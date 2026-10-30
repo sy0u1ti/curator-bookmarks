@@ -1,4 +1,5 @@
 import { navigateToOptionsSectionHash } from '../options-section-store.js'
+import { Button } from '../../ui/base/Button'
 import {
   AI_CONFIG_LINK_CLASS,
   AI_CONFIG_LINK_CONFIGURED_CLASS,
@@ -11,7 +12,8 @@ export function AiConfigLink() {
   const label = configured ? 'AI 渠道设置' : '配置 AI 渠道'
 
   return (
-    <button
+    <Button
+      unstyled
       type="button"
       className={[
         AI_CONFIG_LINK_CLASS,
@@ -23,6 +25,6 @@ export function AiConfigLink() {
       }}
     >
       {label}
-    </button>
+    </Button>
   )
 }

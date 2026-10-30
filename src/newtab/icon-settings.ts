@@ -68,7 +68,7 @@ export const ICON_PRESET_META: Record<IconLayoutPresetKey, {
 }> = {
   compact: { name: '紧凑', desc: '148px · 28px', detail: '高频访问 · 单行卡片', cols: 4, rows: 3 },
   comfortable: { name: '均衡', desc: '184px · 32px', detail: '日常桌面 · 标准卡片', cols: 3, rows: 3 },
-  spacious: { name: '展示', desc: '224px · 36px', detail: '大屏展示 · 双行卡片', cols: 2, rows: 3 }
+  spacious: { name: '宽松', desc: '224px · 36px', detail: '大屏展示 · 双行卡片', cols: 2, rows: 3 }
 }
 
 export const DEFAULT_ICON_SETTINGS: IconSettings = {
@@ -154,21 +154,29 @@ export function normalizeIconSettings(rawSettings: unknown): IconSettings {
 export function detectPresetFromValues(settings: IconPresetValues): string {
   for (const [key, preset] of Object.entries(ICON_LAYOUT_PRESETS)) {
     if (
-      settings.pageWidth === preset.pageWidth &&
       settings.columnGap === preset.columnGap &&
       settings.rowGap === preset.rowGap &&
       settings.folderGap === preset.folderGap &&
       settings.tileWidth === preset.tileWidth &&
-      settings.iconShellSize === preset.iconShellSize &&
-      settings.layoutMode === preset.layoutMode &&
-      settings.columns === preset.columns &&
-      settings.showTitles === preset.showTitles &&
-      settings.titleLines === preset.titleLines
+      settings.iconShellSize === preset.iconShellSize
     ) {
       return key
     }
   }
   return 'custom'
+}
+
+export function applyIconLayoutPreset(settings: IconSettings, key: IconLayoutPresetKey): IconSettings {
+  const { tileWidth, iconShellSize, columnGap, rowGap, folderGap } = ICON_LAYOUT_PRESETS[key]
+  // Density is one decision. It must not reset independent display preferences.
+  return normalizeIconSettings({
+    ...settings,
+    tileWidth,
+    iconShellSize,
+    columnGap,
+    rowGap,
+    folderGap
+  })
 }
 
 export function getIconPageWidthPx(pageWidth: number): number {

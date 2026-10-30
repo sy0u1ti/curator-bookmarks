@@ -234,7 +234,7 @@ export function Select({
                   )}
                 >
                   <BaseSelect.ItemText>{option.label}</BaseSelect.ItemText>
-                  <BaseSelect.ItemIndicator>
+                  <BaseSelect.ItemIndicator className="base-select-indicator inline-flex shrink-0">
                     <Icon name="Check" size={14} aria-hidden="true" />
                   </BaseSelect.ItemIndicator>
                 </BaseSelect.Item>

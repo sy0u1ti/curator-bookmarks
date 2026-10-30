@@ -5,6 +5,7 @@ import {
   normalizeBackgroundMaskStyle
 } from './background-mask-settings.js'
 import { prefetchNewtabStartupData } from './newtab-startup-data.js'
+import { applyTextureBackground, readTextureBackgroundSnapshot } from './texture-background.js'
 
 prefetchNewtabStartupData()
 
@@ -67,8 +68,10 @@ const startupView = createStartupView()
 cacheBootView()
 
 try {
-  const targetRecord = readRecord<InstantWallpaperTargetRecord>(targetKey)
-  const maskSnapshot = readRecord<BackgroundMaskSnapshotRecord>(maskSnapshotKey)
+  const texture = readTextureBackgroundSnapshot()
+  applyTextureBackground(texture)
+  const targetRecord = texture ? null : readRecord<InstantWallpaperTargetRecord>(targetKey)
+  const maskSnapshot = texture ? { maskEnabled: false } : readRecord<BackgroundMaskSnapshotRecord>(maskSnapshotKey)
   cacheBootRecord('__CURATOR_INSTANT_WALLPAPER_BOOT_TARGET__', targetRecord)
   applyStartupMask(targetRecord, maskSnapshot)
   if (!targetRecord?.signature) {

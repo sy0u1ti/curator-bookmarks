@@ -1,6 +1,7 @@
 @import "./tokens.css";
 @import "../shared/ui-refresh.css";
 @import "./tailwind.css";
+@import "./controls-motion.css";
 
 .curator-react-root {
   isolation: isolate;
@@ -197,23 +198,26 @@ body {
   --curator-overlay-enter-scale: 1;
   --curator-overlay-open-duration: var(--dropdown-open-dur);
   --curator-overlay-close-duration: var(--dropdown-close-dur);
+  --curator-overlay-open-ease: var(--dropdown-open-ease);
   opacity: 1;
   transform: translate3d(0, 0, 0) scale(1);
   transition:
     opacity var(--curator-overlay-open-duration) var(--dropdown-ease),
-    transform var(--curator-overlay-open-duration) var(--dropdown-ease);
+    transform var(--curator-overlay-open-duration) var(--curator-overlay-open-ease);
 }
 
 .curator-overlay-panel--dialog {
   --curator-overlay-enter-scale: var(--modal-scale);
   --curator-overlay-open-duration: var(--modal-open-dur);
   --curator-overlay-close-duration: var(--modal-close-dur);
+  --curator-overlay-open-ease: var(--modal-open-ease);
 }
 
 .curator-overlay-panel--drawer {
   --curator-overlay-enter-x: 24px;
   --curator-overlay-open-duration: var(--panel-open-dur);
   --curator-overlay-close-duration: var(--panel-close-dur);
+  --curator-overlay-open-ease: var(--panel-ease);
 }
 
 .curator-overlay-panel--menu,
@@ -265,7 +269,9 @@ body {
 }
 
 .curator-overlay-panel[data-ending-style] {
+  pointer-events: none;
   transition-duration: var(--curator-overlay-close-duration);
+  transition-timing-function: var(--ease-smooth-out);
 }
 
 .curator-overlay-panel--menu[data-ending-style],
@@ -301,7 +307,10 @@ body {
   position: relative;
   z-index: 1;
   color: var(--tabs-text-muted);
-  transition: color var(--tabs-dur) var(--tabs-ease);
+  transition:
+    color var(--ds-motion-fast) var(--ease-smooth-out),
+    transform var(--ds-motion-control) var(--ds-ease-standard),
+    scale var(--ds-motion-control) var(--ds-ease-standard);
 }
 .t-tabs:not(.grid) .t-tab {
   appearance: none;
@@ -441,7 +450,6 @@ body {
   grid-template-rows: 0fr;
   transition: grid-template-rows var(--acc-collapse) var(--acc-ease);
 }
-.t-acc[data-open] .t-acc-panel,
 .t-acc-panel[data-open] {
   grid-template-rows: 1fr;
   transition: grid-template-rows var(--acc-expand) var(--acc-ease);
@@ -452,29 +460,33 @@ body {
   opacity: 0;
   transition: opacity var(--acc-collapse) var(--acc-ease);
 }
-.t-acc[data-open] .t-acc-panel-inner,
-.t-acc-panel[data-open] .t-acc-panel-inner {
+.t-acc-panel[data-open] > .t-acc-panel-inner {
   opacity: 1;
   transition: opacity var(--acc-expand) var(--acc-ease);
 }
 @starting-style {
-  .t-acc[data-open] .t-acc-panel,
   .t-acc-panel[data-open] {
     grid-template-rows: 0fr;
   }
-  .t-acc[data-open] .t-acc-panel-inner,
-  .t-acc-panel[data-open] .t-acc-panel-inner {
+  .t-acc-panel[data-open] > .t-acc-panel-inner {
     opacity: 0;
   }
+}
+.t-acc-panel[data-starting-style],
+.t-acc-panel[data-ending-style] {
+  grid-template-rows: 0fr;
+}
+.t-acc-panel[data-starting-style] > .t-acc-panel-inner,
+.t-acc-panel[data-ending-style] > .t-acc-panel-inner {
+  opacity: 0;
 }
 .t-acc-chevron {
   display: inline-flex;
   transform: scaleY(1);
   transform-origin: center;
-  transition: transform var(--acc-chevron) var(--acc-ease);
+  transition: transform var(--acc-chevron) var(--ds-ease-spring);
 }
 .t-acc-chevron path { vector-effect: non-scaling-stroke; }
-.t-acc[data-open] .t-acc-chevron,
 .t-acc-head[data-panel-open] .t-acc-chevron {
   transform: scaleY(-1);
 }
@@ -491,8 +503,8 @@ body {
   opacity: 0;
   pointer-events: none;
   transition:
-    transform var(--dropdown-open-dur) var(--dropdown-ease),
-    opacity   var(--dropdown-open-dur) var(--dropdown-ease);
+    transform var(--dropdown-open-dur) var(--dropdown-open-ease),
+    opacity   var(--duration-quick) var(--dropdown-ease);
 }
 .t-dropdown[data-origin="top-right"]     { transform-origin: top right; }
 .t-dropdown[data-origin="top-center"]    { transform-origin: top center; }
@@ -509,10 +521,13 @@ body {
 .t-dropdown[data-side="left"] { transform-origin: right center; }
 .t-dropdown.is-open,
 .t-dropdown[data-open="true"],
-.t-dropdown[data-open]:not([data-open="false"]) {
+.t-dropdown:where([data-open]:not([data-open="false"])) {
   transform: scale(1);
   opacity: 1;
   pointer-events: auto;
+}
+.base-select-popup {
+  transform-origin: var(--transform-origin, top center);
 }
 .t-dropdown[data-starting-style] {
   transform: scale(var(--dropdown-pre-scale));
@@ -538,7 +553,7 @@ body {
 
 .base-select-trigger-arrow,
 .custom-select-trigger-arrow {
-  transition: transform var(--dropdown-open-dur) var(--dropdown-ease);
+  transition: transform var(--dropdown-open-dur) var(--dropdown-open-ease);
 }
 .base-select-trigger[data-popup-open] .base-select-trigger-arrow,
 .base-select-trigger[data-popup-open] .custom-select-trigger-arrow {
@@ -557,7 +572,7 @@ body {
   transform: translateY(0) scale(1);
   transition:
     transform var(--toast-open-dur) var(--toast-ease),
-    opacity   var(--toast-open-dur) var(--toast-ease);
+    opacity   var(--duration-quick) var(--ease-smooth-out);
 }
 .t-toast[data-starting-style] {
   opacity: 0;
@@ -568,8 +583,8 @@ body {
   pointer-events: none;
   transform: scale(var(--toast-scale));
   transition:
-    transform var(--toast-close-dur) var(--toast-ease),
-    opacity   var(--toast-close-dur) var(--toast-ease);
+    transform var(--toast-close-dur) var(--ease-smooth-out),
+    opacity   var(--toast-close-dur) var(--ease-smooth-out);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -585,7 +600,7 @@ body {
   transition: opacity var(--modal-open-dur) var(--modal-ease);
 }
 .t-modal-backdrop.is-open,
-.t-modal-backdrop[data-open]:not([data-open="false"]) {
+.t-modal-backdrop:where([data-open]:not([data-open="false"])) {
   opacity: 1;
   pointer-events: auto;
 }
@@ -874,7 +889,8 @@ body {
     box-shadow var(--ds-motion-fast) var(--resize-ease),
     color var(--ds-motion-fast) var(--resize-ease),
     opacity var(--ds-motion-standard) var(--resize-ease),
-    transform var(--ds-motion-fast) var(--resize-ease);
+    transform var(--ds-motion-control) var(--ds-ease-standard),
+    scale var(--ds-motion-control) var(--ds-ease-standard);
 }
 
 .curator-motion-row,
@@ -885,7 +901,8 @@ body {
     background-color var(--ds-motion-fast) var(--resize-ease),
     color var(--ds-motion-fast) var(--resize-ease),
     opacity var(--ds-motion-fast) var(--resize-ease),
-    transform var(--ds-motion-fast) var(--resize-ease);
+    transform var(--ds-motion-control) var(--ds-ease-standard),
+    scale var(--ds-motion-control) var(--ds-ease-standard);
 }
 
 .curator-motion-popover {
@@ -894,16 +911,20 @@ body {
   transform-origin: var(--transform-origin, var(--radix-popover-content-transform-origin, top right));
   transition:
     opacity var(--dropdown-open-dur) var(--dropdown-ease),
-    transform var(--dropdown-open-dur) var(--dropdown-ease);
+    transform var(--dropdown-open-dur) var(--dropdown-open-ease);
 }
 
-.curator-motion-popover[data-starting-style],
 .curator-motion-popover[data-ending-style],
 .curator-motion-popover.is-closing {
   opacity: 0;
   transform: translate3d(0, -4px, 0) scale(var(--dropdown-closing-scale));
   transition-duration: var(--dropdown-close-dur);
+  transition-timing-function: var(--dropdown-ease);
   will-change: opacity, transform;
+}
+.curator-motion-popover[data-starting-style] {
+  opacity: 0;
+  transform: translate3d(0, -4px, 0) scale(var(--dropdown-pre-scale));
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -917,8 +938,9 @@ body {
 .curator-motion-chip:not(.folder-section-header):not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active {
   /* Use one press transform even when a button also has a scale utility. */
   scale: 1;
-  transform: scale(var(--ds-press-scale, 0.985));
+  transform: scale(var(--control-press-scale, var(--ds-press-scale)));
   transition-duration: var(--ds-motion-feedback);
+  transition-timing-function: var(--ease-smooth-out);
 }
 
 @media (prefers-reduced-motion: reduce) {

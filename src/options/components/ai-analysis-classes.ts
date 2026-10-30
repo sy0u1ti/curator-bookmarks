@@ -4,7 +4,7 @@ export const AI_ANALYSIS_RESULTS_GROUP_CLASS =
   `mt-5 ${OPTION_SURFACE_CLASS} p-[18px_20px_20px] max-[760px]:p-4`
 
 export const AI_ANALYSIS_SELECTION_GROUP_CLASS =
-  `t-panel-slide mt-7 ${OPTION_SURFACE_CLASS} p-[18px_20px_20px] [--panel-translate-y:12px] max-[760px]:mt-5 max-[760px]:p-4`
+  `mt-7 ${OPTION_SURFACE_CLASS} p-[18px_20px_20px] max-[760px]:mt-5 max-[760px]:p-4`
 
 export const AI_ANALYSIS_PRIMARY_BUTTON_CLASS =
   'font-bold active:scale-[0.985]'

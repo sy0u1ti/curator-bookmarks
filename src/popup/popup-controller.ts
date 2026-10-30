@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { actionFeedback, type ActionFeedback } from '../shared/action-feedback.js'
 import { closeTransientPopup, isSidePanelSurface } from '../shared/extension-surfaces.js'
 import { getPopupSearchResultId, isPopupKeyboardHelpOpen, publishPopupSearchAccessibility, setPopupKeyboardHelpOpen } from './popup-workspace-state.js'
 import {
@@ -24,7 +25,6 @@ import {
   extractDomain,
   normalizeText
 } from '../shared/text.js'
-import { isExternallyCheckableUrl } from '../shared/sensitive-url.js'
 import { normalizeBookmarkSaveUrl } from '../shared/bookmark-save-url.js'
 import {
   createTab,
@@ -112,6 +112,11 @@ import {
   type PopupToastActionDetail
 } from './popup-controller-store.js'
 import { getPopupSmartClassifierRenderStatus } from './popup-smart-classifier-status.js'
+import {
+  getPopupCurrentPagePolicy,
+  isPopupSmartClassifiableUrl,
+  isPopupWebPageUrl
+} from './popup-page-policy.js'
 import {
   hydratePopupBaseData,
   hydratePopupDeferredEnhancements,
@@ -216,6 +221,7 @@ let activeResultFrame = 0
 let activeFolderFrame = 0
 let keyboardNavigationSettleTimer = 0
 let popupActionStateVersion = 0
+const popupCopyFeedback = new Map<string, ActionFeedback>()
 const treeBookmarkRowsCache = createPopupContentRowCache<PopupContentBookmarkRowViewModel>('active')
 interface BookmarkRowMemo {
   row: PopupContentBookmarkRowViewModel
@@ -1222,6 +1228,7 @@ function buildPopupBookmarkDuplicateKeyMap(bookmarks) {
 function cleanupPopupController() {
   popupAutoAnalyzeStatusVersion++
   popupSessionId += 1
+  popupCopyFeedback.clear()
   popupPreferencesVersion += 1
   popupAiConfigVersion += 1
   popupPinnedVersion += 1
@@ -2106,21 +2113,24 @@ function getPopupSmartPageViewModel() {
   const bookmark = state.currentPageBookmarkId
     ? state.bookmarkMap.get(state.currentPageBookmarkId)
     : null
+  const pagePolicy = getPopupCurrentPagePolicy(url)
 
-  if (!isSmartClassifiableUrl(url)) {
+  if (!pagePolicy.isWebPage) {
     return null
   }
 
   if (!bookmark) {
     return {
       bookmarked: false,
+      canClassify: pagePolicy.canClassify,
+      classificationStatusTitle: pagePolicy.classificationMessage,
       fallbackIcon: getSmartFallbackIconLabel(title),
       favicon,
       pinLabel: '',
       pinPending: false,
       pinned: false,
-      status: '未收藏 · 可快速保存到文件夹',
-      statusTitle: '',
+      status: pagePolicy.canClassify ? '未收藏 · 可快速保存到文件夹' : '未收藏 · 仅手动保存',
+      statusTitle: pagePolicy.classificationMessage,
       title
     }
   }
@@ -2128,6 +2138,8 @@ function getPopupSmartPageViewModel() {
   const pinned = state.newTabPinnedIds.has(String(bookmark.id))
   return {
     bookmarked: true,
+    canClassify: pagePolicy.canClassify,
+    classificationStatusTitle: pagePolicy.classificationMessage,
     fallbackIcon: getSmartFallbackIconLabel(title),
     favicon,
     pinLabel: pinned ? '已固定到newtabs' : '固定到newtabs',
@@ -2854,7 +2866,8 @@ function buildActionMenuViewModel(bookmarkId): PopupActionMenuViewModel {
         bookmarkId: String(bookmarkId || ''),
         danger: false,
         disabled: copyBusy,
-        label: '复制链接'
+        label: '复制链接',
+        feedback: popupCopyFeedback.get(String(bookmarkId))
       },
       {
         action: 'open-current-tab',
@@ -4341,7 +4354,7 @@ function openSmartFolderDialog(returnFocusElement: HTMLElement | null = null) {
   if (shouldBlockDirtyEditClose()) {
     return
   }
-  if (!isSmartClassifiableUrl(state.currentTab?.url)) {
+  if (!isPopupWebPageUrl(state.currentTab?.url)) {
     showToast({ type: 'error', message: '当前页面无法保存为普通网页书签。' })
     return
   }
@@ -4652,7 +4665,7 @@ async function saveCurrentPageViaWorker(
     state.smartFolderError = ''
     renderSmartSaveSurfaces()
     const currentUrl = String(state.currentTab?.url || '').trim()
-    if (!isSmartClassifiableUrl(currentUrl)) {
+    if (!isPopupWebPageUrl(currentUrl)) {
       throw new Error('当前页面不是可保存的普通网页。')
     }
     if (!parentId && !folderPath) {
@@ -5070,27 +5083,35 @@ async function copyBookmarkUrl(bookmarkId) {
     return
   }
   if (!bookmark?.url) {
+    popupCopyFeedback.set(String(bookmarkId), actionFeedback('error'))
+    popupActionStateVersion += 1
+    renderMainContent({ preserveScroll: true })
     showToast({
       type: 'error',
       message: '复制失败：书签链接不存在。'
     })
     return
   }
+  const session = popupSessionId
+  popupCopyFeedback.set(String(bookmarkId), actionFeedback('pending'))
   setPopupActionPending('copy-url', bookmarkId, true)
+  renderMainContent({ preserveScroll: true })
   try {
     await writeClipboardText(bookmark.url)
-    showToast({
-      type: 'success',
-      message: '链接已复制'
-    })
-    showViewNotice(`已复制链接：${bookmark.title}`)
+    if (session !== popupSessionId) return
+    popupCopyFeedback.set(String(bookmarkId), actionFeedback('success'))
   } catch (error) {
+    if (session !== popupSessionId) return
+    popupCopyFeedback.set(String(bookmarkId), actionFeedback('error'))
     showToast({
       type: 'error',
       message: error instanceof Error ? `复制失败：${error.message}` : '复制失败，请手动复制链接。'
     })
   } finally {
-    setPopupActionPending('copy-url', bookmarkId, false)
+    if (session === popupSessionId) {
+      setPopupActionPending('copy-url', bookmarkId, false)
+      renderMainContent({ preserveScroll: true })
+    }
   }
 }
 async function loadAiProviderSettings() {
@@ -5486,7 +5507,7 @@ function formatLocalDate(value) {
   return `${year}-${month}-${day}`
 }
 function isSmartClassifiableUrl(url) {
-  return isExternallyCheckableUrl(url)
+  return isPopupSmartClassifiableUrl(url)
 }
 function getCurrentPageTitle() {
   return String(state.currentTab?.title || '').trim() || '未命名网页'

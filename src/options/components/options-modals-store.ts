@@ -3,6 +3,8 @@ import type { OptionsModalsState } from './options-modals-types.js'
 
 const defaultOptionsModalsState: OptionsModalsState = {
   confirm: {
+    requestId: 0,
+    holdToConfirm: false,
     cancelLabel: '取消',
     confirmLabel: '确认',
     copy: '请确认是否继续。',

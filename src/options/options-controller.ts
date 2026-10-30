@@ -1,4 +1,7 @@
 import { useEffect } from 'react'
+import { actionFeedback, IDLE_ACTION_FEEDBACK, type ActionFeedback } from '../shared/action-feedback.js'
+import { findModelsDevModel } from '../shared/models-dev.js'
+import { getModelsDevSnapshot, loadModelsDevSnapshot, subscribeModelsDevSnapshot } from '../shared/models-dev-cache.js'
 import { saveInboxWorkflowMode } from './sections/inbox-settings.js'
 import { buildFeatureSettingsView } from './sections/feature-settings-view.js'
 import {
@@ -373,6 +376,13 @@ let largeRepositoryHydrationVersion = 0
 let largeRepositoryRefreshTimer: ReturnType<typeof setTimeout> | undefined
 let optionsHydrationStorageChanges: Record<string, unknown> | null = null
 let tagDataOperationPending = false
+let aiConnectionFeedback = IDLE_ACTION_FEEDBACK
+let aiModelsFeedback = IDLE_ACTION_FEEDBACK
+const exportFeedback: Record<'tags' | 'backup' | 'html', ActionFeedback> = {
+  tags: IDLE_ACTION_FEEDBACK,
+  backup: IDLE_ACTION_FEEDBACK,
+  html: IDLE_ACTION_FEEDBACK
+}
 let aiSettingsSaving = false
 let pendingExternalAiSettings: { value: unknown } | null = null
 const AVAILABILITY_FILTERS = new Set([
@@ -668,6 +678,7 @@ async function hydrateLargeRepositoryState(): Promise<void> {
 }
 
 export function subscribeToOptionsStorageEvents(): () => void {
+  const unsubscribeCatalog = subscribeModelsDevSnapshot(() => renderAiProviderConfiguration())
   const changed = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
     if (area !== 'local') return
     if (optionsHydrationStorageChanges) {
@@ -715,6 +726,7 @@ export function subscribeToOptionsStorageEvents(): () => void {
   }
   chrome.storage.onChanged.addListener(changed)
   return () => {
+    unsubscribeCatalog()
     chrome.storage.onChanged.removeListener(changed)
     clearTimeout(largeRepositoryRefreshTimer)
     largeRepositoryHydrationVersion++
@@ -3768,6 +3780,7 @@ function buildContentSnapshotAiRunStatusCopy(): string {
 }
 
 function resetAiNamingConnectivityState() {
+  aiConnectionFeedback = IDLE_ACTION_FEEDBACK
   aiNamingState.testingConnection = false
   aiNamingState.lastConnectivityTestAt = 0
   aiNamingState.lastConnectivityTestStatus = ''
@@ -4122,6 +4135,7 @@ async function handleAiConnectivityTest() {
     aiNamingState.lastError = ''
     resetAiNamingConnectivityState()
     aiNamingState.testingConnection = true
+    aiConnectionFeedback = actionFeedback('pending')
     renderAvailabilitySection()
 
     const permissionGranted = await ensureAiNamingProviderPermission({
@@ -4134,9 +4148,11 @@ async function handleAiConnectivityTest() {
 
     aiNamingState.lastConnectivityTestMessage = await requestAiNamingConnectivityTest(settings)
     aiNamingState.lastConnectivityTestStatus = 'success'
+    aiConnectionFeedback = actionFeedback('success')
     aiNamingState.lastConnectivityTestAt = Date.now()
   } catch (error) {
     aiNamingState.lastConnectivityTestStatus = 'error'
+    aiConnectionFeedback = actionFeedback('error')
     aiNamingState.lastConnectivityTestAt = Date.now()
     aiNamingState.lastConnectivityTestMessage = normalizeAiNamingConnectivityError(
       error,
@@ -4150,6 +4166,9 @@ async function handleAiConnectivityTest() {
 }
 
 function renderAiProviderConfiguration() {
+  if (normalizeSectionKey(getCurrentSectionKey()) === 'ai-settings' && !getModelsDevSnapshot().loaded) {
+    void loadModelsDevSnapshot()
+  }
   if (pendingExternalAiSettings && !aiNamingState.settingsDirty && !areAiProviderSettingsLocked()) {
     const incoming = normalizeAiNamingSettings(pendingExternalAiSettings.value)
     pendingExternalAiSettings = null
@@ -4422,12 +4441,15 @@ function renderBackupControls() {
   publishBackupControls({
     backup: {
       busy: backupBusy,
+      exportFeedback: exportFeedback.backup,
+      htmlExportFeedback: exportFeedback.html,
       hasBackup,
       preview: backupRestoreState.preview,
       status: backupRestoreState.status || ''
     },
     tagData: {
       busy: tagBusy,
+      exportFeedback: exportFeedback.tags,
       countLabel: `${records.length} 条记录`,
       hasRecords: records.length > 0,
       status: aiNamingState.tagDataStatus || '',
@@ -4439,12 +4461,15 @@ function renderBackupControls() {
 }
 
 async function handleBookmarkTagExport() {
+  exportFeedback.tags = actionFeedback('pending')
+  renderBackupControls()
   try {
     const bookmarks = await getCurrentBookmarksForTagData()
     const index = await loadBookmarkTagIndex()
     aiNamingState.tagIndex = index
     const payload = buildBookmarkTagExport(index, bookmarks)
     if (!payload.records.length) {
+      exportFeedback.tags = actionFeedback('error')
       aiNamingState.tagDataStatus = '没有可导出的标签记录。'
       renderAiNamingSection()
       return
@@ -4455,9 +4480,11 @@ async function handleBookmarkTagExport() {
       payload
     )
     aiNamingState.tagDataStatus = `已导出 ${payload.records.length} 条标签记录。`
+    exportFeedback.tags = actionFeedback('success')
     renderActiveOptionsSection()
   } catch (error) {
     aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签数据导出失败。'
+    exportFeedback.tags = actionFeedback('error')
     renderActiveOptionsSection()
   }
 }
@@ -4517,10 +4544,12 @@ async function handleBookmarkTagImport(file?: File) {
 }
 
 async function handleBookmarkTagClear() {
+  const count = Object.keys(normalizeBookmarkTagIndex(aiNamingState.tagIndex).records).length
   const confirmed = await requestConfirmation({
-    title: '清空标签数据？',
+    title: `清空 ${count} 条标签数据？`,
     copy: '只会清空本地标签数据，包括 AI 生成内容和手动维护标签；不会删除 Chrome 书签、AI 渠道设置或 API Key。建议先导出备份。',
     confirmLabel: '清空标签数据',
+    holdToConfirm: true,
     cancelLabel: '取消',
     tone: 'danger',
     label: 'Clear'
@@ -4732,6 +4761,7 @@ function renderBackupRestoreSection() {
 async function handleFullBackupExport() {
   if (backupRestoreState.restoring || backupRestoreState.exporting) return
   backupRestoreState.exporting = true
+  exportFeedback.backup = actionFeedback('pending')
   backupRestoreState.status = '正在生成完整备份...'
   renderBackupRestoreSection()
 
@@ -4741,8 +4771,10 @@ async function handleFullBackupExport() {
     downloadJsonFile(getBackupFileName(now), payload)
     const iconWarnings = (payload.notes || []).filter(note => note.includes('图标无法读取'))
     backupRestoreState.status = ['完整备份已导出，文件不包含 API Key。', ...iconWarnings].join(' ')
+    exportFeedback.backup = actionFeedback('success')
   } catch (error) {
     backupRestoreState.status = error instanceof Error ? error.message : '完整备份导出失败。'
+    exportFeedback.backup = actionFeedback('error')
   } finally {
     backupRestoreState.exporting = false
     renderBackupRestoreSection()
@@ -4752,6 +4784,7 @@ async function handleFullBackupExport() {
 async function handleBookmarkHtmlExport() {
   if (backupRestoreState.restoring || backupRestoreState.exporting) return
   backupRestoreState.exporting = true
+  exportFeedback.html = actionFeedback('pending')
   backupRestoreState.status = '正在生成通用书签文件...'
   renderBackupRestoreSection()
   try {
@@ -4761,8 +4794,10 @@ async function handleBookmarkHtmlExport() {
       type: 'text/html;charset=utf-8'
     }))
     backupRestoreState.status = 'HTML 书签已导出，可在其他浏览器的书签管理器中导入。'
+    exportFeedback.html = actionFeedback('success')
   } catch (error) {
     backupRestoreState.status = error instanceof Error ? error.message : 'HTML 书签导出失败，请重试。'
+    exportFeedback.html = actionFeedback('error')
   } finally {
     backupRestoreState.exporting = false
     renderBackupRestoreSection()
@@ -4998,9 +5033,12 @@ function renderAiProviderSettings(
     settings.reasoningCapabilities,
     settings.model
   )
+  const catalog = getModelsDevSnapshot()
+  const modelMetadata = findModelsDevModel(catalog.cache?.catalog, settings)
   const reasoningContext = {
     baseUrl: settings.baseUrl,
-    apiStyle: settings.apiStyle
+    apiStyle: settings.apiStyle,
+    modelMetadata
   }
   const reasoningProfile = getModelReasoningProfile(
     settings.model,
@@ -5026,13 +5064,13 @@ function renderAiProviderSettings(
     hasRequiredConfig,
     modelTools: buildAiProviderModelToolsState(settings),
     modelToolsDisabled: fieldsDisabled,
-    noticeText: fieldsDisabled
-      ? '正在处理 AI 操作，完成后可继续修改设置。'
-      : aiNamingState.settingsDirty
-      ? '有未保存改动，保存后会用于所有 AI 功能。'
-      : hasRequiredConfig
-        ? ''
-        : '填写 API Key 后即可获取模型并测试连接。',
+    modelCatalog: {
+      loaded: catalog.loaded,
+      autoUpdate: catalog.settings.autoUpdate,
+      checkedAt: catalog.cache?.checkedAt ?? 0,
+      lastError: catalog.settings.lastError,
+      match: modelMetadata
+    },
     reasoningEffort: resolveReasoningEffortForModel(
       settings.model,
       settings.reasoningEffort,
@@ -5055,6 +5093,7 @@ function renderAiProviderSettings(
     testDisabled: !hasRequiredConfig || fieldsDisabled,
     testLabel: aiNamingState.testingConnection ? '测试中' : '测试连接',
     testingConnection: aiNamingState.testingConnection,
+    testFeedback: aiConnectionFeedback,
     timeoutMs: String(settings.timeoutMs)
   })
 }
@@ -5071,14 +5110,12 @@ function buildAiModelSelectorState(settings = aiNamingManagerState.settings) {
 }
 
 function buildAiProviderModelToolsState(settings = aiNamingManagerState.settings) {
-  const status = getAiFetchModelsStatus()
   return {
     fetchDisabled: !isAiProviderKeyConfigured(settings) || areAiProviderSettingsLocked(),
     fetchLabel: aiNamingState.fetchingModels ? '获取中' : '获取模型',
-    fetchModelsStatus: status.copy,
-    fetchModelsStatusBusy: aiNamingState.fetchingModels,
-    fetchModelsStatusTone: status.tone,
+    fetchModelsStatus: getAiFetchModelsStatus(),
     fetchingModels: aiNamingState.fetchingModels,
+    fetchFeedback: aiModelsFeedback,
     manageDisabled: areAiProviderSettingsLocked(),
     selector: buildAiModelSelectorState(settings)
   }
@@ -5102,18 +5139,18 @@ function renderAiFetchModelsStatus() {
   renderAiNamingSection()
 }
 
-function getAiFetchModelsStatus(): { copy: string; tone: string } {
+function getAiFetchModelsStatus(): string {
   if (aiNamingState.fetchingModels) {
-    return { copy: '正在获取模型列表…', tone: 'muted' }
+    return '正在获取模型列表…'
   }
   if (aiNamingState.lastFetchModelsError) {
-    return { copy: `获取失败：${aiNamingState.lastFetchModelsError}`, tone: 'danger' }
+    return `获取失败：${aiNamingState.lastFetchModelsError}`
   }
   if (aiNamingState.lastFetchModelsAt) {
     const timeLabel = formatDateTime(aiNamingState.lastFetchModelsAt)
-    return { copy: `已获取 ${aiNamingState.lastFetchModelsCount} 个模型 · ${timeLabel}`, tone: 'success' }
+    return `已获取 ${aiNamingState.lastFetchModelsCount} 个模型 · ${timeLabel}`
   }
-  return { copy: '', tone: 'muted' }
+  return ''
 }
 
 function getAiModelsEndpoint(settings) {
@@ -5132,6 +5169,7 @@ async function handleFetchAiModels() {
 
   const baseUrlIssue = getAiProviderBaseUrlIssue(baseUrl)
   if (baseUrlIssue || !isAiProviderKeyConfigured(settings)) {
+    aiModelsFeedback = actionFeedback('error')
     aiNamingState.lastFetchModelsError = baseUrlIssue || '请先填写 API Key。'
     aiNamingState.lastFetchModelsAt = 0
     aiNamingState.lastFetchModelsCount = 0
@@ -5140,6 +5178,7 @@ async function handleFetchAiModels() {
   }
 
   aiNamingState.fetchingModels = true
+  aiModelsFeedback = actionFeedback('pending')
   aiNamingState.lastFetchModelsError = ''
   renderAiNamingSection()
 
@@ -5193,6 +5232,7 @@ async function handleFetchAiModels() {
     aiNamingState.lastFetchModelsAt = Date.now()
     aiNamingState.lastFetchModelsCount = normalizedIds.length
     aiNamingState.lastFetchModelsError = ''
+    aiModelsFeedback = actionFeedback('success')
     recordPrivacyAudit({
       feature: 'ai-provider-models',
       label: 'AI 模型列表',
@@ -5206,6 +5246,7 @@ async function handleFetchAiModels() {
   } catch (error) {
     aiNamingState.lastFetchModelsError =
       error instanceof Error ? error.message : '拉取模型列表失败，请稍后重试。'
+    aiModelsFeedback = actionFeedback('error')
     aiNamingState.lastFetchModelsAt = 0
     aiNamingState.lastFetchModelsCount = 0
     recordPrivacyAudit({
@@ -10235,6 +10276,7 @@ function requestConfirmation({
   confirmLabel = '确认',
   cancelLabel = '取消',
   tone = 'danger',
+  holdToConfirm = false,
   label = ''
 }: {
   title?: string
@@ -10242,6 +10284,7 @@ function requestConfirmation({
   confirmLabel?: string
   cancelLabel?: string
   tone?: string
+  holdToConfirm?: boolean
   label?: string
 } = {}): Promise<boolean> {
   if (confirmModalResolve) {
@@ -10250,6 +10293,8 @@ function requestConfirmation({
   }
 
   managerState.confirmModalOpen = true
+  managerState.confirmModalRequestId += 1
+  managerState.confirmModalHoldToConfirm = holdToConfirm
   managerState.confirmModalTone = tone === 'warning' ? 'warning' : 'danger'
   managerState.confirmModalLabel = label || (managerState.confirmModalTone === 'warning' ? '确认' : '删除')
   managerState.confirmModalTitle = title
@@ -10282,6 +10327,8 @@ function renderConfirmModal() {
   if (!managerState.confirmModalOpen) {
     publishOptionsModals({
       confirm: {
+        requestId: managerState.confirmModalRequestId,
+        holdToConfirm: managerState.confirmModalHoldToConfirm,
         cancelLabel: managerState.confirmModalCancelLabel,
         confirmLabel: managerState.confirmModalConfirmLabel,
         copy: managerState.confirmModalCopy,
@@ -10296,6 +10343,8 @@ function renderConfirmModal() {
 
   publishOptionsModals({
     confirm: {
+      requestId: managerState.confirmModalRequestId,
+      holdToConfirm: managerState.confirmModalHoldToConfirm,
       cancelLabel: managerState.confirmModalCancelLabel,
       confirmLabel: managerState.confirmModalConfirmLabel,
       copy: managerState.confirmModalCopy,

@@ -22,12 +22,15 @@ import {
   getModelReasoningCapability,
   getModelReasoningProfile,
   getReasoningTransport,
+  normalizeModelReasoningCapabilityMap,
   resolveReasoningEffortForModel,
   type ReasoningEffortId
 } from './ai-reasoning.js'
 import { normalizeAiOutput } from './ai-output-normalization.js'
 import { AiEventStreamError, parseAiEventStream } from './ai-event-stream.js'
 import { isTextGenerationModelId } from './ai-model-catalog.js'
+import { findModelsDevModel, type ModelsDevMatch } from './models-dev.js'
+import { loadModelsDevSnapshot } from './models-dev-cache.js'
 
 export type AiErrorKind =
   | 'configuration'
@@ -47,6 +50,8 @@ export interface AiProviderSettings {
   timeoutMs?: number
   /** 从渠道模型列表缓存的逐模型推理能力。 */
   reasoningCapabilities?: unknown
+  /** Request-local catalog snapshot; never serialized with provider credentials. */
+  modelMetadata?: ModelsDevMatch | null
   /**
    * 推理强度：已知模型的 'default' 会物化为界面显示的模型默认档；未知模型或
    * 空值不发送参数。其余取值会按 Base URL + apiStyle + model 映射为厂商真实字段，
@@ -58,7 +63,7 @@ export interface AiProviderSettings {
 
 type AiReasoningRequestSettings = Pick<
   AiProviderSettings,
-  'baseUrl' | 'model' | 'apiStyle' | 'reasoningEffort' | 'reasoningCapabilities'
+  'baseUrl' | 'model' | 'apiStyle' | 'reasoningEffort' | 'reasoningCapabilities' | 'modelMetadata'
 >
 
 export interface AiRuntimeMetadata {
@@ -105,7 +110,7 @@ export const AI_PROVIDER_RESPONSE_MAX_BYTES = 2 * 1024 * 1024
 export interface AiPromptEnvelope {
   settings: Pick<
     AiProviderSettings,
-    'baseUrl' | 'model' | 'apiStyle' | 'reasoningEffort' | 'reasoningCapabilities'
+    'baseUrl' | 'model' | 'apiStyle' | 'reasoningEffort' | 'reasoningCapabilities' | 'modelMetadata'
   >
   schema: JsonSchema
   strictSchema: JsonSchema
@@ -191,7 +196,7 @@ export function normalizeReasoningEffortValue(value: unknown): string | null {
 
 function resolveRequestReasoningEffort(settings: AiReasoningRequestSettings): string | null {
   const storedValue = String(settings.reasoningEffort ?? '').trim().toLowerCase()
-  const context = { baseUrl: settings.baseUrl, apiStyle: settings.apiStyle }
+  const context = { baseUrl: settings.baseUrl, apiStyle: settings.apiStyle, modelMetadata: settings.modelMetadata }
   // 设置页会把已知模型的 default 定位到模型的具体默认档位。请求侧必须使用同一
   // 解析结果，否则界面显示“中/高”时，线上请求却会因为省略参数而记录为 auto。
   if (storedValue === 'default') {
@@ -239,7 +244,8 @@ function resolveReasoningRequest(settings: AiReasoningRequestSettings) {
   )
   const transport = getReasoningTransport(settings.model, {
     baseUrl: settings.baseUrl,
-    apiStyle: settings.apiStyle
+    apiStyle: settings.apiStyle,
+    modelMetadata: settings.modelMetadata
   }, capability)
   return {
     effort: transport.kind === 'fixed' || transport.kind === 'unsupported' ? null : effort,
@@ -579,7 +585,7 @@ export function clearAiProviderCompatibilityCache(): void {
 
 function getCompatibilityCacheKey(settings: AiProviderSettings, schema: JsonSchema, schemaName: string): string {
   let hash = 2166136261
-  for (const char of JSON.stringify([schema, settings.apiKey, settings.reasoningCapabilities])) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619)
+  for (const char of JSON.stringify([schema, settings.apiKey, settings.reasoningCapabilities, settings.modelMetadata])) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619)
   return JSON.stringify([settings.baseUrl, settings.apiStyle, settings.model, settings.reasoningEffort, schemaName, hash >>> 0])
 }
 
@@ -610,6 +616,14 @@ export async function requestStructuredAiOutput<T>({
   const requestTimeoutMs = normalizeAiRequestTimeoutMs(timeoutMs || settings.timeoutMs)
   const deadline = resolveAiRequestDeadlineAtMs({ startedAtMs, requestTimeoutMs, totalBudgetMs, deadlineAtMs })
   const budgetMs = Math.max(1, deadline - startedAtMs)
+  settings = {
+    ...settings,
+    reasoningCapabilities: normalizeModelReasoningCapabilityMap(settings.reasoningCapabilities)
+  }
+  if (settings.modelMetadata === undefined) {
+    const catalog = (await loadModelsDevSnapshot()).cache?.catalog
+    settings.modelMetadata = findModelsDevModel(catalog, settings)
+  }
   const cacheKey = getCompatibilityCacheKey(settings, schema, schemaName)
   const cached = aiCompatibilityCache.get(cacheKey)
   const compatibility: AiCompatibilityState = cached && cached.expiresAt > startedAtMs

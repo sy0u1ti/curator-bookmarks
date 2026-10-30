@@ -1,4 +1,5 @@
 import { flushSync } from 'react-dom'
+import { actionFeedback, IDLE_ACTION_FEEDBACK } from '../shared/action-feedback.js'
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -20,6 +21,7 @@ import { collectRemovedBookmarkNodeIds, persistNewtabWorkspaceMutation } from '.
 import { downloadBlobFile } from '../shared/download.js'
 import { getMotionDurationMs, getMotionEasing, prefersReducedMotion } from '../shared/motion.js'
 import { isBookmarkMenuInteractionTarget } from './bookmark-menu-interactions.js'
+import { buildBookmarkMoveActions } from './bookmark-move-menu.js'
 import {
   normalizeSettingsDrawerSection,
   type SettingsDrawerSection
@@ -44,7 +46,7 @@ import type { ContentSnapshotIndex } from '../shared/content-snapshots.js'
 import { loadContentSnapshotSettings, type ContentSnapshotSettings } from '../shared/content-snapshot-search.js'
 import {
   DEFAULT_ICON_SETTINGS,
-  ICON_LAYOUT_PRESETS,
+  applyIconLayoutPreset,
   type IconLayoutPresetKey,
   type IconSettings,
   detectPresetFromValues,
@@ -57,6 +59,14 @@ import {
   getIconRowGapPx,
   normalizeIconSettings
 } from './icon-settings.js'
+import {
+  DEFAULT_SEARCH_LAYOUT,
+  getAdaptiveSearchWidthBounds,
+  normalizeSearchHeight,
+  resetSearchLayout,
+  SEARCH_WIDTH_MAX_VW,
+  SEARCH_WIDTH_MIN_VW
+} from './search-layout.js'
 import {
   dispatchIconPreviewViewForSettings,
   getIconPreviewSignature,
@@ -76,7 +86,6 @@ import {
   prepareNewTabSearchIndex,
   schedulePreparedNewTabSearchWarmup,
   getAdaptiveSearchOffsetBounds,
-  getAdaptiveSearchWidthBounds,
   getVerticalCenterCollisionOffset,
   normalizeNewTabSearchText,
   type AdaptiveSearchOffsetBounds,
@@ -233,6 +242,7 @@ import {
 import { clearNewtabBookmarkPrebootSnapshot } from './newtab-bookmark-preboot.js'
 import {
   createDefaultSearchWidgetInteractionState,
+  createSearchWidgetActionState,
   dispatchNewtabSearchWidgetView,
   getNewtabSearchWidgetNodes,
   getNewtabSearchWidgetView,
@@ -353,6 +363,7 @@ import {
   registerNewtabBackgroundSettingsActions,
   type NewtabBackgroundSettingsFieldKey
 } from './newtab-background-settings-store.js'
+import { normalizeNewtabBackgroundType } from './newtab-background-types.js'
 import {
   DEFAULT_BACKGROUND_MASK_BLUR,
   DEFAULT_BACKGROUND_MASK_FILTER_HOVER,
@@ -365,6 +376,8 @@ import {
   normalizeBackgroundMaskPercentage,
   normalizeBackgroundMaskStyle
 } from './background-mask-settings.js'
+import { DEFAULT_TEXTURE_SETTINGS, TEXTURE_BACKGROUND_COLOR, isProceduralBackgroundType, normalizeTextureSettings } from './texture-settings.js'
+import { syncTextureBackground } from './texture-background.js'
 import {
   dispatchNewtabBackgroundMediaView,
   getNewtabBackgroundMediaView
@@ -416,6 +429,7 @@ const INSTANT_WALLPAPER_STARTUP_CACHE_ATTEMPTS = [
 ] as const
 const FEATURED_BACKGROUND_DAILY_REFRESH_GRACE_MS = 1500
 const DEFAULT_BACKGROUND_SETTINGS = {
+  ...DEFAULT_TEXTURE_SETTINGS,
   type: 'color',
   color: '#101013',
   imageName: '',
@@ -432,7 +446,6 @@ const DEFAULT_BACKGROUND_SETTINGS = {
   maskFilterSpacing: DEFAULT_BACKGROUND_MASK_FILTER_SPACING
 }
 const DEFAULT_FEATURED_BACKGROUND_PLACEHOLDER_COLOR = '#18200f'
-const SUPPORTED_BACKGROUND_TYPES = new Set(['featured', 'image', 'video', 'urls', 'color'])
 const DEFAULT_SEARCH_SETTINGS = {
   enabled: true,
   webSearchEnabled: true,
@@ -442,10 +455,7 @@ const DEFAULT_SEARCH_SETTINGS = {
   placeholder: '搜索书签、网页，或输入 / 执行命令',
   naturalSearchEnabled: false,
   naturalSearchAiConfigured: false,
-  autoVerticalCenter: false,
-  width: 44,
-  height: 40,
-  offsetY: 0,
+  ...DEFAULT_SEARCH_LAYOUT,
   background: 30
 }
 const DEFAULT_TIME_SETTINGS: NewTabTimeSettings = {
@@ -464,7 +474,7 @@ const SEARCH_OFFSET_ABSOLUTE_MAX = 240
 const AUTO_SEARCH_OFFSET_CACHE_KEY = 'curatorNewTabAutoSearchOffsetY'
 const AUTO_SEARCH_LAYOUT_STABLE_FRAME_COUNT = 0
 const AUTO_SEARCH_LAYOUT_PENDING_ATTRIBUTE = 'data-newtab-search-layout-pending'
-const SEARCH_WIDTH_BOUNDS_FALLBACK = { min: 16, max: 72 }
+const SEARCH_WIDTH_BOUNDS_FALLBACK = { min: SEARCH_WIDTH_MIN_VW, max: SEARCH_WIDTH_MAX_VW }
 const NEWTAB_LAYOUT_SAFE_GAP = 12
 const NEWTAB_COMMAND_SCORE = -100000
 const NEWTAB_COMMAND_SUGGESTION_LIMIT = 4
@@ -905,6 +915,8 @@ interface BackgroundUrlCacheTask {
 let newTabControllerStarted = false
 let newTabControllerGeneration = 0
 let bookmarkMenuSession = 0
+let bookmarkCopyFeedback = IDLE_ACTION_FEEDBACK
+let bookmarkMenuReturnFocus: HTMLElement | null = null
 let addBookmarkMenuSession = 0
 let newTabStorageEventsBound = false
 let newTabNaturalSearchSettingsGeneration = 0
@@ -1223,7 +1235,18 @@ function bindEvents(): void {
   })
   registerNewtabSearchSettingsActions({
     onFieldChange: handleSearchSettingFieldChange,
-    onToggle: handleSearchSettingToggle
+    onResetLayout: () => {
+      commitSearchSettings(resetSearchLayout(state.searchSettings), { live: true })
+      scheduleSearchSettingsSettle()
+    },
+    onToggle: handleSearchSettingToggle,
+    onWebEngineChange: (engine) => {
+      commitSearchSettings(normalizeSearchSettings({
+        ...state.searchSettings,
+        webSearchEnabled: engine !== null,
+        engine: engine ?? state.searchSettings.engine
+      }), { render: true })
+    }
   })
   registerNewtabBackgroundSettingsActions({
     onFileSelect: (mediaType, file) => {
@@ -1399,7 +1422,7 @@ function handleBookmarkContextMenu(
   }
 
   closeAddBookmarkMenu({ animate: false })
-  openBookmarkMenu(normalizedBookmarkId, event.clientX, event.clientY)
+  openBookmarkMenu(normalizedBookmarkId, event.clientX, event.clientY, event.currentTarget)
 }
 
 function handleDocumentKeydown(event: KeyboardEvent): void {
@@ -1995,7 +2018,7 @@ function handleBackgroundMaskToggle(enabled: boolean): void {
 
 function handleBackgroundSettingFieldChange(
   key: NewtabBackgroundSettingsFieldKey,
-  value: number | string
+  value: number | string | boolean
 ): void {
   if (key === 'displaySize' || key === 'positionX' || key === 'positionY') {
     state.featuredBackgroundPreferences = normalizeFeaturedBackgroundPreferences({
@@ -2009,6 +2032,7 @@ function handleBackgroundSettingFieldChange(
   }
 
   const previousSettings = state.backgroundSettings
+  if (key === 'type') setBackgroundStatus('')
   const nextSettings = normalizeBackgroundSettings({
     ...state.backgroundSettings,
     [key]: value
@@ -2252,13 +2276,15 @@ function isSettingsDrawerOpen(): boolean {
   return getNewtabSettingsDrawerView().open
 }
 
-function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number): void {
+function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number, anchor: HTMLElement): void {
   const bookmark = getBookmarkById(bookmarkId)
   if (!bookmark?.url) {
     return
   }
 
   bookmarkMenuSession += 1
+  bookmarkCopyFeedback = IDLE_ACTION_FEEDBACK
+  bookmarkMenuReturnFocus = anchor
   state.activeMenuBookmarkId = bookmarkId
   state.menuX = clientX
   state.menuY = clientY
@@ -2304,8 +2330,13 @@ function openAddBookmarkMenuForElement(anchor: HTMLElement, folderId: string): v
   renderAddBookmarkMenu()
 }
 
-function closeBookmarkMenu({ animate = true } = {}): void {
+function closeBookmarkMenu({ animate = true, restoreFocus = false } = {}): void {
+  const anchor = bookmarkMenuReturnFocus
+  const bookmarkId = state.activeMenuBookmarkId
+  bookmarkMenuReturnFocus = null
   bookmarkMenuSession += 1
+  bookmarkCopyFeedback = IDLE_ACTION_FEEDBACK
+  const session = bookmarkMenuSession
   state.activeMenuBookmarkId = ''
   state.menuBusy = false
   state.menuError = ''
@@ -2316,6 +2347,17 @@ function closeBookmarkMenu({ animate = true } = {}): void {
     dispatchNewtabBookmarkEditMenuClosing()
   } else {
     dispatchNewtabBookmarkEditMenuView(null)
+  }
+  if (restoreFocus) {
+    window.requestAnimationFrame(() => {
+      if (session !== bookmarkMenuSession || state.activeMenuBookmarkId) return
+      const target = anchor?.isConnected ? anchor : (
+        getNewtabBookmarkContentNodes().tiles.get(bookmarkId) ||
+        getNewtabSpeedDialNodes().cards.get(bookmarkId) ||
+        getNewtabSearchWidgetNodes().input
+      )
+      target?.focus({ preventScroll: true })
+    })
   }
 }
 
@@ -5160,6 +5202,7 @@ async function copyActiveMenuBookmarkUrl(): Promise<void> {
   }
 
   const session = bookmarkMenuSession
+  bookmarkCopyFeedback = actionFeedback('pending')
   try {
     state.menuBusy = true
     state.pendingDeleteBookmarkId = ''
@@ -5170,14 +5213,54 @@ async function copyActiveMenuBookmarkUrl(): Promise<void> {
     if (!isCurrentBookmarkMenuSession(session)) return
     state.menuBusy = false
     state.menuError = ''
-    state.menuStatus = '链接已复制'
+    bookmarkCopyFeedback = actionFeedback('success')
     renderBookmarkMenu({ focusFirst: false, focusAction: 'copy-url' })
   } catch (error) {
     if (!isCurrentBookmarkMenuSession(session)) return
+    bookmarkCopyFeedback = actionFeedback('error')
     state.menuBusy = false
     state.menuStatus = ''
     state.menuError = error instanceof Error ? `复制失败：${error.message}` : '复制失败，请手动复制链接。'
     renderBookmarkMenu({ focusFirst: false, focusAction: 'copy-url' })
+  }
+}
+
+async function moveActiveMenuBookmark(folderId: string): Promise<void> {
+  if (state.menuBusy) return
+  const bookmark = getActiveMenuBookmark()
+  if (!bookmark?.url) {
+    closeBookmarkMenu()
+    return
+  }
+  if (bookmark.parentId === folderId || bookmark.unmodifiable === 'managed') return
+  const folder = state.folderNodeMap.get(folderId)
+  if (!folder || folder.id === '0' || folder.unmodifiable === 'managed') {
+    state.menuError = '目标文件夹已不可用，请重新选择。'
+    state.menuStatus = ''
+    renderBookmarkMenu({ focusFirst: false, focusAction: 'move-bookmark' })
+    return
+  }
+
+  const session = bookmarkMenuSession
+  state.menuBusy = true
+  state.pendingDeleteBookmarkId = ''
+  state.menuError = ''
+  state.menuStatus = ''
+  renderBookmarkMenu({ focusFirst: false })
+  try {
+    await moveBookmarkLazy(bookmark.id, folderId)
+    // Native bookmark events update the tree without rehydrating settings or
+    // committing the title, URL and icon drafts still being edited in this menu.
+    if (!isCurrentBookmarkMenuSession(session)) return
+    state.menuBusy = false
+    state.menuStatus = `已移动到「${folder.title || '未命名文件夹'}」`
+    renderBookmarkMenu({ focusFirst: false, focusAction: 'move-bookmark' })
+  } catch (error) {
+    if (!isCurrentBookmarkMenuSession(session)) return
+    state.menuBusy = false
+    state.menuStatus = ''
+    state.menuError = error instanceof Error ? `移动失败：${error.message}` : '移动失败，请稍后重试。'
+    renderBookmarkMenu({ focusFirst: false, focusAction: 'move-bookmark' })
   }
 }
 
@@ -5950,7 +6033,8 @@ function runBatchedAdaptiveLayoutUpdate(): void {
   })
   const widthBounds = getAdaptiveSearchWidthBounds({
     viewportWidth,
-    containerWidth: slotRect.width
+    containerWidth: slotRect.width,
+    automaticWidth: Boolean(getComputedStyle(slot).getPropertyValue('--search-auto-width').trim())
   })
 
   let collisionOffset = 0
@@ -6726,10 +6810,8 @@ function initializeSearchWidget(): boolean {
   }
 
   dispatchNewtabSearchWidgetView({
-    action: {
-      canSubmit: false,
-      hasInputValue: false
-    },
+    // Settings can rebuild this view without remounting its uncontrolled input.
+    action: createSearchWidgetActionState(getSearchInput()?.value || ''),
     buttons: {
       engine: getSearchEngineButtonState(),
       natural: getNaturalSearchButtonState()
@@ -6932,10 +7014,7 @@ function getSearchSuggestionKey(suggestion: NewTabSearchSuggestion, index: numbe
 
 function syncSearchInputActions(input: HTMLInputElement): void {
   patchNewtabSearchWidgetView({
-    action: {
-      canSubmit: Boolean(input.value.trim()),
-      hasInputValue: Boolean(input.value)
-    }
+    action: createSearchWidgetActionState(input.value)
   })
 }
 
@@ -8837,10 +8916,27 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
           toggleActiveMenuBookmarkPin,
           { actionId: 'toggle-pin', ariaLabel: `${pinCopy.ariaLabel}：${bookmarkLabel}` }
         ),
-        createMenuActionViewModel('复制链接', 'copy', copyActiveMenuBookmarkUrl, {
-          actionId: 'copy-url',
-          ariaLabel: `复制书签链接：${bookmarkLabel}`
-        }),
+        {
+          ...createMenuActionViewModel('复制链接', 'copy', copyActiveMenuBookmarkUrl, {
+            actionId: 'copy-url',
+            ariaLabel: `复制书签链接：${bookmarkLabel}`
+          }),
+          feedback: bookmarkCopyFeedback
+        },
+        {
+          ...createMenuActionViewModel('移动到', 'move', () => {}, {
+            actionId: 'move-bookmark',
+            ariaLabel: `移动书签：${bookmarkLabel}`,
+            disabled: state.menuBusy || bookmark.unmodifiable === 'managed'
+          }),
+          children: () => buildBookmarkMoveActions(
+            state.rootNode?.children || [],
+            bookmark.parentId || '',
+            folderId => {
+              if (isCurrentBookmarkMenuSession(session)) return moveActiveMenuBookmark(folderId)
+            }
+          )
+        },
         createMenuActionViewModel(
           state.pendingDeleteBookmarkId === String(bookmark.id) ? '确认删除 1 个' : '删除链接',
           'trash',
@@ -8870,7 +8966,7 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
       onCustomIconFileSelect: (file) => {
         if (isCurrentBookmarkMenuSession(session)) return handleCustomIconFileSelect(file)
       },
-      onCloseRequest: closeBookmarkMenu,
+      onCloseRequest: () => closeBookmarkMenu({ restoreFocus: true }),
       onIconModeChange: handleIconModeChange,
       status: state.menuStatus,
       statusTone: state.pendingDeleteBookmarkId === String(bookmark.id) ? 'warning' : '',
@@ -9078,11 +9174,10 @@ function normalizeBackgroundSettings(rawSettings: unknown): typeof DEFAULT_BACKG
   }
 
   const settings = rawSettings as Record<string, unknown>
-  const type = SUPPORTED_BACKGROUND_TYPES.has(String(settings.type))
-    ? String(settings.type)
-    : DEFAULT_BACKGROUND_SETTINGS.type
+  const type = normalizeNewtabBackgroundType(settings.type)
   const featuredId = normalizeFeaturedBackgroundId(settings.featuredId)
   return {
+    ...normalizeTextureSettings(settings),
     type,
     color: normalizeHexColor(settings.color, DEFAULT_BACKGROUND_SETTINGS.color),
     imageName: String(settings.imageName || '').trim(),
@@ -9236,7 +9331,7 @@ async function ensureCurrentBackgroundStartupCache(
   settings = state.backgroundSettings,
   mediaSignature = getBackgroundMediaSignature(settings)
 ): Promise<void> {
-  if (!mediaSignature || settings.type === 'color') {
+  if (!mediaSignature || isProceduralBackgroundType(settings.type)) {
     return
   }
   if (hasCurrentInstantWallpaperStartupImage(mediaSignature, settings)) {
@@ -9269,7 +9364,7 @@ function scheduleCurrentBackgroundStartupCache(
   window.clearTimeout(backgroundStartupCacheTimer)
   backgroundStartupCacheTimer = 0
   const requestId = ++backgroundStartupCacheRequestId
-  if (!getBackgroundMediaSignature(settings) || settings.type === 'color') {
+  if (!getBackgroundMediaSignature(settings) || isProceduralBackgroundType(settings.type)) {
     return
   }
   if (hasCurrentInstantWallpaperStartupImage(getBackgroundMediaSignature(settings), settings)) {
@@ -9328,6 +9423,7 @@ function shouldClearBackgroundUrlCache(
 }
 
 function getBackgroundMediaSignature(settings: typeof DEFAULT_BACKGROUND_SETTINGS): string {
+  if (settings.type === 'texture') return `texture|${settings.texturePreset}`
   const featuredItem = settings.type === 'featured'
     ? getActiveFeaturedBackgroundItemSync(settings)
     : null
@@ -9400,7 +9496,7 @@ function getBackgroundMediaSaveErrorMessage(error: unknown): string {
 
 function updateBackgroundStartupCacheStatus(settings = state.backgroundSettings): void {
   const mediaKey = getBackgroundMediaSignature(settings)
-  const cacheRequired = settings.type !== 'color'
+  const cacheRequired = !isProceduralBackgroundType(settings.type)
   const cacheReady = !cacheRequired || hasCurrentInstantWallpaperStartupImage(mediaKey, settings)
 
   if (!cacheRequired) {
@@ -9415,7 +9511,7 @@ function updateBackgroundStartupCacheStatus(settings = state.backgroundSettings)
 
 function hasAppliedBackgroundMedia(settings: typeof DEFAULT_BACKGROUND_SETTINGS): boolean {
   const media = getNewtabBackgroundMediaView()
-  if (settings.type === 'color') {
+  if (isProceduralBackgroundType(settings.type)) {
     return true
   }
   if (settings.type === 'video') {
@@ -9436,6 +9532,7 @@ function setWallpaperPlaceholderColor(color = getBackgroundPlaceholderColor(stat
 }
 
 function getBackgroundPlaceholderColor(settings: typeof DEFAULT_BACKGROUND_SETTINGS): string {
+  if (settings.type === 'texture') return TEXTURE_BACKGROUND_COLOR
   const allowDarkColor = settings.type === 'color'
   if (settings.type === 'featured') {
     return getNonBlackPlaceholderColor(
@@ -9604,7 +9701,7 @@ async function applyBackgroundSettings(): Promise<void> {
     return
   }
 
-  if (settings.type === 'color') {
+  if (isProceduralBackgroundType(settings.type)) {
     clearBackgroundMedia()
     setActiveBackgroundObjectUrl('')
     activeBackgroundImageNaturalSize = null
@@ -10198,10 +10295,11 @@ function syncInstantWallpaperTargetForSettings(
   settings: typeof DEFAULT_BACKGROUND_SETTINGS,
   mediaSignature = getBackgroundMediaSignature(settings)
 ): void {
+  syncTextureBackground(settings)
   // Mirror the mask independently of the wallpaper target so the boot script can
   // paint it on the first frame for every background type, solid colors included.
   saveBackgroundMaskSnapshot({
-    maskEnabled: settings.maskEnabled,
+    maskEnabled: settings.type !== 'texture' && settings.maskEnabled,
     maskStyle: settings.maskStyle,
     maskOverlay: settings.maskOverlay,
     maskBlur: settings.maskBlur
@@ -10227,7 +10325,7 @@ function buildInstantWallpaperTargetForSettings(
   settings: typeof DEFAULT_BACKGROUND_SETTINGS,
   mediaKey = getBackgroundMediaSignature(settings)
 ): InstantWallpaperTargetRecord | null {
-  if (!mediaKey) {
+  if (!mediaKey || settings.type === 'texture') {
     return null
   }
 
@@ -10255,7 +10353,7 @@ function buildInstantWallpaperTargetForSettings(
     maskStyle: settings.maskStyle,
     maskOverlay: settings.maskOverlay,
     maskBlur: settings.maskBlur,
-    cacheRequired: settings.type !== 'color',
+    cacheRequired: !isProceduralBackgroundType(settings.type),
     cacheReady: hasCurrentInstantWallpaperStartupImage(mediaKey, settings),
     updatedAt: Date.now()
   }
@@ -11026,8 +11124,8 @@ function normalizeSearchSettings(rawSettings: unknown): typeof DEFAULT_SEARCH_SE
     naturalSearchEnabled: settings.naturalSearchEnabled === true,
     naturalSearchAiConfigured: settings.naturalSearchAiConfigured === true,
     autoVerticalCenter: settings.autoVerticalCenter === true,
-    width: clampNumber(settings.width, 16, 72, DEFAULT_SEARCH_SETTINGS.width),
-    height: clampNumber(settings.height, 28, 56, DEFAULT_SEARCH_SETTINGS.height),
+    width: clampNumber(settings.width, SEARCH_WIDTH_MIN_VW, SEARCH_WIDTH_MAX_VW, DEFAULT_SEARCH_SETTINGS.width),
+    height: normalizeSearchHeight(settings.height),
     offsetY: clampNumber(
       settings.offsetY,
       SEARCH_OFFSET_ABSOLUTE_MIN,
@@ -11039,7 +11137,10 @@ function normalizeSearchSettings(rawSettings: unknown): typeof DEFAULT_SEARCH_SE
 }
 
 function getSearchPlaceholder(settings: typeof DEFAULT_SEARCH_SETTINGS): string {
-  return String(settings.placeholder ?? '').trim()
+  const placeholder = String(settings.placeholder ?? '').trim()
+  return !settings.webSearchEnabled && placeholder === DEFAULT_SEARCH_SETTINGS.placeholder
+    ? '搜索书签，或输入 / 执行命令'
+    : placeholder
 }
 
 function syncSearchSettingsControls(): void {
@@ -11394,12 +11495,7 @@ function withDetectedIconPreset(settings: IconSettings): IconSettings {
 }
 
 function applyIconPreset(presetKey: IconLayoutPresetKey): void {
-  const preset = ICON_LAYOUT_PRESETS[presetKey]
-  state.iconSettings = normalizeIconSettings({
-    ...preset,
-    verticalCenter: state.iconSettings.verticalCenter,
-    preset: presetKey
-  })
+  state.iconSettings = applyIconLayoutPreset(state.iconSettings, presetKey)
   void saveIconSettings().catch((error) => {
     console.warn('新标签页图标预设保存失败。', error)
   })

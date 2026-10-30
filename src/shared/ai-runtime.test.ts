@@ -121,6 +121,7 @@ async function run(): Promise<void> {
   await testProviderErrorRedaction()
   clearAiProviderCompatibilityCache()
   await testSharedRequestDeadline()
+  testDeepSeekV41ReasoningContracts()
   testProviderConnectivityReasoningEffort()
   testOfficialProviderReasoningAdapters()
   clearAiProviderCompatibilityCache()
@@ -130,6 +131,79 @@ async function run(): Promise<void> {
   clearAiProviderCompatibilityCache()
   await testReasoningEffortRejection()
   testModelReasoningProfiles()
+}
+
+function testDeepSeekV41ReasoningContracts(): void {
+  for (const model of [
+    'group/auto-deepseek-v4-1-flash',
+    'deepseek-ai/DeepSeek-V4.1-Flash-1017',
+    'deepseek-v4.1-flash:free',
+    'deepseek-flash'
+  ]) {
+    assert(
+      getReasoningEffortOptions(model).map((option) => option.id).join(',') === 'low,high,max',
+      `${model} should expose exactly the three real thinking strengths`
+    )
+  }
+  for (const model of ['deepseek-v4-flash', 'deepseek-v4.10-flash']) {
+    assert(
+      !getModelReasoningProfile(model).levels.includes('low'),
+      `${model} on an unknown gateway must not inherit the V4.1 Flash rule`
+    )
+  }
+
+  const cases = [
+    { baseUrl: 'https://gateway.example/v1', model: 'group/auto-deepseek-v4-1-flash' },
+    { baseUrl: 'https://api.deepseek.com', model: 'deepseek-flash' },
+    { baseUrl: 'https://api.deepseek.com', model: 'deepseek-v4-flash' },
+    { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'deepseek-v4.1-flash' },
+    { baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'deepseek-v4-1-flash-261017' },
+    { baseUrl: 'https://tokenhub-intl.tencentcloudmaas.com/v1', model: 'deepseek-v4.1-flash' }
+  ]
+  for (const provider of cases) {
+    for (const apiStyle of ['chat_completions', 'responses'] as const) {
+      for (const reasoningEffort of ['low', 'high', 'max'] as const) {
+        const body = buildAiProviderConnectivityRequestBody({
+          ...provider, apiStyle, reasoningEffort
+        }) as Record<string, any>
+        const sentEffort = apiStyle === 'responses'
+          ? body.reasoning?.effort
+          : body.reasoning_effort ?? body.thinking?.reasoning_effort
+        assert(
+          sentEffort === reasoningEffort,
+          `${provider.baseUrl} ${apiStyle} must preserve ${reasoningEffort} for ${provider.model}`
+        )
+        assert(body.model === provider.model, 'reasoning normalization must never rewrite the selected model ID')
+        if (apiStyle === 'responses') {
+          assert(!('thinking' in body) && !('reasoning_effort' in body), 'Responses must not receive Chat-only reasoning fields')
+        }
+      }
+    }
+  }
+
+  for (const apiStyle of ['chat_completions', 'responses'] as const) {
+    const body = buildAiProviderConnectivityRequestBody({
+      baseUrl: 'https://api.deepseek.com', model: 'deepseek-flash', apiStyle, reasoningEffort: 'none'
+    }) as Record<string, any>
+    assert(
+      apiStyle === 'responses' ? body.reasoning?.effort === 'none' : body.thinking?.type === 'disabled',
+      'official DeepSeek must keep disabling thinking separate from the three enabled strengths'
+    )
+  }
+
+  const capabilities = extractModelReasoningCapabilities({
+    data: [{
+      id: 'group/auto-deepseek-v4-1-flash',
+      effort: { supported_levels: ['max', 'low', 'high'], default_level: 'high' }
+    }]
+  })
+  const capability = capabilities['group/auto-deepseek-v4-1-flash']
+  assert(capability?.levels.join(',') === 'low,high,max', 'DeepSeek Models API effort.supported_levels must be recognized')
+  assert(capability?.defaultEffort === 'high', 'DeepSeek Models API effort.default_level must survive extraction')
+  assert(
+    getModelReasoningProfile('group/auto-deepseek-v4-1-flash', capability).source === 'metadata',
+    'explicit catalog capabilities must take precedence over generic model-name rules'
+  )
 }
 
 function testProviderConnectivityReasoningEffort(): void {
@@ -256,6 +330,32 @@ function testProviderConnectivityReasoningEffort(): void {
     !('reasoning_effort' in unknownModelDefaultBody) && !('reasoning' in unknownModelDefaultBody),
     'unknown-model default should remain implicit for compatibility'
   )
+
+  const deepSeekV41Model = 'group/auto-deepseek-v4-1-flash'
+  const deepSeekV41LowBody = buildAiProviderConnectivityRequestBody({
+    ...getSettings('chat_completions'),
+    model: deepSeekV41Model,
+    reasoningEffort: 'low'
+  }) as Record<string, any>
+  const deepSeekV41HighBody = buildAiProviderConnectivityRequestBody({
+    ...getSettings('chat_completions'),
+    model: deepSeekV41Model,
+    reasoningEffort: 'high'
+  }) as Record<string, any>
+  const deepSeekV41MaxBody = buildAiProviderConnectivityRequestBody({
+    ...getSettings('chat_completions'),
+    model: deepSeekV41Model,
+    reasoningEffort: 'max'
+  }) as Record<string, any>
+  const deepSeekV41DefaultBody = buildAiProviderConnectivityRequestBody({
+    ...getSettings('chat_completions'),
+    model: deepSeekV41Model,
+    reasoningEffort: 'default'
+  }) as Record<string, any>
+  assert(deepSeekV41LowBody.reasoning_effort === 'low', 'DeepSeek V4.1 Flash custom channels should send the low effort')
+  assert(deepSeekV41HighBody.reasoning_effort === 'high', 'DeepSeek V4.1 Flash custom channels should send the high effort')
+  assert(deepSeekV41MaxBody.reasoning_effort === 'max', 'DeepSeek V4.1 Flash custom channels should send the max effort')
+  assert(deepSeekV41DefaultBody.reasoning_effort === 'high', 'DeepSeek V4.1 Flash custom-channel default should materialize high')
 }
 
 function testOfficialProviderReasoningAdapters(): void {
@@ -274,8 +374,18 @@ function testOfficialProviderReasoningAdapters(): void {
   const deepSeekMax = build('https://api.deepseek.com', 'deepseek-v4-pro', 'max')
   assert(deepSeekMax.thinking?.type === 'enabled', 'DeepSeek max should explicitly enable thinking')
   assert(deepSeekMax.reasoning_effort === 'max', 'DeepSeek max should use the real flat max effort')
+  const deepSeekV41Low = build('https://api.deepseek.com', 'deepseek-v4-1-flash', 'low')
+  assert(
+    deepSeekV41Low.thinking?.type === 'enabled' && deepSeekV41Low.reasoning_effort === 'low',
+    'DeepSeek V4.1 Flash should preserve the real low effort'
+  )
+  const deepSeekV41Off = build('https://api.deepseek.com', 'deepseek-v4.1-flash', 'none')
+  assert(
+    deepSeekV41Off.thinking?.type === 'disabled' && !('reasoning_effort' in deepSeekV41Off),
+    'DeepSeek V4.1 Flash should support disabling thinking without sending an effort'
+  )
   const deepSeekLegacyLow = build('https://api.deepseek.com', 'deepseek-v4-flash', 'low')
-  assert(deepSeekLegacyLow.reasoning_effort === 'high', 'DeepSeek low alias should be canonicalized to real high')
+  assert(deepSeekLegacyLow.reasoning_effort === 'low', 'the official legacy Flash alias now serves V4.1 and must preserve low')
   const deepSeekOff = build('https://api.deepseek.com', 'deepseek-v4-flash', 'none')
   assert(deepSeekOff.thinking?.type === 'disabled', 'DeepSeek off should explicitly disable thinking')
   assert(!('reasoning_effort' in deepSeekOff), 'DeepSeek off should not send a contradictory effort')
@@ -897,7 +1007,7 @@ function testOfficialProviderReasoningAdapters(): void {
   const moonshotResponses = build('https://api.moonshot.cn/v1', 'kimi-k3', 'max', 'responses')
   assert(!('reasoning' in moonshotResponses) && !('reasoning_effort' in moonshotResponses), 'Moonshot direct Responses should not pretend to support effort')
   const deepSeekResponses = build('https://api.deepseek.com', 'deepseek-v4-pro', 'max', 'responses')
-  assert(!('reasoning' in deepSeekResponses) && !('reasoning_effort' in deepSeekResponses), 'DeepSeek direct Responses should not pretend to support effort')
+  assert(deepSeekResponses.reasoning?.effort === 'max' && !('reasoning_effort' in deepSeekResponses), 'DeepSeek direct Responses should use the documented nested effort')
   const deepSeekReasonerResponses = build('https://api.deepseek.com', 'deepseek-reasoner', 'max', 'responses')
   assert(!('reasoning' in deepSeekReasonerResponses), 'DeepSeek reasoner Responses should remain unsupported')
 
@@ -1219,6 +1329,22 @@ function testModelReasoningProfiles(): void {
   assert(getModelReasoningProfile('o4-mini').supported, 'o-series should support effort')
   assert(!getModelReasoningProfile('gpt-4o').supported, 'gpt-4o is not a reasoning model')
   assert(getModelReasoningProfile('deepseek-v4-flash').supported, 'deepseek v4 should support effort')
+  assert(
+    getModelReasoningProfile('group/auto-deepseek-v4-1-flash').levels.join(',') === 'low,high,max',
+    'DeepSeek V4.1 Flash custom channels should expose low, high, and max'
+  )
+  assert(
+    getModelReasoningProfile('deepseek-v4.1-flash').defaultEffort === 'high',
+    'DeepSeek V4.1 Flash should default to high'
+  )
+  assert(
+    resolveReasoningEffortForModel('group/auto-deepseek-v4-1-flash', 'medium') === 'high',
+    'DeepSeek V4.1 Flash medium alias should canonicalize to high'
+  )
+  assert(
+    resolveReasoningEffortForModel('group/auto-deepseek-v4-1-flash', 'xhigh') === 'high',
+    'DeepSeek V4.1 Flash xhigh alias should canonicalize to high'
+  )
   assert(getModelReasoningProfile('qwen3-max').supported, 'unknown gateways should retain explicit compatible effort controls')
   assert(getModelReasoningProfile('grok-4.3').supported, 'grok 4.3 should support effort')
   assert(!getModelReasoningProfile('grok-4').supported, 'legacy grok-4 rejects reasoning_effort')
@@ -1244,12 +1370,12 @@ function testModelReasoningProfiles(): void {
     apiStyle: 'chat_completions'
   }
   assert(
-    getModelReasoningProfile('deepseek-v4-flash', null, deepSeekDirectContext).levels.join(',') === 'none,high,max',
-    'direct DeepSeek should only expose real off/high/max controls'
+    getModelReasoningProfile('deepseek-v4-flash', null, deepSeekDirectContext).levels.join(',') === 'none,low,high,max',
+    'the official Flash alias should expose off plus all three current thinking strengths'
   )
   assert(
-    resolveReasoningEffortForModel('deepseek-v4-flash', 'xhigh', null, deepSeekDirectContext) === 'max',
-    'direct DeepSeek xhigh legacy value should canonicalize to max'
+    resolveReasoningEffortForModel('deepseek-v4-flash', 'xhigh', null, deepSeekDirectContext) === 'high',
+    'the current official DeepSeek xhigh compatibility mapping should canonicalize to high'
   )
 
   const qwenChatContext = {

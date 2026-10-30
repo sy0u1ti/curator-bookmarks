@@ -196,16 +196,19 @@ try {
   await select(page, '背景蒙版样式', '深色渐变')
   await slider(page, 'background-mask-overlay', 35)
 
-  // Live card preview must respond to every spacing control, not just its label.
-  await page.getByRole('button', { name: '卡片细节', exact: true }).click()
-  for (const [id, property] of [['column-gap', 'columnGap'], ['row-gap', 'rowGap']]) {
-    await slider(page, `icon-${id}`, 0)
-    const low = await page.locator('#icon-live-preview > div').evaluate((el, property) => getComputedStyle(el)[property], property)
-    await slider(page, `icon-${id}`, 100)
-    const high = await page.locator('#icon-live-preview > div').evaluate((el, property) => getComputedStyle(el)[property], property)
-    assert.notEqual(high, low)
-    await slider(page, `icon-${id}`, 10)
+  // One density choice updates cards and all spacing together.
+  await page.locator('#icon-advanced-toggle').click()
+  const densityGaps = []
+  for (const preset of ['compact', 'spacious']) {
+    await page.locator(`[data-preset="${preset}"]`).click()
+    densityGaps.push(await page.locator('#icon-live-preview > div').evaluate(el => ({
+      column: getComputedStyle(el).columnGap, row: getComputedStyle(el).rowGap,
+      folder: getComputedStyle(document.querySelector('.bookmark-folder-sections')).rowGap
+    })))
   }
+  for (const key of ['column', 'row', 'folder']) assert.notEqual(densityGaps[0][key], densityGaps[1][key])
+  assert.equal(await page.locator('#icon-column-gap-root, #icon-row-gap-root, #icon-folder-gap-root').count(), 0)
+  await page.locator('[data-preset="comfortable"]').click()
   await page.getByRole('button', { name: '固定列数', exact: true }).click()
   await slider(page, 'icon-columns', 8)
   await page.waitForFunction(() => {
@@ -220,38 +223,41 @@ try {
       Math.abs(live.getBoundingClientRect().width - preview.getBoundingClientRect().width) < 0.5
   })
   await page.getByRole('button', { name: '自动适配', exact: true }).click()
-  await slider(page, 'icon-folder-gap', 88)
-  assert.equal(await page.locator('#icon-folder-gap-value').textContent(), '88px')
-  await slider(page, 'icon-folder-gap', 20)
   await page.locator('#icon-live-preview').screenshot({ path: path.join(output, 'card-preview.png') })
 
   const densityHeights = []
-  for (const [density, value] of [['极简单行', 'compact'], ['平衡胶囊', 'balanced'], ['独立卡片', 'comfortable']]) {
+  for (const [density, value] of [['单行', 'compact'], ['胶囊', 'balanced'], ['卡片', 'comfortable']]) {
     await select(page, '时间布局密度', density)
     await page.waitForFunction(value => document.querySelector('.newtab-clock')?.dataset.clockDensity === value, value)
     densityHeights.push(await page.locator('.newtab-clock').evaluate(el => el.getBoundingClientRect().height))
   }
   assert.ok(densityHeights[0] < densityHeights[1] && densityHeights[1] < densityHeights[2], `Clock densities must change layout: ${densityHeights}`)
-  await select(page, '时间布局密度', '平衡胶囊')
-  await slider(page, 'time-clock-size', 70)
+  await select(page, '时间布局密度', '胶囊')
+  const restoreLegacyClockSize = async size => page.evaluate(async size => {
+    const key = 'curatorBookmarkNewTabTimeSettings'
+    const stored = await chrome.storage.local.get(key)
+    await chrome.storage.local.set({ [key]: { ...stored[key], clockSize: size } })
+  }, size)
+  assert.equal(await page.locator('#time-clock-size-root').count(), 0)
+  await restoreLegacyClockSize(70)
   await page.waitForFunction(() => document.querySelector('.newtab-clock')?.style.getPropertyValue('--clock-scale') === '0.7')
   const smallFont = await page.locator('[data-clock-time]').evaluate(el => parseFloat(getComputedStyle(el).fontSize))
-  await slider(page, 'time-clock-size', 140)
+  await restoreLegacyClockSize(140)
   await page.waitForFunction(() => document.querySelector('.newtab-clock')?.style.getPropertyValue('--clock-scale') === '1.4')
   assert.ok(await page.locator('[data-clock-time]').evaluate(el => parseFloat(getComputedStyle(el).fontSize)) > smallFont)
   await select(page, '时间显示内容', '仅日期')
   await page.waitForFunction(() => document.querySelector('.newtab-clock')?.dataset.clockDisplayMode === 'date')
   assert.equal(await page.locator('[data-clock-time]').count(), 0)
   assert.ok(Math.abs(await page.locator('[data-clock-date]').evaluate(el => parseFloat(getComputedStyle(el).fontSize)) - 22.4) < 0.1, 'Date-only mode uses its 16px base size at 140%')
-  await select(page, '时间布局密度', '独立卡片')
+  await select(page, '时间布局密度', '卡片')
   await page.waitForFunction(() => document.querySelector('.newtab-clock')?.dataset.clockDensity === 'comfortable')
   assert.ok(Math.abs(await page.locator('.newtab-clock').evaluate(el => el.getBoundingClientRect().height) - 75.6) < 1, 'Date-only card uses the compact 54px height at 140%')
-  await select(page, '时间布局密度', '平衡胶囊')
+  await select(page, '时间布局密度', '胶囊')
   await select(page, '时间显示内容', '仅时间')
   await page.waitForFunction(() => document.querySelector('.newtab-clock')?.dataset.clockDisplayMode === 'time')
   assert.equal(await page.locator('[data-clock-date]').count(), 0)
   await select(page, '时间显示内容', '时间和日期')
-  await slider(page, 'time-clock-size', 100)
+  await restoreLegacyClockSize(100)
   report.time = { densityHeights, fontSize: true, displayMode: true }
 
   await select(page, '背景类型', '纯色')

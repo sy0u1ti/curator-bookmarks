@@ -20,7 +20,7 @@ export function OptionDetails({ actions, ariaLabel, children, className = '', la
           render={<Button size="sm" variant="secondary" />}
         >
           {label}
-          <Icon name="ChevronDown" size={14} aria-hidden="true" className="transition-transform duration-ds-fast group-aria-expanded:rotate-180 motion-reduce:transition-none" />
+          <Icon name="ChevronDown" size={14} aria-hidden="true" className="t-acc-chevron" />
         </CollapsibleTrigger>
       </div>
       <CollapsiblePanel keepMounted={false} className="mt-3 border-t border-ds-border-subtle pt-3">

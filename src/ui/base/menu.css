@@ -1,0 +1,73 @@
+.curator-menu-items {
+  display: grid;
+  min-width: 0;
+  gap: inherit;
+}
+
+.curator-menu-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--ds-text-muted);
+}
+
+.curator-cascade-positioner {
+  z-index: 10040;
+}
+
+.curator-cascade-popup {
+  display: grid;
+  gap: 4px;
+  width: max-content;
+  min-width: min(210px, calc(100vw - 24px));
+  max-width: min(260px, calc(100vw - 24px));
+  max-height: min(420px, var(--available-height), calc(100dvh - 24px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-surface-2);
+  color: var(--ds-text-primary);
+  box-shadow: var(--ds-shadow-popover);
+  outline: none;
+}
+
+.curator-cascade-popup .curator-cascade-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  background: transparent;
+  color: var(--ds-text-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: default;
+  outline: none;
+}
+
+.curator-cascade-popup .curator-cascade-item > svg {
+  flex-shrink: 0;
+}
+
+.curator-cascade-popup .curator-cascade-item[data-cascade-highlighted],
+.curator-cascade-popup .curator-cascade-item[data-popup-open] {
+  background: var(--ds-hover);
+}
+
+.curator-cascade-popup .curator-cascade-item:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -2px;
+}
+
+.curator-cascade-popup .curator-cascade-item[data-disabled] {
+  color: var(--ds-text-disabled);
+  opacity: 1;
+}

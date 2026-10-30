@@ -21,6 +21,7 @@ export interface PopoverProps {
   positionMethod?: BasePopoverPositionerProps['positionMethod']
   side?: 'top' | 'right' | 'bottom' | 'left'
   sideOffset?: number
+  sticky?: BasePopoverPositionerProps['sticky']
   showArrow?: boolean
   collisionAvoidance?: BasePopoverPositionerProps['collisionAvoidance']
   collisionPadding?: BasePopoverPositionerProps['collisionPadding']
@@ -44,6 +45,7 @@ export function Popover({
   positionMethod,
   side = 'bottom',
   sideOffset = 8,
+  sticky,
   showArrow = true,
   collisionAvoidance,
   collisionPadding,
@@ -62,6 +64,7 @@ export function Popover({
       positionMethod={positionMethod}
       side={side}
       sideOffset={sideOffset}
+      sticky={sticky}
     >
       <BasePopover.Popup
         id={id}

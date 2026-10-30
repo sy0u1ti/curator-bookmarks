@@ -107,6 +107,9 @@ import { undoInboxAutoMove } from './inbox-undo.js'
 import { reviewInboxItem } from './inbox-review.js'
 import { isInboxItemPending, settleRemovedInboxItems } from '../shared/inbox.js'
 import { shouldAnalyzeInbox } from '../shared/inbox-workflow.js'
+import { registerModelsDevSync } from './models-dev-service.js'
+
+registerModelsDevSync()
 
 interface PendingCheckState {
   tabId: number

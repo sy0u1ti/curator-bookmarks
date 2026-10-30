@@ -29,7 +29,7 @@ const MODEL_SELECTOR_GROUP_ITEMS_CLASS = 'grid list-none gap-px p-0'
 const MODEL_SELECTOR_ITEM_CLASS =
   'grid min-h-8 w-full touch-manipulation select-none grid-cols-[16px_minmax(0,1fr)_auto_16px] items-center gap-2 rounded-ds-sm border-0 bg-transparent px-2 text-left text-sm font-semibold text-ds-text-primary outline-none transition-[background-color,color,transform,scale] duration-ds-fast ease-ds-standard hover:bg-ds-hover data-[highlighted]:bg-ds-hover data-[selected]:bg-ds-selected data-[selected]:text-ds-accent-text active:scale-[var(--ds-press-scale)] motion-reduce:transition-none motion-reduce:active:scale-100'
 const MODEL_SELECTOR_ITEM_INDICATOR_CLASS =
-  'inline-grid size-4 place-items-center opacity-0 data-[selected]:opacity-100'
+  'model-selector-selection-indicator inline-grid size-4 place-items-center opacity-0 data-[selected]:opacity-100'
 const MODEL_SELECTOR_LOGO_CLASS = 'size-3 flex-none object-contain invert'
 const MODEL_SELECTOR_LOGO_GROUP_CLASS = 'ml-auto inline-flex flex-none items-center'
 const MODEL_SELECTOR_TAG_CLASS =
@@ -48,8 +48,8 @@ export type ModelSelectorTriggerProps = ComponentPropsWithoutRef<typeof BaseDial
 export function ModelSelectorTrigger({ className, ...props }: ModelSelectorTriggerProps) {
   const resolvedClassName: ModelSelectorTriggerProps['className'] =
     typeof className === 'function'
-      ? (state) => cx(MODEL_SELECTOR_TRIGGER_CLASS, className(state))
-      : cx(MODEL_SELECTOR_TRIGGER_CLASS, className)
+      ? (state) => cx('curator-control model-selector-trigger', MODEL_SELECTOR_TRIGGER_CLASS, className(state))
+      : cx('curator-control model-selector-trigger', MODEL_SELECTOR_TRIGGER_CLASS, className)
 
   return <BaseDialog.Trigger className={resolvedClassName} {...props} />
 }
@@ -142,7 +142,7 @@ export function ModelSelectorInput({ className, onClear, ...props }: ModelSelect
       {onClear ? (
         <BaseCombobox.Clear
           type="button"
-          className={MODEL_SELECTOR_CLEAR_BUTTON_CLASS}
+          className={cx('curator-control', MODEL_SELECTOR_CLEAR_BUTTON_CLASS)}
           aria-label="清空模型搜索"
           keepMounted
           onClick={onClear}
@@ -211,7 +211,7 @@ export function ModelSelectorItem({
 }: ModelSelectorItemProps) {
   return (
     <BaseCombobox.Item
-      className={cx(MODEL_SELECTOR_ITEM_CLASS, className)}
+      className={cx('curator-control', MODEL_SELECTOR_ITEM_CLASS, className)}
       data-ai-model-id={value}
       value={value}
       {...props}

@@ -151,8 +151,10 @@ assert.ok(
 )
 
 assert.ok(
-  (aiProviderSettings.match(/showLoader=\{false\}/g) || []).length === 2 &&
-    aiProviderSettings.includes('<StatusBusyLoadingLabel label={modelTools.fetchModelsStatus}') &&
+  (aiProviderSettings.match(/<StatusButton\b/g) || []).length === 2 &&
+    aiProviderSettings.includes('feedback={state.testFeedback}') &&
+    aiProviderSettings.includes('feedback={modelTools.fetchFeedback}') &&
+    !aiProviderSettings.includes('StatusBusyLoadingLabel') &&
     availabilityControls.includes('showLoader={false}') &&
     availabilityDecisionPanel.includes('<StatusBusyLoadingLabel label={state.progressLabel}') &&
     aiProviderSettingsClasses.includes('ai-provider-advanced-trigger w-fit max-w-full') &&

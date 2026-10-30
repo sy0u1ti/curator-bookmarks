@@ -31,8 +31,8 @@ export function TabsList(props: TabsListProps) {
   return <BaseTabs.List {...props} />
 }
 
-export function TabsTab(props: TabsTabProps) {
-  return <BaseTabs.Tab {...props} />
+export function TabsTab({ className, ...props }: TabsTabProps) {
+  return <BaseTabs.Tab className={cxState('curator-control', className)} {...props} />
 }
 
 export function TabsPanel({ className, ...props }: TabsPanelProps) {

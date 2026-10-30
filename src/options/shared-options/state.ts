@@ -164,6 +164,8 @@ export const managerState = {
   moveFolderActiveId: '',
   moveExpandedFolderIds: new Set<string>(),
   confirmModalOpen: false,
+  confirmModalRequestId: 0,
+  confirmModalHoldToConfirm: false,
   confirmModalTone: 'danger',
   confirmModalLabel: '确认',
   confirmModalTitle: '确认操作？',

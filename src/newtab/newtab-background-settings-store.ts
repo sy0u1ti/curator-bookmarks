@@ -1,5 +1,6 @@
 import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 import type { FeaturedBackgroundPreferences } from './featured-gallery-preferences.js'
+import { DEFAULT_TEXTURE_SETTINGS, normalizeTextureSettings, type TextureSettings } from './texture-settings.js'
 import {
   doesBackgroundMaskFilterSupportGeometry,
   doesBackgroundMaskFilterSupportHover,
@@ -10,7 +11,7 @@ import {
   type BackgroundMaskStyle
 } from './background-mask-settings.js'
 
-export interface NewtabBackgroundSettingsView {
+export interface NewtabBackgroundSettingsView extends TextureSettings {
   ready: boolean
   backgroundStatus: string
   backgroundStatusTone: 'info' | 'success' | 'warning' | 'error'
@@ -58,7 +59,7 @@ export interface NewtabBackgroundSettingsView {
   videoRowHidden: boolean
 }
 
-export interface NewtabBackgroundSettingsSource {
+export interface NewtabBackgroundSettingsSource extends Partial<TextureSettings> {
   color: string
   featuredId: string
   imageName: string
@@ -87,18 +88,22 @@ export type NewtabBackgroundSettingsFieldKey =
   | 'maskStyle'
   | 'positionX'
   | 'positionY'
+  | 'texturePreset'
+  | 'textureIntensity'
+  | 'textureMotion'
   | 'type'
   | 'url'
 
 export interface NewtabBackgroundSettingsActions {
   onFileSelect: (mediaType: 'image' | 'video', file: File) => void
-  onFieldChange: (key: NewtabBackgroundSettingsFieldKey, value: number | string) => void
+  onFieldChange: (key: NewtabBackgroundSettingsFieldKey, value: number | string | boolean) => void
   onMaskToggle: (enabled: boolean) => void
   onFilterHoverToggle: (enabled: boolean) => void
   onUrlCommit: () => void
 }
 
 const EMPTY_VIEW: NewtabBackgroundSettingsView = {
+  ...DEFAULT_TEXTURE_SETTINGS,
   ready: false,
   backgroundStatus: '',
   backgroundStatusTone: 'info',
@@ -183,12 +188,14 @@ export function createNewtabBackgroundSettingsView(
   >> = {}
 ): NewtabBackgroundSettingsView {
   const featuredPickerSelected = ui.featuredPickerSelected ?? Boolean(settings.featuredId)
-  const maskControlsHidden = !settings.maskEnabled
+  const maskEnabled = settings.type !== 'texture' && settings.maskEnabled
+  const maskControlsHidden = !maskEnabled
   const maskFilterSelected = isBackgroundMaskFilterStyle(settings.maskStyle)
   const maskFilterGeometrySupported = doesBackgroundMaskFilterSupportGeometry(settings.maskStyle)
   const maskFilterHoverSupported = doesBackgroundMaskFilterSupportHover(settings.maskStyle)
 
   return {
+    ...normalizeTextureSettings(settings),
     ready: ui.ready ?? false,
     backgroundStatus: ui.backgroundStatus ?? '',
     backgroundStatusTone: ui.backgroundStatusTone ?? 'info',
@@ -211,7 +218,7 @@ export function createNewtabBackgroundSettingsView(
     imageRowHidden: settings.type !== 'image',
     maskBlur: settings.maskBlur,
     maskBlurHidden: maskControlsHidden || !isLegacyBackgroundMaskStyle(settings.maskStyle),
-    maskEnabled: settings.maskEnabled,
+    maskEnabled,
     maskFilterHover: settings.maskFilterHover,
     maskFilterHoverHidden: maskControlsHidden || !maskFilterHoverSupported,
     maskFilterSize: settings.maskFilterSize,
@@ -222,7 +229,7 @@ export function createNewtabBackgroundSettingsView(
     maskFilterStrengthHidden: maskControlsHidden || !maskFilterSelected,
     maskOverlay: settings.maskOverlay,
     maskStyle: settings.maskStyle,
-    maskStyleHidden: !settings.maskEnabled,
+    maskStyleHidden: maskControlsHidden,
     positionX: preferences.positionX,
     positionXMax: limits.positionX.max,
     positionXMin: limits.positionX.min,
@@ -280,7 +287,7 @@ export function dispatchNewtabBackgroundFilterHoverToggle(enabled: boolean): voi
 
 export function dispatchNewtabBackgroundSettingFieldChange(
   key: NewtabBackgroundSettingsFieldKey,
-  value: number | string
+  value: number | string | boolean
 ): void {
   backgroundSettingsActions.onFieldChange(key, value)
 }

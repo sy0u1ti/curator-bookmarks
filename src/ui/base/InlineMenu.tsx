@@ -1,11 +1,15 @@
 import { Menu as BaseMenu, type MenuRoot } from '@base-ui/react/menu'
-import { useRef, type ComponentPropsWithRef, type ReactElement, type ReactNode, type Ref } from 'react'
+import { useCallback, useRef, type ComponentPropsWithRef, type ReactElement, type ReactNode, type Ref } from 'react'
+import type { IconName } from '../icons/Icon'
 import { MotionPanel } from '../motion/MotionPanel'
-import { getInlineMenuActionLabel } from './menu-labels.js'
+import { InlineMenuItems, useMenuCascade } from './InlineMenuItems'
+import { cx } from './utils'
 
 export interface InlineMenuAction {
   id: string
   label: ReactNode
+  icon?: IconName
+  children?: InlineMenuAction[] | (() => InlineMenuAction[])
   attributes?: Record<string, string>
   className?: string
   closeOnSelect?: boolean
@@ -41,13 +45,29 @@ export function InlineMenu({
   triggerWrapper
 }: InlineMenuProps) {
   const portalContainerRef = useRef<HTMLSpanElement>(null)
-  const menuTrigger = <BaseMenu.Trigger {...triggerProps}>{trigger}</BaseMenu.Trigger>
+  const anchorRef = useRef<HTMLButtonElement | null>(null)
+  const actionsRef = useRef<BaseMenu.Root.Actions | null>(null)
+  const cascade = useMenuCascade({ actions, open, anchor: anchorRef, onClose: () => actionsRef.current?.close() })
+  const triggerRef = triggerProps?.ref
+  const registerAnchor = useCallback((node: HTMLButtonElement | null) => {
+    anchorRef.current = node
+    if (typeof triggerRef === 'function') {
+      const cleanup = triggerRef(node)
+      if (typeof cleanup === 'function') return () => { anchorRef.current = null; cleanup() }
+    } else if (triggerRef) {
+      triggerRef.current = node
+    }
+  }, [triggerRef])
+  const menuTrigger = <BaseMenu.Trigger {...triggerProps} className={cx('curator-control', triggerProps?.className)} ref={registerAnchor}>{trigger}</BaseMenu.Trigger>
 
   return (
     <BaseMenu.Root
       open={open}
       modal={false}
+      actionsRef={actionsRef}
+      highlightItemOnHover={!cascade.enabled}
       onOpenChange={(nextOpen, eventDetails) => {
+        if (!nextOpen) cascade.intent.reset()
         onOpenChange?.(nextOpen, eventDetails)
       }}
     >
@@ -60,23 +80,7 @@ export function InlineMenu({
             aria-label={label}
             render={<MotionPanel variant="menu" className={className} />}
           >
-            {actions.map((action) => (
-              <BaseMenu.Item
-                key={action.id}
-                disabled={action.disabled}
-                closeOnClick={action.closeOnSelect ?? true}
-                nativeButton
-                render={<button type="button" aria-label={getInlineMenuActionLabel(action)} />}
-                className={action.className || (action.destructive ? 'danger' : '')}
-                ref={action.itemRef}
-                onClick={() => {
-                  void action.onSelect?.()
-                }}
-                {...action.attributes}
-              >
-                {action.label}
-              </BaseMenu.Item>
-            ))}
+            <InlineMenuItems actions={actions} cascade={cascade} closeOnSelect />
           </BaseMenu.Popup>
         </BaseMenu.Positioner>
       </BaseMenu.Portal>

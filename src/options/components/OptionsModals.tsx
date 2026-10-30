@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { Button } from '../../ui/base/Button'
+import { HoldConfirmButton } from '../../ui/actions/HoldConfirmButton'
 import { DialogBackdrop, DialogOverlay, DialogPanel } from '../../ui/base/Dialog'
 import { Input } from '../../ui/base/Input'
 import { cx } from '../../ui/base/utils'
@@ -179,15 +180,26 @@ export function OptionsModals() {
             >
               {modals.confirm.cancelLabel}
             </Button>
-            <Button
-              className={confirmButtonClass(modals.confirm.tone)}
-              type="button"
-              variant={modals.confirm.tone === 'danger' ? 'danger' : 'primary'}
-              aria-label="确认当前操作"
-              onClick={() => handleOptionsModalAction({ action: 'confirm', modal: 'confirm' })}
-            >
-              {modals.confirm.confirmLabel}
-            </Button>
+            {modals.confirm.holdToConfirm && modals.confirm.open ? (
+              <HoldConfirmButton
+                key={modals.confirm.requestId}
+                className={confirmButtonClass(modals.confirm.tone)}
+                type="button"
+                variant="danger"
+                label={modals.confirm.confirmLabel}
+                onConfirm={() => handleOptionsModalAction({ action: 'confirm', modal: 'confirm' })}
+              />
+            ) : (
+              <Button
+                className={confirmButtonClass(modals.confirm.tone)}
+                type="button"
+                variant={modals.confirm.tone === 'danger' ? 'danger' : 'primary'}
+                aria-label="确认当前操作"
+                onClick={() => handleOptionsModalAction({ action: 'confirm', modal: 'confirm' })}
+              >
+                {modals.confirm.confirmLabel}
+              </Button>
+            )}
           </div>
         </>
       </ModalBackdrop>

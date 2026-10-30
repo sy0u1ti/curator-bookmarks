@@ -15,6 +15,7 @@ import { Icon } from '../../ui/icons/Icon'
 import { Collapsible as BaseCollapsible } from '@base-ui/react/collapsible'
 import { Button } from '../../ui/base/Button'
 import { Input } from '../../ui/base/Input'
+import { normalizeSearchHeight, SEARCH_WIDTH_MIN_PX } from '../search-layout'
 import {
   setNewtabSearchWidgetNodes,
   type NewtabSearchWidgetView,
@@ -80,8 +81,9 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
   const [focusWithin, setFocusWithin] = useState(false)
   const shell = view.shell
   const slotStyle = useMemo(() => ({
+    '--search-min-width': `${SEARCH_WIDTH_MIN_PX}px`,
     '--search-width': `${shell.width}vw`,
-    '--search-height': `${shell.height}px`,
+    '--search-height': `${normalizeSearchHeight(shell.height)}px`,
     '--search-offset-y': `${shell.offsetY}px`,
     ...(shell.autoVerticalCenter && !shell.layoutReady
       ? {
@@ -91,10 +93,6 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
         }
       : null)
   }) as CSSProperties, [shell.autoVerticalCenter, shell.height, shell.layoutReady, shell.offsetY, shell.width])
-  const formStyle = useMemo(() => ({
-    '--search-width': `${shell.width}vw`,
-    '--search-height': `${shell.height}px`
-  }) as CSSProperties, [shell.height, shell.width])
 
   const publishNodes = useCallback(() => {
     const nodes = {
@@ -166,7 +164,6 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
             SEARCH_FORM_CLASS,
             view.panel.panelVisible && SEARCH_FORM_PANEL_OPEN_CLASS
           ].filter(Boolean).join(' ')}
-          style={formStyle}
           role="search"
           aria-label={shell.ariaLabel}
           onSubmit={view.interactions.onSubmit}
@@ -176,8 +173,10 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
           <SearchWidgetClearButton view={view} />
           <SearchWidgetSeparator view={view} />
           <SearchWidgetNaturalButton view={view} />
-          <DeferredSearchEngineMenu view={view} buttonRef={engineButtonRef} menuRef={setEngineMenuNode} />
-          <SearchWidgetSubmitButton view={view} />
+          {!view.buttons.engine.disabled ? <>
+            <DeferredSearchEngineMenu view={view} buttonRef={engineButtonRef} menuRef={setEngineMenuNode} />
+            <SearchWidgetSubmitButton view={view} />
+          </> : null}
         </form>
         <SearchWidgetSuggestionsPanel view={view} />
       </BaseCollapsible.Root>
@@ -228,6 +227,9 @@ function SearchWidgetClearButton({ view }: { view: NewtabSearchWidgetView }) {
       type="button"
       aria-label="清空搜索"
       hidden={!hasInputValue}
+      inert={!hasInputValue}
+      aria-hidden={!hasInputValue}
+      tabIndex={hasInputValue ? undefined : -1}
       onClick={view.interactions.onClear}
       unstyled
     >
@@ -243,7 +245,7 @@ function SearchWidgetSeparator({ view }: { view: NewtabSearchWidgetView }) {
     <span
       className={SEARCH_SEPARATOR_CLASS}
       aria-hidden="true"
-      hidden={!hasInputValue}
+      hidden={!hasInputValue || view.buttons.engine.disabled}
     />
   )
 }

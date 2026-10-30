@@ -2,19 +2,28 @@ import { Menu as BaseMenu } from '@base-ui/react/menu'
 import { useRef } from 'react'
 import { MotionPanel } from '../motion/MotionPanel'
 import type { InlineMenuAction } from './InlineMenu.js'
-import { getInlineMenuActionLabel } from './menu-labels.js'
+import { InlineMenuItems, useMenuCascade } from './InlineMenuItems'
 
 export interface InlineMenuListProps {
   actions: InlineMenuAction[]
   className?: string
   label: string
+  active?: boolean
+  submenuAttributes?: Record<string, string>
 }
 
-export function InlineMenuList({ actions, className, label }: InlineMenuListProps) {
+export function InlineMenuList({ actions, active = true, className, label, submenuAttributes }: InlineMenuListProps) {
   const portalContainerRef = useRef<HTMLSpanElement>(null)
+  const cascade = useMenuCascade({ actions, open: active })
 
   return (
-    <BaseMenu.Root open modal={false}>
+    <BaseMenu.Root
+      open
+      modal={false}
+      disabled={!active}
+      highlightItemOnHover={!cascade.enabled}
+      onOpenChange={(open) => { if (!open) cascade.intent.reset() }}
+    >
       <span ref={portalContainerRef} />
       <BaseMenu.Portal container={portalContainerRef}>
         <BaseMenu.Positioner
@@ -32,23 +41,12 @@ export function InlineMenuList({ actions, className, label }: InlineMenuListProp
             aria-label={label}
             render={<MotionPanel variant="menu" className={className} />}
           >
-            {actions.map((action) => (
-              <BaseMenu.Item
-                key={action.id}
-                disabled={action.disabled}
-                closeOnClick={action.closeOnSelect ?? false}
-                nativeButton
-                render={<button type="button" aria-label={getInlineMenuActionLabel(action)} />}
-                className={action.className || (action.destructive ? 'danger' : '')}
-                ref={action.itemRef}
-                onClick={() => {
-                  void action.onSelect?.()
-                }}
-                {...action.attributes}
-              >
-                {action.label}
-              </BaseMenu.Item>
-            ))}
+            <InlineMenuItems
+              actions={actions}
+              cascade={cascade}
+              closeOnSelect={false}
+              submenuAttributes={submenuAttributes}
+            />
           </BaseMenu.Popup>
         </BaseMenu.Positioner>
       </BaseMenu.Portal>

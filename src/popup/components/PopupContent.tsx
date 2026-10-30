@@ -13,6 +13,9 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '../../ui/base/Button'
+import { StatusButton } from '../../ui/actions/StatusButton'
+import { COPY_ACTION_LABELS } from '../../ui/actions/ActionFeedback'
+import { IDLE_ACTION_FEEDBACK } from '../../shared/action-feedback'
 import { Input } from '../../ui/base/Input'
 import { Icon, type IconName } from '../../ui/icons/Icon'
 import { cx } from '../../ui/base/utils'
@@ -665,7 +668,8 @@ function PopupFolderPane({
         )}
       </header>
       <div className={folderTreeClass} role="tree" ref={folderTreeRef}
-        id={sidePanel ? 'sidepanel-folder-tree' : undefined} hidden={sidePanel && collapsed}>
+        id={sidePanel ? 'sidepanel-folder-tree' : undefined} hidden={sidePanel && collapsed}
+        inert={sidePanel && collapsed}>
         {children}
       </div>
     </aside>
@@ -1604,6 +1608,7 @@ function areActionMenusEqual(
       item.bookmarkId === nextItem.bookmarkId &&
       item.danger === nextItem.danger &&
       item.disabled === nextItem.disabled &&
+      item.feedback === nextItem.feedback &&
       item.label === nextItem.label
   })
 }
@@ -1695,7 +1700,25 @@ function PopupRowActionRail({
       onPointerLeave={() => setForcedCollapsed(false)}
     >
       <div className={rowActionRailClass}>
-        {quickActions.map((item) => (
+        {quickActions.map((item) => item.action === 'copy-url' ? (
+          <StatusButton
+            key={`${item.bookmarkId}:${item.action}`}
+            className={rowActionButtonClass}
+            type="button"
+            aria-label={item.ariaLabel}
+            feedback={item.feedback || IDLE_ACTION_FEEDBACK}
+            icon="Copy"
+            labels={COPY_ACTION_LABELS}
+            iconOnly
+            disabled={item.disabled}
+            tabIndex={expanded ? undefined : -1}
+            onClick={(event) => {
+              onMenuAction?.(item.bookmarkId, item.action, event.currentTarget)
+              setFocusExpanded(true)
+            }}
+            unstyled
+          />
+        ) : (
           <Button
             className={cx(rowActionButtonClass, item.danger ? rowActionDangerClass : '')}
             type="button"

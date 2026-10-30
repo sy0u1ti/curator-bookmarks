@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import './newtab-settings-policy.test.js'
+import {
+  NEWTAB_BACKGROUND_TYPE_OPTIONS,
+  normalizeNewtabBackgroundType
+} from './newtab-background-types.js'
 import {
   DEFAULT_NEW_TAB_MODULE_SETTINGS,
   normalizeNewTabModuleSettings
@@ -38,6 +43,25 @@ const bookmarkTileClasses = readFileSync('src/newtab/components/bookmarkTileClas
 const speedDialClasses = readFileSync('src/newtab/components/speedDialClasses.ts', 'utf8')
 const backgroundLayer = readFileSync('src/newtab/components/NewtabBackgroundLayer.tsx', 'utf8')
 const newtabButtonClasses = readFileSync('src/newtab/components/newtabButtonClass.ts', 'utf8')
+
+assert.deepEqual(
+  NEWTAB_BACKGROUND_TYPE_OPTIONS.map(([value]) => value),
+  ['image', 'video', 'urls', 'color'],
+  'Retired gallery and texture backgrounds must not remain selectable.'
+)
+for (const retiredType of ['featured', 'texture']) {
+  assert.equal(
+    normalizeNewtabBackgroundType(retiredType),
+    'color',
+    `${retiredType} must fall back to solid color so stored selections never leave an empty select.`
+  )
+}
+assert.ok(
+  settingsDrawer.includes('options={[...NEWTAB_BACKGROUND_TYPE_OPTIONS]}') &&
+    !settingsDrawer.includes("['featured', '精选图库']") &&
+    !settingsDrawer.includes("['texture', '纹理']"),
+  'Background settings must render only the supported background choices.'
+)
 
 assert.equal(
   DEFAULT_NEW_TAB_MODULE_SETTINGS.speedDial,

@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AiProviderCard } from '../../ui/ai/AiProviderCard'
 import { Button } from '../../ui/base/Button'
+import { RevealInput } from '../../ui/actions/RevealInput'
+import { StatusButton } from '../../ui/actions/StatusButton'
 import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../../ui/base/Collapsible'
 import { DialogBackdrop, DialogClose, DialogDescription, DialogOverlay, DialogPanel, DialogTitle } from '../../ui/base/Dialog'
 import { Input } from '../../ui/base/Input'
 import { Select, type SelectOption } from '../../ui/base/Select'
-import { SwitchControl } from '../../ui/base/Switch'
 import { Textarea } from '../../ui/base/Textarea'
+import { ToastList, type ToastItem } from '../../ui/base/Toast'
 import { AiModelSelector } from './AiModelSelector.js'
+import { AiModelDetails } from './AiModelDetails.js'
 import { OptionDetails } from './OptionDetails.js'
 import { ReasoningEffortSelector } from './ReasoningEffortSelector.js'
-import {
-  ButtonBusyLoadingLabel,
-  StatusBusyLoadingLabel
-} from './LoadingLabel.js'
 import { handleAiProviderSettingsAction } from '../options-controller'
 import {
   AI_PROVIDER_ACTION_BUTTONS_CLASS,
@@ -24,7 +24,6 @@ import {
   AI_PROVIDER_BODY_CLASS,
   AI_PROVIDER_CARD_CLASS,
   AI_PROVIDER_CARD_ATTENTION_CLASS,
-  AI_PROVIDER_CHECK_CLASS,
   AI_PROVIDER_CONNECTIVITY_CLASS,
   AI_PROVIDER_CONNECTIVITY_TONE_CLASS,
   AI_PROVIDER_COPY_CLASS,
@@ -42,7 +41,6 @@ import {
   AI_PROVIDER_FIELD_CLASS,
   AI_PROVIDER_FIELD_HEAD_CLASS,
   AI_PROVIDER_FIELD_LABEL_CLASS,
-  AI_PROVIDER_FIELD_TIP_CLASS,
   AI_PROVIDER_FLOW_CLASS,
   AI_PROVIDER_FLOW_COPY_CLASS,
   AI_PROVIDER_FLOW_INDEX_CLASS,
@@ -50,17 +48,14 @@ import {
   AI_PROVIDER_FLOW_TITLE_CLASS,
   AI_PROVIDER_GRID_CLASS,
   AI_PROVIDER_HEADER_CLASS,
-  AI_PROVIDER_HINTS_CLASS,
   AI_PROVIDER_INLINE_ACTION_CLASS,
   AI_PROVIDER_INPUT_CLASS,
   AI_PROVIDER_MODEL_CONTROL_CLASS,
-  AI_PROVIDER_MODEL_FETCH_STATUS_CLASS,
   AI_PROVIDER_MODEL_FIELD_CLASS,
   AI_PROVIDER_MODEL_GROUP_CLASS,
   AI_PROVIDER_MODEL_LABEL_CLASS,
   AI_PROVIDER_MODEL_ROW_CLASS,
   AI_PROVIDER_MODEL_SELECT_HOST_CLASS,
-  AI_PROVIDER_NOTICE_CLASS,
   AI_PROVIDER_SAVE_STATE_CLASS,
   AI_PROVIDER_SAVE_TONE_CLASS,
   AI_PROVIDER_SELECT_HOST_CLASS,
@@ -75,11 +70,6 @@ import {
 } from './ai-provider-settings-classes.js'
 import { useAiProviderSettingsState } from './ai-provider-settings-store.js'
 import type { AiProviderSettingsState } from './ai-provider-settings-types.js'
-import {
-  AI_SETTINGS_SWITCH_CONTROL_CLASS,
-  AI_SETTINGS_SWITCH_THUMB_CLASS,
-  AI_SETTINGS_SWITCH_WRAP_CLASS
-} from './ai-settings-card-classes.js'
 
 const aiProviderSteps = [
   { id: 'api-key', index: '1', title: '填写密钥', copy: '填写渠道密钥；本机服务可留空' },
@@ -88,8 +78,8 @@ const aiProviderSteps = [
   { id: 'test-connection', index: '4', title: '测试连接', copy: '确认模型可用' },
   { id: 'save-settings', index: '5', title: '保存', copy: '同步到 AI 功能' }
 ] as const
-const AI_PROVIDER_TEST_LABELS = ['测试连接', '测试中'] as const
-const AI_PROVIDER_FETCH_LABELS = ['获取模型', '获取中'] as const
+const AI_PROVIDER_TEST_LABELS = { idle: '测试连接', pending: '测试中', success: '连接成功', error: '连接失败' }
+const AI_PROVIDER_FETCH_LABELS = { idle: '获取模型', pending: '获取中', success: '已获取', error: '获取失败' }
 
 export function AiProviderSettings({
   attentionRequestId = 0
@@ -104,11 +94,8 @@ export function AiProviderSettings({
   const attention = attentionState.visible
   const [customModelsOpen, setCustomModelsOpen] = useState(false)
   const description = useMemo(() => (
-    <>
-      {state.noticeText ? <p className={AI_PROVIDER_NOTICE_CLASS}>{state.noticeText}</p> : null}
-      <p className={AI_PROVIDER_SUBTITLE_CLASS}>API Key 仅保存在本地；本机服务可留空。</p>
-    </>
-  ), [state.noticeText])
+    <p className={AI_PROVIDER_SUBTITLE_CLASS}>API Key 仅保存在本地；本机服务可留空。</p>
+  ), [])
   const status = useMemo(() => (
     <span
       className={`${AI_PROVIDER_STATUS_BADGE_CLASS} ${aiProviderToneClass(state.configTone, AI_PROVIDER_STATUS_TONE_CLASS)}`}
@@ -173,29 +160,12 @@ export function AiProviderSettings({
         <div className={AI_PROVIDER_FIELD_CLASS}>
           <div className={AI_PROVIDER_FIELD_HEAD_CLASS}>
             <label className={AI_PROVIDER_FIELD_LABEL_CLASS} htmlFor="ai-api-key">API Key</label>
-            <label className={AI_PROVIDER_CHECK_CLASS} htmlFor="ai-api-key-reveal">
-              <span>显示密码</span>
-              <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
-                <SwitchControl
-                  id="ai-api-key-reveal"
-                  aria-label="显示密码"
-                  checked={state.revealApiKey}
-                  className={AI_SETTINGS_SWITCH_CONTROL_CLASS}
-                  disabled={state.fieldsDisabled}
-                  thumbClassName={AI_SETTINGS_SWITCH_THUMB_CLASS}
-                  onCheckedChange={(checked) => handleAiProviderSettingsAction({
-                    action: 'toggle-api-key',
-                    value: checked
-                  })}
-                  unstyled
-                />
-              </span>
-            </label>
           </div>
-          <Input
+          <RevealInput
             id="ai-api-key"
             className={AI_PROVIDER_INPUT_CLASS}
-            type={state.revealApiKey ? 'text' : 'password'}
+            revealed={state.revealApiKey}
+            onRevealChange={(value) => handleAiProviderSettingsAction({ action: 'toggle-api-key', value })}
             spellCheck={false}
             autoComplete="off"
             placeholder={state.apiKeyPlaceholder}
@@ -219,11 +189,7 @@ export function AiProviderSettings({
 
         {state.connectivityVisible ? (
           <p className={connectivityClassName}>
-            {state.connectivityBusy ? (
-                <StatusBusyLoadingLabel label={state.connectivityCopy} />
-            ) : (
-              state.connectivityCopy
-            )}
+            {state.connectivityCopy}
           </p>
         ) : null}
 
@@ -325,21 +291,17 @@ export function AiProviderSettings({
             </span>
           ) : null}
           <div className={AI_PROVIDER_ACTION_BUTTONS_CLASS}>
-            <Button
+            <StatusButton
               variant={state.testButtonSecondary ? 'secondary' : 'primary'}
+              feedback={state.testFeedback}
+              labels={AI_PROVIDER_TEST_LABELS}
+              icon="RefreshCw"
               type="button"
               aria-label="测试自定义 AI 渠道连接"
               disabled={state.testDisabled}
               focusableWhenDisabled={state.testingConnection}
               onClick={() => handleAiProviderSettingsAction({ action: 'test-connection' })}
-            >
-              <ButtonBusyLoadingLabel
-                busy={state.testingConnection}
-                label={state.testLabel}
-                reserveLabels={AI_PROVIDER_TEST_LABELS}
-                showLoader={false}
-              />
-            </Button>
+            />
             {state.showSaveSettingsButton ? (
               <Button
                 variant="primary"
@@ -373,10 +335,13 @@ function AiProviderModelToolsContent({
   state: AiProviderSettingsState
 }) {
   const modelTools = state.modelTools
-  const fetchModelsStatusClassName = [
-    AI_PROVIDER_MODEL_FETCH_STATUS_CLASS,
-    aiProviderToneClass(modelTools.fetchModelsStatusTone, AI_PROVIDER_CONNECTIVITY_TONE_CLASS)
-  ].filter(Boolean).join(' ')
+  const fetchError = modelTools.fetchFeedback.status === 'error' ? modelTools.fetchModelsStatus : ''
+  const notifications = useMemo<ToastItem[]>(() => fetchError ? [{
+    id: `ai-models-fetch-${modelTools.fetchFeedback.updatedAt}`,
+    description: fetchError,
+    priority: 'high',
+    type: 'error'
+  }] : [], [fetchError, modelTools.fetchFeedback.updatedAt])
 
   return (
     <>
@@ -393,23 +358,21 @@ function AiProviderModelToolsContent({
                 })}
               />
             </div>
-            <Button
+            <StatusButton
               className={AI_PROVIDER_FETCH_BUTTON_CLASS}
+              feedback={modelTools.fetchFeedback}
+              labels={AI_PROVIDER_FETCH_LABELS}
+              icon="Download"
               size="sm"
               type="button"
               variant="secondary"
               aria-label="从自定义 AI 渠道获取模型列表"
+              aria-description={modelTools.fetchModelsStatus || undefined}
+              title={modelTools.fetchModelsStatus || undefined}
               disabled={modelTools.fetchDisabled}
               focusableWhenDisabled={modelTools.fetchingModels}
               onClick={() => handleAiProviderSettingsAction({ action: 'fetch-models' })}
-            >
-              <ButtonBusyLoadingLabel
-                busy={modelTools.fetchingModels}
-                label={modelTools.fetchLabel}
-                reserveLabels={AI_PROVIDER_FETCH_LABELS}
-                showLoader={false}
-              />
-            </Button>
+            />
           </div>
         </div>
         <div className={AI_PROVIDER_MODEL_CONTROL_CLASS}>
@@ -430,34 +393,31 @@ function AiProviderModelToolsContent({
           </div>
         </div>
       </div>
-      <div className={AI_PROVIDER_HINTS_CLASS}>
-        {modelTools.fetchModelsStatus ? (
-          <p className={fetchModelsStatusClassName}>
-            {modelTools.fetchModelsStatusBusy ? (
-              <StatusBusyLoadingLabel label={modelTools.fetchModelsStatus} />
-            ) : (
-              modelTools.fetchModelsStatus
-            )}
-          </p>
-        ) : null}
-        {state.reasoningEffortNote ? (
-          <p className={AI_PROVIDER_FIELD_TIP_CLASS}>{state.reasoningEffortNote}</p>
-        ) : null}
-        <p className={AI_PROVIDER_FIELD_TIP_CLASS}>
-          可搜索模型；自定义 ID 可在{' '}
-          <Button
-            className={AI_PROVIDER_INLINE_ACTION_CLASS}
-            type="button"
-            aria-label="打开自定义模型列表设置"
-            disabled={modelTools.manageDisabled}
-            onClick={onOpenCustomModels}
-            unstyled
-          >
-            设置更多模型
-          </Button>
-          {' '}里追加。
-        </p>
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <AiModelDetails state={state} />
+        <Button
+          className={AI_PROVIDER_INLINE_ACTION_CLASS}
+          type="button"
+          aria-label="打开自定义模型列表设置"
+          disabled={modelTools.manageDisabled}
+          onClick={onOpenCustomModels}
+          unstyled
+        >
+          设置更多模型
+        </Button>
       </div>
+      {createPortal(
+        <ToastList
+          className="pointer-events-none fixed bottom-4 right-4 z-50 w-[min(400px,calc(100vw-32px))]"
+          rootClassName="pointer-events-auto data-[type=error]:border-ds-danger/35"
+          contentClassName="min-w-0 flex-1"
+          descriptionClassName="m-0 text-[13px] leading-relaxed [overflow-wrap:anywhere]"
+          closeClassName="shrink-0"
+          items={notifications}
+          limit={1}
+        />,
+        document.body
+      )}
     </>
   )
 }

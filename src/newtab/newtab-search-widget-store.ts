@@ -47,6 +47,13 @@ export interface SearchWidgetActionState {
   hasInputValue: boolean
 }
 
+export function createSearchWidgetActionState(value: string): SearchWidgetActionState {
+  return {
+    canSubmit: Boolean(value.trim()),
+    hasInputValue: Boolean(value)
+  }
+}
+
 export interface SearchWidgetComboboxState {
   activeDescendantId: string
   expanded: boolean

@@ -33,10 +33,16 @@ try {
   // The popup is hosted in a test tab. Only substitute its active-page metadata;
   // successful saves still use the real service worker and Chrome bookmarks API.
   await page.addInitScript(({ sourceUrl, sourceTitle }) => {
+    const fixture = new URLSearchParams(location.search)
+    const activeUrl = fixture.get('fixtureUrl') || sourceUrl
+    const activeTitle = fixture.get('fixtureTitle') || sourceTitle
     const query = chrome.tabs.query.bind(chrome.tabs)
     chrome.tabs.query = (info, callback) => {
       if (!info.active || !info.currentWindow) return query(info, callback)
-      const tabs = [{ id: 77, active: true, url: sourceUrl, title: sourceTitle }]
+      const tabs = [{
+        id: 77, active: true, url: activeUrl, title: activeTitle,
+        favIconUrl: chrome.runtime.getURL('src/assets/icon32.png')
+      }]
       return callback ? callback(tabs) : Promise.resolve(tabs)
     }
     window.saveProbe = { calls: 0, failNext: false, hold: false, resume: null }
@@ -142,8 +148,54 @@ try {
   assert.equal(saved[0].parentId, folders.child)
   await page.locator('[data-current-page-action="edit"]').click()
   assert.equal(await page.locator('#edit-title-input').inputValue(), customTitle)
+  await page.locator('#cancel-edit').click()
+
+  // External-request protection must not disable local page recognition/save.
+  // These exercise the original /billing regression and the same boundary on
+  // login, private workspace, local-network and credential-bearing URLs.
+  const protectedPages = [
+    ['https://platform.yeta.ai/billing', 'Yeta Platform'],
+    ['https://example.com/login', 'Account sign in'],
+    ['https://docs.google.com/document/d/private-document/edit', 'Project notes'],
+    ['http://localhost:3000/dashboard', 'Local dashboard'],
+    ['https://example.com/download?token=private-token', 'Private download']
+  ]
+  const externalRequests = []
+  const recordRequest = request => {
+    if (/^https?:/i.test(request.url())) externalRequests.push(request.url())
+  }
+  page.on('request', recordRequest)
+  for (const [url, pageTitle] of protectedPages) {
+    const fixture = new URLSearchParams({ fixtureUrl: url, fixtureTitle: pageTitle })
+    await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html?${fixture}`)
+    await trigger.waitFor()
+    const pageCard = page.locator('#smart-classifier .popup-page-content')
+    assert.ok((await pageCard.innerText()).includes(pageTitle), `${url} must show its actual tab title`)
+    assert.match(await pageCard.locator('img').getAttribute('src'), /icon32\.png$/)
+    assert.equal(await trigger.isEnabled(), true, `${url} must allow local saving`)
+    const classify = page.locator('[data-smart-action="classify"]')
+    assert.equal(await classify.isDisabled(), true, `${url} must still protect external AI access`)
+    assert.match(await classify.getAttribute('title'), /保护隐私/)
+
+    await trigger.click()
+    await waitTitleFocus()
+    assert.equal(await title.inputValue(), pageTitle)
+    await save.click()
+    await modal.waitFor({ state: 'hidden' })
+    await page.locator('[data-current-page-action="edit"]').waitFor()
+    const savedProtected = await worker.evaluate(target => chrome.bookmarks.search({ url: target }), url)
+    assert.equal(savedProtected.length, 1, `${url} must save exactly once`)
+    assert.equal(savedProtected[0].title, pageTitle)
+    assert.equal(savedProtected[0].url, url, 'local saving must not strip paths, query values or credentials')
+    await page.reload()
+    await page.locator('[data-current-page-action="edit"]').waitFor()
+    assert.match(await pageCard.innerText(), /已收藏/)
+    assert.equal(await page.locator('[data-current-page-action="pin-newtab"]').isEnabled(), true)
+  }
+  page.off('request', recordRequest)
+  assert.deepEqual(externalRequests, [], 'recognizing and saving protected pages must not fetch or upload them')
   assert.deepEqual(errors, [])
-  console.log('Popup quick save passed: rename, folder selection, cancel/reopen focus, empty/IME guards, viewport, failed retry, busy controls, exact stored title and no duplicates.')
+  console.log('Popup quick save passed: rename, folder selection, cancel/reopen focus, empty/IME guards, viewport, failed retry, busy controls, exact stored title, protected-page recognition/save and no duplicates.')
 } finally {
   await context?.close()
   assert.equal(path.dirname(path.resolve(profile)), path.resolve(tmpdir()))

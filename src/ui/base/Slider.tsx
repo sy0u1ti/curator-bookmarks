@@ -302,8 +302,8 @@ export function SliderControl({
       disabled={disabled}
       onValueChange={handleValueChange}
       onValueCommitted={handleValueCommitted}
-      className={unstyled ? className : cx(
-        'grid h-6 w-full items-center',
+      className={unstyled ? cx('base-slider', className) : cx(
+        'base-slider grid h-6 w-full items-center',
         className
       )}
       {...props}
@@ -328,8 +328,8 @@ export function SliderControl({
           />
         </BaseSlider.Track>
         <BaseSlider.Thumb
-          className={unstyled ? thumbClassName : cx(
-            'size-4 rounded-full border border-ds-border-hover bg-ds-accent outline-none focus-within:ring-2 focus-within:shadow-ds-focus',
+          className={unstyled ? cx('base-slider-thumb', thumbClassName) : cx(
+            'base-slider-thumb size-4 rounded-full border border-ds-border-hover bg-ds-accent outline-none focus-within:ring-2 focus-within:shadow-ds-focus',
             thumbClassName
           )}
           getAriaLabel={ariaLabel ? () => ariaLabel : undefined}

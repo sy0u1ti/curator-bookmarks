@@ -10,6 +10,7 @@ import {
 import { normalizeAiOutput } from './ai-output-normalization.js'
 import { extractJsonPayloadText } from './ai-response.js'
 import { parseAiModelCatalogPage } from './ai-model-catalog.js'
+import { extractModelReasoningCapabilities, getReasoningEffortOptions } from './ai-reasoning.js'
 import {
   BOOKMARK_CLASSIFICATION_SCHEMA, validateAiClassificationResult,
   validateAiBatchResults, meetsAiConfidenceThreshold
@@ -240,6 +241,107 @@ test('default reasoning can fall back; explicit effort must be honored', async (
   await rejects(() => request({ settings: { ...provider, reasoningEffort: 'high' }, fetchImpl }), 'provider', 400)
   assert.equal(bodies.length - before, 1)
 })
+
+for (const apiStyle of ['chat_completions', 'responses', 'anthropic_messages'] as const) {
+  for (const reasoningEffort of ['low', 'high', 'max'] as const) {
+    test(`V4.1 Flash saved ${reasoningEffort} reaches every AI entry point over ${apiStyle}`, async () => {
+      const model = 'group/auto-deepseek-v4-1-flash'
+      const reasoningCapabilities = extractModelReasoningCapabilities({
+        data: [{ id: model, effort: { supported_levels: ['low', 'high', 'max'], default_level: 'high' } }]
+      })
+      const saved = normalizeAiNamingSettings(JSON.parse(JSON.stringify(serializeAiNamingSettings({
+        ...settings, model, apiStyle, reasoningEffort, reasoningCapabilities
+      }))))
+      assert.equal(saved.reasoningEffort, reasoningEffort)
+      assert.deepEqual(saved.reasoningCapabilities, reasoningCapabilities)
+      assert.deepEqual(
+        getReasoningEffortOptions(model, saved.reasoningCapabilities[model], saved).map((option) => option.id),
+        ['low', 'high', 'max']
+      )
+
+      let calls = 0
+      let responseData: unknown = { status: 'ok' }
+      const fetchImpl: typeof fetch = async (_url, init) => {
+        calls += 1
+        const body = JSON.parse(String(init?.body))
+        const actualEffort = apiStyle === 'responses' ? body.reasoning?.effort
+          : apiStyle === 'anthropic_messages' ? body.output_config?.effort : body.reasoning_effort
+        assert.equal(body.model, model)
+        assert.equal(actualEffort, reasoningEffort)
+        return jsonResponse(envelope(apiStyle, responseData))
+      }
+      await requestAiProviderConnectivityTest(saved, { fetchImpl })
+      responseData = valid
+      await request({ settings: saved, fetchImpl })
+      responseData = batchValid
+      await request({
+        settings: saved, schema: AI_NAMING_RESPONSE_SCHEMA, schemaName: 'bookmark_naming_batch',
+        validate: (payload) => validateAiBatchResults(payload, prepared), fetchImpl
+      })
+
+      const originalFetch = globalThis.fetch
+      const originalChrome = (globalThis as any).chrome
+      globalThis.fetch = fetchImpl
+      ;(globalThis as any).chrome = {
+        runtime: {},
+        permissions: { contains: (_query: unknown, callback: (granted: boolean) => void) => callback(true) }
+      }
+      try {
+        responseData = valid
+        await requestSmartClassification({
+          settings: saved, currentUrl: 'https://example.org/docs', currentTitle: 'Documentation',
+          pageContext: { title: 'Documentation', mainText: 'Documentation content', extractionStatus: 'ok' },
+          allFolders: folders.map((folder) => ({ id: folder.folderId, title: folder.title, path: folder.folderPath, depth: folder.depth }))
+        })
+        responseData = { queries: ['react tutorial'], keywords: ['react'], excluded_terms: [], date_range: null }
+        const localPlan = buildLocalNaturalSearchPlan('React tutorial')
+        await requestNaturalSearchAiPlan({ query: localPlan.rawQuery, localPlan, settings: saved })
+      } finally {
+        globalThis.fetch = originalFetch
+        ;(globalThis as any).chrome = originalChrome
+      }
+      assert.equal(calls, 5, 'connection, classification, batch analysis, popup and natural search each use one request')
+    })
+  }
+}
+
+for (const reasoningEffort of ['low', 'high', 'max'] as const) {
+  test(`V4.1 Flash keeps ${reasoningEffort} through protocol and JSON format fallback`, async () => {
+    const bodies: any[] = []
+    const result = await request({
+      settings: { ...settings, model: 'group/auto-deepseek-v4-1-flash', apiStyle: 'auto', reasoningEffort },
+      fetchImpl: async (_url, init) => {
+        const body = JSON.parse(String(init?.body)); bodies.push(body)
+        if (bodies.length === 1) {
+          assert.equal(body.reasoning_effort, reasoningEffort)
+          return jsonResponse({ error: { message: 'Not Found' } }, 404)
+        }
+        assert.equal(body.reasoning?.effort, reasoningEffort)
+        assert.equal(body.reasoning_effort, undefined)
+        if (bodies.length === 2) {
+          return jsonResponse({ error: { message: 'json_schema is not supported' } }, 400)
+        }
+        return jsonResponse(envelope('responses', valid))
+      }
+    })
+    assert.equal(result.metadata.apiStyle, 'responses')
+    assert.equal(result.metadata.structuredOutputMode, 'json_object')
+    assert.equal(result.metadata.attempts, 3)
+  })
+
+  test(`V4.1 Flash explicit ${reasoningEffort} rejection never retries without effort`, async () => {
+    let calls = 0
+    await rejects(() => request({
+      settings: { ...settings, model: 'group/auto-deepseek-v4-1-flash', reasoningEffort },
+      fetchImpl: async (_url, init) => {
+        calls += 1
+        assert.equal(JSON.parse(String(init?.body)).reasoning_effort, reasoningEffort)
+        return jsonResponse({ error: { message: 'reasoning_effort unsupported', param: 'reasoning_effort' } }, 400)
+      }
+    }), 'provider', 400)
+    assert.equal(calls, 1)
+  })
+}
 
 test('only explicitly unsupported system roles are merged', async () => {
   const bodies: any[] = []

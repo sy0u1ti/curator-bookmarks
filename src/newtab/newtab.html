@@ -77,9 +77,46 @@
       /* Wallpaper blur is an explicit readability setting, independent of
          the operating system's preference for opaque interface surfaces. */
     </style>
+    <style id="newtab-texture-startup-style">
+      #newtab-texture-stage {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        contain: strict;
+        pointer-events: none;
+        background: radial-gradient(ellipse at 15% 0%, #ffffff08, transparent 65%), #101013;
+        --texture-field-mask: radial-gradient(ellipse at 50% 40%, #0003 5%, #0006 38%, #000 90%);
+      }
+      html[data-texture-background] #newtab-texture-stage {
+        display: block;
+      }
+      #newtab-texture-stage::before,
+      .newtab-texture-live {
+        position: absolute;
+        inset: 0;
+        opacity: var(--newtab-texture-opacity, 0.13);
+        mask-image: var(--texture-field-mask);
+        pointer-events: none;
+      }
+      #newtab-texture-stage::before {
+        content: "";
+        background: var(--newtab-texture-image) center / cover no-repeat;
+      }
+      #newtab-texture-stage[data-live-texture]::before {
+        opacity: 0;
+      }
+      @media (forced-colors: active) {
+        #newtab-texture-stage::before,
+        .newtab-texture-live {
+          display: none;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="newtab-wallpaper-stage" class="newtab-background-image" data-state="visible" aria-hidden="true"></div>
+    <div id="newtab-texture-stage" aria-hidden="true"></div>
     <div id="newtab-background-mask" class="newtab-background-mask" aria-hidden="true"></div>
     <div id="newtab-react-root"></div>
     <script type="module" src="./main.tsx"></script>

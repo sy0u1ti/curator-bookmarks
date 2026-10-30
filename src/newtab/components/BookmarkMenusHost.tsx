@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Icon, type IconName } from '../../ui/icons/Icon'
 import { Button } from '../../ui/base/Button'
+import { CopyActionContent } from '../../ui/actions/ActionFeedback'
 import { InlineDialogPanel } from '../../ui/base/Dialog'
 import { Input } from '../../ui/base/Input'
 import { InlineMenuList, type InlineMenuAction } from '../../ui/base/Menu'
@@ -22,6 +23,8 @@ import type {
 
 const MENU_ACTION_ICON_BY_ACTION: Record<BookmarkMenuActionIcon, IconName> = {
   copy: 'Copy',
+  folder: 'Folder',
+  move: 'Move',
   pin: 'Pin',
   plus: 'Plus',
   refresh: 'RefreshCw',
@@ -40,8 +43,8 @@ const MENU_CONTROL_CLASS = 'min-h-[30px] w-full min-w-0 rounded-[var(--ui-radius
 const MENU_SELECT_TRIGGER_CLASS = 'base-select-trigger flex min-h-[30px] w-full min-w-0 items-center justify-start rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] px-2 text-[13px] text-[var(--ui-text-primary)] outline-none [transition:background-color_var(--ui-motion-fast)_var(--ui-ease-standard),border-color_var(--ui-motion-fast)_var(--ui-ease-standard),color_var(--ui-motion-fast)_var(--ui-ease-standard)] data-[popup-open]:border-[var(--ui-focus-ring)] hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] focus-visible:border-[var(--ui-focus-ring)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[var(--ui-focus-ring)] disabled:opacity-60 motion-reduce:transition-none'
 const MENU_SELECT_POPUP_CLASS = 'custom-select-list z-[10040] max-h-60 min-w-[var(--anchor-width)] overflow-hidden rounded-[var(--ui-radius-panel)] border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] p-1 text-[13px] text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] outline-none'
 const MENU_SELECT_OPTION_CLASS = 'flex cursor-default items-center justify-between gap-3 rounded-[var(--ui-radius-control)] px-2.5 py-2 outline-none [transition:background-color_var(--ui-motion-fast)_var(--ui-ease-standard),color_var(--ui-motion-fast)_var(--ui-ease-standard),opacity_var(--ui-motion-fast)_var(--ui-ease-standard)] data-[highlighted]:bg-[var(--ui-surface-hover)] data-[disabled]:opacity-45 motion-reduce:transition-none'
-const MENU_ACTION_CLASS = 'bookmark-menu-action flex min-h-[30px] w-full cursor-pointer items-center justify-start gap-2.5 rounded-[var(--ui-radius-control)] bg-transparent px-2 text-left text-[13px] leading-none text-[var(--ui-text-primary)] outline-none [transition:background-color_var(--ui-motion-fast)_var(--ui-ease-standard),color_var(--ui-motion-fast)_var(--ui-ease-standard),transform_var(--ui-motion-fast)_var(--ui-ease-standard),opacity_var(--ui-motion-fast)_var(--ui-ease-standard)] hover:bg-[var(--ui-surface-hover)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:[outline:3px_solid_var(--ui-accent-soft)] focus-visible:outline-offset-0 active:[transform:scale(var(--ui-press-scale))] disabled:cursor-default disabled:opacity-60 data-[disabled]:cursor-default data-[disabled]:opacity-60 motion-reduce:transition-none motion-reduce:transform-none [&_svg]:h-[17px] [&_svg]:w-[17px] [&_svg]:shrink-0'
-const MENU_DANGER_ACTION_CLASS = 'bookmark-menu-action-danger text-[var(--ui-danger)] hover:bg-[var(--ui-danger-soft)] focus-visible:bg-[var(--ui-danger-soft)]'
+const MENU_ACTION_CLASS = 'bookmark-menu-action flex min-h-[30px] w-full cursor-pointer items-center justify-start gap-2.5 rounded-[var(--ui-radius-control)] bg-transparent px-2 text-left text-[13px] leading-none text-[var(--ui-text-primary)] outline-none [transition:background-color_var(--ui-motion-fast)_var(--ui-ease-standard),color_var(--ui-motion-fast)_var(--ui-ease-standard),transform_var(--ui-motion-fast)_var(--ui-ease-standard),opacity_var(--ui-motion-fast)_var(--ui-ease-standard)] data-[cascade-highlighted]:bg-[var(--ui-surface-hover)] data-[popup-open]:bg-[var(--ui-surface-hover)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:[outline:3px_solid_var(--ui-accent-soft)] focus-visible:outline-offset-0 active:[transform:scale(var(--ui-press-scale))] disabled:cursor-default disabled:opacity-60 data-[disabled]:cursor-default data-[disabled]:opacity-60 motion-reduce:transition-none motion-reduce:transform-none [&_svg]:h-[17px] [&_svg]:w-[17px] [&_svg]:shrink-0'
+const MENU_DANGER_ACTION_CLASS = 'bookmark-menu-action-danger text-[var(--ui-danger)] data-[cascade-highlighted]:bg-[var(--ui-danger-soft)] focus-visible:bg-[var(--ui-danger-soft)]'
 const MENU_ACTIONS_CLASS = 'bookmark-menu-actions grid gap-0.5'
 const MENU_FEEDBACK_CLASS = 'bookmark-menu-feedback mt-2 mx-0.5 rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] text-xs leading-[1.45] shadow-none'
 const MENU_ERROR_CLASS = `${MENU_FEEDBACK_CLASS} bookmark-menu-error text-[var(--ui-danger)]`
@@ -95,7 +98,7 @@ function BookmarkEditMenuHost({ view }: { view: NewtabBookmarkEditMenuView }) {
       }}
       ref={ref}
     >
-      <BookmarkEditMenu actionRefs={actionRefs} firstInputRef={firstInputRef} menu={view.menu} />
+      <BookmarkEditMenu actionRefs={actionRefs} active={!view.closing} firstInputRef={firstInputRef} menu={view.menu} />
     </section>
   )
 }
@@ -295,10 +298,12 @@ function getMenuViewportSize(): { width: number; height: number } {
 
 function BookmarkEditMenu({
   actionRefs,
+  active,
   firstInputRef,
   menu
 }: {
   actionRefs: BookmarkActionRefMap
+  active: boolean
   firstInputRef: RefObject<HTMLInputElement | null>
   menu: BookmarkEditMenuViewModel
 }) {
@@ -364,7 +369,7 @@ function BookmarkEditMenu({
           />
         </div>
       </div>
-      <BookmarkMenuActions actionRefs={actionRefs} actions={menu.actions} label="书签操作" />
+      <BookmarkMenuActions actionRefs={actionRefs} actions={menu.actions} active={active} label="书签操作" />
       <BookmarkMenuFeedback error={menu.error} status={menu.status} statusTone={menu.statusTone} />
     </InlineDialogPanel>
   )
@@ -397,7 +402,7 @@ function BookmarkAddMenu({
       ) : (
         <div className="bookmark-add-menu-content is-collapsed">
           <Button
-            className={cx(MENU_ACTION_CLASS, 'bookmark-add-menu-trigger')}
+            className={cx(MENU_ACTION_CLASS, 'bookmark-add-menu-trigger hover:bg-[var(--ui-surface-hover)]')}
             type="button"
             onClick={() => {
               void menu.onExpand()
@@ -453,17 +458,21 @@ function BookmarkMenuTextField({
 function BookmarkMenuActions({
   actionRefs,
   actions,
+  active = true,
   label
 }: {
   actionRefs: BookmarkActionRefMap
   actions: BookmarkMenuActionViewModel[]
+  active?: boolean
   label: string
 }) {
   return (
     <InlineMenuList
       actions={actions.map((action) => toInlineMenuAction(action, actionRefs))}
+      active={active}
       className={MENU_ACTIONS_CLASS}
       label={label}
+      submenuAttributes={{ 'data-newtab-bookmark-menu-surface': '' }}
     />
   )
 }
@@ -474,7 +483,9 @@ function toInlineMenuAction(
 ): InlineMenuAction {
   return {
     id: action.id,
-    label: <BookmarkMenuActionContent icon={action.icon} label={action.label} />,
+    label: action.feedback ? <CopyActionContent feedback={action.feedback} label={action.label} /> : action.label,
+    icon: action.feedback ? undefined : MENU_ACTION_ICON_BY_ACTION[action.icon],
+    children: action.children ? () => action.children!().map(child => toInlineMenuAction(child, actionRefs)) : undefined,
     disabled: action.disabled,
     destructive: action.variant === 'danger',
     className: cx(MENU_ACTION_CLASS, action.variant === 'danger' && MENU_DANGER_ACTION_CLASS),
@@ -482,18 +493,10 @@ function toInlineMenuAction(
     closeOnSelect: false,
     itemRef: action.actionId ? actionRefs.get(action.actionId) : undefined,
     attributes: {
-      'aria-label': action.ariaLabel
+      'aria-label': action.ariaLabel,
+      ...(action.feedback?.status === 'pending' ? { 'aria-busy': 'true' } : {})
     }
   }
-}
-
-function BookmarkMenuActionContent({ icon, label }: { icon: BookmarkMenuActionIcon; label: string }) {
-  return (
-    <>
-      <MenuActionIcon icon={icon} />
-      {label}
-    </>
-  )
 }
 
 function MenuActionIcon({ icon }: { icon: BookmarkMenuActionIcon }) {

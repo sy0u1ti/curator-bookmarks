@@ -215,7 +215,9 @@ try {
   await expect(b.locator('.bookmark-edit-menu')).toHaveCount(0)
 
   await settings(a, 'search')
+  await a.locator('#search-details-toggle').click()
   await settings(b, 'search')
+  await b.locator('#search-details-toggle').click()
   await a.bringToFront()
   await a.locator('#search-placeholder').fill('两个页面保留设置')
   await b.bringToFront()
@@ -250,6 +252,7 @@ try {
 
   await openPage(a)
   await settings(a, 'appearance')
+  await a.locator('#time-details-toggle').click()
   await a.locator('[role="switch"][aria-labelledby="time-show-seconds-label"]').scrollIntoViewIfNeeded()
   await a.evaluate(() => {
     document.querySelector('[role="switch"][aria-labelledby="time-show-seconds-label"]').click()

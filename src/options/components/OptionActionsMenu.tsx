@@ -20,7 +20,7 @@ export function OptionActionsMenu({ actions, label }: { actions: OptionMenuActio
   return (
     <Menu.Root modal={false}>
       <Menu.Trigger aria-label={label} disabled={actions.every(action => action.disabled)} render={<Button size="sm" variant="secondary" />}>
-        更多操作 <Icon name="ChevronDown" size={14} aria-hidden="true" />
+        更多操作 <Icon name="ChevronDown" size={14} aria-hidden="true" className="base-menu-trigger-arrow" />
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner align="end" sideOffset={6} collisionPadding={12} className="z-[10000]">
@@ -38,7 +38,7 @@ export function OptionActionsMenu({ actions, label }: { actions: OptionMenuActio
                   render={<button type="button" />}
                   aria-label={action.description ? action.label + '：' + action.description : action.label}
                   onClick={action.onSelect}
-                  className="flex min-h-10 w-full cursor-pointer items-start gap-2.5 rounded-ds-sm px-3 py-2.5 text-left text-[13px] text-ds-text-primary outline-none hover:bg-ds-hover data-[highlighted]:bg-ds-hover data-[disabled]:cursor-default data-[disabled]:opacity-45"
+                  className="curator-menu-item flex min-h-10 w-full cursor-pointer items-start gap-2.5 rounded-ds-sm px-3 py-2.5 text-left text-[13px] text-ds-text-primary outline-none hover:bg-ds-hover data-[highlighted]:bg-ds-hover data-[disabled]:cursor-default data-[disabled]:opacity-45"
                 >
                   {action.icon ? <Icon name={action.icon} size={15} aria-hidden="true" className="mt-0.5 shrink-0" /> : null}
                   <span className="grid min-w-0 gap-1">

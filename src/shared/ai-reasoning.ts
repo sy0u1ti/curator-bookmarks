@@ -1,4 +1,5 @@
 import { resolveAiApiStyle } from './ai-provider-url.js'
+import type { ModelsDevMatch } from './models-dev.js'
 /**
  * 推理强度能力解析。
  *
@@ -17,7 +18,7 @@ export type ReasoningEffortId =
   | 'xhigh'
   | 'max'
 
-export type ReasoningCapabilitySource = 'metadata' | 'model_rule' | 'fallback'
+export type ReasoningCapabilitySource = 'metadata' | 'models_dev' | 'model_rule' | 'fallback'
 
 export const REASONING_EFFORT_LABELS: Record<ReasoningEffortId, string> = {
   default: '默认',
@@ -96,6 +97,7 @@ interface ReasoningRule {
 export interface ReasoningProviderContext {
   baseUrl?: unknown
   apiStyle?: unknown
+  modelMetadata?: ModelsDevMatch | null
 }
 
 export type ReasoningTransportKind =
@@ -157,6 +159,18 @@ const OFF_HIGH_MAX_ALIASES: Partial<Record<ReasoningEffortId, ReasoningEffortId>
   medium: 'high',
   xhigh: 'max'
 }
+const DEEPSEEK_V41_FLASH_LEVELS: ReasoningEffortId[] = ['low', 'high', 'max']
+const DEEPSEEK_V41_FLASH_DIRECT_LEVELS: ReasoningEffortId[] = ['none', ...DEEPSEEK_V41_FLASH_LEVELS]
+const DEEPSEEK_V41_FLASH_ALIASES: Partial<Record<ReasoningEffortId, ReasoningEffortId>> = {
+  minimal: 'low',
+  medium: 'high',
+  xhigh: 'high'
+}
+const DEEPSEEK_V41_FLASH_PATTERN = /deepseek-(?:v4[._-]?1[-._/])?flash(?:[-._/:]|$)/
+
+function isDeepSeekV41FlashModel(model: string): boolean {
+  return DEEPSEEK_V41_FLASH_PATTERN.test(model)
+}
 
 // 顺序敏感：具体型号必须排在系列规则之前。
 const REASONING_RULES: ReasoningRule[] = [
@@ -202,6 +216,13 @@ const REASONING_RULES: ReasoningRule[] = [
   { test: /gemini/, levels: NONE, note: '该 Gemini 版本不支持推理强度' },
 
   // 其他兼容模型。
+  {
+    test: DEEPSEEK_V41_FLASH_PATTERN,
+    levels: DEEPSEEK_V41_FLASH_LEVELS,
+    defaultEffort: 'high',
+    aliases: DEEPSEEK_V41_FLASH_ALIASES,
+    note: 'DeepSeek V4.1 Flash 支持轻度、高、最高 3 档；默认高'
+  },
   { test: /deepseek-(?:v4|reasoner|r1)/, levels: ['high', 'max'], defaultEffort: 'high', aliases: REAL_HIGH_MAX_ALIASES, note: 'DeepSeek V4 的真实强度只有高、最高 2 档' },
   { test: /deepseek/, levels: NONE, note: '该 DeepSeek 对话模型不支持推理强度' },
   { test: /grok.*non[-_.]?reasoning/, levels: NONE, note: '该 Grok 型号明确为 non-reasoning，不支持推理强度' },
@@ -498,6 +519,12 @@ function isDashscopeResponsesModel(model: string): boolean {
   )
 }
 
+function isDashscopeDeepSeekResponsesModel(model: string, baseUrl: unknown): boolean {
+  // The 1017 snapshot adds six regions; the original alias is Beijing/Singapore only.
+  return /^deepseek-v4\.1-flash-1017$/.test(model) ||
+    (/^deepseek-v4\.1-flash$/.test(model) && supportsDashscopeExtendedEffort(baseUrl))
+}
+
 /**
  * Qwen3-Omni-Flash is a hybrid-thinking Chat model, but it is not listed by
  * Bailian's OpenAI-compatible Responses model table.  Unlike the text Qwen3
@@ -577,6 +604,27 @@ function getProviderReasoningMatch(
       return makeProviderMatch(
         { kind: 'unsupported' },
         { levels: NONE, note: 'SiliconFlow 官方当前仅声明 Chat Completions 推理参数，不支持 Responses 推理映射' }
+      )
+    }
+    if (/^deepseek-ai\//.test(model) && isDeepSeekV41FlashModel(model)) {
+      // V4.1 Flash exposes the three real effort values. SiliconFlow keeps
+      // the same regional guard as the legacy V4 Flash adapter.
+      if (!chinaGateway) {
+        return makeProviderMatch(
+          { kind: 'unsupported' },
+          { levels: NONE, note: 'SiliconFlow .com 当前未公开 DeepSeek V4.1 Flash 的 reasoning_effort，停止猜测字段' },
+          true
+        )
+      }
+      return makeProviderMatch(
+        { kind: 'flat_effort' },
+        {
+          levels: DEEPSEEK_V41_FLASH_LEVELS,
+          defaultEffort: 'high',
+          mandatory: true,
+          aliases: DEEPSEEK_V41_FLASH_ALIASES,
+          note: 'SiliconFlow DeepSeek V4.1 Flash 使用顶层 reasoning_effort，支持轻度、高、最高'
+        }
       )
     }
     if (/^deepseek-ai\/deepseek-v4-flash(?:[-._/]|$)/.test(model)) {
@@ -693,20 +741,40 @@ function getProviderReasoningMatch(
   }
 
   if (provider === 'deepseek') {
-    if (apiStyle === 'responses') {
+    if (
+      apiStyle === 'responses' &&
+      !isDeepSeekV41FlashModel(model) &&
+      !/^deepseek-v4-(?:pro|flash)(?:[-._/]|$)/.test(model)
+    ) {
       return makeProviderMatch(
         { kind: 'unsupported' },
-        { levels: NONE, note: 'DeepSeek 官方直连仅提供 Chat Completions，不支持 Responses API' }
+        { levels: NONE, note: '该 DeepSeek 型号未确认支持 Responses 推理参数' },
+        true
+      )
+    }
+    if (isDeepSeekV41FlashModel(model)) {
+      return makeProviderMatch(
+        apiStyle === 'responses'
+          ? { kind: 'nested_effort' }
+          : { kind: 'effort_with_thinking', effortField: 'flat' },
+        {
+          levels: DEEPSEEK_V41_FLASH_DIRECT_LEVELS,
+          defaultEffort: 'high',
+          aliases: DEEPSEEK_V41_FLASH_ALIASES,
+          note: 'DeepSeek V4.1 Flash 支持关闭思考，以及轻度、高、最高 3 档；默认高'
+        }
       )
     }
     if (/deepseek-v4-(?:pro|flash)/.test(model)) {
       return makeProviderMatch(
-        { kind: 'effort_with_thinking', effortField: 'flat' },
+        apiStyle === 'responses'
+          ? { kind: 'nested_effort' }
+          : { kind: 'effort_with_thinking', effortField: 'flat' },
         {
-          levels: ['none', 'high', 'max'],
+          levels: DEEPSEEK_V41_FLASH_DIRECT_LEVELS,
           defaultEffort: 'high',
-          note: 'DeepSeek 官方接口真实支持关闭、高、最高；低/中会被厂家按高处理',
-          aliases: REAL_HIGH_MAX_ALIASES
+          note: 'DeepSeek 官方当前支持关闭思考，以及轻度、高、最高 3 档；默认高',
+          aliases: DEEPSEEK_V41_FLASH_ALIASES
         }
       )
     }
@@ -730,12 +798,16 @@ function getProviderReasoningMatch(
   }
 
   if (provider === 'dashscope') {
-    if (apiStyle === 'responses' && !isDashscopeResponsesModel(model)) {
+    if (
+      apiStyle === 'responses' &&
+      !isDashscopeResponsesModel(model) &&
+      !isDashscopeDeepSeekResponsesModel(model, context.baseUrl)
+    ) {
       return makeProviderMatch(
         { kind: 'unsupported' },
         {
           levels: NONE,
-          note: '该型号不在百炼 Responses API 官方 Qwen 支持列表中，不发送推理参数'
+          note: '该型号或区域不在百炼 Responses API 已确认支持列表中，不发送推理参数'
         }
       )
     }
@@ -1078,6 +1150,19 @@ function getProviderReasoningMatch(
         }
       )
     }
+    if (isDeepSeekV41FlashModel(model)) {
+      return makeProviderMatch(
+        apiStyle === 'responses'
+          ? { kind: 'nested_effort' }
+          : { kind: 'effort_with_enable_thinking', effortField: 'flat' },
+        {
+          levels: DEEPSEEK_V41_FLASH_DIRECT_LEVELS,
+          defaultEffort: 'high',
+          aliases: DEEPSEEK_V41_FLASH_ALIASES,
+          note: '百炼 DeepSeek V4.1 Flash 支持关闭思考，以及轻度、高、最高 3 档；默认高'
+        }
+      )
+    }
     if (/deepseek-v4/.test(model)) {
       if (apiStyle === 'responses') {
         return makeProviderMatch(
@@ -1265,8 +1350,17 @@ function getProviderReasoningMatch(
   }
 
   if (provider === 'ark') {
-    // 方舟文档当前仅给 DeepSeek V4 的 Chat API 提供 reasoning_effort；
-    // Responses API 仍支持 thinking 开关，但不能伪造 reasoning.effort。
+    if (isDeepSeekV41FlashModel(model)) {
+      return makeProviderMatch(
+        getEffortTransport(apiStyle),
+        {
+          levels: DEEPSEEK_V41_FLASH_DIRECT_LEVELS,
+          defaultEffort: 'high',
+          aliases: DEEPSEEK_V41_FLASH_ALIASES,
+          note: '火山方舟 DeepSeek V4.1 Flash 支持关闭思考，以及轻度、高、最高 3 档；默认高'
+        }
+      )
+    }
     if (/deepseek-v4/.test(model)) {
       if (apiStyle === 'responses') {
         return makeProviderMatch(
@@ -1423,6 +1517,17 @@ function getProviderReasoningMatch(
         {
           levels: ['default', 'low', 'medium', 'high'],
           note: '千帆 GPT-OSS 使用顶层 reasoning_effort；厂家未声明默认档，默认时保持省略'
+        }
+      )
+    }
+    if (isDeepSeekV41FlashModel(model) && apiStyle !== 'responses') {
+      return makeProviderMatch(
+        { kind: 'effort_with_thinking', effortField: 'flat' },
+        {
+          levels: DEEPSEEK_V41_FLASH_DIRECT_LEVELS,
+          defaultEffort: 'high',
+          aliases: DEEPSEEK_V41_FLASH_ALIASES,
+          note: '百度千帆 DeepSeek V4.1 Flash Chat 支持关闭思考，以及轻度、高、最高 3 档；默认高'
         }
       )
     }
@@ -1784,7 +1889,10 @@ function getProviderReasoningMatch(
   if (provider === 'tencent_tokenhub') {
     if (
       isTokenHubInternationalHost(context.baseUrl) &&
-      !/deepseek-(?:v4-(?:pro|flash)(?:-\d+)?|v3[._-]2)|glm-5[._-]2(?:[-._/]|$)|kimi-k2[._-]7-code-highspeed|hy3(?:-preview)?(?:[-._/]|$)/.test(model)
+      !(
+        isDeepSeekV41FlashModel(model) ||
+        /deepseek-(?:v4-(?:pro|flash)(?:-\d+)?|v3[._-]2)|glm-5[._-]2(?:[-._/]|$)|kimi-k2[._-]7-code-highspeed|hy3(?:-preview)?(?:[-._/]|$)/.test(model)
+      )
     ) {
       return makeProviderMatch(
         { kind: 'unsupported' },
@@ -1801,6 +1909,24 @@ function getProviderReasoningMatch(
           note: apiStyle === 'responses'
             ? '腾讯 TokenHub Hy3 Responses 使用 reasoning.effort，支持关闭、轻度、中、高'
             : '腾讯 TokenHub Hy3 Chat 支持关闭、轻度、中、高；“默认”保持厂家默认关闭，不会伪装成轻度'
+        }
+      )
+    }
+    if (isDeepSeekV41FlashModel(model)) {
+      const tokenHubIntl = isTokenHubInternationalHost(context.baseUrl)
+      return makeProviderMatch(
+        apiStyle === 'responses'
+          ? { kind: 'nested_effort' }
+          : tokenHubIntl
+            ? { kind: 'effort_inside_thinking' }
+            : { kind: 'effort_with_thinking', effortField: 'flat' },
+        {
+          levels: DEEPSEEK_V41_FLASH_DIRECT_LEVELS,
+          defaultEffort: 'high',
+          aliases: DEEPSEEK_V41_FLASH_ALIASES,
+          note: tokenHubIntl && apiStyle !== 'responses'
+            ? '腾讯 TokenHub 国际 DeepSeek V4.1 Flash 使用 thinking.reasoning_effort，支持关闭思考，以及轻度、高、最高'
+            : `腾讯 TokenHub DeepSeek V4.1 Flash 使用${apiStyle === 'responses' ? ' reasoning.effort' : ' reasoning_effort'}，支持关闭思考，以及轻度、高、最高`
         }
       )
     }
@@ -2234,6 +2360,17 @@ function extractCapabilityFromEntry(entry: Record<string, unknown>): ModelReason
     })
   }
 
+  const catalogEffort = isRecord(entry.effort) ? entry.effort : null
+  if (catalogEffort && (
+    Array.isArray(catalogEffort.supported_levels) ||
+    typeof catalogEffort.supported_levels === 'string'
+  )) {
+    return normalizeModelReasoningCapability({
+      levels: catalogEffort.supported_levels,
+      defaultEffort: catalogEffort.default_level
+    })
+  }
+
   const capabilities = isRecord(entry.capabilities) ? entry.capabilities : null
   const effort = capabilities && isRecord(capabilities.effort) ? capabilities.effort : null
   if (effort) {
@@ -2269,7 +2406,7 @@ function extractCapabilityFromEntry(entry: Record<string, unknown>): ModelReason
 }
 
 /**
- * 从 OpenRouter、Anthropic 以及常见兼容 `/models` 响应提取逐模型能力。
+ * 从 DeepSeek、OpenRouter、Anthropic 及兼容 `/models` 响应提取逐模型能力。
  * 仅采信显式元数据；普通 OpenAI `/models` 只有 ID 时由静态规则兜底。
  */
 export function extractModelReasoningCapabilities(payload: unknown): ModelReasoningCapabilityMap {
@@ -2343,6 +2480,77 @@ function findRuleProfile(model: string): ModelReasoningProfile | null {
   return null
 }
 
+function acceptsEffortMetadata(match: ProviderReasoningMatch | null): boolean {
+  return !match || (match.allowMetadataOverride === true && match.transport.kind === 'unsupported') || [
+    'flat_effort', 'nested_effort', 'anthropic_effort',
+    'effort_with_thinking', 'effort_with_enable_thinking', 'effort_inside_thinking'
+  ].includes(match.transport.kind)
+}
+
+function getCatalogReasoningMatch(
+  model: string,
+  context: ReasoningProviderContext,
+  provider: ProviderReasoningMatch | null,
+  rule: ModelReasoningProfile | null
+): ProviderReasoningMatch | null {
+  const match = context.modelMetadata
+  if (match?.kind !== 'provider' || getReasoningCapabilityKey(match.model.id) !== model) return null
+  // Catalogs describe model controls, not which protocols an endpoint implements.
+  if (provider?.transport.kind === 'unsupported') return null
+  const metadata = match.model
+  const options = metadata.reasoningOptions
+  if (metadata.reasoning !== false && !options) return null
+  const fallback = provider?.profile ?? rule
+  const transport = provider?.transport ?? getEffortTransport(resolveAiApiStyle(context))
+  const effort = options?.find((option) => option.type === 'effort')
+  const toggle = options?.some((option) => option.type === 'toggle')
+  const budget = options?.find((option) => option.type === 'budget_tokens')
+  let profile: ModelReasoningProfile
+  let selectedTransport = transport
+  if (metadata.reasoning === false) {
+    profile = { levels: [], supported: false, source: 'models_dev', note: 'models.dev：该渠道模型不支持推理' }
+    selectedTransport = { kind: 'unsupported' }
+  } else if (effort?.type === 'effort' && acceptsEffortMetadata(provider)) {
+    const levels = normalizeCapabilityLevels(effort.values)
+    if (!levels.length) return null
+    if (toggle && fallback?.levels.includes('none') && !levels.includes('none')) levels.unshift('none')
+    profile = createMetadataProfile({ levels }, fallback ? { ...fallback, optionLabels: undefined, optionHints: undefined } : null)
+    profile = { ...profile, source: 'models_dev', note: '推理档位来自 models.dev 的当前渠道资料' }
+  } else if (budget && transport.budgetByEffort && fallback) {
+    const levels = fallback.levels.filter((level) => {
+      if (level === 'default' || level === 'none') return true
+      const tokens = transport.budgetByEffort?.[level]
+      return tokens !== undefined && tokens >= (budget.min ?? 0) && tokens <= (budget.max ?? Infinity)
+    })
+    profile = {
+      ...createMetadataProfile({ levels }, fallback), source: 'models_dev',
+      note: '思考预算范围来自 models.dev；预算不是推理强度'
+    }
+  } else if (toggle && [
+    'thinking_toggle', 'enable_thinking', 'minimax_adaptive',
+    'effort_with_thinking', 'effort_inside_thinking', 'effort_with_enable_thinking'
+  ].includes(transport.kind)) {
+    selectedTransport = {
+      kind: transport.kind === 'minimax_adaptive' ? 'minimax_adaptive'
+        : transport.kind === 'enable_thinking' || transport.kind === 'effort_with_enable_thinking' ? 'enable_thinking' : 'thinking_toggle'
+    }
+    profile = createMetadataProfile({ levels: ['none', 'high'] }, fallback)
+    profile = {
+      ...profile, source: 'models_dev', optionLabels: OFF_ON_LABELS, optionHints: OFF_ON_HINTS,
+      note: 'models.dev：该渠道仅支持思考开关，不提供强度档位'
+    }
+  } else {
+    profile = {
+      levels: ['default'], supported: false, source: 'models_dev',
+      note: budget ? 'models.dev 仅声明思考预算，不推测强度档位'
+        : toggle ? 'models.dev 仅声明思考开关；当前协议未配置开关映射'
+          : 'models.dev：该渠道未提供可调推理档位'
+    }
+    selectedTransport = { kind: 'fixed' }
+  }
+  return { profile, transport: selectedTransport }
+}
+
 export function getModelReasoningProfile(
   model: unknown,
   capability?: ModelReasoningCapability | null,
@@ -2352,15 +2560,16 @@ export function getModelReasoningProfile(
   const ruleProfile = normalized ? findRuleProfile(normalized) : null
   const providerMatch = normalized ? getProviderReasoningMatch(normalized, context) : null
   const normalizedCapability = normalizeModelReasoningCapability(capability)
-  if (providerMatch?.profile && !(providerMatch.allowMetadataOverride && normalizedCapability)) {
-    return providerMatch.profile
-  }
-  if (normalizedCapability) {
+  if (normalizedCapability && (!normalizedCapability.levels.length || acceptsEffortMetadata(providerMatch))) {
     return createMetadataProfile(
       normalizedCapability,
       providerMatch?.profile ?? ruleProfile
     )
   }
+  const catalogMatch = getCatalogReasoningMatch(normalized, context, providerMatch, ruleProfile)
+  if (catalogMatch?.profile) return catalogMatch.profile
+  if (providerMatch?.profile) return providerMatch.profile
+  if (normalizedCapability) return createMetadataProfile(normalizedCapability, ruleProfile)
   return ruleProfile ?? { ...FALLBACK_PROFILE, levels: FALLBACK_PROFILE.levels.slice() }
 }
 
@@ -2375,11 +2584,14 @@ export function getReasoningTransport(
 ): ReasoningTransport {
   const providerMatch = getProviderReasoningMatch(model, context)
   const normalizedCapability = normalizeModelReasoningCapability(capability)
-  if (providerMatch?.allowMetadataOverride && normalizedCapability) {
-    return normalizedCapability.levels.length
-      ? getEffortTransport(context.apiStyle)
-      : { kind: 'unsupported' }
+  if (normalizedCapability && !normalizedCapability.levels.length) return { kind: 'unsupported' }
+  if (normalizedCapability && providerMatch?.allowMetadataOverride && providerMatch.transport.kind === 'unsupported') {
+    return getEffortTransport(resolveAiApiStyle(context))
   }
+  const metadataWins = normalizedCapability && acceptsEffortMetadata(providerMatch)
+  const normalized = getReasoningCapabilityKey(model)
+  const catalogMatch = !metadataWins ? getCatalogReasoningMatch(normalized, context, providerMatch, findRuleProfile(normalized)) : null
+  if (catalogMatch) return catalogMatch.transport
   if (providerMatch) {
     return {
       ...providerMatch.transport,

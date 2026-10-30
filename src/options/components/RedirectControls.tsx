@@ -1,7 +1,7 @@
 import { OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { Button } from '../../ui/base/Button'
 import { TextSwap } from '../../ui/motion/TextSwap'
-import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
+import { MotionDisclosure } from '../../ui/motion/MotionDisclosure'
 import { handleRedirectAction } from '../options-controller'
 import { useRedirectControlsState } from './redirect-controls-store.js'
 
@@ -14,22 +14,21 @@ const REDIRECT_HEADER_SUBTITLE_CLASS =
 const REDIRECT_HEADER_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:items-start max-[760px]:justify-start'
 const REDIRECT_SELECTION_GROUP_CLASS =
-  `t-panel-slide mb-[18px] ${OPTION_INSET_CLASS} p-[16px] [--panel-translate-y:12px]`
+  `mb-[18px] ${OPTION_INSET_CLASS} p-[16px]`
 
 export function RedirectControls() {
   const state = useRedirectControlsState()
   const hasResults = state.count > 0
   const hasSelection = state.selectedCount > 0
-  const selectionEntered = useMotionEntrance(hasSelection)
 
   return (
     <>
-      {hasSelection ? (
-        <div className={REDIRECT_SELECTION_GROUP_CLASS} data-open={selectionEntered ? 'true' : 'false'}>
+      <MotionDisclosure open={hasSelection}>
+        <div className={REDIRECT_SELECTION_GROUP_CLASS}>
           <div className={REDIRECT_HEADER_CLASS}>
             <div className={REDIRECT_HEADER_COPY_CLASS}>
               <strong className={REDIRECT_HEADER_TITLE_CLASS}>
-                <TextSwap animate={selectionEntered} text={`${state.selectedCount} 条已选择`} />
+                <TextSwap animate={hasSelection} text={`${state.selectedCount} 条已选择`} />
               </strong>
               <p className={REDIRECT_HEADER_SUBTITLE_CLASS}>可批量更新最终地址或移入回收站。</p>
             </div>
@@ -67,7 +66,7 @@ export function RedirectControls() {
             </div>
           </div>
         </div>
-      ) : null}
+      </MotionDisclosure>
 
       <div className={REDIRECT_HEADER_CLASS}>
         <div className={REDIRECT_HEADER_COPY_CLASS}>

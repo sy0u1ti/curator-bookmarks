@@ -16,9 +16,6 @@ export const AI_PROVIDER_TITLE_CLASS =
 
 export const AI_PROVIDER_BODY_CLASS = 'mt-[22px] flex flex-col gap-[18px]'
 
-export const AI_PROVIDER_NOTICE_CLASS =
-  'm-0 text-sm font-semibold leading-[1.7] text-ds-text-secondary'
-
 export const AI_PROVIDER_SUBTITLE_CLASS =
   'm-0 mt-2 text-[13px] leading-[1.7] text-ds-text-disabled'
 
@@ -94,8 +91,6 @@ export const AI_PROVIDER_CHECK_CLASS =
 
 export const AI_PROVIDER_CONNECTIVITY_CLASS =
   'relative m-0 pl-[18px] text-[13px] font-medium leading-[1.65] before:absolute before:left-0 before:top-[7px] before:size-2 before:rounded-full'
-
-export const AI_PROVIDER_MODEL_FETCH_STATUS_CLASS = AI_PROVIDER_CONNECTIVITY_CLASS
 
 export const AI_PROVIDER_CONNECTIVITY_TONE_CLASS: Record<string, string> = {
   danger: 'text-ds-danger-text before:bg-ds-danger',

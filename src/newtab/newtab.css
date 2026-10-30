@@ -325,7 +325,10 @@ body {
   position: relative;
   z-index: 1;
   color: var(--tabs-text-muted);
-  transition: color var(--tabs-dur) var(--tabs-ease);
+  transition:
+    color var(--ds-motion-fast) var(--ease-smooth-out),
+    transform var(--ds-motion-control) var(--ds-ease-standard),
+    scale var(--ds-motion-control) var(--ds-ease-standard);
 }
 
 .newtab-app .t-tab:not([data-active]):hover,
@@ -451,8 +454,9 @@ body {
   #newtab-settings-drawer button
 ):not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active {
   scale: 1;
-  transform: scale(var(--ui-press-scale, var(--ds-press-scale, 0.985)));
+  transform: scale(var(--control-press-scale, var(--ui-press-scale, var(--ds-press-scale))));
   transition-duration: var(--ds-motion-feedback, 80ms);
+  transition-timing-function: var(--ease-smooth-out);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -546,9 +550,11 @@ body {
   filter: var(--newtab-glass-drop);
   transform-origin: top right;
   transition:
-    border-color var(--dropdown-open-dur) var(--dropdown-ease),
-    background-color var(--dropdown-open-dur) var(--dropdown-ease),
-    box-shadow var(--dropdown-open-dur) var(--dropdown-ease);
+    opacity var(--duration-quick) var(--dropdown-ease),
+    transform var(--dropdown-open-dur) var(--dropdown-open-ease),
+    border-color var(--ds-motion-fast) var(--dropdown-ease),
+    background-color var(--ds-motion-fast) var(--dropdown-ease),
+    box-shadow var(--ds-motion-fast) var(--dropdown-ease);
   -webkit-backdrop-filter: var(--newtab-glass-filter);
   backdrop-filter: var(--newtab-glass-filter);
 }
@@ -597,8 +603,8 @@ body {
 .bookmark-add-menu[data-expanded="true"] .bookmark-add-menu-content.is-expanded {
   /* A transition (not keyframes) so a quick re-expand retargets mid-flight. */
   transition:
-    opacity var(--dropdown-open-dur) var(--dropdown-ease),
-    transform var(--dropdown-open-dur) var(--dropdown-ease);
+    opacity var(--duration-quick) var(--dropdown-ease),
+    transform var(--dropdown-open-dur) var(--dropdown-open-ease);
 }
 
 @starting-style {
@@ -644,7 +650,9 @@ body {
   transition:
     border-color var(--ui-motion-fast) var(--ui-ease-standard),
     background-color var(--ui-motion-fast) var(--ui-ease-standard),
-    box-shadow var(--ui-motion-fast) var(--ui-ease-standard);
+    box-shadow var(--ui-motion-fast) var(--ui-ease-standard),
+    transform var(--ds-motion-control) var(--ds-ease-standard),
+    scale var(--ds-motion-control) var(--ds-ease-standard);
 }
 
 .bookmark-menu-surface .base-input:hover,
@@ -692,7 +700,7 @@ body {
   transition:
     background-color var(--ui-motion-fast) var(--ui-ease-standard),
     color var(--ui-motion-fast) var(--ui-ease-standard),
-    transform var(--dropdown-open-dur) var(--dropdown-ease);
+    transform var(--dropdown-open-dur) var(--dropdown-open-ease);
 }
 
 .bookmark-add-menu-trigger:focus-visible .bookmark-add-menu-trigger-icon {
@@ -703,7 +711,7 @@ body {
 @media (hover: hover) and (pointer: fine) {
   .bookmark-add-menu-trigger:hover .bookmark-add-menu-trigger-icon {
     background: rgba(245, 245, 247, 0.16);
-    transform: rotate(90deg) scale(1.04);
+    transform: rotate(90deg);
   }
 }
 
@@ -711,6 +719,14 @@ body {
   padding-top: 7px;
   border-top: 1px solid rgba(245, 245, 247, 0.1);
   outline: none;
+}
+
+.bookmark-menu-surface .bookmark-menu-action {
+  transition:
+    background-color var(--ds-motion-fast) var(--ease-smooth-out),
+    color var(--ds-motion-fast) var(--ease-smooth-out),
+    opacity var(--ds-motion-fast) var(--ease-smooth-out),
+    transform var(--ds-motion-control) var(--ds-ease-standard);
 }
 
 .bookmark-edit-menu .bookmark-menu-action,
@@ -722,9 +738,11 @@ body {
   box-shadow: none;
 }
 
-.bookmark-edit-menu .bookmark-menu-action:hover,
+.bookmark-edit-menu .bookmark-menu-action[data-cascade-highlighted],
+.bookmark-edit-menu .bookmark-menu-action[data-popup-open],
 .bookmark-edit-menu .bookmark-menu-action:focus-visible,
-.bookmark-add-menu.expanded .bookmark-menu-action:hover,
+.bookmark-add-menu.expanded .bookmark-menu-action[data-cascade-highlighted],
+.bookmark-add-menu.expanded .bookmark-menu-action[data-popup-open],
 .bookmark-add-menu.expanded .bookmark-menu-action:focus-visible {
   background: rgba(245, 245, 247, 0.08);
   color: rgba(245, 245, 247, 0.96);
@@ -732,7 +750,7 @@ body {
 }
 
 .bookmark-edit-menu .bookmark-menu-action-danger,
-.bookmark-edit-menu .bookmark-menu-action-danger:hover,
+.bookmark-edit-menu .bookmark-menu-action-danger[data-cascade-highlighted],
 .bookmark-edit-menu .bookmark-menu-action-danger:focus-visible {
   color: #ffb7b0;
 }
@@ -1241,7 +1259,7 @@ body {
   pointer-events: none;
   transform: translateY(0) scale(1);
   transition:
-    transform var(--ds-motion-fast) var(--ease-smooth-out),
+    transform var(--ds-motion-control) var(--ds-ease-standard),
     background-color var(--ds-motion-fast) var(--ease-smooth-out),
     border-color var(--ds-motion-fast) var(--ease-smooth-out);
 }
@@ -1256,14 +1274,14 @@ body {
   .newtab-search-chip-button:enabled:hover::before {
     border-color: var(--ui-divider-strong);
     background: rgba(245, 245, 247, 0.08);
-    transform: translateY(-1px);
   }
 }
 
 .newtab-search-chip-button:enabled:active::before,
 .newtab-search-chip-button:enabled[aria-expanded="true"]::before {
-  transform: translateY(0) scale(var(--scale-medium));
+  transform: translateY(0) scale(var(--ds-press-scale));
   transition-duration: var(--ds-motion-feedback);
+  transition-timing-function: var(--ease-smooth-out);
 }
 
 .newtab-search-natural.active:not(.fallback)::before {
@@ -1278,7 +1296,7 @@ body {
 
 .newtab-search-engine-caret {
   transform: rotate(0deg);
-  transition: transform var(--duration-quick) var(--ease-smooth-out);
+  transition: transform var(--ds-motion-spring) var(--ds-ease-spring);
 }
 
 .newtab-search-engine[aria-expanded="true"] .newtab-search-engine-caret {
@@ -1307,6 +1325,8 @@ body {
 /* One floating material carries both the field and its recommendations. The
    fixed-height slot keeps this local grid reveal from moving any bookmarks. */
 .newtab-search-shell {
+  container-type: inline-size;
+  container-name: newtab-search;
   pointer-events: none;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
   border-radius: var(--ui-radius-group);
@@ -1314,12 +1334,12 @@ body {
   /* Lift the field as one unit. Scaling its live text and native controls
      changes glyph rasterization and makes them snap as the layer settles. */
   transform: translateY(0);
-  transition: transform var(--duration-fast) var(--ease-smooth-out);
+  transition: transform var(--ds-motion-control) var(--ds-ease-standard);
 }
 .newtab-search-shell:focus-within,
 .newtab-search-shell[data-focus-within="true"],
 .newtab-search-shell[data-engine-open="true"] {
-  transform: translateY(-2px);
+  transform: translateY(var(--ds-hover-lift));
 }
 .newtab-search-surface {
   position: absolute;
@@ -1372,6 +1392,21 @@ body {
   padding: 6px 6px 8px;
   scrollbar-color: rgba(245, 245, 247, 0.22) transparent;
   scrollbar-width: thin;
+}
+@container newtab-search (max-width: 400px) {
+  .newtab-search {
+    gap: 4px;
+    padding-inline: 10px 6px;
+  }
+  .newtab-search-natural {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+  }
+  .newtab-search-engine {
+    min-width: 42px;
+    padding-inline: 7px;
+  }
 }
 @media (hover: hover) and (pointer: fine) {
   .newtab-search-shell:hover:not(:focus-within):not([data-focus-within="true"]):not([data-engine-open="true"]) {
@@ -1512,7 +1547,7 @@ body {
   }
 
   .newtab-search-slot {
-    --search-effective-width: calc(100vw - 40px);
+    --search-auto-width: calc(100vw - 40px);
   }
 
   .newtab-search {
@@ -1640,7 +1675,8 @@ body {
   background: var(--ds-surface-3);
   color: var(--ds-text-primary);
   transition:
-    transform var(--ds-motion-fast) var(--ds-ease-standard),
+    transform var(--ds-motion-control) var(--ds-ease-standard),
+    scale var(--ds-motion-control) var(--ds-ease-standard),
     background-color var(--ds-motion-fast) var(--ds-ease-standard),
     color var(--ds-motion-fast) var(--ds-ease-standard);
 }
@@ -1653,9 +1689,12 @@ body {
   color: var(--ds-text-primary);
 }
 
-.featured-wallpaper-action:active,
-.featured-wallpaper-close:active {
+.featured-wallpaper-action:where(:not(:disabled):not([aria-disabled="true"]):not([data-disabled])):active,
+.featured-wallpaper-close:where(:not(:disabled):not([aria-disabled="true"]):not([data-disabled])):active {
+  scale: 1;
   transform: scale(var(--ds-press-scale));
+  transition-duration: var(--ds-motion-feedback);
+  transition-timing-function: var(--ease-smooth-out);
 }
 
 .featured-wallpaper-close {
@@ -1736,10 +1775,11 @@ body {
   background: var(--newtab-panel-bg-raised);
   box-shadow: none;
   transition:
-    transform var(--dropdown-open-dur) var(--dropdown-ease),
-    border-color var(--dropdown-open-dur) var(--dropdown-ease),
-    background-color var(--dropdown-open-dur) var(--dropdown-ease),
-    box-shadow var(--dropdown-open-dur) var(--dropdown-ease);
+    transform var(--ds-motion-control) var(--ds-ease-standard),
+    scale var(--ds-motion-control) var(--ds-ease-standard),
+    border-color var(--ds-motion-fast) var(--ease-smooth-out),
+    background-color var(--ds-motion-fast) var(--ease-smooth-out),
+    box-shadow var(--ds-motion-fast) var(--ease-smooth-out);
 }
 
 .featured-wallpaper-card:hover,
@@ -1756,7 +1796,7 @@ body {
 
 @media (hover: hover) and (pointer: fine) {
   .featured-wallpaper-card:hover {
-    transform: translateY(-2px);
+    transform: translateY(var(--ds-hover-lift));
   }
 
   .featured-wallpaper-card:hover .featured-wallpaper-preview-image {
@@ -1764,8 +1804,11 @@ body {
   }
 }
 
-.featured-wallpaper-card:active {
-  transform: translateY(-1px) scale(0.992);
+.featured-wallpaper-card:where(:not(:disabled):not([aria-disabled="true"]):not([data-disabled])):active {
+  scale: 1;
+  transform: translateY(0) scale(var(--ds-press-scale));
+  transition-duration: var(--ds-motion-feedback);
+  transition-timing-function: var(--ease-smooth-out);
 }
 
 .featured-wallpaper-preview {
@@ -1784,7 +1827,7 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform var(--ui-motion-standard) var(--dropdown-ease);
+  transition: transform var(--ds-motion-spring) var(--ds-ease-spring);
 }
 
 .featured-wallpaper-preview:not([data-state="ready"]) .featured-wallpaper-preview-image {
@@ -1852,7 +1895,8 @@ body {
   color: var(--ds-text-primary);
   transition:
     opacity var(--ds-motion-fast) var(--ds-ease-standard),
-    transform var(--ds-motion-fast) var(--ds-ease-standard),
+    transform var(--ds-motion-control) var(--ds-ease-standard),
+    scale var(--ds-motion-control) var(--ds-ease-standard),
     background-color var(--ds-motion-fast) var(--ds-ease-standard),
     border-color var(--ds-motion-fast) var(--ds-ease-standard),
     color var(--ds-motion-fast) var(--ds-ease-standard);
@@ -1882,10 +1926,10 @@ body {
   filter: var(--newtab-glass-drop);
   opacity: 0;
   pointer-events: none;
-  transform: translateY(4px) scale(0.985);
+  transform: translateY(4px) scale(var(--dropdown-pre-scale));
   transition:
-    opacity var(--dropdown-open-dur) var(--dropdown-ease),
-    transform var(--dropdown-open-dur) var(--dropdown-ease);
+    opacity var(--dropdown-close-dur) var(--dropdown-ease),
+    transform var(--dropdown-close-dur) var(--dropdown-ease);
   -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
   backdrop-filter: var(--newtab-glass-backdrop-filter);
 }
@@ -1893,6 +1937,9 @@ body {
 .featured-wallpaper-hover-preview.is-visible {
   opacity: 1;
   transform: translateY(0) scale(1);
+  transition:
+    opacity var(--duration-quick) var(--dropdown-ease),
+    transform var(--dropdown-open-dur) var(--dropdown-open-ease);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1996,7 +2043,8 @@ body {
   line-height: 1;
   padding: 0 9px;
   transition:
-    transform var(--ds-motion-fast) var(--ds-ease-standard),
+    transform var(--ds-motion-control) var(--ds-ease-standard),
+    scale var(--ds-motion-control) var(--ds-ease-standard),
     border-color var(--ds-motion-fast) var(--ds-ease-standard),
     background-color var(--ds-motion-fast) var(--ds-ease-standard),
     color var(--ds-motion-fast) var(--ds-ease-standard);
@@ -2014,8 +2062,11 @@ body {
   outline-offset: 2px;
 }
 
-.newtab-delete-toast-actions button:active {
+.newtab-delete-toast-actions button:where(:not(:disabled):not([aria-disabled="true"]):not([data-disabled])):active {
+  scale: 1;
   transform: scale(var(--ds-press-scale));
+  transition-duration: var(--ds-motion-feedback);
+  transition-timing-function: var(--ease-smooth-out);
 }
 
 .newtab-delete-toast-actions button:disabled {

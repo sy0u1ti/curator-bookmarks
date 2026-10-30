@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { chromium } from 'playwright'
 import { installGlassWallpaperFixture } from './glass-test-fixture.mjs'
+import { verifySearchGeometryMatrix } from './newtab-search-geometry-scenarios.mjs'
 
 const baseline = process.argv.includes('--baseline')
 const output = path.resolve('output/playwright/newtab-search-stability', baseline ? 'before' : 'after')
@@ -62,6 +63,13 @@ for (const density of [1, 1.25]) {
     }))
     await page.locator('.bookmark-folder-section').first().screenshot({ path: path.join(output, `title-count-${density}.png`) })
     if (!baseline) await verifyFolderHeadingFeedback(page)
+    if (!baseline) {
+      const geometry = await verifySearchGeometryMatrix(page, size => page.setViewportSize(size))
+      await writeFile(path.join(output, `geometry-${density}.json`), JSON.stringify(geometry, null, 2))
+      await page.mouse.move(10, 890)
+      await page.locator('.newtab-search-input').evaluate(element => element.blur())
+      await page.waitForFunction(() => new DOMMatrixReadOnly(getComputedStyle(document.querySelector('.newtab-search-shell')).transform).f === 0)
+    }
     const capture = () => page.evaluate(() => new Promise(resolve => {
       const selectors = ['.newtab-search-input', '.newtab-search-icon', '.newtab-search-natural', '.newtab-search-engine', '.newtab-search-submit']
       const frames = []

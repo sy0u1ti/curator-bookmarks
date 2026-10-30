@@ -1,5 +1,6 @@
 import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { AiProviderSettingsState } from './ai-provider-settings-types.js'
+import { IDLE_ACTION_FEEDBACK } from '../../shared/action-feedback.js'
 
 const defaultAiProviderSettingsState: AiProviderSettingsState = {
   apiKey: '',
@@ -21,9 +22,8 @@ const defaultAiProviderSettingsState: AiProviderSettingsState = {
     fetchDisabled: true,
     fetchLabel: '获取模型',
     fetchModelsStatus: '',
-    fetchModelsStatusBusy: false,
-    fetchModelsStatusTone: 'muted',
     fetchingModels: false,
+    fetchFeedback: IDLE_ACTION_FEEDBACK,
     manageDisabled: true,
     selector: {
       currentModel: '',
@@ -35,7 +35,7 @@ const defaultAiProviderSettingsState: AiProviderSettingsState = {
     }
   },
   modelToolsDisabled: true,
-  noticeText: '填写 API Key 后即可获取模型并测试连接。',
+  modelCatalog: { loaded: false, autoUpdate: false, checkedAt: 0, lastError: '', match: null },
   reasoningEffort: 'default',
   reasoningEffortNote: '',
   reasoningEffortOptions: [],
@@ -48,6 +48,7 @@ const defaultAiProviderSettingsState: AiProviderSettingsState = {
   testDisabled: true,
   testLabel: '测试连接',
   testingConnection: false,
+  testFeedback: IDLE_ACTION_FEEDBACK,
   timeoutMs: '30000'
 }
 

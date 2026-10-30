@@ -1,5 +1,8 @@
 import { useRef, useState } from 'react'
 import { Button } from '../ui/base/Button'
+import { StatusButton } from '../ui/actions/StatusButton'
+import { COPY_ACTION_LABELS } from '../ui/actions/ActionFeedback'
+import { IDLE_ACTION_FEEDBACK } from '../shared/action-feedback'
 import { Popover } from '../ui/base/Popover'
 import { Icon } from '../ui/icons/Icon'
 import type { PopupActionMenuViewModel } from '../popup/components/PopupViewModels'
@@ -24,7 +27,21 @@ export function SidePanelBookmarkActions({ menu, onMenuAction }: {
         trigger={<Button ref={trigger} size="sm" variant="secondary" className="sidepanel-bookmark-menu !h-7 !w-7 !min-w-0 !p-0" aria-label="打开书签操作"><Icon name="MoreHorizontal" size={16} /></Button>}
       >
         <div data-popup-row-menu className="grid gap-1">
-          {menu.items.map(item => (
+          {menu.items.map(item => item.action === 'copy-url' ? (
+            <StatusButton
+              key={item.action}
+              size="sm"
+              variant="ghost"
+              className="w-full !justify-start"
+              aria-label={item.ariaLabel}
+              data-bookmark-menu-action={item.action}
+              disabled={item.disabled}
+              feedback={item.feedback || IDLE_ACTION_FEEDBACK}
+              labels={COPY_ACTION_LABELS}
+              icon="Copy"
+              onClick={(event) => onMenuAction?.(item.bookmarkId, item.action, event.currentTarget)}
+            />
+          ) : (
             <Button
               key={item.action}
               size="sm"

@@ -1,4 +1,5 @@
 import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
+import { DEFAULT_SEARCH_LAYOUT, normalizeSearchHeight, SEARCH_WIDTH_MAX_VW, SEARCH_WIDTH_MIN_VW } from './search-layout.js'
 
 export const NEWTAB_SEARCH_BACKGROUND_MIN = 52
 export const NEWTAB_SEARCH_BACKGROUND_DEFAULT = 60
@@ -61,7 +62,9 @@ interface NewtabSearchSettingsSource {
 
 export interface NewtabSearchSettingsActions {
   onFieldChange: (key: NewtabSearchSettingsFieldKey, value: number | string | string[]) => void
+  onResetLayout: () => void
   onToggle: (key: NewtabSearchSettingsToggleKey, enabled: boolean) => void
+  onWebEngineChange: (engine: string | null) => void
 }
 
 const EMPTY_VIEW: NewtabSearchSettingsView = {
@@ -73,7 +76,7 @@ const EMPTY_VIEW: NewtabSearchSettingsView = {
   enabledEngines: ['google', 'bing', 'baidu', 'duckduckgo'],
   engine: 'google',
   engineControlsDisabled: false,
-  height: 40,
+  height: DEFAULT_SEARCH_LAYOUT.height,
   offsetDisabled: false,
   offsetMax: 240,
   offsetMin: -240,
@@ -84,15 +87,17 @@ const EMPTY_VIEW: NewtabSearchSettingsView = {
   placeholderDisabled: false,
   width: 44,
   widthDisabled: false,
-  widthMax: 72,
-  widthMin: 16,
+  widthMax: SEARCH_WIDTH_MAX_VW,
+  widthMin: SEARCH_WIDTH_MIN_VW,
   webSearchDisabled: false,
   webSearchEnabled: true
 }
 
 const EMPTY_ACTIONS: NewtabSearchSettingsActions = {
   onFieldChange: () => {},
-  onToggle: () => {}
+  onResetLayout: () => {},
+  onToggle: () => {},
+  onWebEngineChange: () => {}
 }
 
 let searchSettingsActions: NewtabSearchSettingsActions = EMPTY_ACTIONS
@@ -105,7 +110,7 @@ export function createNewtabSearchSettingsView(
     width: { min: number; max: number }
   } = {
     offset: { min: -240, max: 240 },
-    width: { min: 16, max: 72 }
+    width: { min: SEARCH_WIDTH_MIN_VW, max: SEARCH_WIDTH_MAX_VW }
   }
 ): NewtabSearchSettingsView {
   const engineControlsDisabled = !settings.enabled || !settings.webSearchEnabled
@@ -126,7 +131,7 @@ export function createNewtabSearchSettingsView(
     enabledEngines: settings.enabledEngines,
     engine: settings.engine,
     engineControlsDisabled,
-    height: settings.height,
+    height: normalizeSearchHeight(settings.height),
     offsetDisabled: !settings.enabled || settings.autoVerticalCenter,
     offsetMax: bounds.offset.max,
     offsetMin: bounds.offset.min,
@@ -136,7 +141,7 @@ export function createNewtabSearchSettingsView(
     placeholder: settings.placeholder,
     placeholderDisabled: !settings.enabled,
     width,
-    widthDisabled: !settings.enabled,
+    widthDisabled: !settings.enabled || bounds.width.min >= bounds.width.max,
     widthMax: bounds.width.max,
     widthMin: bounds.width.min,
     webSearchDisabled: !settings.enabled,
@@ -182,4 +187,12 @@ export function dispatchNewtabSearchSettingFieldChange(
   value: number | string | string[]
 ): void {
   searchSettingsActions.onFieldChange(key, value)
+}
+
+export function dispatchNewtabSearchLayoutReset(): void {
+  searchSettingsActions.onResetLayout()
+}
+
+export function dispatchNewtabSearchWebEngineChange(engine: string | null): void {
+  searchSettingsActions.onWebEngineChange(engine)
 }

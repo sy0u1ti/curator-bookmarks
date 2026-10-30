@@ -52,6 +52,7 @@ export interface PopupActionMenuItemViewModel {
   danger: boolean
   disabled: boolean
   label: string
+  feedback?: import('../../shared/action-feedback').ActionFeedback
 }
 
 export interface PopupActionMenuViewModel {
@@ -157,6 +158,8 @@ export interface PopupContentViewModel {
 
 export interface PopupSmartPageViewModel {
   bookmarked: boolean
+  canClassify: boolean
+  classificationStatusTitle: string
   favicon: string
   pinLabel: string
   pinPending: boolean

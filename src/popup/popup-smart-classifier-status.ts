@@ -1,4 +1,4 @@
-import { isExternallyCheckableUrl } from '../shared/sensitive-url.js'
+import { isPopupSmartClassifiableUrl } from './popup-page-policy.js'
 import type { PopupSmartClassifierViewModel } from './components/PopupViewModels.js'
 
 interface PopupSmartClassifierRenderState {
@@ -18,7 +18,7 @@ export function getPopupSmartClassifierRenderStatus({
   currentUrl,
   smartStatus
 }: PopupSmartClassifierRenderState): PopupSmartClassifierViewModel['status'] {
-  if (!isExternallyCheckableUrl(currentUrl)) {
+  if (!isPopupSmartClassifiableUrl(currentUrl)) {
     return 'idle'
   }
 

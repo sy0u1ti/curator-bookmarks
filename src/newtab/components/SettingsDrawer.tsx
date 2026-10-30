@@ -54,10 +54,14 @@ import {
   useNewtabTimeSettingsView
 } from '../newtab-time-settings-store'
 import {
+  dispatchNewtabSearchLayoutReset,
   dispatchNewtabSearchSettingFieldChange,
   dispatchNewtabSearchSettingToggle,
+  dispatchNewtabSearchWebEngineChange,
   useNewtabSearchSettingsView
 } from '../newtab-search-settings-store'
+import { getSearchSizePreset, SEARCH_SIZE_PRESETS, type SearchSizePreset } from '../search-layout'
+import { SEARCH_MULTI_OPEN_LIMIT } from '../search-engines'
 import {
   dispatchNewtabBackgroundFileSelect,
   dispatchNewtabBackgroundFilterHoverToggle,
@@ -66,13 +70,13 @@ import {
   dispatchNewtabBackgroundUrlCommit,
   useNewtabBackgroundSettingsView
 } from '../newtab-background-settings-store'
+import { NEWTAB_BACKGROUND_TYPE_OPTIONS } from '../newtab-background-types'
 import type { SettingsDrawerSection } from '../settings-group-sync'
 import { useSettingsDrawerModalMode } from '../settings-drawer-mode'
 import { BACKGROUND_MASK_META, BACKGROUND_MASK_STYLES, isPaperShaderMaskStyle } from '../background-mask-settings'
 import { getBackgroundFilterUnavailableReason, useBackgroundFilterStatus } from '../background-filter-runtime'
 import {
   dispatchNewtabSettingsDrawerActiveGroupChange,
-  dispatchNewtabSettingsDrawerFeaturedPickerClick,
   dispatchNewtabSettingsDrawerOpenChange,
   dispatchNewtabSettingsDrawerReady,
   getNewtabSettingsDrawerNodes,
@@ -81,7 +85,6 @@ import {
   useNewtabSettingsDrawerLayoutRequest,
   useNewtabSettingsDrawerView
 } from '../newtab-settings-drawer-store'
-import { setNewtabFeaturedBackgroundPickerNodes } from '../newtab-featured-background-picker-store'
 import {
   dispatchNewtabModuleSettingToggle,
   useNewtabModuleSettingsView,
@@ -178,11 +181,6 @@ const FOLDER_CANDIDATE_TITLE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whit
 const FOLDER_CANDIDATE_META_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-snug text-ds-text-secondary'
 const FOLDER_CANDIDATE_BADGE_CLASS = 'inline-flex min-h-5 items-center justify-center rounded-full bg-ds-surface-1 px-2 text-xs font-semibold text-ds-text-secondary whitespace-nowrap'
 const MODULE_SWITCH_LABEL_CLASS = SETTINGS_SWITCH_WRAP_CLASS
-const BACKGROUND_CREDIT_ROW_CLASS = '-mt-1 flex min-h-6 min-w-0 items-center gap-1.5 px-1.5 text-xs leading-none text-ds-text-muted'
-const BACKGROUND_CREDIT_LABEL_CLASS = 'shrink-0 font-medium text-ds-text-secondary'
-const BACKGROUND_CREDIT_CLASS = 'group inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-ds-sm text-xs font-medium leading-none text-ds-text-muted outline-none transition-colors duration-ds-fast ease-ds-standard hover:text-ds-text-primary focus-visible:shadow-ds-focus'
-const BACKGROUND_CREDIT_TEXT_CLASS = 'min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap'
-const BACKGROUND_CREDIT_ICON_CLASS = 'shrink-0 text-ds-text-disabled transition-colors duration-ds-fast ease-ds-standard group-hover:text-ds-text-secondary'
 const SETTING_COLOR_CLASS = 'inline-grid min-h-9 min-w-40 grid-cols-[minmax(0,1fr)_34px] items-center gap-2 overflow-hidden rounded-ds-sm border border-ds-border bg-ds-surface-2 p-1 pl-2.5'
 const SETTING_COLOR_VALUE_CLASS = 'text-xs font-semibold text-ds-text-primary'
 const SETTING_COLOR_INPUT_CLASS = 'h-7 min-h-7 w-8 min-w-8 overflow-hidden rounded-ds-sm border-0 bg-transparent p-0'
@@ -191,16 +189,13 @@ const ICON_PREVIEW_HEADER_CLASS = 'grid gap-1 text-xs font-semibold text-ds-text
 const ICON_PREVIEW_SUMMARY_CLASS = 'min-w-0 text-xs font-medium leading-relaxed text-ds-text-secondary'
 const ICON_LIVE_PREVIEW_CLASS = 'm-0 overflow-x-auto rounded-ds-sm border border-ds-border bg-ds-app px-2.5 py-4 outline-none focus-visible:shadow-ds-focus [scrollbar-width:thin] [scrollbar-color:var(--ds-border-hover)_transparent]'
 const ICON_LIVE_PREVIEW_GRID_CLASS = 'mx-auto grid w-[var(--preview-grid-max-width)] content-center [column-gap:var(--preview-column-gap)] [row-gap:var(--preview-row-gap)]'
-const ICON_PRESET_ROW_CLASS = 'grid grid-cols-3 gap-2 @max-[400px]/settings:grid-cols-1'
-const ICON_PRESET_CARD_CLASS = 'grid min-h-32 min-w-0 content-start gap-1.5 rounded-ds-sm border border-ds-border bg-ds-surface-1 p-2.5 text-left text-ds-text-secondary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-ds-focus'
+const ICON_PRESET_ROW_CLASS = 'grid grid-cols-3 gap-2'
+const ICON_PRESET_CARD_CLASS = 'grid min-h-24 min-w-0 content-center gap-3 rounded-ds-sm border border-ds-border bg-ds-surface-1 p-2.5 text-left text-ds-text-secondary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-ds-focus'
 const ICON_PRESET_PREVIEW_CLASS = 'grid min-h-11 content-center rounded-ds-sm bg-ds-app'
 const ICON_PRESET_PREVIEW_CELL_CLASS = 'block rounded-ds-sm bg-ds-surface-2'
 const ICON_PRESET_NAME_CLASS = 'min-w-0 overflow-hidden text-ellipsis text-xs font-semibold text-ds-text-primary'
-const ICON_PRESET_DETAIL_CLASS = 'min-w-0 overflow-hidden text-ellipsis text-xs leading-snug text-ds-text-secondary'
 const SETTINGS_SEGMENTED_CLASS = 'inline-flex min-h-9 items-center gap-1 rounded-ds-sm border border-ds-border bg-ds-surface-2 p-1 @max-[440px]/settings:w-full'
 const ICON_CONTROL_ROW_CLASS = 'grid-cols-[minmax(0,1fr)_auto]'
-const ICON_ADVANCED_PANEL_CLASS = 'grid'
-const ICON_RESET_DEFAULTS_CLASS = 'min-h-9 w-full justify-center px-3 text-xs font-semibold'
 const SEARCH_ENGINE_ROW_CLASS = 'items-start'
 const SEARCH_ENGINE_GRID_CLASS = 'grid min-w-0 grid-cols-3 gap-1.5'
 const SEARCH_ENGINE_TOGGLE_CLASS = 'search-engine-toggle relative inline-flex min-h-8 min-w-0 items-center justify-center px-2 text-xs font-semibold'
@@ -332,7 +327,7 @@ function SliderRow({
   disabled?: boolean
   onValueChange?: (value: number) => void
   onValueCommitted?: (value: number) => void
-  sliderValue?: number
+  sliderValue: number
   ticks?: readonly [string, string, string]
   step?: number
 }) {
@@ -356,7 +351,6 @@ function SliderRow({
           step={step}
           onValueChange={onValueChange}
           onValueCommitted={onValueCommitted}
-          syncInputState
           value={sliderValue}
         />
         {ticks ? (
@@ -416,6 +410,24 @@ function SettingsSelect({
         valueClassName={SETTINGS_SELECT_VALUE_CLASS}
       />
     </div>
+  )
+}
+
+function SettingsDetails({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+  return (
+    <CollapsibleRoot>
+      <CollapsibleTrigger
+        id={`${id}-toggle`}
+        className={settingsControlClassName(SETTINGS_WIDE_BUTTON_CLASS, 'flex items-center gap-3 text-left')}
+        aria-controls={`${id}-panel`}
+      >
+        <span>{title}</span>
+        <span className="t-acc-chevron"><Icon name="ChevronDown" size={14} aria-hidden="true" /></span>
+      </CollapsibleTrigger>
+      <CollapsiblePanel id={`${id}-panel`} className={SETTINGS_LIST_CLASS} keepMounted={false}>
+        {children}
+      </CollapsiblePanel>
+    </CollapsibleRoot>
   )
 }
 
@@ -835,7 +847,6 @@ const SourceSettingsSection = memo(function SourceSettingsSection({
         <div className={settingRowClassName(ICON_CONTROL_ROW_CLASS)}>
           <SettingLabelStack
             title="浏览方式"
-            description="「展开」平铺显示所有书签；「导航」将文件夹呈现为卡片，点击下钻浏览。"
           />
           <ToggleGroup
             id="folder-browse-mode-control"
@@ -850,8 +861,8 @@ const SourceSettingsSection = memo(function SourceSettingsSection({
               }
             }}
             items={[
-              { value: 'expanded', label: '展开', attributes: { 'data-browse-mode': 'expanded' } },
-              { value: 'navigation', label: '导航', attributes: { 'data-browse-mode': 'navigation' } }
+              { value: 'expanded', label: '平铺书签', attributes: { 'data-browse-mode': 'expanded' } },
+              { value: 'navigation', label: '逐级浏览', attributes: { 'data-browse-mode': 'navigation' } }
             ]}
             unstyled
             value={folderSource.browseMode}
@@ -1042,20 +1053,8 @@ const BackgroundSettingsSection = memo(function BackgroundSettingsSection({
   sectionRef?: SettingsSectionRef
 }) {
   const backgroundSettings = useNewtabBackgroundSettingsView()
-  const featuredPickerRef = useRef<HTMLButtonElement | null>(null)
   const imageFileInputRef = useRef<HTMLInputElement | null>(null)
   const videoFileInputRef = useRef<HTMLInputElement | null>(null)
-
-  useLayoutEffect(() => {
-    setNewtabFeaturedBackgroundPickerNodes({
-      trigger: featuredPickerRef.current
-    })
-    return () => {
-      setNewtabFeaturedBackgroundPickerNodes({
-        trigger: null
-      })
-    }
-  }, [])
 
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="appearance" aria-labelledby="settings-background-title">
@@ -1071,59 +1070,8 @@ const BackgroundSettingsSection = memo(function BackgroundSettingsSection({
           portalContainer={panelElement}
           triggerRef={firstControlRef}
           value={backgroundSettings.type}
-          options={[
-            ['featured', '精选图库'],
-            ['image', '图片'],
-            ['video', '视频'],
-            ['urls', '图片链接'],
-            ['color', '纯色']
-          ]}
+          options={[...NEWTAB_BACKGROUND_TYPE_OPTIONS]}
         />
-        <div id="background-featured-row" className={settingRowClassName()} hidden={backgroundSettings.featuredPickerHidden}>
-          <SettingLabelStack title="精选图库" description="主动选择后会访问 NASA、Wikimedia Commons、The Met 等第三方图片域名并自动缓存。" />
-          <Button
-            unstyled
-            id="background-featured-picker"
-            ref={featuredPickerRef}
-            className={settingsControlClassName(SETTINGS_PICKER_BUTTON_CLASS, backgroundSettings.featuredPickerSelected ? SETTINGS_SELECTED_SURFACE_CLASS : undefined)}
-            type="button"
-            aria-haspopup="dialog"
-            aria-controls="background-featured-modal"
-            aria-expanded={backgroundSettings.featuredPickerExpanded ? 'true' : 'false'}
-            disabled={backgroundSettings.featuredPickerDisabled}
-            onClick={() => {
-              dispatchNewtabSettingsDrawerFeaturedPickerClick()
-            }}
-          >
-            <span id="background-featured-picker-label">{backgroundSettings.featuredPickerLabel}</span>
-          </Button>
-          <Input
-            id="background-featured-id"
-            type="hidden"
-            value={backgroundSettings.featuredId}
-            onChange={(event) => dispatchNewtabBackgroundSettingFieldChange('featuredId', event.currentTarget.value)}
-            unstyled
-          />
-        </div>
-        <div id="background-featured-credit-row" className={BACKGROUND_CREDIT_ROW_CLASS} hidden={backgroundSettings.featuredCreditHidden}>
-          <span className={BACKGROUND_CREDIT_LABEL_CLASS}>来源</span>
-          <span aria-hidden="true" className="shrink-0 text-ds-text-disabled">·</span>
-          <a
-            id="background-featured-credit"
-            className={BACKGROUND_CREDIT_CLASS}
-            href={backgroundSettings.featuredCreditHref}
-            aria-label={`打开图片来源：${backgroundSettings.featuredCreditText}`}
-            title={backgroundSettings.featuredCreditTitle}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <span className={BACKGROUND_CREDIT_TEXT_CLASS}>{backgroundSettings.featuredCreditText}</span>
-            <Icon className={BACKGROUND_CREDIT_ICON_CLASS} name="ExternalLink" size={13} aria-hidden="true" />
-          </a>
-        </div>
-        <SliderRow rowId="background-featured-display-size-row" id="background-featured-display-size" label="背景大小" valueId="background-featured-display-size-value" value={`${backgroundSettings.displaySize}%`} min={String(backgroundSettings.displaySizeMin)} max={String(backgroundSettings.displaySizeMax)} defaultValue="100" ariaLabel="精选图库背景大小" hidden={backgroundSettings.featuredDisplayHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('displaySize', value)} sliderValue={backgroundSettings.displaySize} />
-        <SliderRow rowId="background-featured-position-x-row" id="background-featured-position-x" label="水平位置" valueId="background-featured-position-x-value" value={`${backgroundSettings.positionX}%`} min={String(backgroundSettings.positionXMin)} max={String(backgroundSettings.positionXMax)} defaultValue="50" ariaLabel="精选图库背景水平位置" hidden={backgroundSettings.featuredDisplayHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('positionX', value)} sliderValue={backgroundSettings.positionX} />
-        <SliderRow rowId="background-featured-position-y-row" id="background-featured-position-y" label="垂直位置" valueId="background-featured-position-y-value" value={`${backgroundSettings.positionY}%`} min={String(backgroundSettings.positionYMin)} max={String(backgroundSettings.positionYMax)} defaultValue="50" ariaLabel="精选图库背景垂直位置" hidden={backgroundSettings.featuredDisplayHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('positionY', value)} sliderValue={backgroundSettings.positionY} />
         <label id="background-color-row" className={settingRowClassName()} htmlFor="background-color" hidden={backgroundSettings.type !== 'color'}>
           <span className={SETTINGS_LABEL_CLASS}>背景颜色</span>
           <span id="background-color-control" className={SETTING_COLOR_CLASS}>
@@ -1347,7 +1295,13 @@ const IconSettingSliderRow = memo(function IconSettingSliderRow({
   return <SliderRow {...props} onValueChange={(value) => dispatchNewtabIconSettingFieldChange(field, value)} />
 })
 
-const IconSettingsSection = memo(function IconSettingsSection() {
+const IconSettingsSection = memo(function IconSettingsSection({
+  firstControlRef,
+  sectionRef
+}: {
+  firstControlRef?: Ref<HTMLElement>
+  sectionRef?: SettingsSectionRef
+}) {
   const iconPreview = useNewtabIconPreviewView()
   const layout = useBookmarkPreviewLayout()
   const tileWidth = layout?.tileWidth ?? iconPreview.previewTileWidth
@@ -1364,48 +1318,16 @@ const IconSettingsSection = memo(function IconSettingsSection() {
   } as React.CSSProperties
 
   return (
-    <section className={SETTINGS_SECTION_CLASS} data-settings-group="appearance" aria-labelledby="settings-icon-title">
-      <h2 id="settings-icon-title" className={SETTINGS_SECTION_TITLE_CLASS}>书签卡片</h2>
+    <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="appearance" aria-labelledby="settings-icon-title">
+      <div className="flex min-h-8 items-center justify-between gap-3">
+        <h2 id="settings-icon-title" className={SETTINGS_SECTION_TITLE_CLASS}>书签卡片</h2>
+        <Button id="icon-reset-defaults" variant="ghost" size="sm" onClick={dispatchNewtabIconResetDefaults}>恢复默认布局</Button>
+      </div>
       <Surface className={SETTINGS_LIST_CLASS} variant="plain">
-        <div className={ICON_PREVIEW_PANEL_CLASS}>
-          <div className={ICON_PREVIEW_HEADER_CLASS}>
-            <span>{layout ? '实际尺寸预览' : '卡片预览'}</span>
-            <span id="icon-live-preview-summary" className={ICON_PREVIEW_SUMMARY_CLASS}>
-              {iconPreview.layoutMode === 'fixed' ? `${layout?.columns ?? iconPreview.fixedColumns} 列` : '自动适配'} · {Math.round(tileWidth)}px 卡片 · {iconPreview.iconShellSize}px 图标区 · {iconPreview.showTitles ? `${iconPreview.titleLines} 行标题` : '图标模式'}
-            </span>
-          </div>
-          <figure
-            id="icon-live-preview"
-            className={ICON_LIVE_PREVIEW_CLASS}
-            aria-label="书签卡片布局预览"
-            data-icon-layout-mode={iconPreview.layoutMode}
-            data-squircle="off"
-            tabIndex={0}
-            style={previewStyle}
-          >
-            <div
-              className={cx(ICON_LIVE_PREVIEW_GRID_CLASS, 'max-w-full justify-center')}
-              style={{
-                minWidth: tileWidth,
-                gridTemplateColumns: 'repeat(auto-fit, var(--preview-tile-width))'
-              }}
-            >
-              {iconPreview.tiles.map((item) => (
-                <span className={getBookmarkTileClass({ showTitles: iconPreview.showTitles, preview: true })} key={item.id}>
-                  <BookmarkIconShell
-                    customIcon={false}
-                    fallbackLabel={item.mark}
-                    favicon={{ src: item.iconSource, pageUrl: '', fetchpriority: 'low', loading: 'eager' }}
-                  />
-                  {iconPreview.showTitles ? <span className={getBookmarkTitleClass()} title={item.title}>{item.title}</span> : null}
-                </span>
-              ))}
-            </div>
-          </figure>
-        </div>
-        <div id="icon-preset-row" className={ICON_PRESET_ROW_CLASS}>
-          {iconPresetCards.map((card) => (
+        <div id="icon-preset-row" className={ICON_PRESET_ROW_CLASS} role="group" aria-label="书签卡片密度">
+          {iconPresetCards.map((card, index) => (
             <Button
+              ref={index === 0 ? firstControlRef : undefined}
               className={cx(
                 ICON_PRESET_CARD_CLASS,
                 SETTINGS_PSEUDO_SHADOW_RESET_CLASS,
@@ -1414,13 +1336,14 @@ const IconSettingsSection = memo(function IconSettingsSection() {
               type="button"
               data-preset={card.key}
               aria-pressed={iconPreview.preset === card.key}
-              aria-label={`${card.name}布局，${card.desc}，${card.detail}`}
+              aria-label={`${card.name}布局`}
               onClick={() => dispatchNewtabIconPresetApply(card.key)}
               key={card.key}
               unstyled
             >
               <span
                 className={ICON_PRESET_PREVIEW_CLASS}
+                aria-hidden="true"
                 style={{
                   gap: card.previewGap,
                   gridTemplateColumns: `repeat(${card.previewColumnCount}, 1fr)`,
@@ -1436,84 +1359,103 @@ const IconSettingsSection = memo(function IconSettingsSection() {
                 ))}
               </span>
               <span className={ICON_PRESET_NAME_CLASS}>{card.name}</span>
-              <span className={ICON_PRESET_DETAIL_CLASS}>{card.desc}</span>
-              <span className={ICON_PRESET_DETAIL_CLASS}>{card.detail}</span>
             </Button>
           ))}
         </div>
-        <div className={settingRowClassName(ICON_CONTROL_ROW_CLASS)}>
-          <SettingLabelStack title="布局方式" />
-          <ToggleGroup
-            id="icon-layout-control"
-            slidingIndicator
-            aria-label="布局方式"
-            className={SETTINGS_SEGMENTED_CLASS}
-            itemClassName={settingsControlClassName(SETTINGS_SEGMENTED_BUTTON_CLASS)}
-            onValueChange={(value) => {
-              const nextValue = value[0]
-              if (nextValue) dispatchNewtabIconSettingFieldChange('layoutMode', nextValue)
-            }}
-            items={[
-              { value: 'auto', label: '自动适配', attributes: { 'data-icon-layout-mode': 'auto' } },
-              { value: 'fixed', label: '固定列数', attributes: { 'data-icon-layout-mode': 'fixed' } }
-            ]}
-            unstyled
-            value={iconPreview.layoutMode}
-          />
-        </div>
-        <IconSettingSwitchRow
-          id="icon-vertical-center"
-          title="垂直居中"
-          checked={iconPreview.verticalCenter}
-          onCheckedChange={dispatchNewtabIconVerticalCenterToggle}
-        />
+        {iconPreview.preset === 'custom' ? <p className={SETTINGS_NOTE_CLASS}>自定义密度</p> : null}
         <IconSettingSwitchRow
           id="icon-show-titles"
           title="显示标题"
           checked={iconPreview.showTitles}
           onCheckedChange={dispatchNewtabIconShowTitlesToggle}
         />
-        <div id="icon-title-lines-row" className={settingRowClassName(ICON_CONTROL_ROW_CLASS, iconPreview.titleLinesDisabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)}>
-          <span className={SETTINGS_LABEL_CLASS}>标题行数</span>
-          <ToggleGroup
-            id="icon-title-lines-control"
-            slidingIndicator
-            aria-label="标题行数"
-            className={SETTINGS_SEGMENTED_CLASS}
-            itemClassName={settingsControlClassName(SETTINGS_SEGMENTED_BUTTON_CLASS)}
-            onValueChange={(value) => {
-              const nextValue = value[0]
-              if (nextValue) dispatchNewtabIconSettingFieldChange('titleLines', Number(nextValue))
-            }}
-            items={[
-              { value: '1', label: '1 行', disabled: iconPreview.titleLinesDisabled, attributes: { 'data-icon-title-lines': '1' } },
-              { value: '2', label: '2 行', disabled: iconPreview.titleLinesDisabled, attributes: { 'data-icon-title-lines': '2' } }
-            ]}
-            unstyled
-            value={String(iconPreview.titleLines)}
+        <SettingsDetails id="icon-advanced" title="自定义布局">
+          <div className={settingRowClassName(ICON_CONTROL_ROW_CLASS)}>
+            <SettingLabelStack title="排列" />
+            <ToggleGroup
+              id="icon-layout-control"
+              slidingIndicator
+              aria-label="布局方式"
+              className={SETTINGS_SEGMENTED_CLASS}
+              itemClassName={settingsControlClassName(SETTINGS_SEGMENTED_BUTTON_CLASS)}
+              onValueChange={(value) => {
+                const nextValue = value[0]
+                if (nextValue) dispatchNewtabIconSettingFieldChange('layoutMode', nextValue)
+              }}
+              items={[
+                { value: 'auto', label: '自动适配', attributes: { 'data-icon-layout-mode': 'auto' } },
+                { value: 'fixed', label: '固定列数', attributes: { 'data-icon-layout-mode': 'fixed' } }
+              ]}
+              unstyled
+              value={iconPreview.layoutMode}
+            />
+          </div>
+          {iconPreview.layoutMode === 'fixed' ? (
+            <IconSettingSliderRow field="columns" rowId="icon-columns-row" id="icon-columns" label="固定列数" valueId="icon-columns-value" value={String(iconPreview.fixedColumns)} min="2" max="8" defaultValue="4" ariaLabel="书签卡片固定列数" sliderValue={iconPreview.fixedColumns} />
+          ) : null}
+          <IconSettingSliderRow field="pageWidth" id="icon-page-width" label="页面宽度" valueId="icon-page-width-value" value={`${iconPreview.pageWidth}%`} min="16" max="100" defaultValue="78" ariaLabel="书签卡片页面宽度" sliderValue={iconPreview.pageWidth} />
+          <IconSettingSwitchRow
+            id="icon-vertical-center"
+            title="垂直居中"
+            checked={iconPreview.verticalCenter}
+            onCheckedChange={dispatchNewtabIconVerticalCenterToggle}
           />
-        </div>
-        <CollapsibleRoot>
-          <CollapsibleTrigger
-            id="icon-advanced-toggle"
-            className={settingsControlClassName(SETTINGS_WIDE_BUTTON_CLASS)}
-            aria-controls="icon-advanced-panel"
-          >
-            <span>卡片细节</span>
-          </CollapsibleTrigger>
-          <CollapsiblePanel id="icon-advanced-panel" className={ICON_ADVANCED_PANEL_CLASS} keepMounted={false}>
-            <div className={FOLDER_STACK_CLASS}>
-              <Button unstyled id="icon-reset-defaults" className={settingsControlClassName(ICON_RESET_DEFAULTS_CLASS)} type="button" onClick={dispatchNewtabIconResetDefaults}>恢复默认布局</Button>
-              <IconSettingSliderRow field="pageWidth" id="icon-page-width" label="页面宽度" valueId="icon-page-width-value" value={`${iconPreview.pageWidth}%`} min="16" max="100" defaultValue="78" ariaLabel="书签卡片页面宽度" sliderValue={iconPreview.pageWidth} />
-              <IconSettingSliderRow field="tileWidth" rowId="icon-tile-width-row" id="icon-tile-width" label="卡片宽度" valueId="icon-tile-width-value" value={`${iconPreview.tileWidth}px`} min="132" max="260" defaultValue="184" ariaLabel="书签卡片宽度" disabled={iconPreview.tileWidthDisabled} sliderValue={iconPreview.tileWidth} />
-              <IconSettingSliderRow field="iconShellSize" id="icon-shell-size" label="图标区域" valueId="icon-shell-size-value" value={`${iconPreview.iconShellSize}px`} min="24" max="48" defaultValue="32" ariaLabel="书签图标区域尺寸" sliderValue={iconPreview.iconShellSize} />
-              <IconSettingSliderRow field="columnGap" id="icon-column-gap" label="横向间距" valueId="icon-column-gap-value" value={`${iconPreview.effectiveColumnGap}px`} min="0" max="100" defaultValue="10" ariaLabel="书签卡片横向间距" sliderValue={iconPreview.columnGap} />
-              <IconSettingSliderRow field="rowGap" id="icon-row-gap" label="行距" valueId="icon-row-gap-value" value={`${iconPreview.effectiveRowGap}px`} min="0" max="100" defaultValue="10" ariaLabel="书签卡片行距" sliderValue={iconPreview.rowGap} />
-              <IconSettingSliderRow field="folderGap" id="icon-folder-gap" label="文件夹间距" valueId="icon-folder-gap-value" value={`${iconPreview.effectiveFolderGap}px`} min="0" max="120" defaultValue="20" ariaLabel="书签文件夹间距" sliderValue={iconPreview.folderGap} />
-              <IconSettingSliderRow field="columns" rowId="icon-columns-row" id="icon-columns" label="固定列数" valueId="icon-columns-value" value={String(iconPreview.fixedColumns)} min="2" max="8" defaultValue="4" ariaLabel="书签卡片固定列数" disabled={iconPreview.fixedColumnsDisabled} sliderValue={iconPreview.fixedColumns} />
+          {iconPreview.showTitles ? (
+            <div id="icon-title-lines-row" className={settingRowClassName(ICON_CONTROL_ROW_CLASS)}>
+              <span className={SETTINGS_LABEL_CLASS}>标题行数</span>
+              <ToggleGroup
+                id="icon-title-lines-control"
+                slidingIndicator
+                aria-label="标题行数"
+                className={SETTINGS_SEGMENTED_CLASS}
+                itemClassName={settingsControlClassName(SETTINGS_SEGMENTED_BUTTON_CLASS)}
+                onValueChange={(value) => {
+                  const nextValue = value[0]
+                  if (nextValue) dispatchNewtabIconSettingFieldChange('titleLines', Number(nextValue))
+                }}
+                items={[
+                  { value: '1', label: '1 行', attributes: { 'data-icon-title-lines': '1' } },
+                  { value: '2', label: '2 行', attributes: { 'data-icon-title-lines': '2' } }
+                ]}
+                unstyled
+                value={String(iconPreview.titleLines)}
+              />
             </div>
-          </CollapsiblePanel>
-        </CollapsibleRoot>
+          ) : null}
+          <div className={ICON_PREVIEW_PANEL_CLASS}>
+            <div className={ICON_PREVIEW_HEADER_CLASS}>
+              <span>布局预览</span>
+              <span id="icon-live-preview-summary" className={ICON_PREVIEW_SUMMARY_CLASS}>
+                {iconPreview.layoutMode === 'fixed' ? `${layout?.columns ?? iconPreview.fixedColumns} 列` : '自动适配'}
+              </span>
+            </div>
+            <figure
+              id="icon-live-preview"
+              className={ICON_LIVE_PREVIEW_CLASS}
+              aria-label="书签卡片布局预览"
+              data-icon-layout-mode={iconPreview.layoutMode}
+              data-squircle="off"
+              tabIndex={0}
+              style={previewStyle}
+            >
+              <div
+                className={cx(ICON_LIVE_PREVIEW_GRID_CLASS, 'max-w-full justify-center')}
+                style={{ minWidth: tileWidth, gridTemplateColumns: 'repeat(auto-fit, var(--preview-tile-width))' }}
+              >
+                {iconPreview.tiles.map((item) => (
+                  <span className={getBookmarkTileClass({ showTitles: iconPreview.showTitles, preview: true })} key={item.id}>
+                    <BookmarkIconShell
+                      customIcon={false}
+                      fallbackLabel={item.mark}
+                      favicon={{ src: item.iconSource, pageUrl: '', fetchpriority: 'low', loading: 'eager' }}
+                    />
+                    {iconPreview.showTitles ? <span className={getBookmarkTitleClass()} title={item.title}>{item.title}</span> : null}
+                  </span>
+                ))}
+              </div>
+            </figure>
+          </div>
+        </SettingsDetails>
       </Surface>
     </section>
   )
@@ -1523,8 +1465,6 @@ const iconPresetCards = (Object.entries(ICON_PRESET_META) as Array<[
   IconLayoutPresetKey,
   typeof ICON_PRESET_META[IconLayoutPresetKey]
 ]>).map(([key, meta]) => ({
-  desc: meta.desc,
-  detail: meta.detail,
   key,
   name: meta.name,
   previewCellHeight: key === 'compact' ? '8px' : key === 'spacious' ? '12px' : '10px',
@@ -1543,86 +1483,74 @@ const TimeSettingsSection = memo(function TimeSettingsSection({ panelElement }: 
       <Surface className={SETTINGS_LIST_CLASS} variant="plain">
         <SwitchRow
           id="time-enabled"
-          title="显示时间模块"
+          title="显示时间和日期"
           checked={timeSettings.enabled}
           onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('enabled', checked)}
         />
-        <SettingsSelect
-          id="time-display-mode"
-          label="显示内容"
-          ariaLabel="时间显示内容"
-          disabled={timeSettings.settingsDisabled}
-          onValueChange={(value) => {
-            if (value) dispatchNewtabTimeSettingFieldChange('displayMode', value)
-          }}
-          portalContainer={panelElement}
-          value={timeSettings.displayMode}
-          options={[['time-date', '时间和日期'], ['time', '仅时间'], ['date', '仅日期']]}
-        />
-        <SettingsSelect
-          id="time-time-zone"
-          label="时区"
-          ariaLabel="时区"
-          disabled={timeSettings.settingsDisabled}
-          onValueChange={(value) => {
-            if (value) dispatchNewtabTimeSettingFieldChange('timeZone', value)
-          }}
-          portalContainer={panelElement}
-          value={timeSettings.timeZone}
-          options={[['auto', '自动跟随系统'], ['UTC', 'UTC'], ['Asia/Shanghai', '北京'], ['Asia/Hong_Kong', '香港'], ['Asia/Tokyo', '东京'], ['Asia/Singapore', '新加坡'], ['Europe/London', '伦敦'], ['Europe/Paris', '巴黎'], ['America/New_York', '纽约'], ['America/Los_Angeles', '洛杉矶']]}
-        />
-        <SettingsSelect
-          id="time-date-format"
-          label="日期格式"
-          description="仅在显示日期时生效。"
-          ariaLabel="日期格式"
-          disabled={timeSettings.settingsDisabled || timeSettings.displayMode === 'time'}
-          onValueChange={(value) => {
-            if (value) dispatchNewtabTimeSettingFieldChange('dateFormat', value)
-          }}
-          portalContainer={panelElement}
-          value={timeSettings.dateFormat}
-          options={[['year-month-day-weekday', '2026.05.01 周五'], ['chinese-date-weekday', '2026年5月1日 周五'], ['month-day-weekday', '05.01 周五'], ['weekday-month-day', '周五 05/01'], ['weekday-day-month', '周五 01/05'], ['year-month-day', '2026.05.01']]}
-        />
-        <SwitchRow
-          id="time-show-seconds"
-          title="显示秒数"
-          checked={timeSettings.showSeconds}
-          disabled={timeSettings.switchesDisabled}
-          onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('showSeconds', checked)}
-        />
-        <SwitchRow
-          id="time-hour12"
-          title="12 小时制"
-          checked={timeSettings.hour12}
-          disabled={timeSettings.switchesDisabled}
-          onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('hour12', checked)}
-        />
-        <SettingsSelect
-          id="time-density"
-          label="布局密度"
-          ariaLabel="时间布局密度"
-          disabled={timeSettings.settingsDisabled}
-          onValueChange={(value) => {
-            if (value) dispatchNewtabTimeSettingFieldChange('density', value)
-          }}
-          portalContainer={panelElement}
-          value={timeSettings.density}
-          options={[['compact', '极简单行'], ['balanced', '平衡胶囊'], ['comfortable', '独立卡片']]}
-        />
-        <SliderRow
-          id="time-clock-size"
-          label="字号"
-          valueId="time-clock-size-value"
-          value={`${timeSettings.clockSize}%`}
-          min="70"
-          max="140"
-          defaultValue="100"
-          ariaLabel="时间字号"
-          disabled={timeSettings.settingsDisabled}
-          onValueChange={(value) => dispatchNewtabTimeSettingFieldChange('clockSize', value)}
-          sliderValue={timeSettings.clockSize}
-        />
+        {timeSettings.enabled ? <>
+          <SettingsSelect
+            id="time-display-mode"
+            label="显示内容"
+            ariaLabel="时间显示内容"
+            onValueChange={(value) => {
+              if (value) dispatchNewtabTimeSettingFieldChange('displayMode', value)
+            }}
+            portalContainer={panelElement}
+            value={timeSettings.displayMode}
+            options={[['time-date', '时间和日期'], ['time', '仅时间'], ['date', '仅日期']]}
+          />
+          <SettingsSelect
+            id="time-density"
+            label="样式"
+            ariaLabel="时间布局密度"
+            onValueChange={(value) => {
+              if (value) dispatchNewtabTimeSettingFieldChange('density', value)
+            }}
+            portalContainer={panelElement}
+            value={timeSettings.density}
+            options={[['compact', '单行'], ['balanced', '胶囊'], ['comfortable', '卡片']]}
+          />
+          <SettingsDetails id="time-details" title="时间格式">
+            <SettingsSelect
+              id="time-time-zone"
+              label="时区"
+              ariaLabel="时区"
+              onValueChange={(value) => {
+                if (value) dispatchNewtabTimeSettingFieldChange('timeZone', value)
+              }}
+              portalContainer={panelElement}
+              value={timeSettings.timeZone}
+              options={[['auto', '自动跟随系统'], ['UTC', 'UTC'], ['Asia/Shanghai', '北京'], ['Asia/Hong_Kong', '香港'], ['Asia/Tokyo', '东京'], ['Asia/Singapore', '新加坡'], ['Europe/London', '伦敦'], ['Europe/Paris', '巴黎'], ['America/New_York', '纽约'], ['America/Los_Angeles', '洛杉矶']]}
+            />
+            {timeSettings.displayMode !== 'time' ? (
+              <SettingsSelect
+                id="time-date-format"
+                label="日期格式"
+                ariaLabel="日期格式"
+                onValueChange={(value) => {
+                  if (value) dispatchNewtabTimeSettingFieldChange('dateFormat', value)
+                }}
+                portalContainer={panelElement}
+                value={timeSettings.dateFormat}
+                options={[['year-month-day-weekday', '2026.05.01 周五'], ['chinese-date-weekday', '2026年5月1日 周五'], ['month-day-weekday', '05.01 周五'], ['weekday-month-day', '周五 05/01'], ['weekday-day-month', '周五 01/05'], ['year-month-day', '2026.05.01']]}
+              />
+            ) : null}
+            {timeSettings.displayMode !== 'date' ? <>
+              <SwitchRow
+                id="time-show-seconds"
+                title="显示秒数"
+                checked={timeSettings.showSeconds}
+                onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('showSeconds', checked)}
+              />
+              <SwitchRow
+                id="time-hour12"
+                title="12 小时制"
+                checked={timeSettings.hour12}
+                onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('hour12', checked)}
+              />
+            </> : null}
+          </SettingsDetails>
+        </> : null}
       </Surface>
     </section>
   )
@@ -1638,6 +1566,7 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
   sectionRef?: SettingsSectionRef
 }) {
   const searchSettings = useNewtabSearchSettingsView()
+  const sizePreset = getSearchSizePreset(searchSettings.height)
   const enabledEngineSet = new Set(searchSettings.enabledEngines)
   const handleSearchEngineToggle = (engine: string, checked: boolean) => {
     const currentEngines = searchSettings.enabledEngines.includes(searchSettings.engine)
@@ -1652,138 +1581,140 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
 
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="search" aria-labelledby="settings-search-title">
-      <h2 id="settings-search-title" className={SETTINGS_SECTION_TITLE_CLASS}>搜索栏</h2>
+      <div className="flex min-h-8 items-center justify-between gap-3">
+        <h2 id="settings-search-title" className={SETTINGS_SECTION_TITLE_CLASS}>搜索栏</h2>
+        {searchSettings.enabled ? <Button id="search-reset-layout" variant="ghost" size="sm" onClick={dispatchNewtabSearchLayoutReset}>恢复默认布局</Button> : null}
+      </div>
       <Surface className={SETTINGS_LIST_CLASS} variant="plain">
-        <p className={SETTINGS_NOTE_CLASS}>仅影响 Curator 新标签页内搜索，不会修改 Chrome 默认搜索引擎或启动页；搜索栏可随时关闭。</p>
         <SwitchRow
           id="search-enabled"
-          title="启用"
+          title="显示搜索栏"
           controlRef={firstControlRef}
           checked={searchSettings.enabled}
           onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('enabled', checked)}
         />
-        <SwitchRow
-          id="search-web-enabled"
-          title="启用网页搜索"
-          description="允许按下回车跳转至搜索引擎；关闭后搜索栏仅用于快速过滤本地书签。"
-          checked={searchSettings.webSearchEnabled}
-          disabled={searchSettings.webSearchDisabled}
-          onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('webSearchEnabled', checked)}
-        />
-        <SwitchRow
-          id="search-open-new-tab"
-          title="在新标签页打开链接"
-          checked={searchSettings.openInNewTab}
-          disabled={searchSettings.openInNewTabDisabled}
-          onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('openInNewTab', checked)}
-        />
-        <SettingsSelect
-          id="search-engine"
-          label="默认引擎"
-          ariaLabel="默认搜索引擎"
-          disabled={searchSettings.engineControlsDisabled}
-          onValueChange={(value) => {
-            if (value) dispatchNewtabSearchSettingFieldChange('engine', value)
-          }}
-          portalContainer={panelElement}
-          value={searchSettings.engine}
-          options={searchEngines.map(([value, label]) => [value, label])}
-        />
-        <div className={settingRowClassName(SEARCH_ENGINE_ROW_CLASS)}>
-          <SettingLabelStack title="启用引擎" description="决定搜索框快捷菜单和 Cmd/Ctrl+Enter 的打开顺序。" />
-          <div className={SEARCH_ENGINE_GRID_CLASS} aria-label="启用的搜索引擎">
-            {searchEngines.map(([value, label]) => {
-              const isSelected = searchSettings.engine === value
-              const checked = enabledEngineSet.has(value) || isSelected
-
-              return (
-              <label
-                className={settingsControlClassName(SEARCH_ENGINE_TOGGLE_CLASS, checked ? SETTINGS_SELECTED_SURFACE_CLASS : undefined, isSelected ? 'opacity-80' : undefined)}
-                key={value}
-              >
-                <SwitchControl
-                  aria-label={label}
-                  checked={checked}
-                  disabled={searchSettings.engineControlsDisabled || isSelected}
-                  className={SEARCH_ENGINE_HIDDEN_SWITCH_CLASS}
-                  data-search-engine-toggle={value}
-                  onCheckedChange={(checked) => handleSearchEngineToggle(value, checked)}
-                  syncInputState
-                  unstyled
-                />
-                <span>{label}</span>
-              </label>
-              )
-            })}
-          </div>
-        </div>
-        <div className={settingRowClassName()}>
-          <span className={SETTINGS_LABEL_CLASS}>占位符文本</span>
-          <span className={SETTINGS_FIELD_CLASS}>
-            <Input
-              id="search-placeholder"
-              className={SETTINGS_TEXT_INPUT_CLASS}
-              type="text"
-              placeholder="占位符文本"
-              maxLength={40}
-              aria-label="搜索栏占位符文本"
-              disabled={searchSettings.placeholderDisabled}
-              onChange={(event) => {
-                dispatchNewtabSearchSettingFieldChange('placeholder', event.currentTarget.value)
+        {searchSettings.enabled ? <>
+          <SettingsSelect
+            id="search-engine"
+            label="网页搜索"
+            ariaLabel="默认搜索引擎"
+            onValueChange={(value) => {
+              if (value) dispatchNewtabSearchWebEngineChange(value === 'bookmarks' ? null : value)
+            }}
+            portalContainer={panelElement}
+            value={searchSettings.webSearchEnabled ? searchSettings.engine : 'bookmarks'}
+            options={[['bookmarks', '关闭，仅搜索书签'], ...searchEngines.map(([value, label]) => [value, label] as const)]}
+          />
+          <div className={settingRowClassName()}>
+            <SettingLabelStack title="尺寸" description={sizePreset === 'custom' ? `自定义 · ${searchSettings.height}px` : undefined} />
+            <ToggleGroup
+              id="search-size-control"
+              slidingIndicator
+              aria-label="搜索栏尺寸"
+              className={SETTINGS_SEGMENTED_CLASS}
+              itemClassName={settingsControlClassName(SETTINGS_SEGMENTED_BUTTON_CLASS)}
+              value={sizePreset}
+              onValueChange={(value) => {
+                const key = value[0] as SearchSizePreset | undefined
+                if (key && key in SEARCH_SIZE_PRESETS) {
+                  dispatchNewtabSearchSettingFieldChange('height', SEARCH_SIZE_PRESETS[key])
+                }
               }}
-              value={searchSettings.placeholder}
+              items={[
+                { value: 'compact', label: '紧凑' },
+                { value: 'standard', label: '标准' },
+                { value: 'comfortable', label: '宽松' }
+              ]}
               unstyled
             />
-          </span>
-        </div>
-        <SliderRow
-          id="search-width"
-          label="宽度"
-          valueId="search-width-value"
-          value={`${searchSettings.width}vw`}
-          min={String(searchSettings.widthMin)}
-          max={String(searchSettings.widthMax)}
-          defaultValue="44"
-          ariaLabel="搜索栏宽度"
-          disabled={searchSettings.widthDisabled}
-          onValueChange={(value) => dispatchNewtabSearchSettingFieldChange('width', value)}
-          sliderValue={searchSettings.width}
-        />
-        <SliderRow
-          id="search-height"
-          label="高度"
-          valueId="search-height-value"
-          value={`${searchSettings.height}px`}
-          min="28"
-          max="56"
-          defaultValue="40"
-          ariaLabel="搜索栏高度"
-          disabled={searchSettings.widthDisabled}
-          onValueChange={(value) => dispatchNewtabSearchSettingFieldChange('height', value)}
-          sliderValue={searchSettings.height}
-        />
-        <SliderRow
-          id="search-offset-y"
-          label="上下位置"
-          valueId="search-offset-y-value"
-          value={searchSettings.autoVerticalCenter ? '自动' : `${searchSettings.offsetY}px`}
-          min={String(searchSettings.offsetMin)}
-          max={String(searchSettings.offsetMax)}
-          defaultValue="0"
-          ariaLabel="搜索栏上下位置"
-          disabled={searchSettings.offsetDisabled}
-          onValueChange={(value) => dispatchNewtabSearchSettingFieldChange('offsetY', value)}
-          sliderValue={searchSettings.offsetY}
-        />
-        <SwitchRow
-          id="search-auto-vertical-center"
-          title="自动垂直居中"
-          description="根据上方和下方模块之间的可用空间自动居中搜索栏。"
-          checked={searchSettings.autoVerticalCenter}
-          disabled={searchSettings.autoVerticalCenterDisabled}
-          onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('autoVerticalCenter', checked)}
-        />
-        <p className={SETTINGS_NOTE_CLASS}>搜索栏的底色、模糊与折射在「玻璃」中统一调整。</p>
+          </div>
+          <SettingsDetails id="search-details" title="更多搜索设置">
+            {searchSettings.webSearchEnabled ? <>
+              <SwitchRow
+                id="search-open-new-tab"
+                title="在新标签页打开网页"
+                checked={searchSettings.openInNewTab}
+                onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('openInNewTab', checked)}
+              />
+              <div className={settingRowClassName(SEARCH_ENGINE_ROW_CLASS)}>
+                <SettingLabelStack title="快捷引擎" description={`Cmd/Ctrl+Enter 同时搜索前 ${SEARCH_MULTI_OPEN_LIMIT} 个。`} />
+                <div className={SEARCH_ENGINE_GRID_CLASS} aria-label="启用的搜索引擎">
+                  {searchEngines.map(([value, label]) => {
+                    const isSelected = searchSettings.engine === value
+                    const checked = enabledEngineSet.has(value) || isSelected
+                    return (
+                      <label
+                        className={settingsControlClassName(SEARCH_ENGINE_TOGGLE_CLASS, checked ? SETTINGS_SELECTED_SURFACE_CLASS : undefined, isSelected ? 'opacity-80' : undefined)}
+                        key={value}
+                      >
+                        <SwitchControl
+                          aria-label={label}
+                          checked={checked}
+                          disabled={isSelected}
+                          className={SEARCH_ENGINE_HIDDEN_SWITCH_CLASS}
+                          data-search-engine-toggle={value}
+                          onCheckedChange={(checked) => handleSearchEngineToggle(value, checked)}
+                          syncInputState
+                          unstyled
+                        />
+                        <span>{label}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            </> : null}
+            {!searchSettings.widthDisabled ? (
+              <SliderRow
+                id="search-width"
+                label="宽度"
+                valueId="search-width-value"
+                value={`${searchSettings.width}vw`}
+                min={String(searchSettings.widthMin)}
+                max={String(searchSettings.widthMax)}
+                defaultValue="44"
+                ariaLabel="搜索栏宽度"
+                onValueChange={(value) => dispatchNewtabSearchSettingFieldChange('width', value)}
+                sliderValue={searchSettings.width}
+              />
+            ) : null}
+            <SettingsSelect
+              id="search-position"
+              label="位置"
+              ariaLabel="搜索栏位置"
+              portalContainer={panelElement}
+              value={searchSettings.autoVerticalCenter ? 'center' : searchSettings.offsetY === 0 ? 'flow' : 'custom'}
+              options={[
+                ['flow', '跟随页面布局'],
+                ['center', '自动居中'],
+                ...(!searchSettings.autoVerticalCenter && searchSettings.offsetY !== 0
+                  ? [['custom', `自定义 · ${searchSettings.offsetY}px`] as const]
+                  : [])
+              ]}
+              onValueChange={(value) => {
+                if (!value || value === 'custom') return
+                dispatchNewtabSearchSettingFieldChange('offsetY', 0)
+                dispatchNewtabSearchSettingToggle('autoVerticalCenter', value === 'center')
+              }}
+            />
+            <div className={settingRowClassName()}>
+              <label className={SETTINGS_LABEL_CLASS} htmlFor="search-placeholder">提示文字</label>
+              <span className={SETTINGS_FIELD_CLASS}>
+                <Input
+                  id="search-placeholder"
+                  className={SETTINGS_TEXT_INPUT_CLASS}
+                  type="text"
+                  maxLength={40}
+                  aria-label="搜索栏占位符文本"
+                  onChange={(event) => dispatchNewtabSearchSettingFieldChange('placeholder', event.currentTarget.value)}
+                  value={searchSettings.placeholder}
+                  unstyled
+                />
+              </span>
+            </div>
+            <p className={SETTINGS_NOTE_CLASS}>仅影响 Curator 内的搜索，不会修改浏览器的默认搜索引擎。</p>
+          </SettingsDetails>
+        </> : null}
       </Surface>
     </section>
   )
@@ -1982,12 +1913,11 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
                   />
                 </SettingsTabPanel>
                 <SettingsTabPanel value="appearance" active={activeGroup === 'appearance'} visited={visitedGroups.has('appearance')}>
-                  <BackgroundSettingsSection
+                  <IconSettingsSection
                     firstControlRef={setAppearanceFirstControlRef}
-                    panelElement={panelElement}
                     sectionRef={setAppearanceSectionRef}
                   />
-                  <IconSettingsSection />
+                  <BackgroundSettingsSection panelElement={panelElement} />
                   <TimeSettingsSection panelElement={panelElement} />
                 </SettingsTabPanel>
                 <SettingsTabPanel value="glass" active={activeGroup === 'glass'} visited={visitedGroups.has('glass')}>

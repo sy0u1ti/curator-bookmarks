@@ -1,0 +1,86 @@
+.texture-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 4px 0 14px;
+}
+
+.texture-preset {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  border: 1px solid var(--ds-border-subtle);
+  border-radius: var(--ds-radius-sm);
+  color: var(--ds-text-secondary);
+  background: var(--ds-surface-1);
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--ds-motion-feedback) var(--ds-ease-standard),
+    background-color var(--ds-motion-feedback) var(--ds-ease-standard);
+}
+
+.texture-preset-swatch {
+  position: relative;
+  display: block;
+  aspect-ratio: 1.85;
+  overflow: hidden;
+  background: #101013;
+}
+
+.texture-preset-swatch::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.32;
+  background: var(--texture-preview-image) center / cover no-repeat;
+  mask-image: radial-gradient(ellipse at 50% 40%, #0008, #000);
+}
+
+.texture-preset-label {
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.texture-preset-check {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  color: var(--ds-accent);
+  opacity: 0;
+}
+
+.texture-preset:hover {
+  border-color: var(--ds-border-hover);
+}
+
+.texture-preset[data-pressed] {
+  color: var(--ds-text-primary);
+  border-color: var(--ds-accent);
+  background: var(--ds-accent-soft);
+}
+
+.texture-preset[data-pressed] .texture-preset-check {
+  opacity: 1;
+}
+
+.texture-preset:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .texture-preset {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .texture-preset[data-pressed] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}

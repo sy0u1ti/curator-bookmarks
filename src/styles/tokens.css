@@ -92,15 +92,18 @@
   --ds-motion-fast: 130ms;
   --ds-motion-standard: 190ms;
   --ds-motion-surface: 300ms;
+  --ds-motion-control: var(--duration-quick);
+  --ds-motion-spring: var(--duration-fast);
   --ds-ease-standard: var(--ease-smooth-out);
   --ds-ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ds-ease-spring: var(--ease-smooth-out);
-  --ds-press-scale: 0.985;
+  --ds-ease-settle: var(--ease-smooth-out);
+  --ds-press-scale: 0.99;
   --ds-hover-lift: -1px;
   --ds-sheet-offset: 12px;
 
-  --tabs-dur: var(--duration-fast);
-  --tabs-ease: var(--ease-smooth-out);
+  --tabs-dur: var(--ds-motion-spring);
+  --tabs-ease: var(--ds-ease-spring);
   --tabs-text-muted: var(--ds-text-secondary);
   --tabs-text-active: var(--ds-text-primary);
   --tabs-bar-bg: var(--ds-surface-1);
@@ -119,11 +122,11 @@
   --tt-bg: var(--ds-surface-2);
   --tt-fg: var(--ds-text-primary);
 
-  /* Disclosure and chevron share one reversible clock. */
+  /* Layout settles without overshoot; the small chevron carries the spring. */
   --acc-expand: var(--duration-fast);
   --acc-collapse: var(--duration-fast);
-  --acc-chevron: var(--duration-fast);
-  --acc-ease: var(--ease-smooth-out);
+  --acc-chevron: var(--ds-motion-spring);
+  --acc-ease: var(--ds-ease-settle);
 
   --resize-dur: 380ms;
   --resize-ease: var(--ease-smooth-out);
@@ -136,14 +139,14 @@
   --list-exit-gap: 0px;
 
   /* A transition can reverse from the current thumb position. */
-  --toggle-dur: var(--duration-fast);
+  --toggle-dur: var(--ds-motion-spring);
   --toggle-travel: 20px;
-  --toggle-ease: var(--ease-smooth-out);
+  --toggle-ease: var(--ds-ease-spring);
 
   /* Inline status feedback stays on opacity and transform. */
-  --badge-pop-dur: var(--duration-fast);
+  --badge-pop-dur: var(--ds-motion-spring);
   --badge-pop-scale: var(--scale-large);
-  --badge-pop-ease: var(--ease-smooth-out);
+  --badge-pop-ease: var(--ds-ease-spring);
 
   --digit-dur: 130ms;
   --digit-distance: var(--distance-base);
@@ -153,23 +156,25 @@
   --digit-dir-x: 0;
   --digit-dir-y: 1;
 
-  --dropdown-open-dur: var(--duration-fast);
+  --dropdown-open-dur: var(--ds-motion-spring);
   --dropdown-close-dur: var(--duration-quick);
   --dropdown-pre-scale: var(--scale-medium);
   --dropdown-closing-scale: var(--scale-tiny);
   --dropdown-ease: var(--ease-smooth-out);
+  --dropdown-open-ease: var(--ds-ease-spring);
 
   --toast-open-dur: var(--duration-slow);
   --toast-close-dur: var(--duration-medium);
   --toast-offset-y: var(--distance-base);
   --toast-scale: var(--scale-small);
-  --toast-ease: var(--ease-smooth-out);
+  --toast-ease: var(--ds-ease-spring);
 
-  --modal-open-dur: var(--duration-fast);
+  --modal-open-dur: var(--ds-motion-spring);
   --modal-close-dur: var(--duration-quick);
   --modal-scale: var(--scale-large);
   --modal-scale-close: var(--scale-large);
   --modal-ease: var(--ease-smooth-out);
+  --modal-open-ease: var(--ds-ease-spring);
 
   --icon-swap-dur: var(--duration-fast);
   --icon-swap-blur: 0px;
@@ -194,7 +199,7 @@
   --panel-translate-y: var(--distance-base);
   --tabs-panel-translate-y: var(--distance-base);
   --panel-blur: 0px;
-  --panel-ease: var(--ease-smooth-out);
+  --panel-ease: var(--ds-ease-settle);
   --drag-settle-dur: 160ms;
 
   --page-slide-dur: var(--duration-fast);
@@ -255,12 +260,34 @@
   --motion-slow: var(--ds-motion-surface);
 }
 
+/* Surface spring: damping ratio 0.85, sampled over 10 natural time units.
+   Its single 0.63% overshoot stays quiet; button feedback uses the faster,
+   monotonic control timing instead. Large panels never overshoot. */
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --ds-ease-spring: linear(
+      0, 0.0941, 0.2838, 0.483, 0.6535, 0.7835, 0.8748, 0.9344,
+      0.9708, 0.9911, 1.0013, 1.0054, 1.0063, 1.0056, 1.0044,
+      1.0032, 1.0021, 1.0013, 1.0008, 1.0004, 1
+    );
+    --ds-ease-settle: linear(
+      0, 0.0902, 0.2642, 0.4422, 0.594, 0.7127, 0.8009, 0.8641,
+      0.9084, 0.9389, 0.9596, 0.9734, 0.9826, 0.9887, 0.9927,
+      0.9953, 0.997, 0.9981, 0.9988, 0.9992, 1
+    );
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --ds-motion-feedback: 80ms;
     --ds-motion-fast: 80ms;
     --ds-motion-standard: 80ms;
     --ds-motion-surface: 80ms;
+    --ds-motion-control: 80ms;
+    --ds-motion-spring: 1ms;
+    --ds-ease-spring: linear;
+    --ds-ease-settle: linear;
     --ds-press-scale: 1;
     --ds-hover-lift: 0px;
     --ds-sheet-offset: 0px;

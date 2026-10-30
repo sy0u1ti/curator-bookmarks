@@ -29,12 +29,7 @@
   ],
   "optional_permissions": ["pageCapture"],
   "side_panel": { "default_path": "src/sidepanel/sidepanel.html" },
-  "host_permissions": [
-    "https://images-assets.nasa.gov/*",
-    "https://images.metmuseum.org/*",
-    "https://upload.wikimedia.org/*",
-    "https://openaccess-cdn.clevelandart.org/*"
-  ],
+  "host_permissions": [],
   "background": {
     "service_worker": "src/service-worker/service-worker.ts",
     "type": "module"

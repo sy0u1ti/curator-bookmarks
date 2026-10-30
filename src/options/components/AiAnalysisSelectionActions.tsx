@@ -1,6 +1,6 @@
 import { Button } from '../../ui/base/Button'
 import { TextSwap } from '../../ui/motion/TextSwap'
-import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
+import { MotionDisclosure } from '../../ui/motion/MotionDisclosure'
 import {
   AI_ANALYSIS_CONFIRM_BUTTON_ACTIVE_CLASS,
   AI_ANALYSIS_CONFIRM_ICON_CLASS,
@@ -22,97 +22,95 @@ const AI_SELECTION_ACTIONS_CLASS =
 
 export function AiAnalysisSelectionActions() {
   const state = useAiAnalysisSelectionActions()
-  const entered = useMotionEntrance(!state.hidden)
-
-  if (state.hidden) {
-    return null
-  }
+  const entered = !state.hidden
 
   return (
-    <div className={AI_ANALYSIS_SELECTION_GROUP_CLASS} data-open={entered ? 'true' : 'false'}>
-      <div className={AI_SELECTION_HEADER_CLASS}>
-        <div className={AI_SELECTION_HEADER_COPY_CLASS}>
-          <strong className={AI_SELECTION_HEADER_TITLE_CLASS}>
-            <TextSwap animate={entered} text={state.countLabel} />
-          </strong>
-          <p className={AI_SELECTION_SUBTITLE_CLASS}>仅应用“建议改名”条目。</p>
-        </div>
-        <div className={AI_SELECTION_ACTIONS_CLASS}>
-          <Button
-            className={AI_ANALYSIS_SMALL_BUTTON_CLASS}
-            size="sm"
-            type="button"
-            variant="secondary"
-            aria-label="全选书签智能分析结果"
-            disabled={state.selectAllDisabled}
-            focusableWhenDisabled={state.selectAllDisabled}
-            onClick={() => handleAiAnalysisAction('select-all')}
-          >
-            全选
-          </Button>
-          <Button
-            className={AI_ANALYSIS_SMALL_BUTTON_CLASS}
-            size="sm"
-            type="button"
-            variant="secondary"
-            aria-label="全选书签智能分析高置信结果"
-            disabled={state.selectHighConfidenceDisabled}
-            focusableWhenDisabled={state.selectHighConfidenceDisabled}
-            onClick={() => handleAiAnalysisAction('select-high-confidence')}
-          >
-            全选高置信
-          </Button>
-          <Button
-            className={AI_ANALYSIS_SMALL_BUTTON_CLASS}
-            size="sm"
-            type="button"
-            variant="secondary"
-            aria-label="清空书签智能分析已选建议"
-            disabled={state.clearDisabled}
-            focusableWhenDisabled={state.clearDisabled}
-            onClick={() => handleAiAnalysisAction('clear-selection')}
-          >
-            清空选择
-          </Button>
-          <Button
-            className={[
-              AI_ANALYSIS_SMALL_BUTTON_CLASS,
-              state.moveConfirm ? AI_ANALYSIS_CONFIRM_BUTTON_ACTIVE_CLASS : ''
-            ].filter(Boolean).join(' ')}
-            size="sm"
-            type="button"
-            variant="secondary"
-            aria-label={state.moveConfirm
-              ? '确认将书签智能分析已选建议移动至推荐文件夹'
-              : '将书签智能分析已选建议移动至推荐文件夹'}
-            title={state.moveTitle}
-            disabled={state.moveDisabled}
-            focusableWhenDisabled={state.moveDisabled}
-            onClick={() => handleAiAnalysisAction('move-selection-to-suggested')}
-          >
-            <span className="t-icon-swap" data-state={state.moveConfirm ? 'b' : 'a'} aria-hidden="true">
-              <span className="t-icon inline-flex items-center justify-center" data-icon="a">
-                {state.moveLabel}
+    <MotionDisclosure open={entered}>
+      <div className={AI_ANALYSIS_SELECTION_GROUP_CLASS}>
+        <div className={AI_SELECTION_HEADER_CLASS}>
+          <div className={AI_SELECTION_HEADER_COPY_CLASS}>
+            <strong className={AI_SELECTION_HEADER_TITLE_CLASS}>
+              <TextSwap animate={entered} text={state.countLabel} />
+            </strong>
+            <p className={AI_SELECTION_SUBTITLE_CLASS}>仅应用“建议改名”条目。</p>
+          </div>
+          <div className={AI_SELECTION_ACTIONS_CLASS}>
+            <Button
+              className={AI_ANALYSIS_SMALL_BUTTON_CLASS}
+              size="sm"
+              type="button"
+              variant="secondary"
+              aria-label="全选书签智能分析结果"
+              disabled={state.selectAllDisabled}
+              focusableWhenDisabled={state.selectAllDisabled}
+              onClick={() => handleAiAnalysisAction('select-all')}
+            >
+              全选
+            </Button>
+            <Button
+              className={AI_ANALYSIS_SMALL_BUTTON_CLASS}
+              size="sm"
+              type="button"
+              variant="secondary"
+              aria-label="全选书签智能分析高置信结果"
+              disabled={state.selectHighConfidenceDisabled}
+              focusableWhenDisabled={state.selectHighConfidenceDisabled}
+              onClick={() => handleAiAnalysisAction('select-high-confidence')}
+            >
+              全选高置信
+            </Button>
+            <Button
+              className={AI_ANALYSIS_SMALL_BUTTON_CLASS}
+              size="sm"
+              type="button"
+              variant="secondary"
+              aria-label="清空书签智能分析已选建议"
+              disabled={state.clearDisabled}
+              focusableWhenDisabled={state.clearDisabled}
+              onClick={() => handleAiAnalysisAction('clear-selection')}
+            >
+              清空选择
+            </Button>
+            <Button
+              className={[
+                AI_ANALYSIS_SMALL_BUTTON_CLASS,
+                state.moveConfirm ? AI_ANALYSIS_CONFIRM_BUTTON_ACTIVE_CLASS : ''
+              ].filter(Boolean).join(' ')}
+              size="sm"
+              type="button"
+              variant="secondary"
+              aria-label={state.moveConfirm
+                ? '确认将书签智能分析已选建议移动至推荐文件夹'
+                : '将书签智能分析已选建议移动至推荐文件夹'}
+              title={state.moveTitle}
+              disabled={state.moveDisabled}
+              focusableWhenDisabled={state.moveDisabled}
+              onClick={() => handleAiAnalysisAction('move-selection-to-suggested')}
+            >
+              <span className="t-icon-swap" data-state={state.moveConfirm ? 'b' : 'a'} aria-hidden="true">
+                <span className="t-icon inline-flex items-center justify-center" data-icon="a">
+                  {state.moveLabel}
+                </span>
+                <span className="t-icon inline-flex items-center justify-center" data-icon="b">
+                  <span className={AI_ANALYSIS_CONFIRM_ICON_CLASS}>{'\u2713\u2713'}</span> 确认移动
+                </span>
               </span>
-              <span className="t-icon inline-flex items-center justify-center" data-icon="b">
-                <span className={AI_ANALYSIS_CONFIRM_ICON_CLASS}>{'\u2713\u2713'}</span> 确认移动
-              </span>
-            </span>
-          </Button>
-          <Button
-            className={AI_ANALYSIS_SMALL_BUTTON_CLASS}
-            size="sm"
-            type="button"
-            variant="primary"
-            aria-label="应用书签智能分析已选建议"
-            disabled={state.applyDisabled}
-            focusableWhenDisabled={state.applyDisabled}
-            onClick={() => handleAiAnalysisAction('apply-selection')}
-          >
-            应用所选建议
-          </Button>
+            </Button>
+            <Button
+              className={AI_ANALYSIS_SMALL_BUTTON_CLASS}
+              size="sm"
+              type="button"
+              variant="primary"
+              aria-label="应用书签智能分析已选建议"
+              disabled={state.applyDisabled}
+              focusableWhenDisabled={state.applyDisabled}
+              onClick={() => handleAiAnalysisAction('apply-selection')}
+            >
+              应用所选建议
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
+    </MotionDisclosure>
   )
 }

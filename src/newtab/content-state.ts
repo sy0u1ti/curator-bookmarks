@@ -250,22 +250,11 @@ export interface AutoCenteredSearchOffsetInput {
   fallbackOffsetY?: number
 }
 
-export interface AdaptiveSearchWidthBoundsInput {
-  viewportWidth: number
-  containerWidth: number
-  minWidthVw?: number
-  maxWidthVw?: number
-  minWidthPx?: number
-}
-
 const DEFAULT_VERTICAL_CENTER_COLLISION_GAP = 12
 const DEFAULT_ADAPTIVE_SEARCH_OFFSET_GAP = 12
 const DEFAULT_ADAPTIVE_SEARCH_OFFSET_MINIMUM_RANGE = 24
 const DEFAULT_ADAPTIVE_SEARCH_OFFSET_MIN = -240
 const DEFAULT_ADAPTIVE_SEARCH_OFFSET_MAX = 240
-const DEFAULT_ADAPTIVE_SEARCH_WIDTH_MIN_VW = 16
-const DEFAULT_ADAPTIVE_SEARCH_WIDTH_MAX_VW = 72
-const DEFAULT_ADAPTIVE_SEARCH_WIDTH_MIN_PX = 220
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   const numericValue = Number(value)
@@ -391,27 +380,6 @@ export function getAutoCenteredSearchOffsetY({
   const centeredTop = availableTop + ((availableBottom - availableTop - searchHeight) / 2)
   const offset = Math.round(currentOffsetY + centeredTop - searchTop)
   return clampNumber(offset, min, max, fallback)
-}
-
-export function getAdaptiveSearchWidthBounds({
-  viewportWidth,
-  containerWidth,
-  minWidthVw = DEFAULT_ADAPTIVE_SEARCH_WIDTH_MIN_VW,
-  maxWidthVw = DEFAULT_ADAPTIVE_SEARCH_WIDTH_MAX_VW,
-  minWidthPx = DEFAULT_ADAPTIVE_SEARCH_WIDTH_MIN_PX
-}: AdaptiveSearchWidthBoundsInput): { min: number; max: number } {
-  const min = Math.max(1, Math.floor(Math.min(minWidthVw, maxWidthVw)))
-  const absoluteMax = Math.max(min, Math.ceil(Math.max(minWidthVw, maxWidthVw)))
-  const safeViewportWidth = Math.max(1, viewportWidth)
-  const safeContainerWidth = Math.max(0, containerWidth)
-  const minWidthPercent = Math.ceil((Math.max(0, minWidthPx) / safeViewportWidth) * 100)
-  const availableWidthPercent = Math.floor((safeContainerWidth / safeViewportWidth) * 100)
-  const max = Math.min(
-    absoluteMax,
-    Math.max(min, minWidthPercent, availableWidthPercent)
-  )
-
-  return { min, max }
 }
 
 export function resolveNewTabContentState(

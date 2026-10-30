@@ -350,6 +350,7 @@ export async function clearRecycleBin(callbacks) {
         title: `清空 ${managerState.recycleBin.length} 条回收站记录？`,
         copy: '这些回收站记录会被永久移除，之后无法再从扩展内恢复。',
         confirmLabel: '清空回收站',
+        holdToConfirm: true,
         label: '清空回收站',
         tone: 'danger'
       })

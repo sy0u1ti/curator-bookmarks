@@ -57,6 +57,7 @@ try {
   await newtab.goto(`chrome-extension://${extensionId}/src/newtab/newtab.html`)
   await newtab.locator('#newtab-settings-trigger').click()
   await newtab.getByRole('tab', { name: '外观', exact: true }).click()
+  await newtab.locator('#icon-advanced-toggle').click()
   const segment = newtab.locator('#icon-layout-control')
   await segment.scrollIntoViewIfNeeded()
   await settle(newtab)

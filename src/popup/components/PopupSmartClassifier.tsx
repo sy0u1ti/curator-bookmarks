@@ -361,9 +361,12 @@ function PopupSmartPageCardContent({
             快速保存
           </Button>
           <Button
-            className={currentPageSecondaryActionClass}
+            className={page.canClassify ? currentPageSecondaryActionClass : placeholderSecondaryActionClass}
             type="button"
             data-smart-action="classify"
+            aria-label={page.canClassify ? '智能分类' : '智能分类（当前页面受隐私保护）'}
+            disabled={!page.canClassify}
+            title={page.canClassify ? undefined : page.classificationStatusTitle}
             onClick={() => handlers?.onAction?.('classify')}
             unstyled
           >

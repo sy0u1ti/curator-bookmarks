@@ -10,18 +10,32 @@ html[data-curator-surface="sidepanel"] #popup-root > .curator-react-root { heigh
 html[data-curator-surface="sidepanel"] .popup-workspace {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(42px, min(28%, var(--sidepanel-folder-height, 140px))) minmax(0, 1fr);
+  transition: grid-template-rows var(--acc-expand) var(--acc-ease);
 }
 
 html[data-curator-surface="sidepanel"] .popup-workspace:has([aria-controls="sidepanel-folder-tree"][aria-expanded="false"]) {
-  grid-template-rows: 42px minmax(0, 1fr);
+  grid-template-rows: minmax(42px, 42px) minmax(0, 1fr);
 }
-/* Only the chevron turns; the tree itself toggles instantly so the results
-   pane below never slides around. Shares the disclosure clock. */
 html[data-curator-surface="sidepanel"] .sidepanel-folder-chevron {
-  transition: transform var(--acc-chevron) var(--acc-ease);
+  transition: rotate var(--acc-chevron) var(--ds-ease-spring);
+}
+html[data-curator-surface="sidepanel"] #sidepanel-folder-tree {
+  opacity: 1;
+  transition:
+    opacity var(--acc-collapse) var(--ease-smooth-out),
+    display var(--acc-collapse) allow-discrete;
+}
+html[data-curator-surface="sidepanel"] #sidepanel-folder-tree[hidden] {
+  opacity: 0;
+  pointer-events: none;
+}
+@starting-style {
+  html[data-curator-surface="sidepanel"] #sidepanel-folder-tree {
+    opacity: 0;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  html[data-curator-surface="sidepanel"] .sidepanel-folder-chevron { transition: none; }
+  html[data-curator-surface="sidepanel"] :is(.sidepanel-folder-chevron, .popup-workspace, #sidepanel-folder-tree) { transition: none; }
 }
 html[data-curator-surface="sidepanel"] .popup-workspace > aside { min-height: 0; }
 html[data-curator-surface="sidepanel"] .popup-main-pane { min-height: 0; }

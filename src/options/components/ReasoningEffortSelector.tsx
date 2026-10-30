@@ -9,6 +9,7 @@ import {
   useState
 } from 'react'
 import { getMotionDurationMs, getMotionEasing, prefersReducedMotion } from '../../shared/motion'
+import { Button } from '../../ui/base/Button'
 import { Popover } from '../../ui/base/Popover'
 import { cx } from '../../ui/base/utils'
 import { OPTIONS_REDUCED_MOTION_SURFACE_CLASS } from './options-motion-classes.js'
@@ -47,7 +48,7 @@ const FALLBACK_LEVEL: ReasoningEffortLevel = { id: 'default', label: '—' }
 const FALLBACK_LEVELS: ReasoningEffortLevel[] = [FALLBACK_LEVEL]
 const KNOB_DIAMETER_PX = 34
 const SPRING_STIFFNESS = 900
-const SPRING_DAMPING = 42
+const SPRING_DAMPING = 51
 const VELOCITY_WINDOW_MS = 90
 const VELOCITY_MAX = 2.2
 
@@ -90,7 +91,7 @@ const KNOB_CLASS = cx(
   'shadow-[0_1px_2px_rgba(6,9,14,0.35),0_2px_6px_rgba(6,9,14,0.24)]',
   'before:absolute before:inset-0 before:rounded-full before:shadow-[0_2px_3px_rgba(6,9,14,0.28),0_4px_10px_rgba(6,9,14,0.3)] before:opacity-0 before:transition-opacity before:duration-ds-fast',
   'data-[dragging=true]:[scale:1.04] data-[dragging=true]:before:opacity-100',
-  'transition-[scale] duration-ds-fast ease-ds-standard motion-reduce:transition-none'
+  'transition-[scale] duration-[var(--ds-motion-control)] ease-ds-standard motion-reduce:transition-none'
 )
 
 export function ReasoningEffortSelector({
@@ -411,7 +412,8 @@ export function ReasoningEffortSelector({
   const showDefaultHeader = !isHighestLevel && !showHoverLabels
 
   const trigger = (
-    <button
+    <Button
+      unstyled
       type="button"
       className={TRIGGER_CLASS}
       aria-label={`${ariaLabel}：${currentLevel?.label ?? '—'}；模型：${modelName}`}
@@ -432,10 +434,10 @@ export function ReasoningEffortSelector({
         </span>
       </span>
       <ChevronDownIcon
-        className="ml-2 size-3.5 flex-none text-ds-text-muted transition-transform duration-ds-standard ease-ds-standard group-aria-expanded:rotate-180 motion-reduce:transition-none"
+        className="ml-2 size-3.5 flex-none text-ds-text-muted transition-transform duration-[var(--ds-motion-spring)] ease-ds-spring group-aria-expanded:rotate-180 motion-reduce:transition-none"
         aria-hidden="true"
       />
-    </button>
+    </Button>
   )
 
   return (
@@ -485,7 +487,8 @@ export function ReasoningEffortSelector({
               </div>
               <hr className="mx-1 my-[5px] h-px border-0 bg-ds-border-subtle" />
               <div className="reasoning-selector-menu-action-wrap">
-                <button
+                <Button
+                  unstyled
                   ref={advancedButtonRef}
                   type="button"
                   className="inline-flex min-h-8 items-center gap-1 rounded-ds-sm px-3 text-sm text-ds-text-secondary outline-none transition-colors duration-ds-fast hover:bg-ds-hover hover:text-ds-text-primary focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-ds-focus motion-reduce:transition-none"
@@ -493,7 +496,7 @@ export function ReasoningEffortSelector({
                 >
                   高级设置
                   <ChevronDownIcon className="size-3" aria-hidden="true" />
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -519,14 +522,15 @@ export function ReasoningEffortSelector({
                   aria-hidden={!showDefaultHeader}
                   inert={!showDefaultHeader}
                 >
-                  <button
+                  <Button
+                    unstyled
                     type="button"
                     className="-ml-2 inline-flex min-h-8 items-center gap-1 rounded-ds-sm px-2 text-sm text-ds-text-secondary outline-none transition-colors duration-ds-fast hover:bg-ds-hover hover:text-ds-text-primary focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-ds-focus motion-reduce:transition-none"
                     onClick={() => setView('menu')}
                   >
                     高级设置
                     <ChevronRightIcon className="size-3 text-ds-text-muted" aria-hidden="true" />
-                  </button>
+                  </Button>
                   <ZapIcon className="size-4 fill-current text-[#47a8ff]" aria-hidden="true" />
                 </div>
                 <div

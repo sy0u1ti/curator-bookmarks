@@ -2,6 +2,7 @@ import { Button } from '../../ui/base/Button'
 import { AiThinkingOrb } from '../../ui/ai/AiThinkingOrb'
 import { Icon } from '../../ui/icons/Icon'
 import { cx } from '../../ui/base/utils'
+import { MotionDisclosure } from '../../ui/motion/MotionDisclosure'
 import {
   dispatchPopupAutoAnalyzeStatusAction,
   usePopupAutoAnalyzeStatusView
@@ -52,7 +53,6 @@ export function PopupAutoAnalyzeStatus({ smartActive = false }: { smartActive?: 
       className={cx(
         STATUS_BASE_CLASS,
         !state.collapsed && 'max-h-24',
-        state.collapsed && 'py-[5px]',
         !hidden && STATUS_STATE_CLASS[state.status]
       )}
       hidden={hidden}
@@ -73,11 +73,11 @@ export function PopupAutoAnalyzeStatus({ smartActive = false }: { smartActive?: 
             <p className="m-0 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold leading-tight text-ds-text-primary">
               {state.title}
             </p>
-            <p className={cx(
-              'mt-0.5 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-tight text-ds-text-secondary'
-            )} hidden={state.collapsed}>
-              {state.detail}
-            </p>
+            <MotionDisclosure open={!state.collapsed}>
+              <p className="mt-0.5 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-tight text-ds-text-secondary">
+                {state.detail}
+              </p>
+            </MotionDisclosure>
           </output>
           <div className="inline-flex items-center gap-1.5">
             {state.showHistory ? (

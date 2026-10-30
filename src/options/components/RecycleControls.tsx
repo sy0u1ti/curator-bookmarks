@@ -1,7 +1,7 @@
 import { OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { Button } from '../../ui/base/Button'
 import { TextSwap } from '../../ui/motion/TextSwap'
-import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
+import { MotionDisclosure } from '../../ui/motion/MotionDisclosure'
 import { handleRecycleAction } from '../options-controller'
 import { useRecycleControlsState } from './recycle-controls-store.js'
 
@@ -14,22 +14,21 @@ const RECYCLE_HEADER_SUBTITLE_CLASS =
 const RECYCLE_HEADER_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:items-start max-[760px]:justify-start'
 const RECYCLE_SELECTION_GROUP_CLASS =
-  `t-panel-slide mb-[18px] ${OPTION_INSET_CLASS} p-[16px] [--panel-translate-y:12px]`
+  `mb-[18px] ${OPTION_INSET_CLASS} p-[16px]`
 
 export function RecycleControls() {
   const state = useRecycleControlsState()
   const hasEntries = state.entryCount > 0
   const hasSelection = state.selectedCount > 0
-  const selectionEntered = useMotionEntrance(hasSelection)
 
   return (
     <>
-      {hasSelection ? (
-        <div className={RECYCLE_SELECTION_GROUP_CLASS} data-open={selectionEntered ? 'true' : 'false'}>
+      <MotionDisclosure open={hasSelection}>
+        <div className={RECYCLE_SELECTION_GROUP_CLASS}>
           <div className={RECYCLE_HEADER_CLASS}>
             <div className={RECYCLE_HEADER_COPY_CLASS}>
               <strong className={RECYCLE_HEADER_TITLE_CLASS}>
-                <TextSwap animate={selectionEntered} text={`${state.selectedCount} 条已选择`} />
+                <TextSwap animate={hasSelection} text={`${state.selectedCount} 条已选择`} />
               </strong>
               <p className={RECYCLE_HEADER_SUBTITLE_CLASS}>可批量恢复或清除记录，包含其他页及筛选外的已选项。</p>
             </div>
@@ -69,7 +68,7 @@ export function RecycleControls() {
             </div>
           </div>
         </div>
-      ) : null}
+      </MotionDisclosure>
 
       <div className={RECYCLE_HEADER_CLASS}>
         <div className={RECYCLE_HEADER_COPY_CLASS}>

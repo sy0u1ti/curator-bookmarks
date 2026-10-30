@@ -148,15 +148,11 @@ body,
   content: "";
   opacity: 0;
   pointer-events: none;
-  transform: scale(0.88);
-  transition:
-    opacity var(--ds-motion-fast) var(--ds-ease-standard),
-    transform var(--ds-motion-standard) var(--ds-ease-standard);
+  transition: opacity var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 .options-switch-control:not([data-disabled]):active::after {
   opacity: 0.7;
-  transform: scale(1);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -182,13 +178,9 @@ body,
     transform: translateX(1px);
   }
 
-  .options-shell .curator-button:not(:disabled):not([aria-disabled="true"]):not([data-disabled]):hover {
-    transform: translate3d(0, -1px, 0);
-  }
-
   .options-shell .curator-button:not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active {
     scale: 1;
-    transform: scale(var(--ds-press-scale));
+    transform: scale(var(--control-press-scale, var(--ds-press-scale)));
   }
 
   .options-interactive-surface:has(
@@ -224,8 +216,8 @@ body,
   [role="treeitem"]
 ):not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active,
 .options-modal-panel :where(button, a[href]):not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active {
-  opacity: 0.84;
-  transition-duration: 80ms !important;
+  opacity: 0.92;
+  transition-duration: var(--ds-motion-feedback) !important;
 }
 
 .options-shell .curator-button:is(:disabled, [data-disabled]) {

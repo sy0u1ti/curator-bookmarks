@@ -16,6 +16,8 @@ export interface DeleteModalState {
 }
 
 export interface ConfirmModalState {
+  requestId: number
+  holdToConfirm: boolean
   cancelLabel: string
   confirmLabel: string
   copy: string

@@ -1,4 +1,4 @@
-export type BookmarkMenuActionIcon = 'trash' | 'refresh' | 'save' | 'plus' | 'copy' | 'pin'
+export type BookmarkMenuActionIcon = 'trash' | 'refresh' | 'save' | 'plus' | 'copy' | 'pin' | 'move' | 'folder'
 export type BookmarkIconMode = 'website' | 'custom'
 
 export interface BookmarkMenuTextFieldViewModel {
@@ -19,7 +19,9 @@ export interface BookmarkMenuActionViewModel {
   icon: BookmarkMenuActionIcon
   id: string
   label: string
+  feedback?: import('../shared/action-feedback').ActionFeedback
   onSelect: () => void | Promise<void>
+  children?: () => BookmarkMenuActionViewModel[]
   variant?: 'danger' | ''
 }
 

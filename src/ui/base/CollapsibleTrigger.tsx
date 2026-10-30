@@ -14,7 +14,7 @@ export const CollapsibleTrigger = forwardRef<HTMLButtonElement, CollapsibleTrigg
     return (
       <BaseCollapsible.Trigger
         ref={ref}
-        className={cx('t-acc-head outline-none focus-visible:shadow-ds-focus', className)}
+        className={cx('curator-control t-acc-head outline-none focus-visible:shadow-ds-focus', className)}
         {...props}
       />
     )

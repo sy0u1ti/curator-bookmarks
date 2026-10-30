@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { Button } from '../../ui/base/Button'
+import { StatusButton } from '../../ui/actions/StatusButton'
 import { Input } from '../../ui/base/Input'
 import { handleBackupAction } from '../options-controller'
 import { useBackupControlsState } from './backup-controls-store.js'
@@ -69,17 +70,18 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
           </div>
           <div className={BACKUP_ROW_ACTIONS_CLASS}>
             {state.tagData.hasRecords ? (
-              <Button
+              <StatusButton
                 size="sm"
                 type="button"
                 variant="secondary"
                 aria-label="导出书签标签数据"
+                feedback={state.tagData.exportFeedback}
+                icon="Download"
+                labels={{ idle: '导出标签数据', pending: '正在导出', success: '已导出', error: '导出失败' }}
                 disabled={state.tagData.busy}
                 focusableWhenDisabled={state.tagData.busy}
                 onClick={() => handleBackupAction({ action: 'export-tags' })}
-              >
-                导出标签数据
-              </Button>
+              />
             ) : null}
             <Button
               size="sm"
@@ -132,17 +134,18 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
             </p>
           </div>
           <div className={BACKUP_ROW_ACTIONS_CLASS}>
-            <Button
+            <StatusButton
               size="sm"
               type="button"
               variant="secondary"
               aria-label="导出完整书签备份"
+              feedback={state.backup.exportFeedback}
+              icon="Download"
+              labels={{ idle: '导出完整备份', pending: '正在导出', success: '已导出', error: '导出失败' }}
               disabled={state.backup.busy}
               focusableWhenDisabled={state.backup.busy}
               onClick={() => handleBackupAction({ action: 'export-backup' })}
-            >
-              导出完整备份
-            </Button>
+            />
             <Button
               size="sm"
               type="button"
@@ -179,17 +182,18 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
             </p>
           </div>
           <div className={BACKUP_ROW_ACTIONS_CLASS}>
-            <Button
+            <StatusButton
               size="sm"
               type="button"
               variant="secondary"
               aria-label="导出通用 HTML 书签文件"
+              feedback={state.backup.htmlExportFeedback}
+              icon="Download"
+              labels={{ idle: '导出 HTML 书签', pending: '正在导出', success: '已导出', error: '导出失败' }}
               disabled={state.backup.busy}
               focusableWhenDisabled={state.backup.busy}
               onClick={() => handleBackupAction({ action: 'export-html' })}
-            >
-              导出 HTML 书签
-            </Button>
+            />
           </div>
         </div>
       </div>

@@ -1,4 +1,7 @@
 import type { AiProviderModelToolsState } from './ai-provider-model-tools-types.js'
+import type { ActionFeedback } from '../../shared/action-feedback.js'
+import type { ModelsDevMatch } from '../../shared/models-dev.js'
+import type { ModelsDevSyncError } from '../../shared/models-dev-cache.js'
 
 export type AiProviderSettingsAction =
   | 'attention'
@@ -42,7 +45,13 @@ export interface AiProviderSettingsState {
   hasRequiredConfig: boolean
   modelTools: AiProviderModelToolsState
   modelToolsDisabled: boolean
-  noticeText: string
+  modelCatalog: {
+    loaded: boolean
+    autoUpdate: boolean
+    checkedAt: number
+    lastError: ModelsDevSyncError | ''
+    match: ModelsDevMatch | null
+  }
   reasoningEffort: string
   reasoningEffortNote: string
   reasoningEffortOptions: Array<{ id: string; label: string; hint: string }>
@@ -55,5 +64,6 @@ export interface AiProviderSettingsState {
   testDisabled: boolean
   testLabel: string
   testingConnection: boolean
+  testFeedback: ActionFeedback
   timeoutMs: string
 }

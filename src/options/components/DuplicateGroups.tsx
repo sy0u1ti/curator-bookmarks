@@ -5,7 +5,7 @@ import { displayUrl } from '../../shared/text.js'
 import { Button } from '../../ui/base/Button'
 import { Checkbox } from '../../ui/base/Checkbox'
 import { TextSwap } from '../../ui/motion/TextSwap'
-import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
+import { MotionDisclosure } from '../../ui/motion/MotionDisclosure'
 import { handleDuplicateAction } from '../options-controller'
 import { useDuplicateGroupsState } from './duplicate-groups-store.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
@@ -31,7 +31,7 @@ const RESULTS_CLASS = 'mt-4 flex flex-col gap-2'
 const EMPTY_CLASS =
   `${OPTION_INSET_CLASS} p-[14px_16px] text-[13px] leading-[1.55] text-ds-text-secondary shadow-none transition-colors hover:border-ds-border hover:bg-ds-hover`
 const DOCKED_SELECTION_CLASS =
-  't-panel-slide sticky top-3 z-[5] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 p-[12px_14px] [filter:var(--ds-filter-card)] [--panel-translate-y:12px] max-[760px]:static max-[760px]:grid-cols-1'
+  'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 p-[12px_14px] [filter:var(--ds-filter-card)] max-[760px]:grid-cols-1'
 const DOCKED_COPY_CLASS = 'min-w-0'
 const DOCKED_TITLE_CLASS = 'block text-sm font-bold text-ds-text-primary'
 const DOCKED_TEXT_CLASS = 'mt-[5px] text-xs leading-[1.55] text-[rgba(245,245,247,0.58)]'
@@ -135,55 +135,53 @@ function DuplicateDockedSelection({
   locked: boolean
   selectionStats: DuplicateSelectionStatsViewModel
 }) {
-  const entered = useMotionEntrance(Boolean(selectionStats.deleteCount))
-
-  if (!selectionStats.deleteCount) {
-    return null
-  }
+  const entered = Boolean(selectionStats.deleteCount)
 
   const unsafe = selectionStats.unsafeGroupCount > 0
 
   return (
-    <section className={DOCKED_SELECTION_CLASS} data-open={entered ? 'true' : 'false'} aria-label="已选重复书签操作">
-      <div className={DOCKED_COPY_CLASS}>
-        <strong className={DOCKED_TITLE_CLASS}>
-          <TextSwap
-            animate={entered}
-            text={`已选 ${selectionStats.deleteCount} 条待移入回收站`}
-          />
-        </strong>
-        <p className={DOCKED_TEXT_CLASS}>
-          保留 {selectionStats.keepCount} 条，涉及 {selectionStats.groupCount} 组。
-        </p>
-        {unsafe ? (
-          <p className={DOCKED_WARNING_CLASS}>
-            {selectionStats.unsafeGroupCount} 组已全选；每组至少保留 1 条后才能移入回收站。
+    <MotionDisclosure open={entered} className="sticky top-3 z-[5] max-[760px]:static">
+      <section className={DOCKED_SELECTION_CLASS} aria-label="已选重复书签操作">
+        <div className={DOCKED_COPY_CLASS}>
+          <strong className={DOCKED_TITLE_CLASS}>
+            <TextSwap
+              animate={entered}
+              text={`已选 ${selectionStats.deleteCount} 条待移入回收站`}
+            />
+          </strong>
+          <p className={DOCKED_TEXT_CLASS}>
+            保留 {selectionStats.keepCount} 条，涉及 {selectionStats.groupCount} 组。
           </p>
-        ) : null}
-      </div>
-      <div className={DOCKED_ACTIONS_CLASS}>
-        <Button
-          className={DOCKED_ACTION_BUTTON_CLASS}
-          size="sm"
-          type="button"
-          variant="secondary"
-          disabled={locked}
-          onClick={() => handleDuplicateAction({ action: 'clear-selection' })}
-        >
-          清空选择
-        </Button>
-        <Button
-          className={DOCKED_ACTION_BUTTON_CLASS}
-          size="sm"
-          type="button"
-          variant="danger"
-          disabled={locked || unsafe}
-          onClick={() => handleDuplicateAction({ action: 'delete-selection' })}
-        >
-          移入回收站
-        </Button>
-      </div>
-    </section>
+          {unsafe ? (
+            <p className={DOCKED_WARNING_CLASS}>
+              {selectionStats.unsafeGroupCount} 组已全选；每组至少保留 1 条后才能移入回收站。
+            </p>
+          ) : null}
+        </div>
+        <div className={DOCKED_ACTIONS_CLASS}>
+          <Button
+            className={DOCKED_ACTION_BUTTON_CLASS}
+            size="sm"
+            type="button"
+            variant="secondary"
+            disabled={locked}
+            onClick={() => handleDuplicateAction({ action: 'clear-selection' })}
+          >
+            清空选择
+          </Button>
+          <Button
+            className={DOCKED_ACTION_BUTTON_CLASS}
+            size="sm"
+            type="button"
+            variant="danger"
+            disabled={locked || unsafe}
+            onClick={() => handleDuplicateAction({ action: 'delete-selection' })}
+          >
+            移入回收站
+          </Button>
+        </div>
+      </section>
+    </MotionDisclosure>
   )
 }
 

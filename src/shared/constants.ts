@@ -32,6 +32,8 @@ export const STORAGE_KEYS = {
   availabilitySettings: 'curatorBookmarkAvailabilitySettings',
   recycleBin: 'curatorBookmarkRecycleBin',
   aiProviderSettings: 'curatorBookmarkAiNamingSettings',
+  modelsDevCatalog: 'curatorModelsDevCatalog',
+  modelsDevSync: 'curatorModelsDevSync',
   aiAnalysisCheckpoint: 'curatorBookmarkAiAnalysisCheckpoint',
   aiRejectedSuggestions: 'curatorBookmarkAiRejectedSuggestions',
   onboardingState: 'curatorBookmarkOnboardingState',

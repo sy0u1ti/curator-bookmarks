@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { Button } from '../ui/base/Button'
 import { cx } from '../ui/base/utils'
 import { Icon } from '../ui/icons/Icon'
@@ -52,6 +52,8 @@ import {
   getBackgroundMaskOverlayGradient,
   isLegacyBackgroundMaskStyle
 } from './background-mask-settings'
+
+const NewtabTextureLayer = lazy(() => import('./components/NewtabTextureLayer'))
 
 const BACKGROUND_MASK_BASE_CLASS = 'newtab-background-mask fixed inset-0 z-0 pointer-events-none opacity-0 before:absolute before:inset-0 before:pointer-events-none before:opacity-0 before:mix-blend-overlay'
 const BACKGROUND_MASK_ENABLED_CLASS = 'opacity-100'
@@ -213,6 +215,10 @@ function NewtabShell({ onOpenSettings }: { onOpenSettings: () => void }) {
     if (wallpaper && stage && wallpaper.parentElement !== stage) {
       stage.prepend(wallpaper)
     }
+    const texture = document.getElementById('newtab-texture-stage')
+    if (texture && stage && texture.parentElement !== stage) {
+      stage.append(texture)
+    }
     const mask = document.getElementById('newtab-background-mask')
     const host = backgroundMaskHostRef.current
     if (mask && host && mask.parentElement !== host) {
@@ -282,6 +288,9 @@ function NewtabShell({ onOpenSettings }: { onOpenSettings: () => void }) {
         <SolidBackgroundNoiseLayer active={backgroundSettings.type === 'color'} />
         <NewtabWallpaperFilterLayer />
         <NewtabPaperShaderLayer />
+        {backgroundSettings.type === 'texture' ? (
+          <Suspense fallback={null}><NewtabTextureLayer /></Suspense>
+        ) : null}
       </div>
       <div
         id="newtab-background-mask-host"
