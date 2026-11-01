@@ -64,7 +64,7 @@ function AvailabilityResultCard({ kind, result }: { kind: AvailabilityResultPane
             <span className={cx(BADGE_CLASS, TONES[result.tone] || TONES.muted)}>{result.badgeText || result.statusLabel}</span>
           </div>
           {result.url ? (
-            <a className="mt-1 block truncate text-[13px] leading-5 text-ds-text-secondary underline-offset-4 hover:text-ds-text-primary hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus"
+            <a className="mt-1 block truncate text-[13px] leading-5 text-ds-text-secondary underline-offset-4 hover:text-ds-text-primary hover:underline focus-visible:rounded-ds-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus"
               href={result.url} target="_blank" rel="noreferrer noopener" title={result.url}>
               {displayUrl(result.url)}
             </a>

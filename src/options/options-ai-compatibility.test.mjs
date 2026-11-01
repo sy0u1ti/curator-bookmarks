@@ -63,7 +63,7 @@ try {
   await page.goto('chrome-extension://' + extensionId + '/src/options/options.html#ai-settings', { waitUntil: 'domcontentloaded' })
   await page.locator('#ai-api-key').waitFor({ state: 'visible', timeout: 20000 })
   assert.equal(await page.locator('#ai-api-key').inputValue(), '')
-  await page.getByRole('button', { name: 'Base URL 与接口选项', exact: true }).click()
+  await page.getByRole('button', { name: '接口与请求设置', exact: true }).click()
   await page.getByRole('combobox', { name: '接口类型', exact: true }).click()
   const labels = ['自动识别（推荐）', 'OpenAI Responses', 'OpenAI Chat Completions', 'Anthropic Messages', 'Gemini GenerateContent', 'Gemini Interactions']
   for (const label of labels) await page.getByRole('option', { name: label, exact: true }).waitFor({ state: 'visible' })

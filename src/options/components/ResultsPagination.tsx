@@ -4,7 +4,6 @@ import { handleResultsPagination } from '../options-controller'
 import { useResultsPaginationState } from './results-pagination-store.js'
 import {
   OPTION_PAGINATION_CLASS,
-  OPTION_PAGINATION_HIDDEN_CLASS,
   OPTION_PAGINATION_LABEL_CLASS,
   OPTION_PAGINATION_PAGE_VALUE_CLASS,
   OPTION_PAGINATION_RANGE_VALUE_CLASS,
@@ -19,16 +18,12 @@ export function ResultsPagination({
   kind: string
 }) {
   const state = useResultsPaginationState(kind)
+  if (!state.visible) return null
 
   return (
     <div aria-label={ariaLabel}>
       <div
-        className={[
-          OPTION_PAGINATION_CLASS,
-          state.visible ? '' : OPTION_PAGINATION_HIDDEN_CLASS
-        ].filter(Boolean).join(' ')}
-        aria-hidden={state.visible ? undefined : 'true'}
-        inert={!state.visible}
+        className={OPTION_PAGINATION_CLASS}
       >
         <span className={OPTION_PAGINATION_LABEL_CLASS}>
           {state.label} <NumberPop className={OPTION_PAGINATION_RANGE_VALUE_CLASS} text={`${state.start}-${state.end} / ${state.totalCount}`} />

@@ -9,6 +9,7 @@ export interface AiAnalysisStatusState {
 
 export interface AiAnalysisProgressState {
   busy: boolean
+  visible: boolean
   progressCopy: string
   progressLabel: string
   progressMax: number
@@ -54,16 +55,19 @@ export interface AiAnalysisSelectionActionsState {
 export interface AiAnalysisResultsHeaderState {
   resultCount: string
   subtitle: string
+  visible: boolean
 }
 
 export interface AiAnalysisResultsFilterState {
   clearDisabled: boolean
   query: string
   status: string
+  visible: boolean
 }
 
 export interface AiAnalysisScopePickerState {
   copy: string
+  countLabel?: string
   disabled: boolean
   label: string
 }
@@ -86,6 +90,7 @@ const defaultState: AiAnalysisStatusState = {
 
 const defaultProgressState: AiAnalysisProgressState = {
   busy: false,
+  visible: false,
   progressCopy: '先读取网页内容，再分批生成建议。',
   progressLabel: '未开始',
   progressMax: 1,
@@ -130,13 +135,15 @@ const defaultSelectionActionsState: AiAnalysisSelectionActionsState = {
 
 const defaultResultsHeaderState: AiAnalysisResultsHeaderState = {
   resultCount: '0 条结果',
-  subtitle: '展示标题建议、标签、置信度和原因。'
+  subtitle: '',
+  visible: false
 }
 
 const defaultResultsFilterState: AiAnalysisResultsFilterState = {
   clearDisabled: true,
   query: '',
-  status: 'all'
+  status: 'all',
+  visible: false
 }
 
 const defaultResultsState: AiNamingResultsState = {

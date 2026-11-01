@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ThemeProvider } from '../theme/ThemeProvider'
 import { createRoot } from 'react-dom/client'
 import { Button } from '../base/Button'
 import { CheckboxControl } from '../base/Checkbox'
@@ -81,4 +82,4 @@ function Fixture() {
   )
 }
 
-createRoot(document.getElementById('root')!).render(<Fixture />)
+createRoot(document.getElementById('root')!).render(<ThemeProvider><Fixture /></ThemeProvider>)

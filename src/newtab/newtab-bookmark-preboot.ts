@@ -8,7 +8,7 @@ export const NEWTAB_BOOKMARK_PREBOOT_ROOT_ID = 'newtab-bookmark-preboot'
 export const NEWTAB_BOOKMARK_PREBOOT_STORAGE_KEY = 'curatorNewTabBookmarkPreboot'
 
 const NEWTAB_BOOKMARK_PREBOOT_STYLE_ID = 'newtab-bookmark-preboot-style'
-const NEWTAB_BOOKMARK_PREBOOT_VERSION = 5
+const NEWTAB_BOOKMARK_PREBOOT_VERSION = 6
 const NEWTAB_BOOKMARK_PREBOOT_MAX_AGE_MS = 10 * 60 * 1000
 const NEWTAB_BOOKMARK_PREBOOT_MAX_SECTIONS = 8
 const NEWTAB_BOOKMARK_PREBOOT_MAX_ITEMS = 72
@@ -756,13 +756,14 @@ function createNewtabBookmarkPrebootTile(
   }
   const iconShell = documentRef.createElement('span')
   iconShell.className = 'newtab-bookmark-preboot-icon-shell'
-  if (content.clipPaths.iconShell) {
+  const nativeCorners = typeof CSS !== 'undefined' && CSS.supports('corner-shape', 'superellipse(1.25)')
+  if (!nativeCorners && content.clipPaths.iconShell) {
     iconShell.style.clipPath = content.clipPaths.iconShell
   }
   const fallback = documentRef.createElement('span')
   fallback.className = 'newtab-bookmark-preboot-fallback'
   fallback.textContent = item.fallbackLabel
-  if (content.clipPaths.fallback) {
+  if (!nativeCorners && content.clipPaths.fallback) {
     fallback.style.clipPath = content.clipPaths.fallback
   }
   iconShell.appendChild(fallback)
@@ -777,7 +778,7 @@ function createNewtabBookmarkPrebootTile(
     image.referrerPolicy = 'no-referrer'
     image.fetchPriority = loadAttributes.fetchPriority
     image.loading = loadAttributes.loading
-    if (content.clipPaths.favicon) {
+    if (!nativeCorners && content.clipPaths.favicon) {
       image.style.clipPath = content.clipPaths.favicon
     }
     const revealImage = () => {
@@ -1353,6 +1354,12 @@ function clampPrebootLength(value: unknown, min: number, max: number, fallback: 
 }
 
 const NEWTAB_BOOKMARK_PREBOOT_CSS = `
+@supports (corner-shape: superellipse(1.25)) {
+  #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} :where(*) {
+    corner-shape: var(--ds-corner-shape, superellipse(1.25));
+  }
+}
+
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
   /* This script paints before the app stylesheet is available, so mirror the
      resting bookmark material here instead of letting hydration add the blur. */
@@ -1452,10 +1459,10 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
   align-items: center;
   justify-self: stretch;
   gap: 8px;
-  padding: 8px 10px;
+  padding: calc(var(--ds-inset-panel, 8px) - var(--ds-stroke-width, 1px));
   overflow: hidden;
   border: 1px solid var(--preboot-card-border);
-  border-radius: var(--ui-radius-group, 10px);
+  border-radius: var(--ds-radius-lg, 16px);
   background: var(--preboot-card-bg);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16),
     var(--newtab-glass-edge-shadow, 0 0 0 0 transparent);
@@ -1499,7 +1506,7 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
   grid-template-columns: var(--icon-shell-size);
   justify-content: center;
   gap: 0;
-  padding: 8px;
+  padding: calc(var(--ds-inset-panel, 8px) - var(--ds-stroke-width, 1px));
 }
 
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-icon-shell {
@@ -1528,10 +1535,10 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
   z-index: 1;
   width: calc(var(--icon-shell-size) * 0.68);
   height: calc(var(--icon-shell-size) * 0.68);
-  border-radius: 5px;
+  border-radius: var(--ds-radius-xs, 4px);
   object-fit: contain;
   opacity: 0;
-  transition: opacity var(--icon-swap-dur, 130ms) var(--icon-swap-ease, ease-in-out);
+  transition: opacity var(--icon-swap-dur, 220ms) var(--icon-swap-ease, cubic-bezier(0.2, 0.8, 0.2, 1));
 }
 
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-favicon[data-ready="true"] {
@@ -1544,14 +1551,14 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
   width: calc(var(--icon-shell-size) * 0.76);
   height: calc(var(--icon-shell-size) * 0.76);
   place-items: center;
-  border-radius: 7px;
+  border-radius: var(--ds-radius-xs, 4px);
   background: rgba(245, 245, 247, 0.09);
   color: rgba(245, 245, 247, 0.88);
   font-size: 13px;
   font-weight: 800;
   line-height: 1;
   opacity: 1;
-  transition: opacity var(--icon-swap-dur, 130ms) var(--icon-swap-ease, ease-in-out);
+  transition: opacity var(--icon-swap-dur, 220ms) var(--icon-swap-ease, cubic-bezier(0.2, 0.8, 0.2, 1));
 }
 
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-fallback[data-hidden="true"] {

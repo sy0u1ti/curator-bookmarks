@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { Button } from '../../ui/base/Button'
 import { Input } from '../../ui/base/Input'
 import { Select, type SelectOption } from '../../ui/base/Select'
@@ -30,6 +31,8 @@ const AI_RESULTS_FILTER_CLEAR_CLASS =
 
 export function AiAnalysisResultsFilter() {
   const state = useAiAnalysisResultsFilter()
+  const inputRef = useRef<HTMLInputElement>(null)
+  if (!state.visible) return null
 
   return (
     <div className={AI_RESULTS_FILTER_ROW_CLASS}>
@@ -38,6 +41,7 @@ export function AiAnalysisResultsFilter() {
           <span className={AI_RESULTS_FILTER_LABEL_CLASS}>文件夹或域名</span>
           <Input
             id="ai-analysis-results-filter-query"
+            ref={inputRef}
             className={AI_RESULTS_FILTER_QUERY_CLASS}
             type="search"
             spellCheck={false}
@@ -65,18 +69,19 @@ export function AiAnalysisResultsFilter() {
             value: value || 'all'
           })}
         />
-        <Button
+        {!state.clearDisabled ? <Button
           className={AI_RESULTS_FILTER_CLEAR_CLASS}
           size="sm"
           type="button"
           variant="secondary"
           aria-label="清空书签智能分析筛选条件"
-          disabled={state.clearDisabled}
-          focusableWhenDisabled={state.clearDisabled}
-          onClick={() => handleAiResultsFilterChange({ action: 'clear' })}
+          onClick={() => {
+            inputRef.current?.focus()
+            handleAiResultsFilterChange({ action: 'clear' })
+          }}
         >
           清空筛选
-        </Button>
+        </Button> : null}
       </div>
     </div>
   )

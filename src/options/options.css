@@ -55,34 +55,70 @@ body,
   --ui-focus-ring: var(--ds-focus);
 }
 
-/* Selection does not travel: the highlight is placed on the active row at once
-   and the copy on the previous row dissolves where it stood, so the handoff
-   reads as one highlight re-forming rather than a shape drifting across the
-   sidebar. Geometry is written without a transition; only the surface tone and
-   the handoff opacity ride the tokens. */
-.options-nav-active-indicator[data-ready="true"] {
+.options-sidebar {
+  --options-nav-selection-fill: color-mix(in srgb, var(--ds-text-primary) 9%, transparent);
+  --options-nav-selection-rim: color-mix(in srgb, var(--ds-text-primary) 8%, transparent);
+  --options-nav-selection-shadow: color-mix(in srgb, var(--ds-bg-page) 30%, transparent);
+}
+
+/* Magpie's relief is a translucent fill, a half-pixel top edge and a tiny
+   shadow, not a full outline or a blur filter on the text. */
+.options-nav-selection {
+  background: var(--options-nav-selection-fill);
+  box-shadow:
+    inset 0 0.5px 0 var(--options-nav-selection-rim),
+    0 1px 2px var(--options-nav-selection-shadow);
+}
+
+.options-nav-active-indicator[data-moving] {
+  will-change: transform;
+}
+
+.options-nav-sub-indicator[data-ready="true"] {
+  transition: transform var(--nav-select-dur) var(--nav-select-ease);
+}
+
+.options-nav-label {
+  color: var(--ds-text-secondary);
+}
+
+:is(.options-nav-link[aria-current="page"], .options-nav-trigger[data-active], .options-nav-link:focus-visible, .options-nav-trigger:focus-visible) :is(.options-nav-label, .options-nav-icon) {
+  color: var(--ds-text-primary);
+}
+
+.options-nav-disclosure {
+  --acc-expand: var(--nav-expand-dur);
+  --acc-collapse: var(--nav-collapse-dur);
+  --acc-chevron: var(--nav-select-dur);
+}
+
+.options-nav-disclosure .t-acc-panel .options-nav-content {
+  opacity: 0;
+  transform: translateY(calc(-1 * var(--acc-content-offset)));
   transition:
-    background-color var(--ds-motion-fast) var(--ds-ease-standard),
-    box-shadow var(--ds-motion-fast) var(--ds-ease-standard),
-    opacity var(--nav-select-dur) var(--nav-select-ease);
+    opacity var(--acc-fade-out) var(--ds-ease-standard),
+    transform var(--acc-collapse) var(--acc-ease);
 }
 
-.options-nav-active-indicator-exit {
-  transition: opacity var(--nav-select-dur) var(--nav-select-ease);
+.options-nav-disclosure .t-acc-panel[data-open]:not([data-starting-style], [data-ending-style]) .options-nav-content {
+  opacity: 1;
+  transform: none;
+  transition-duration: var(--nav-item-dur);
+  transition-delay: calc(var(--nav-content-delay) + min(var(--nav-item-index), 5) * var(--duration-stagger));
 }
 
-.options-nav-active-indicator::before,
-.options-nav-active-indicator-exit::before {
-  position: absolute;
-  top: 50%;
-  left: 4px;
-  width: 2px;
-  height: 16px;
-  border-radius: var(--ds-radius-full);
-  background: var(--ds-text-primary);
-  content: "";
-  opacity: 0.82;
-  transform: translateY(-50%);
+.options-sidebar:not([data-motion-ready]) :is(.t-acc-panel, .t-acc-panel-inner, .options-nav-content) {
+  transition: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  /* Native text colour preserves glyph edges. Each row owns its hover;
+     leaving it restores its ink instead of chasing the pointer on another row. */
+  .options-nav-link:hover .options-nav-label,
+  .options-nav-trigger:hover .options-nav-label {
+    color: var(--ds-text-primary);
+    transition: color var(--ds-motion-fast) var(--ds-ease-standard);
+  }
 }
 
 .options-brand:focus-visible {
@@ -99,6 +135,7 @@ body,
 .options-main-scroll,
 .options-shell aside,
 .options-mobile-sidebar {
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: var(--ds-border-hover) transparent;
 }
@@ -170,14 +207,6 @@ body,
     color: var(--ds-text-primary);
   }
 
-  .options-sidebar:has(.options-nav-link[aria-current="page"]:hover) > .options-nav-active-indicator {
-    background: var(--ds-active);
-  }
-
-  .options-nav-link:hover > span > svg {
-    transform: translateX(1px);
-  }
-
   .options-shell .curator-button:not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active {
     scale: 1;
     transform: scale(var(--control-press-scale, var(--ds-press-scale)));
@@ -208,18 +237,6 @@ body,
   outline: none;
 }
 
-.options-shell :where(
-  button,
-  a[href],
-  [role="button"],
-  [role="option"],
-  [role="treeitem"]
-):not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active,
-.options-modal-panel :where(button, a[href]):not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active {
-  opacity: 0.92;
-  transition-duration: var(--ds-motion-feedback) !important;
-}
-
 .options-shell .curator-button:is(:disabled, [data-disabled]) {
   border-color: var(--ds-border);
   background: var(--ds-surface-2);
@@ -228,19 +245,8 @@ body,
 }
 
 .options-settings-ready-body {
-  animation: options-settings-content-reveal var(--duration-quick) var(--ds-ease-standard) both;
-}
-
-@keyframes options-settings-content-reveal {
-  from {
-    opacity: 0.72;
-    transform: translate3d(0, 2px, 0);
-  }
-
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
+  /* Hydration and refresh replace values in place, not the section's position. */
+  opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -253,6 +259,91 @@ body,
 .options-stable-number :where(.t-number, .t-number-value) {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
+}
+
+.options-selection-dock {
+  position: fixed;
+  z-index: 20;
+  max-height: min(40dvh, 144px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: var(--ds-stroke-width) solid var(--ds-border);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-surface-2);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3);
+}
+
+.options-selection-dock > * {
+  margin: 0;
+  padding: calc(var(--ds-inset-card) - var(--ds-stroke-width));
+  border: 0;
+  background: transparent;
+  filter: none;
+}
+
+.options-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.options-selection-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.options-selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .options-selection-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .options-selection-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.options-run-secondary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.options-run-action-slot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.options-run-action-slot > * {
+  grid-area: 1 / 1;
+}
+
+.options-run-action-slot button {
+  width: 100%;
+  height: 40px;
+}
+
+.options-run-secondary-actions > button {
+  min-width: 0;
+}
+
+/* Space exists before selection, so even the last row can clear the action dock. */
+#options-main:has(:is(#ai, #availability, #duplicates, #recycle, #redirects)) {
+  padding-bottom: min(40dvh, 176px);
+  scroll-padding-block: 24px min(40dvh, 176px);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -300,15 +391,21 @@ body,
     transition: opacity 80ms linear !important;
   }
 
-  .options-nav-active-indicator[data-ready="true"],
-  .options-nav-active-indicator-exit {
-    transition-property: background-color, box-shadow, opacity !important;
-    transition-duration: 80ms !important;
-    transition-timing-function: linear !important;
+  .options-nav-sub-indicator[data-ready="true"] {
+    transition: none !important;
+  }
+
+  .options-nav-disclosure .options-nav-content {
+    transform: none;
+    transition: none !important;
   }
 }
 
 @media (prefers-reduced-transparency: reduce) {
+  .options-sidebar {
+    --options-nav-selection-fill: var(--ds-surface-2);
+  }
+
   .options-modal-backdrop,
   .options-mobile-nav-backdrop {
     background: rgba(0, 0, 0, 0.92) !important;
@@ -330,6 +427,11 @@ body,
 }
 
 @media (prefers-contrast: more) {
+  .options-nav-selection {
+    outline: 1px solid var(--ds-border-hover);
+    outline-offset: -1px;
+  }
+
   #options-root,
   .options-modal-panel {
     --ds-selected: rgba(245, 245, 247, 0.2);
@@ -355,7 +457,7 @@ body,
 
 .reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-row,
 .reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-action-wrap {
-  animation: reasoning-selector-row-in var(--duration-fast) var(--ease-smooth-out) backwards;
+  animation: reasoning-selector-row-in var(--ds-motion-standard) var(--ds-ease-settle) backwards;
 }
 
 .reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-row:nth-child(2) {

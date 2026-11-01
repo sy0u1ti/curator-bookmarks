@@ -3,8 +3,10 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -22,7 +24,12 @@ import { cx } from '../../ui/base/utils'
 import { getMotionDurationMs, prefersReducedMotion } from '../../shared/motion'
 import { HighlightedText } from '../../ui/base/HighlightedText'
 import { PopupEmptyState } from './PopupEmptyState'
-import { getActiveResultRevealScrollTop } from '../popup-active-result-scroll'
+import { getPopupVirtualRange, getPopupHeldRange, includePopupVirtualSelection, POPUP_VIRTUAL_OVERSCAN } from '../popup-virtual-window'
+import {
+  subscribeNoPopupNavigation,
+  usePopupNavigationStore,
+  usePopupRowNavigation
+} from '../popup-navigation-view-store'
 import { getPopupBookmarkReorderTargetIndex } from '../popup-bookmark-reorder'
 import {
   getPopupBookmarkDomain,
@@ -62,10 +69,10 @@ export interface PopupContentActionHandlers {
   onFolderFilterChange?: (value: string) => void
   onFolderFilterClear?: () => void
   onFolderFilterEscape?: () => void
-  onFolderFilterMove?: (delta: number, exitOnEmpty?: boolean) => void
+  onFolderFilterMove?: (delta: number, exitOnEmpty?: boolean, repeat?: boolean) => void
   onFolderFilter?: (folderId: string) => void
   onFolderFocus?: (index: number) => void
-  onKeyboardNavigate?: (key: string) => boolean
+  onKeyboardNavigate?: (key: string, repeat?: boolean) => boolean
   onMenuAction?: (bookmarkId: string, action: string, returnFocusElement?: HTMLElement | null) => void
   onBookmarkReorder?: (bookmarkId: string, index: number) => void
   onReorderModeChange?: (active: boolean) => void
@@ -106,10 +113,10 @@ const workspaceContentLayerClass = cx(
 )
 const workspaceContentLoadingClass = 'pointer-events-none'
 const workspaceClass =
-  'popup-workspace relative grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2 max-[620px]:grid-cols-[minmax(0,1fr)] max-[620px]:grid-rows-[minmax(108px,36%)_minmax(0,1fr)]'
+  'popup-workspace relative grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2 @max-[620px]/popup:grid-cols-[minmax(0,1fr)] @max-[620px]/popup:grid-rows-[minmax(108px,36%)_minmax(0,1fr)]'
 const workspacePlaceholderClass = 'pointer-events-none'
 const paneClass =
-  'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-ds-md border-0 bg-ds-surface-1'
+  'popup-surface flex min-h-0 min-w-0 flex-col overflow-hidden border-0 bg-ds-surface-1'
 const mainPaneClass = cx(paneClass, 'popup-main-pane bg-ds-surface-1')
 const paneHeaderClass =
   'flex min-h-[42px] flex-none items-center justify-between gap-2.5 border-b border-ds-border px-[13px] text-xs font-semibold text-ds-text-primary'
@@ -123,14 +130,14 @@ const paneHeaderActionClass = [
   'active:scale-[var(--ds-press-scale)] disabled:cursor-default disabled:opacity-40'
 ].join(' ')
 const folderTreeClass =
-  'popup-folder-tree min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-[6px_5px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
+  'popup-folder-tree min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const mainListClass =
-  'popup-main-list relative m-0 min-h-0 flex-1 list-none overflow-x-hidden overflow-y-auto p-[8px_9px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
+  'popup-main-list relative m-0 min-h-0 flex-1 list-none overflow-x-hidden overflow-y-auto p-2 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 // The filter lives in the existing 42px pane header, so it adds no height and
 // no new pane. Geometry matches the folder rows' 34px rhythm, not the 40px
 // main search shell, which would make the header grow.
 const folderFilterShellClass = [
-  'popup-folder-filter group/filter relative flex h-[26px] min-h-[26px] w-full min-w-0 items-center gap-1 rounded-ds-sm border border-transparent bg-ds-text-primary/[0.055] pl-2 pr-1 text-ds-text-primary',
+  'popup-folder-filter group/filter relative flex h-[26px] min-h-[26px] w-full min-w-0 items-center gap-1 rounded-ds-sm border border-transparent bg-ds-text-primary/[0.055] ds-inset-menu pl-2 text-ds-text-primary',
   'transition-[background-color,border-color,box-shadow] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border hover:bg-ds-text-primary/[0.085]',
   'focus-within:border-ds-border-hover focus-within:bg-ds-text-primary/[0.085] focus-within:[outline:3px_solid_rgba(245,245,247,0.14)] focus-within:outline-offset-0'
@@ -140,7 +147,7 @@ const folderFilterIconClass =
 const folderFilterInputClass =
   'min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-xs font-medium leading-[1.3] text-ds-text-primary outline-none placeholder:font-normal placeholder:text-ds-text-muted [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
 const folderFilterClearClass = [
-  'inline-flex h-[18px] w-[18px] flex-none items-center justify-center rounded-md border-0 bg-transparent p-0 text-ds-text-muted',
+  'inline-flex h-[18px] w-[18px] flex-none items-center justify-center rounded-ds-xs border-0 bg-transparent p-0 text-ds-text-muted',
   'transition-[background-color,color,opacity,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-active hover:text-ds-text-primary focus-visible:bg-ds-active focus-visible:text-ds-text-primary focus-visible:outline-none',
   'active:scale-[var(--ds-press-scale)]',
@@ -149,21 +156,20 @@ const folderFilterClearClass = [
 const folderFilterEmptyClass =
   'grid place-items-center rounded-ds-sm px-3 py-6 text-center text-xs leading-[1.55] text-ds-text-muted'
 const mainRowClass =
-  'popup-main-row relative z-[1] grid min-h-[var(--popup-bookmark-row-height)] grid-cols-[minmax(0,1fr)] items-center border-t border-[rgba(38,40,46,0.72)] py-1 first:border-t-0'
+  'popup-main-row relative z-[1] grid min-h-[var(--popup-bookmark-row-height)] grid-cols-[minmax(0,1fr)] items-center border-t border-[rgba(38,40,46,0.72)] py-1'
 const virtualSpacerClass = 'pointer-events-none block w-full'
 const POPUP_FOLDER_ROW_HEIGHT = 34
-const POPUP_VIRTUAL_OVERSCAN = 8
 const POPUP_VIRTUALIZATION_THRESHOLD = 24
 const activeResultIndicatorClass = 'popup-active-result-indicator'
 const folderCardDimmedClass = 'opacity-55 hover:opacity-100 focus-visible:opacity-100'
 const rootFolderBranchClass = 'rounded-full border border-white/30'
 const listButtonClass = [
-  'popup-list-button flex min-h-12 w-full min-w-0 items-center gap-2.5 rounded-md border border-transparent bg-transparent text-left text-ds-text-primary outline-none',
+  'popup-list-button flex min-h-12 w-full min-w-0 items-center gap-2.5 rounded-ds-sm border border-transparent bg-transparent text-left text-ds-text-primary outline-none',
   'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
 ].join(' ')
 const listButtonBaseStyle: CSSProperties = {
-  padding: '6px var(--popup-row-copy-rest-inset) 6px 13px'
+  padding: '6px var(--popup-row-copy-rest-inset) 6px calc(var(--popup-row-label-inset) - var(--ds-stroke-width))'
 }
 const rowMainClass = 'popup-row-copy grid w-full min-w-0 gap-0.5'
 const rowTitleClass =
@@ -178,7 +184,7 @@ const resultMatchReasonsClass = 'min-w-0 truncate text-xs font-medium leading-[1
 const rowActionsClass = 'popup-row-actions'
 const rowActionRailClass = 'popup-row-actions-menu'
 const rowActionButtonClass = [
-  'inline-flex h-7 w-7 flex-none items-center justify-center rounded-md border-0 bg-ds-surface-3 text-ds-text-primary outline-none',
+  'inline-flex h-7 w-7 flex-none items-center justify-center rounded-ds-sm border-0 bg-ds-surface-3 text-ds-text-primary outline-none',
   'transition-[background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-surface-3 focus-visible:bg-ds-surface-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)] disabled:cursor-default disabled:opacity-45'
@@ -203,7 +209,7 @@ const skeletonBarClass = cx(
 )
 const skeletonTextBarClass = cx(skeletonBarBaseClass, 'block max-w-full')
 const skeletonDotClass =
-  'popup-skeleton-pulse block h-7 w-7 rounded-md bg-[rgba(255,255,255,0.065)]'
+  'popup-skeleton-pulse block h-7 w-7 rounded-ds-sm bg-[rgba(255,255,255,0.065)]'
 const skeletonFolderTitleClass = cx(skeletonBarClass, 'min-w-[54px]')
 const skeletonFolderCountClass =
   cx(skeletonBarClass, 'max-w-[30px] min-w-4 justify-self-end')
@@ -214,7 +220,7 @@ const skeletonBookmarkTitleLineClass = cx(rowTitleClass, 'flex h-4 items-center'
 const skeletonBookmarkSubtitleLineClass = cx(rowSubtitleClass, 'flex h-[15px] items-center')
 const skeletonActionButtonClass = skeletonDotClass
 const searchSkeletonClass = 'grid w-[min(100%,390px)] gap-3 self-stretch'
-const searchSkeletonRowClass = 'grid gap-2 rounded-md bg-ds-text-primary/[0.018] px-[9px] py-2'
+const searchSkeletonRowClass = 'grid gap-2 rounded-ds-sm bg-ds-text-primary/[0.018] px-[9px] py-2'
 const POPUP_REORDER_MOUSE_THRESHOLD_PX = 6
 const POPUP_REORDER_TOUCH_CANCEL_THRESHOLD_PX = 10
 const POPUP_REORDER_LONG_PRESS_MS = 320
@@ -279,7 +285,7 @@ function usePopupBookmarkReorderDrag({
 }: {
   active: boolean
   busy: boolean
-  mainListRef?: RefObject<HTMLUListElement | null>
+  mainListRef?: RefObject<HTMLDivElement | null>
   onCommit?: (bookmarkId: string, index: number) => void
   rowCount: number
 }) {
@@ -647,11 +653,23 @@ function PopupFolderPane({
 }) {
   const sidePanel = isSidePanelSurface()
   const [collapsed, setCollapsed] = useState(false)
+  const navigation = usePopupNavigationStore()
+  const getClosedSelection = useCallback(() => collapsed && navigation
+    ? (navigation.getSnapshot().state.activeFolderIndex ?? -1) : -1, [collapsed, navigation])
+  useSyncExternalStore(navigation?.subscribe || subscribeNoPopupNavigation, getClosedSelection, getClosedSelection)
+  const currentIndex = navigation?.getSnapshot().state.activeFolderIndex ?? activeIndex
+  const previousActiveIndexRef = useRef(activeIndex)
   useLayoutEffect(() => {
-    if (activeIndex >= 0) setCollapsed(false)
-  }, [activeIndex])
+    // Only navigation into a closed tree opens it. Publishing false on every
+    // repeat creates redundant commits even though the tree is already open.
+    if (previousActiveIndexRef.current !== currentIndex && currentIndex >= 0 && collapsed) setCollapsed(false)
+    previousActiveIndexRef.current = currentIndex
+  }, [currentIndex, collapsed])
   return (
-    <aside className={paneClass} aria-label="文件夹树">
+    <aside className={paneClass} aria-label="文件夹树" onKeyDownCapture={event => {
+      if (collapsed && !event.altKey && !event.ctrlKey && !event.metaKey &&
+        (event.key === 'ArrowDown' || event.key === 'ArrowUp')) setCollapsed(false)
+    }}>
       <header className={paneHeaderClass}>
         <span className="shrink-0">全部文件夹</span>
         <PopupFolderFilterField filter={filter} handlers={handlers} />
@@ -662,7 +680,10 @@ function PopupFolderPane({
         </span>
         {sidePanel && (
           <Button size="sm" variant="ghost" aria-label={collapsed ? '展开文件夹列表' : '收起文件夹列表'}
-            aria-expanded={!collapsed} aria-controls="sidepanel-folder-tree" onClick={() => setCollapsed(value => !value)}>
+            aria-expanded={!collapsed} aria-controls="sidepanel-folder-tree" onClick={() => {
+              previousActiveIndexRef.current = navigation?.getSnapshot().state.activeFolderIndex ?? activeIndex
+              setCollapsed(value => !value)
+            }}>
             <Icon name="ChevronDown" className={collapsed ? 'sidepanel-folder-chevron' : 'sidepanel-folder-chevron rotate-180'} size={14} />
           </Button>
         )}
@@ -741,7 +762,7 @@ function PopupFolderFilterField({
           if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
             event.preventDefault()
             event.stopPropagation()
-            handlers?.onFolderFilterMove?.(event.key === 'ArrowDown' ? 1 : -1, !query)
+            handlers?.onFolderFilterMove?.(event.key === 'ArrowDown' ? 1 : -1, !query, event.repeat)
             return
           }
           if (event.key === 'Enter') {
@@ -788,6 +809,8 @@ export function PopupContent({
   handlers,
   mainListRef,
   onRowsLayout,
+  revealActiveRow = true,
+  heldDirection = 0,
   state
 }: {
   activeResultIndicatorRef?: RefObject<HTMLDivElement | null>
@@ -796,10 +819,14 @@ export function PopupContent({
   folderTreeRef?: RefObject<HTMLDivElement | null>
   workspaceRef?: RefObject<HTMLDivElement | null>
   handlers?: PopupContentActionHandlers
-  mainListRef?: RefObject<HTMLUListElement | null>
+  mainListRef?: RefObject<HTMLDivElement | null>
   onRowsLayout?: () => void
+  revealActiveRow?: boolean
+  heldDirection?: -1 | 0 | 1
   state: PopupContentViewModel
 }) {
+  const navigation = usePopupNavigationStore()
+  const selection = navigation?.getSnapshot().state
   const sidebarRows = state.sidebarRows || state.rows.filter((row): row is PopupContentFolderRowViewModel => row.kind === 'folder')
   const mainRows = state.mainRows || state.rows.filter((row): row is PopupContentMainRowViewModel => row.kind !== 'folder')
   const mode = state.mode || (mainRows.some((row) => row.kind === 'result') ? 'search' : 'tree')
@@ -815,24 +842,38 @@ export function PopupContent({
     onCommit: handlers?.onBookmarkReorder,
     rowCount: mainRows.length
   })
-  const activeMainIndex = mainRows.findIndex((row) => row.active)
-  const activeFolderIndex = sidebarRows.findIndex((row) => row.keyboardActive)
+  const activeMainIndex = selection?.activeResultIndex ?? state.activeResultIndex ?? mainRows.findIndex((row) => row.active)
+  const activeFolderIndex = selection?.activeFolderIndex ?? state.activeFolderIndex ?? sidebarRows.findIndex((row) => row.keyboardActive)
+  const mainWindowed = mode === 'tree' && !state.mainState && mainRows.length > POPUP_VIRTUALIZATION_THRESHOLD
+  const foldersWindowed = sidebarRows.length > POPUP_VIRTUALIZATION_THRESHOLD
   const mainWindow = useFixedRowWindow({
+    pane: 'bookmarks',
     activeIndex: activeMainIndex,
+    revealVersion: state,
+    revealActiveRow,
+    heldDirection: state.keyboardPane === 'folders' ? 0 : heldDirection,
     containerRef: mainListRef,
-    enabled: mode === 'tree' && !state.mainState && mainRows.length > POPUP_VIRTUALIZATION_THRESHOLD,
+    enabled: mainWindowed,
     rowCount: mainRows.length,
     rowHeight: POPUP_BOOKMARK_ROW_HEIGHT
   })
   const folderWindow = useFixedRowWindow({
+    pane: 'folders',
     activeIndex: activeFolderIndex,
+    revealVersion: state,
+    revealActiveRow,
+    heldDirection: state.keyboardPane === 'folders' ? heldDirection : 0,
     containerRef: folderTreeRef,
-    enabled: sidebarRows.length > POPUP_VIRTUALIZATION_THRESHOLD,
+    enabled: foldersWindowed,
     rowCount: sidebarRows.length,
     rowHeight: POPUP_FOLDER_ROW_HEIGHT
   })
-  const visibleSidebarRows = sidebarRows.slice(folderWindow.start, folderWindow.end)
-  const visibleMainRows = mainRows.slice(mainWindow.start, mainWindow.end)
+  const visibleSidebarRows = useMemo(() => sidebarRows.slice(folderWindow.start, folderWindow.end).map(row =>
+    navigation || Boolean(row.keyboardActive) === (row.index === activeFolderIndex) ? row : { ...row, keyboardActive: row.index === activeFolderIndex }),
+  [activeFolderIndex, folderWindow.end, folderWindow.start, navigation, sidebarRows])
+  const visibleMainRows = useMemo(() => mainRows.slice(mainWindow.start, mainWindow.end).map(row =>
+    navigation || Boolean(row.active) === (row.index === activeMainIndex) ? row : { ...row, active: row.index === activeMainIndex }),
+  [activeMainIndex, mainRows, mainWindow.end, mainWindow.start, navigation])
 
   useLayoutEffect(() => {
     // Scroll listeners run before a virtual window commits. Reconnect the
@@ -869,15 +910,17 @@ export function PopupContent({
                   aria-hidden="true"
                 />
               ) : null}
+              <div className="popup-row-layer" role="presentation">
               {visibleSidebarRows.map((row) => (
                 <MemoPopupFolderRow
-                  activeFolderRef={row.keyboardActive ? activeFolderRef : undefined}
+                  activeFolderRef={activeFolderRef}
                   handlers={handlers}
                   onFolderFilter={handlers?.onFolderFilter}
                   row={row}
                   key={`folder:${row.folderId}`}
                 />
               ))}
+              </div>
               {folderWindow.after > 0 ? (
                 <div
                   className={virtualSpacerClass}
@@ -923,25 +966,29 @@ export function PopupContent({
                 </Button>
               ) : null}
             </header>
-            <ul
+            <div
               id="popup-search-results"
+              role="list"
               {...getPopupSearchGridAria(mode, mainRows.length, Boolean(state.mainState))}
               className={mainListClass}
               ref={mainListRef}
               aria-label={mode === 'search' ? '书签搜索结果' : reorderActive ? `${state.reorder?.folderTitle || '当前文件夹'}直属书签排序` : undefined}
             >
               {state.mainState ? (
-                <PopupMainStatePanel onEmptyAction={handlers?.onEmptyAction} state={state.mainState} />
+                <ul className="m-0 list-none p-0" role="presentation">
+                  <PopupMainStatePanel onEmptyAction={handlers?.onEmptyAction} state={state.mainState} />
+                </ul>
               ) : mainRows.length ? (
                 <>
                   {mainWindow.before > 0 ? (
-                    <li
+                    <div
                       className={virtualSpacerClass}
                       style={{ height: `${mainWindow.before}px` }}
                       role="presentation"
                       aria-hidden="true"
                     />
                   ) : null}
+                  <ul className="popup-row-layer m-0 list-none p-0" role="presentation">
                   {visibleMainRows.map((row) => {
                     if (row.kind === 'bookmark') {
                       return (
@@ -950,15 +997,17 @@ export function PopupContent({
                           handlers={handlers}
                           reorder={reorderActive ? reorderDrag.getRowProps(row) : undefined}
                           scopeFolderId={state.reorder?.folderId}
+                          deferActions={Boolean(heldDirection && row.active)}
                           row={row}
                           key={`bookmark:${row.bookmarkId}`}
                         />
                       )
                     }
-                    return <MemoPopupSearchResultRow activeResultRef={activeResultRef} handlers={handlers} row={row} key={`result:${row.bookmarkId}:${row.index}`} />
+                    return <MemoPopupSearchResultRow activeResultRef={activeResultRef} handlers={handlers} deferActions={Boolean(heldDirection && row.active)} row={row} key={`result:${row.bookmarkId}:${row.index}`} />
                   })}
+                  </ul>
                   {mainWindow.after > 0 ? (
-                    <li
+                    <div
                       className={virtualSpacerClass}
                       style={{ height: `${mainWindow.after}px` }}
                       role="presentation"
@@ -967,9 +1016,11 @@ export function PopupContent({
                   ) : null}
                 </>
               ) : (
-                <li className={compactStateClass}>{state.emptyLabel || '暂无可展示书签'}</li>
+                <ul className="m-0 list-none p-0" role="presentation">
+                  <li className={compactStateClass}>{state.emptyLabel || '暂无可展示书签'}</li>
+                </ul>
               )}
-            </ul>
+            </div>
             {reorderActive ? (
               <p className="sr-only" aria-live="polite" aria-atomic="true">
                 {state.reorder?.announcement}
@@ -979,6 +1030,7 @@ export function PopupContent({
           {/* Workspace-level indicator — slides freely across both panes */}
           <div
             className={activeResultIndicatorClass}
+            data-motion-keyboard="preserve"
             aria-hidden="true"
             ref={activeResultIndicatorRef}
             role="presentation"
@@ -989,6 +1041,8 @@ export function PopupContent({
     </div>
   )
 }
+
+export const MemoPopupContent = memo(PopupContent)
 
 function usePopupScrollLayer(loading: boolean): RefObject<HTMLDivElement | null> {
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -1031,52 +1085,94 @@ interface FixedRowWindow {
 }
 
 function useFixedRowWindow({
+  pane,
   activeIndex,
+  revealVersion,
+  revealActiveRow,
+  heldDirection,
   containerRef,
   enabled,
   rowCount,
   rowHeight
 }: {
+  pane: 'bookmarks' | 'folders'
   activeIndex: number
+  revealVersion: PopupContentViewModel
+  revealActiveRow: boolean
+  heldDirection: -1 | 0 | 1
   containerRef?: RefObject<HTMLElement | null>
   enabled: boolean
   rowCount: number
   rowHeight: number
 }): FixedRowWindow {
+  const navigation = usePopupNavigationStore()
   // Scroll pixels are not render state. Only publish a new window when rows
   // enter or leave the overscan; both panes share this component.
   const [rowWindow, setRowWindow] = useState({ start: 0, count: 8 + POPUP_VIRTUAL_OVERSCAN * 2 })
   const windowRef = useRef(rowWindow)
+  const heldDirectionRef = useRef(heldDirection)
+  const revealedVersionRef = useRef<PopupContentViewModel | null>(null)
+  const viewportRef = useRef({ height: rowHeight * 8, paddingTop: 0 })
   // Rows are adjacent (no gap), so the first painted row's height is the true
   // pitch. Measuring it keeps the spacers exact when a larger browser font
   // size or a wrapped title makes rows taller than the design constant.
   const [measuredPitch, setMeasuredPitch] = useState(0)
+  const measuredPitchRef = useRef(0)
   const pitch = measuredPitch > 0 ? measuredPitch : rowHeight
+  const consumedNavigationRef = useRef<ReturnType<NonNullable<typeof navigation>['getSnapshot']> | null>(null)
+  const getNavigationRange = useCallback(() => {
+    if (!navigation || !enabled) return null
+    const snapshot = navigation.getSnapshot()
+    if (consumedNavigationRef.current !== snapshot) {
+      consumedNavigationRef.current = snapshot
+      const selectedIndex = pane === 'folders' ? snapshot.state.activeFolderIndex : snapshot.state.activeResultIndex
+      const direction = snapshot.navigation === 'repeat' && (snapshot.state.keyboardPane || 'bookmarks') === pane
+        ? snapshot.direction || 0 : 0
+      heldDirectionRef.current = direction
+      const current = windowRef.current
+      const next = direction && selectedIndex !== undefined && selectedIndex >= 0
+        ? getPopupHeldRange({
+            activeIndex: selectedIndex, direction, rowCount, pitch, previous: current,
+            viewportHeight: viewportRef.current.height, paddingTop: viewportRef.current.paddingTop
+          })
+        : !snapshot.preserveScroll && selectedIndex !== undefined
+          ? includePopupVirtualSelection(current, selectedIndex, rowCount) : current
+      if (current.start !== next.start || current.count !== next.count) windowRef.current = next
+    }
+    // A stable range snapshot lets React skip the entire list on most repeats.
+    const start = Math.min(windowRef.current.start, Math.max(0, rowCount - windowRef.current.count))
+    if (start !== windowRef.current.start) windowRef.current = { ...windowRef.current, start }
+    return windowRef.current
+  }, [enabled, navigation, pane, pitch, rowCount])
+  const navigationRange = useSyncExternalStore(
+    navigation?.subscribe || subscribeNoPopupNavigation, getNavigationRange, getNavigationRange
+  )
+  useLayoutEffect(() => { heldDirectionRef.current = heldDirection }, [heldDirection])
   const measureRowPitch = useCallback(() => {
     const container = containerRef?.current
     if (!container) return null
-    let row: HTMLElement | null = null
-    for (const child of container.children) {
-      if (child instanceof HTMLElement && child.getAttribute('aria-hidden') !== 'true') { row = child; break }
-    }
+    const row = container.querySelector<HTMLElement>('[data-popup-row-index]')
     if (!row) return null
     const height = Math.round(row.getBoundingClientRect().height)
-    if (height > 0) setMeasuredPitch(current => (current === height ? current : height))
+    if (height > 0 && height !== measuredPitchRef.current) {
+      measuredPitchRef.current = height
+      setMeasuredPitch(height)
+    }
     return row
   }, [containerRef])
   const measureViewport = useCallback(() => {
     const container = containerRef?.current
     if (!container) return
-    const height = container.clientHeight || pitch * 8
-    const count = Math.ceil(height / pitch) + POPUP_VIRTUAL_OVERSCAN * 2
-    const next = {
-      count,
-      start: Math.min(
-        Math.max(0, rowCount - count + POPUP_VIRTUAL_OVERSCAN),
-        Math.max(0, Math.floor(container.scrollTop / pitch) - POPUP_VIRTUAL_OVERSCAN)
-      )
-    }
+    if (heldDirectionRef.current) return
     const current = windowRef.current
+    const next = getPopupVirtualRange({
+      previous: current,
+      rowCount,
+      pitch,
+      scrollTop: container.scrollTop,
+      viewportHeight: viewportRef.current.height,
+      paddingTop: viewportRef.current.paddingTop
+    })
     if (current.start === next.start && current.count === next.count) return
     windowRef.current = next
     setRowWindow(next)
@@ -1087,44 +1183,65 @@ function useFixedRowWindow({
     const container = containerRef?.current
     if (!container) return
 
-    measureRowPitch()
-    measureViewport()
+    const resize = () => {
+      viewportRef.current = {
+        height: container.clientHeight || pitch * 8,
+        paddingTop: Number.parseFloat(getComputedStyle(container).paddingTop) || 0
+      }
+      measureRowPitch()
+      measureViewport()
+    }
+    resize()
     container.addEventListener('scroll', measureViewport, { passive: true })
     const observer = typeof ResizeObserver === 'undefined'
       ? null
-      : new ResizeObserver(measureViewport)
+      : new ResizeObserver(resize)
     observer?.observe(container)
     return () => {
       container.removeEventListener('scroll', measureViewport)
       observer?.disconnect()
     }
-  }, [containerRef, enabled, measureRowPitch, measureViewport, rowCount])
-
-  // The window changes swap which row is first; re-measure from the new one so
-  // a font-size change is picked up even without a container resize.
-  useLayoutEffect(() => {
-    if (!enabled) return
-    measureRowPitch()
-  }, [enabled, measureRowPitch, rowWindow.count, rowWindow.start])
+  }, [containerRef, enabled, measureRowPitch, measureViewport, pitch, rowCount])
 
   useLayoutEffect(() => {
-    if (!enabled || activeIndex < 0) return
+    if (enabled && !heldDirection) measureViewport()
+  }, [enabled, heldDirection, measureViewport])
+
+  const clampedRange = {
+    start: Math.min(windowRef.current.start, Math.max(0, rowCount - windowRef.current.count)),
+    count: windowRef.current.count
+  }
+  const range = navigationRange || (heldDirection && activeIndex >= 0
+    ? getPopupHeldRange({ activeIndex, direction: heldDirection, rowCount, pitch,
+        viewportHeight: viewportRef.current.height, paddingTop: viewportRef.current.paddingTop, previous: clampedRange })
+    : revealActiveRow && revealedVersionRef.current !== revealVersion
+      ? includePopupVirtualSelection(clampedRange, activeIndex, rowCount)
+      : clampedRange)
+
+  useLayoutEffect(() => {
     const container = containerRef?.current
-    if (!container) return
-    const paddingTop = Number.parseFloat(getComputedStyle(container).paddingTop) || 0
-    const viewportStart = container.scrollTop
-    const nextScrollTop = getActiveResultRevealScrollTop({
-      itemHeight: pitch,
-      itemTop: paddingTop + activeIndex * pitch,
-      maxScrollTop: Math.max(0, container.scrollHeight - container.clientHeight),
-      viewportHeight: container.clientHeight,
-      viewportTop: viewportStart
+    if (!enabled || heldDirection || !container || typeof ResizeObserver === 'undefined') return
+    const row = container.querySelector<HTMLElement>('[data-popup-row-index]')
+    if (!row) return
+    const observer = new ResizeObserver(([entry]) => {
+      const height = Math.round(entry.borderBoxSize[0]?.blockSize || 0)
+      if (height > 0 && height !== measuredPitchRef.current) {
+        measuredPitchRef.current = height
+        setMeasuredPitch(height)
+      }
     })
-    if (nextScrollTop !== null && nextScrollTop !== viewportStart) {
-      container.scrollTop = nextScrollTop
-      measureViewport()
+    observer.observe(row)
+    return () => observer.disconnect()
+  }, [containerRef, enabled, heldDirection, range.start])
+
+  // Mount a distant target before the host measures it. This hook owns only
+  // the render window; the content host is the sole scroll-reveal writer.
+  useLayoutEffect(() => {
+    revealedVersionRef.current = revealVersion
+    if (enabled && (range.start !== windowRef.current.start || range.count !== windowRef.current.count)) {
+      windowRef.current = range
     }
-  }, [activeIndex, containerRef, enabled, measureViewport, pitch])
+  }, [enabled, range.start, range.count, revealVersion])
 
   if (!enabled) {
     return { after: 0, before: 0, end: rowCount, start: 0 }
@@ -1132,11 +1249,11 @@ function useFixedRowWindow({
 
   // Data may shrink before the resize/scroll event arrives. Clamp immediately
   // so removing a folder's tail never leaves an empty, oversized spacer.
-  const start = Math.min(rowWindow.start, Math.max(0, rowCount - rowWindow.count + POPUP_VIRTUAL_OVERSCAN))
-  const end = Math.min(rowCount, start + rowWindow.count)
+  const start = range.start
+  const end = Math.min(rowCount, start + range.count)
   return {
-    after: Math.max(0, (rowCount - end) * rowHeight),
-    before: start * rowHeight,
+    after: Math.max(0, (rowCount - end) * pitch),
+    before: start * pitch,
     end,
     start
   }
@@ -1183,9 +1300,9 @@ function PopupContentSkeleton({
           </span>
         </header>
         <ul className={mainListClass} role="presentation">
-          {POPUP_CONTENT_SKELETON_BOOKMARK_ROWS.map((row) => (
+          {POPUP_CONTENT_SKELETON_BOOKMARK_ROWS.map((row, index) => (
             <li
-              className={mainRowClass}
+              className={cx(mainRowClass, index === 0 && 'border-t-0')}
               key={`bookmark-skeleton:${row.title}:${row.url}:${row.path}`}
               style={{ height: POPUP_BOOKMARK_ROW_HEIGHT }}
             >
@@ -1257,7 +1374,7 @@ function PopupMainStatePanel({
 
 function PopupMainLoadingSkeleton({ label }: { label: string }) {
   return (
-    <div className={searchSkeletonClass} aria-label={label}>
+    <div className={searchSkeletonClass} aria-label="搜索中">
       {[0.82, 0.66, 0.74].map((width, index) => (
         <div className={searchSkeletonRowClass} key={`search-skeleton:${index}`}>
           <span className={skeletonBookmarkTitleClass} style={{ '--skeleton-width': width } as CSSProperties}></span>
@@ -1279,10 +1396,11 @@ function PopupFolderRow({
   onFolderFilter?: (folderId: string) => void
   row: PopupContentFolderRowViewModel
 }) {
+  const { active: keyboardActive } = usePopupRowNavigation('folders', row.index, Boolean(row.keyboardActive))
   const style = { '--depth': row.depth } as CSSProperties
 
   return (
-    <div className={folderRowClass} data-folder-row-id={row.folderId} style={style} ref={activeFolderRef}>
+    <div className={folderRowClass} data-folder-row-id={row.folderId} data-popup-row-index={row.index} style={style} ref={keyboardActive ? activeFolderRef : undefined}>
       <Button
         className={cx(
           folderCardClass,
@@ -1295,7 +1413,7 @@ function PopupFolderRow({
         role="treeitem"
         aria-expanded={row.expanded}
         aria-level={row.depth + 1}
-        aria-selected={row.keyboardActive ? 'true' : 'false'}
+        aria-selected={keyboardActive ? 'true' : 'false'}
         style={getFolderDepthStyle(row.depth)}
         aria-current={row.active ? 'page' : undefined}
         title={row.subtitle}
@@ -1318,42 +1436,60 @@ function PopupFolderRow({
   )
 }
 
+function useRowFlag(id: string) {
+  const [flag, setFlag] = useState({ id, value: false })
+  const setValue = useCallback((value: boolean) => setFlag(current =>
+    current.id === id && current.value === value ? current : { id, value }
+  ), [id])
+  // A recycled DOM slot must not inherit another bookmark's menu or hover.
+  return [flag.id === id && flag.value, setValue] as const
+}
+
+function hasPointerIntent(event: ReactPointerEvent<HTMLElement>): boolean {
+  return Boolean(event.movementX || event.movementY) || document.documentElement.dataset.motionInput !== 'keyboard'
+}
+
 function PopupBookmarkRow({
   activeResultRef,
   handlers,
   reorder,
   scopeFolderId,
+  deferActions: fallbackDeferActions = false,
   row
 }: {
   activeResultRef?: RefObject<HTMLLIElement | null>
   handlers?: PopupContentActionHandlers
   reorder?: PopupBookmarkReorderRowProps
   scopeFolderId?: string
+  deferActions?: boolean
   row: PopupContentBookmarkRowViewModel
 }) {
+  const { active, deferActions } = usePopupRowNavigation('bookmarks', row.index, Boolean(row.active), fallbackDeferActions)
   const style = {
     '--depth': row.depth,
     height: `${POPUP_BOOKMARK_ROW_HEIGHT}px`,
     transform: reorder?.shiftY ? `translate3d(0, ${reorder.shiftY}px, 0)` : undefined
   } as CSSProperties
-  const [actionsMounted, setActionsMounted] = useState(false)
+  const [actionsMounted, setActionsMounted] = useRowFlag(row.bookmarkId)
 
   return (
     <li
-      className={mainRowClass}
-      data-active={row.active ? 'true' : undefined}
+      className={cx(mainRowClass, row.index === 0 && 'border-t-0')}
+      data-active={active ? 'true' : undefined}
       data-bookmark-id={row.bookmarkId}
+      data-popup-row-index={row.index}
       data-reorder-source={reorder?.dragging ? 'true' : undefined}
       data-reorder-shift={reorder?.shiftY ? 'true' : undefined}
       onFocusCapture={() => setActionsMounted(true)}
-      onPointerEnter={() => setActionsMounted(true)}
-      ref={row.active ? activeResultRef : undefined}
+      onPointerEnter={event => { if (hasPointerIntent(event)) setActionsMounted(true) }}
+      onPointerMove={event => { if (!actionsMounted && (event.movementX || event.movementY)) setActionsMounted(true) }}
+      ref={active ? activeResultRef : undefined}
       style={style}
     >
       <Button
         className={cx(listButtonClass, reorder ? 'popup-reorder-row-content' : '')}
         type="button"
-        data-active={row.active ? 'true' : undefined}
+        data-active={active ? 'true' : undefined}
         disabled={Boolean(reorder)}
         style={getBookmarkButtonStyle()}
         onFocus={() => {
@@ -1400,10 +1536,10 @@ function PopupBookmarkRow({
         </Button>
       ) : (
         <PopupRowActions
-          active={row.active}
+          active={active}
           bookmarkId={row.bookmarkId}
           label={row.menuLabel}
-          mountQuickActions={actionsMounted || row.active}
+          mountQuickActions={actionsMounted || (active && !deferActions)}
           menu={row.menu}
           onMenuAction={handlers?.onMenuAction}
         />
@@ -1415,36 +1551,42 @@ function PopupBookmarkRow({
 function PopupSearchResultRow({
   activeResultRef,
   handlers,
+  deferActions: fallbackDeferActions = false,
   row
 }: {
   activeResultRef?: RefObject<HTMLLIElement | null>
   handlers?: PopupContentActionHandlers
+  deferActions?: boolean
   row: PopupContentSearchResultViewModel
 }) {
-  const [actionsMounted, setActionsMounted] = useState(false)
+  const { active, deferActions } = usePopupRowNavigation('bookmarks', row.index, Boolean(row.active), fallbackDeferActions)
+  const [actionsMounted, setActionsMounted] = useRowFlag(row.bookmarkId)
   const { presentation } = row
   const reasons = presentation.reasonTokens
 
   return (
     <li
-      className={mainRowClass}
+      className={cx(mainRowClass, row.index === 0 && 'border-t-0')}
       style={{ height: presentation.rowHeight }}
       id={getPopupSearchResultId(row.bookmarkId)}
       role="row"
       aria-rowindex={row.index + 1}
-      aria-selected={row.active}
+      aria-selected={active}
       aria-label={`${row.title}，${row.displayUrl}，${row.path || ''}`}
       aria-description={row.reasonTitle || undefined}
-      data-active={row.active ? 'true' : undefined}
+      data-active={active ? 'true' : undefined}
+      data-bookmark-id={row.bookmarkId}
+      data-popup-row-index={row.index}
       onFocusCapture={() => setActionsMounted(true)}
-      onPointerEnter={() => setActionsMounted(true)}
-      ref={row.active ? activeResultRef : undefined}
+      onPointerEnter={event => { if (hasPointerIntent(event)) setActionsMounted(true) }}
+      onPointerMove={event => { if (!actionsMounted && (event.movementX || event.movementY)) setActionsMounted(true) }}
+      ref={active ? activeResultRef : undefined}
     >
       <div role="gridcell" className="min-w-0">
       <Button
         className={listButtonClass}
         type="button"
-        data-active={row.active ? 'true' : undefined}
+        data-active={active ? 'true' : undefined}
         style={{ ...getBookmarkButtonStyle(), ...(reasons.length ? { paddingBlock: 4 } : {}) }}
         onFocus={() => handlers?.onRowFocus?.(row.index)}
         onKeyDown={(event) => {
@@ -1452,7 +1594,10 @@ function PopupSearchResultRow({
           handleContentNavigationKeyDown(event, handlers)
         }}
         onClick={() => handlers?.onBookmarkOpen?.(row.bookmarkId)}
-        onPointerOver={() => handlers?.onResultHover?.(row.index)}
+        onPointerOver={event => { if (hasPointerIntent(event)) handlers?.onResultHover?.(row.index) }}
+        onPointerMove={event => {
+          if (!active && (event.movementX || event.movementY)) handlers?.onResultHover?.(row.index)
+        }}
         unstyled
       >
         <span className={resultCopyClass}>
@@ -1475,10 +1620,10 @@ function PopupSearchResultRow({
       </div>
       <div role="gridcell" className="popup-result-actions-cell">
       <PopupRowActions
-        active={row.active}
+        active={active}
         bookmarkId={row.bookmarkId}
         label={row.menuLabel}
-        mountQuickActions={actionsMounted || row.active}
+        mountQuickActions={actionsMounted || (active && !deferActions)}
         menu={row.menu}
         onMenuAction={handlers?.onMenuAction}
         title="操作菜单"
@@ -1523,6 +1668,7 @@ function arePopupBookmarkRowPropsEqual(
     handlers?: PopupContentActionHandlers
     reorder?: PopupBookmarkReorderRowProps
     scopeFolderId?: string
+    deferActions?: boolean
     row: PopupContentBookmarkRowViewModel
   },
   next: {
@@ -1530,10 +1676,12 @@ function arePopupBookmarkRowPropsEqual(
     handlers?: PopupContentActionHandlers
     reorder?: PopupBookmarkReorderRowProps
     scopeFolderId?: string
+    deferActions?: boolean
     row: PopupContentBookmarkRowViewModel
   }
 ) {
   return previous.activeResultRef === next.activeResultRef &&
+    previous.deferActions === next.deferActions &&
     previous.handlers === next.handlers &&
     previous.reorder === next.reorder &&
     previous.scopeFolderId === next.scopeFolderId &&
@@ -1544,15 +1692,18 @@ function arePopupSearchResultRowPropsEqual(
   previous: {
     activeResultRef?: RefObject<HTMLLIElement | null>
     handlers?: PopupContentActionHandlers
+    deferActions?: boolean
     row: PopupContentSearchResultViewModel
   },
   next: {
     activeResultRef?: RefObject<HTMLLIElement | null>
     handlers?: PopupContentActionHandlers
+    deferActions?: boolean
     row: PopupContentSearchResultViewModel
   }
 ) {
   return previous.activeResultRef === next.activeResultRef &&
+    previous.deferActions === next.deferActions &&
     previous.handlers === next.handlers &&
     areSearchResultRowsEqual(previous.row, next.row)
 }
@@ -1637,14 +1788,14 @@ function handleContentNavigationKeyDown(
     return
   }
 
-  if (handlers?.onKeyboardNavigate?.(event.key)) {
+  if (handlers?.onKeyboardNavigate?.(event.key, event.repeat)) {
     event.preventDefault()
   }
 }
 
 function PopupRowActions(props: PopupRowActionsProps) {
   return isSidePanelSurface()
-    ? <SidePanelBookmarkActions menu={props.menu} onMenuAction={props.onMenuAction} />
+    ? <SidePanelBookmarkActions key={props.bookmarkId} menu={props.menu} onMenuAction={props.onMenuAction} />
     : <PopupRowActionRail {...props} />
 }
 
@@ -1667,9 +1818,9 @@ function PopupRowActionRail({
   onMenuAction,
   title
 }: PopupRowActionsProps) {
-  const [focusExpanded, setFocusExpanded] = useState(false)
-  const [pinnedExpanded, setPinnedExpanded] = useState(false)
-  const [forcedCollapsed, setForcedCollapsed] = useState(false)
+  const [focusExpanded, setFocusExpanded] = useRowFlag(bookmarkId)
+  const [pinnedExpanded, setPinnedExpanded] = useRowFlag(bookmarkId)
+  const [forcedCollapsed, setForcedCollapsed] = useRowFlag(bookmarkId)
   const quickActions = mountQuickActions
     ? menu.items.filter((item) => {
         return ['edit', 'copy-url', 'open-current-tab', 'move', 'delete'].includes(item.action)

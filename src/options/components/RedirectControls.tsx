@@ -1,7 +1,7 @@
 import { OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { Button } from '../../ui/base/Button'
 import { TextSwap } from '../../ui/motion/TextSwap'
-import { MotionDisclosure } from '../../ui/motion/MotionDisclosure'
+import { SelectionDock } from './SelectionDock'
 import { handleRedirectAction } from '../options-controller'
 import { useRedirectControlsState } from './redirect-controls-store.js'
 
@@ -23,14 +23,13 @@ export function RedirectControls() {
 
   return (
     <>
-      <MotionDisclosure open={hasSelection}>
+      <SelectionDock open={hasSelection} label="已选重定向书签操作">
         <div className={REDIRECT_SELECTION_GROUP_CLASS}>
           <div className={REDIRECT_HEADER_CLASS}>
             <div className={REDIRECT_HEADER_COPY_CLASS}>
               <strong className={REDIRECT_HEADER_TITLE_CLASS}>
                 <TextSwap animate={hasSelection} text={`${state.selectedCount} 条已选择`} />
               </strong>
-              <p className={REDIRECT_HEADER_SUBTITLE_CLASS}>可批量更新最终地址或移入回收站。</p>
             </div>
             <div className={REDIRECT_HEADER_ACTIONS_CLASS}>
               <Button
@@ -66,7 +65,7 @@ export function RedirectControls() {
             </div>
           </div>
         </div>
-      </MotionDisclosure>
+      </SelectionDock>
 
       <div className={REDIRECT_HEADER_CLASS}>
         <div className={REDIRECT_HEADER_COPY_CLASS}>

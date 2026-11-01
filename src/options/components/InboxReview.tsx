@@ -6,7 +6,8 @@ import { type InboxItem } from '../../shared/inbox.js'
 import type { InboxReviewMessage } from '../../shared/messages.js'
 import type { FolderRecord } from '../../shared/types.js'
 import { Input } from '../../ui/base/Input.js'
-import { useListExit } from '../../ui/motion/useListExit.js'
+import { StatusMessage, StableLabel } from '../../ui/base/StatusMessage.js'
+import { useListExit, type MountedListEntry } from '../../ui/motion/useListExit.js'
 import { refreshInboxReview, useInboxReviewData } from './inbox-review-store.js'
 
 export function InboxReview() {
@@ -48,19 +49,19 @@ export function InboxReview() {
   const filtered = pending.filter(item => `${item.title} ${item.url}`.toLocaleLowerCase().includes(normalizedQuery))
   const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 20) - 1))
   const visible = filtered.slice(currentPage * 20, currentPage * 20 + 20)
+  const rows = useListExit(visible, item => item.captureId, `${normalizedQuery}\u0000${currentPage}`)
   return <section aria-labelledby="inbox-review-title" className={`mb-7 ${OPTION_SURFACE_CLASS} p-5`}>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h3 id="inbox-review-title" className="m-0 text-[15px] font-semibold tabular-nums"><span className="sr-only">待整理 </span>{pending.length} 条</h3>
       {data?.inbox.lastUndoMove ? <Button size="sm" variant="secondary" disabled={busy} onClick={() => void run({ type: 'inbox:undo-last-move' })}>撤销最近一次移动</Button> : null}
     </div>
-    {status ? <p role="status" className="text-[13px] text-ds-text-secondary">{status}</p> : null}
-    {actionError || error ? <p role="alert" className="text-[13px] text-ds-text-secondary">{[actionError, error].filter(Boolean).join('；')}</p> : null}
+    <StatusMessage className="mt-2 text-[13px] leading-relaxed text-ds-text-secondary" tone={actionError || error ? 'error' : 'neutral'}>
+      {actionError || error ? [actionError, error].filter(Boolean).join('；') : status}
+    </StatusMessage>
     <Input className="mt-4" aria-label="搜索待整理书签" placeholder="搜索标题或网址" value={query} onChange={event => { setQuery(event.target.value); setPage(0) }} />
     {error ? <Button size="sm" disabled={busy} onClick={() => void refreshInboxReview()}>重新读取</Button> : null}
-    {!data ? (!error ? <p>正在读取待整理…</p> : null) : !pending.length ? <p className="text-[13px] text-ds-text-secondary">当前没有待整理书签。</p> : (
-      // Remount per query/page so filtering and paging swap rows instantly;
-      // only rows resolved by a review action play the exit collapse.
-      <InboxReviewList key={`${normalizedQuery}\u0000${currentPage}`} items={visible} bookmarks={data.bookmarks} folderMap={folderMap} folderOptions={folderOptions} busy={busy} run={run} />
+    {!data ? (!error ? <p>正在读取待整理…</p> : null) : !pending.length && !rows.length ? <p className="text-[13px] text-ds-text-secondary">当前没有待整理书签。</p> : (
+      <InboxReviewList rows={rows} bookmarks={data.bookmarks} folderMap={folderMap} folderOptions={folderOptions} busy={busy} run={run} />
     )}
     {data && filtered.length === 0 && pending.length > 0 ? <p>没有匹配的待办。</p> : null}
     {filtered.length > 20 ? <div className="mt-4 flex items-center justify-between gap-3">
@@ -73,11 +74,10 @@ export function InboxReview() {
 
 type InboxReviewRunner = (message: InboxReviewMessage) => Promise<void>
 
-function InboxReviewList({ items, bookmarks, folderMap, folderOptions, busy, run }: { items: InboxItem[]; bookmarks: Map<string, { url?: string }>; folderMap: Map<string, FolderRecord>; folderOptions: { value: string; label: string }[]; busy: boolean; run: InboxReviewRunner }) {
-  const entries = useListExit(items, item => item.captureId)
+function InboxReviewList({ rows, bookmarks, folderMap, folderOptions, busy, run }: { rows: MountedListEntry<InboxItem>[]; bookmarks: Map<string, { url?: string }>; folderMap: Map<string, FolderRecord>; folderOptions: { value: string; label: string }[]; busy: boolean; run: InboxReviewRunner }) {
   return <div className="flex flex-col">
-    {entries.map(entry =>
-      <div className="t-list-exit" data-exiting={entry.exiting ? 'true' : 'false'} inert={entry.exiting || undefined} key={entry.key}>
+    {rows.map(entry =>
+      <div ref={entry.ref} className="t-list-exit" data-exiting={entry.exiting ? 'true' : 'false'} inert={entry.exiting || undefined} key={entry.key}>
         <div className="t-list-exit-inner">
           <InboxReviewRow item={entry.item} stale={bookmarks.get(entry.item.bookmarkId)?.url !== entry.item.url} folderMap={folderMap} folderOptions={folderOptions} busy={busy || entry.exiting} run={run} />
         </div>
@@ -97,11 +97,11 @@ function InboxReviewRow({ item, stale, folderMap, folderOptions, busy, run }: { 
   return <article className="border-t border-ds-border-subtle py-4">
     <strong className="block text-[14px] [overflow-wrap:anywhere]">{item.title}</strong>
     <p className="my-2 text-[12px] text-ds-text-secondary [overflow-wrap:anywhere]">{item.url}</p>
-    <p className="my-2 text-[13px] text-ds-text-secondary">{stale ? '地址已变化，旧建议不再适用。请结清待办后重新收藏。' : analyzing ? '正在分析…' : item.lastError || '等待整理'}{item.recommendedFolderPath ? ` · 建议：${item.recommendedFolderPath} · 置信度 ${Math.round((item.confidence || 0) * 100)}%` : ''}</p>
+    <p className="my-2 text-[13px] text-ds-text-secondary">{stale ? '地址已变化，旧建议不再适用。请结清待办后重新收藏。' : item.lastError || '等待整理'}{item.recommendedFolderPath ? ` · 建议：${item.recommendedFolderPath} · 置信度 ${Math.round((item.confidence || 0) * 100)}%` : ''}</p>
     {item.recommendationReason ? <p className="text-[13px] text-ds-text-secondary">{item.recommendationReason}</p> : null}
     <div className="flex flex-wrap items-center gap-2">
-      <Button size="sm" disabled={disabled || !item.recommendedFolderPath} onClick={() => act('accept')}>{item.recommendedFolderId ? '接受建议' : '新建建议目录并移动'}</Button>
-      <Select ariaLabel={`为 ${item.title} 选择目录`} value={selectedFolder?.id || null} onValueChange={setFolderId} disabled={disabled} placeholder="选择其他目录" options={folderOptions} />
+      <Button size="sm" disabled={disabled || !item.recommendedFolderPath} onClick={() => act('accept')}><StableLabel text={item.recommendedFolderId ? '接受建议' : '新建建议目录并移动'} reserve={['接受建议', '新建建议目录并移动']} /></Button>
+      <Select className="w-[min(240px,100%)]" triggerClassName="w-full" ariaLabel={`为 ${item.title} 选择目录`} value={selectedFolder?.id || null} onValueChange={setFolderId} disabled={disabled} placeholder="选择其他目录" options={folderOptions} />
       <Button size="sm" variant="secondary" disabled={disabled || !selectedFolder} onClick={() => act('move')}>移至所选目录</Button>
       <Button size="sm" variant="secondary" disabled={busy} onClick={() => act('keep')}>{stale || analyzing ? '结清待办' : '保留原位'}</Button>
       <Button size="sm" variant="secondary" disabled={disabled} onClick={() => act('retry')}>重新分析</Button>

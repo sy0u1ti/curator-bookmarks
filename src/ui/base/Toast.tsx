@@ -131,7 +131,7 @@ function ToastListViewport({
             key={toast.id}
             toast={toast}
             className={unstyled ? rootClassName : cx(
-              't-toast flex items-center gap-3 rounded-md border border-ds-border bg-ds-surface-2 p-3 text-ds-text-primary [filter:var(--ds-filter-popover)]',
+              't-toast flex items-center gap-3 rounded-ds-lg border border-ds-border bg-ds-surface-2 ds-inset-panel text-ds-text-primary [filter:var(--ds-filter-popover)]',
               rootClassName
             )}
             data-toast-id={toast.id}
@@ -146,7 +146,7 @@ function ToastListViewport({
               <>
                 <BaseToast.Action
                   className={unstyled ? actionClassName : cx(
-                    'inline-flex h-8 items-center rounded border border-ds-border px-2.5 text-xs',
+                    'inline-flex h-8 items-center rounded-ds-sm border border-ds-border px-3 text-xs',
                     actionClassName
                   )}
                   data-toast-action={item?.action}
@@ -155,7 +155,7 @@ function ToastListViewport({
                 <BaseToast.Close
                   aria-label={typeof closeLabel === 'string' ? closeLabel : '关闭通知'}
                   className={unstyled ? closeClassName : cx(
-                    'inline-flex h-8 items-center rounded border border-ds-border px-2.5 text-xs',
+                    'inline-flex h-8 items-center rounded-ds-sm border border-ds-border px-3 text-xs',
                     closeClassName
                   )}
                   render={<Button type="button" unstyled />}

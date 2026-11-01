@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { MotionPanel } from '../motion/MotionPanel'
 import { cx, cxState } from './utils'
+import './dialog-layout.css'
 
 export interface DialogProps {
   open?: boolean
@@ -77,6 +78,7 @@ export interface DialogPanelProps extends Omit<BaseDialogPopupProps, 'className'
   motionClassName?: string
   ref?: Ref<HTMLDivElement>
   unanimated?: boolean
+  layout?: 'centered' | 'workspace'
 }
 
 export function DialogPanel({
@@ -85,19 +87,32 @@ export function DialogPanel({
   motionVariant = 'dialog',
   ref,
   unanimated = false,
+  layout = 'centered',
   ...props
 }: DialogPanelProps) {
   if (unanimated) {
-    return <BaseDialog.Popup ref={ref} className={className} {...props} />
+    return <BaseDialog.Popup ref={ref} className={cx(layout === 'workspace' && 'curator-dialog-workspace', className)} {...props} />
   }
 
   return (
     <BaseDialog.Popup
       ref={ref}
-      render={<MotionPanel variant={motionVariant} className={cx(className, motionClassName)} />}
+      render={<MotionPanel variant={motionVariant} className={cx(layout === 'workspace' && 'curator-dialog-workspace', className, motionClassName)} />}
       {...props}
     />
   )
+}
+
+export function DialogHeader({ className, ...props }: ComponentPropsWithoutRef<'div'>) {
+  return <div className={cx('curator-dialog-header', className)} {...props} />
+}
+
+export function DialogBody({ className, ...props }: ComponentPropsWithoutRef<'div'>) {
+  return <div className={cx('curator-dialog-body', className)} {...props} />
+}
+
+export function DialogFooter({ className, ...props }: ComponentPropsWithoutRef<'div'>) {
+  return <div className={cx('curator-dialog-footer', className)} {...props} />
 }
 
 export interface InlineDialogPanelProps extends Omit<BaseDialogPopupProps, 'className' | 'render'> {

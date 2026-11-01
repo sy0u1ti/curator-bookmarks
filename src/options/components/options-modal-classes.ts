@@ -4,7 +4,7 @@ export const OPTIONS_MODAL_BACKDROP_CLASS =
   `options-modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-[14px] ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 const OPTIONS_MODAL_PANEL_BASE_CLASS =
-  `options-modal-panel pointer-events-auto relative z-10 w-full max-h-[calc(100vh-40px)] min-w-0 overflow-auto rounded-ds-lg border border-ds-border p-[24px_24px_22px] text-ds-text-primary shadow-none outline-none max-[640px]:p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
+  `options-modal-panel pointer-events-auto relative z-10 w-full max-h-[calc(100vh-40px)] min-w-0 overflow-auto rounded-ds-dialog border border-ds-border ds-inset-dialog text-ds-text-primary shadow-none outline-none max-[640px]:rounded-ds-card max-[640px]:ds-inset-card ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 export const OPTIONS_MODAL_PANEL_CLASS =
   `${OPTIONS_MODAL_PANEL_BASE_CLASS} max-w-[420px] bg-ds-app`

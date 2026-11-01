@@ -195,7 +195,7 @@ export function Select({
           aria-label={ariaLabel}
           ref={triggerRef}
           className={unstyled ? cx('base-select-trigger inline-flex items-center gap-2', triggerClassName) : cx(
-            'base-select-trigger inline-flex h-9 min-w-36 items-center justify-start gap-2 rounded-md border border-ds-border bg-ds-surface-1 px-3 text-sm text-ds-text-primary outline-none transition-[background-color,border-color,color] duration-ds-fast ease-ds-standard data-[popup-open]:border-ds-border-hover focus-visible:shadow-ds-focus disabled:opacity-50 motion-reduce:transition-none',
+            'base-select-trigger inline-flex h-9 min-w-36 items-center justify-start gap-2 rounded-ds-sm border border-ds-border bg-ds-surface-1 px-3 text-sm text-ds-text-primary outline-none transition-[background-color,border-color,color] duration-ds-fast ease-ds-standard data-[popup-open]:border-ds-border-hover focus-visible:shadow-ds-focus disabled:opacity-50 motion-reduce:transition-none',
             triggerClassName
           )}
         >
@@ -218,7 +218,7 @@ export function Select({
           <BaseSelect.Popup
             {...popupAttributes}
             className={unstyled ? cx('base-select-popup t-dropdown overflow-y-auto overscroll-contain', popupClassName) : cx(
-            'base-select-popup t-dropdown z-50 max-h-64 min-w-[var(--anchor-width)] overflow-y-auto overscroll-contain rounded-md border border-ds-border bg-ds-surface-2 p-1 text-ds-text-primary [filter:var(--ds-filter-popover)] outline-none',
+            'base-select-popup t-dropdown z-50 max-h-64 min-w-[var(--anchor-width)] overflow-y-auto overscroll-contain rounded-ds-menu border border-ds-border bg-ds-surface-2 ds-inset-menu text-ds-text-primary [filter:var(--ds-filter-popover)] outline-none',
             popupClassName
           )}
           >
@@ -229,7 +229,7 @@ export function Select({
                   value={option.value}
                   disabled={option.disabled}
                   className={itemClassNameResolver ?? cx(
-                    'base-select-option flex cursor-default items-center justify-between gap-3 rounded px-2.5 py-2 text-sm outline-none transition-colors duration-ds-fast ease-ds-standard data-[highlighted]:bg-ds-hover data-[disabled]:opacity-45 motion-reduce:transition-none',
+                    'base-select-option flex cursor-default items-center justify-between gap-3 rounded-ds-sm px-3 py-2 text-sm outline-none transition-colors duration-ds-fast ease-ds-standard data-[highlighted]:bg-ds-hover data-[disabled]:opacity-45 motion-reduce:transition-none',
                     itemClassName
                   )}
                 >

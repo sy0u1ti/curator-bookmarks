@@ -27,7 +27,7 @@ const featuredWallpaperBackdropClass =
 const featuredWallpaperPanelLayoutClass =
   'pointer-events-auto relative z-[1] grid w-[min(1320px,calc(100vw_-_48px))] max-h-[min(820px,calc(100vh_-_48px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden'
 const featuredWallpaperPanelSurfaceClass =
-  'rounded-ds-lg border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] text-ds-text-primary shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)]'
+  'rounded-ds-dialog border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] text-ds-text-primary shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)]'
 const featuredWallpaperStatusClass =
   'featured-wallpaper-status text-ds-text-secondary'
 const featuredWallpaperActionClass = `featured-wallpaper-action ${FEATURED_WALLPAPER_CONTROL_CLASS}`

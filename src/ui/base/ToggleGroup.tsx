@@ -51,7 +51,7 @@ export function ToggleGroup({
   return (
     <BaseToggleGroup
       className={cx(slidingIndicator && 't-segmented', unstyled ? className : cx(
-        'base-toggle-group inline-flex items-center gap-1 rounded-ds-sm border border-ds-border bg-ds-surface-1 p-1',
+        'base-toggle-group inline-flex items-center gap-1 rounded-ds-menu border border-ds-border bg-ds-surface-1 ds-inset-menu',
         className
       ))}
       defaultValue={defaultSelection}

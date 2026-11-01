@@ -23,9 +23,9 @@
   max-height: min(420px, var(--available-height), calc(100dvh - 24px));
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 6px;
+  padding: calc(var(--ds-inset-control) - var(--ds-stroke-width));
   border: 1px solid var(--ds-border);
-  border-radius: var(--ds-radius-lg);
+  border-radius: var(--ds-radius-menu);
   background: var(--ds-surface-2);
   color: var(--ds-text-primary);
   box-shadow: var(--ds-shadow-popover);

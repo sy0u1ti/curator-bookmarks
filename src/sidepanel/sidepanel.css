@@ -15,14 +15,15 @@ html[data-curator-surface="sidepanel"] .popup-workspace {
 
 html[data-curator-surface="sidepanel"] .popup-workspace:has([aria-controls="sidepanel-folder-tree"][aria-expanded="false"]) {
   grid-template-rows: minmax(42px, 42px) minmax(0, 1fr);
+  transition-duration: var(--acc-collapse);
 }
 html[data-curator-surface="sidepanel"] .sidepanel-folder-chevron {
-  transition: rotate var(--acc-chevron) var(--ds-ease-spring);
+  transition: rotate var(--acc-chevron) var(--acc-ease);
 }
 html[data-curator-surface="sidepanel"] #sidepanel-folder-tree {
   opacity: 1;
   transition:
-    opacity var(--acc-collapse) var(--ease-smooth-out),
+    opacity var(--acc-fade-out) var(--ds-ease-standard),
     display var(--acc-collapse) allow-discrete;
 }
 html[data-curator-surface="sidepanel"] #sidepanel-folder-tree[hidden] {

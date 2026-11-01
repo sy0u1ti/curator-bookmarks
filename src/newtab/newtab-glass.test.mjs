@@ -246,7 +246,11 @@ try {
   const blur = page.getByRole('slider', { name: '玻璃模糊', exact: true })
   await blur.press('Home')
   for (let step = 0; step < 8; step++) await blur.press('ArrowRight')
-  await page.waitForFunction(() => [...document.querySelectorAll('#settings-panel-glass output')].some(element => element.textContent === '已保存'), undefined, { timeout: 5000 }).catch(async error => {
+  // Settings now save silently without status text; wait for storage to be updated instead
+  await page.waitForFunction(async () => {
+    const result = await chrome.storage.local.get('curatorBookmarkNewTabGlassSettings')
+    return result.curatorBookmarkNewTabGlassSettings?.blur === 4
+  }, undefined, { timeout: 15000 }).catch(async error => {
     console.log(await page.evaluate(async () => ({ outputs: [...document.querySelectorAll('#settings-panel-glass output')].map(element => element.textContent), stored: await chrome.storage.local.get('curatorBookmarkNewTabGlassSettings'), locks: await navigator.locks.query() })))
     throw error
   })

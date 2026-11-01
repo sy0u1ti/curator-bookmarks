@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Icon, type IconName } from '../../ui/icons/Icon'
 import { Button } from '../../ui/base/Button'
+import { StatusMessage } from '../../ui/base/StatusMessage'
 import { CopyActionContent } from '../../ui/actions/ActionFeedback'
 import { InlineDialogPanel } from '../../ui/base/Dialog'
 import { Input } from '../../ui/base/Input'
@@ -32,7 +33,7 @@ const MENU_ACTION_ICON_BY_ACTION: Record<BookmarkMenuActionIcon, IconName> = {
   trash: 'Trash2'
 }
 
-const MENU_SURFACE_CLASS = 'curator-motion-popover bookmark-menu-surface fixed z-[10030] overflow-hidden rounded-[var(--ui-radius-panel)] border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] p-[10px_12px_12px] text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] origin-top-right'
+const MENU_SURFACE_CLASS = 'curator-motion-popover bookmark-menu-surface fixed z-[10030] overflow-hidden rounded-ds-lg border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] ds-inset-panel text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] origin-top-right'
 const MENU_CLOSING_CLASS = 'is-closing pointer-events-none'
 const MENU_FULL_WIDTH_CLASS = 'w-[276px]'
 const MENU_ADD_EXPANDED_CLASS = 'w-[300px]'
@@ -41,7 +42,7 @@ const MENU_ROW_CLASS = 'grid min-h-9 grid-cols-[42px_minmax(0,1fr)] items-center
 const MENU_ROW_LABEL_CLASS = 'min-w-0 pl-0.5 leading-[1.3]'
 const MENU_CONTROL_CLASS = 'min-h-[30px] w-full min-w-0 rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] px-[9px] text-[13px] text-[var(--ui-text-primary)] outline-none placeholder:text-[var(--ui-text-disabled)] focus:border-[var(--ui-focus-ring)] focus:outline focus:outline-1 focus:outline-offset-2 focus:outline-[var(--ui-focus-ring)] focus-visible:border-[var(--ui-focus-ring)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[var(--ui-focus-ring)] disabled:opacity-60'
 const MENU_SELECT_TRIGGER_CLASS = 'base-select-trigger flex min-h-[30px] w-full min-w-0 items-center justify-start rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] px-2 text-[13px] text-[var(--ui-text-primary)] outline-none [transition:background-color_var(--ui-motion-fast)_var(--ui-ease-standard),border-color_var(--ui-motion-fast)_var(--ui-ease-standard),color_var(--ui-motion-fast)_var(--ui-ease-standard)] data-[popup-open]:border-[var(--ui-focus-ring)] hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] focus-visible:border-[var(--ui-focus-ring)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[var(--ui-focus-ring)] disabled:opacity-60 motion-reduce:transition-none'
-const MENU_SELECT_POPUP_CLASS = 'custom-select-list z-[10040] max-h-60 min-w-[var(--anchor-width)] overflow-hidden rounded-[var(--ui-radius-panel)] border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] p-1 text-[13px] text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] outline-none'
+const MENU_SELECT_POPUP_CLASS = 'custom-select-list z-[10040] max-h-60 min-w-[var(--anchor-width)] overflow-hidden rounded-ds-menu border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] ds-inset-menu text-[13px] text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] outline-none'
 const MENU_SELECT_OPTION_CLASS = 'flex cursor-default items-center justify-between gap-3 rounded-[var(--ui-radius-control)] px-2.5 py-2 outline-none [transition:background-color_var(--ui-motion-fast)_var(--ui-ease-standard),color_var(--ui-motion-fast)_var(--ui-ease-standard),opacity_var(--ui-motion-fast)_var(--ui-ease-standard)] data-[highlighted]:bg-[var(--ui-surface-hover)] data-[disabled]:opacity-45 motion-reduce:transition-none'
 const MENU_ACTION_CLASS = 'bookmark-menu-action flex min-h-[30px] w-full cursor-pointer items-center justify-start gap-2.5 rounded-[var(--ui-radius-control)] bg-transparent px-2 text-left text-[13px] leading-none text-[var(--ui-text-primary)] outline-none [transition:background-color_var(--ui-motion-fast)_var(--ui-ease-standard),color_var(--ui-motion-fast)_var(--ui-ease-standard),transform_var(--ui-motion-fast)_var(--ui-ease-standard),opacity_var(--ui-motion-fast)_var(--ui-ease-standard)] data-[cascade-highlighted]:bg-[var(--ui-surface-hover)] data-[popup-open]:bg-[var(--ui-surface-hover)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:[outline:3px_solid_var(--ui-accent-soft)] focus-visible:outline-offset-0 active:[transform:scale(var(--ui-press-scale))] disabled:cursor-default disabled:opacity-60 data-[disabled]:cursor-default data-[disabled]:opacity-60 motion-reduce:transition-none motion-reduce:transform-none [&_svg]:h-[17px] [&_svg]:w-[17px] [&_svg]:shrink-0'
 const MENU_DANGER_ACTION_CLASS = 'bookmark-menu-action-danger text-[var(--ui-danger)] data-[cascade-highlighted]:bg-[var(--ui-danger-soft)] focus-visible:bg-[var(--ui-danger-soft)]'
@@ -416,7 +417,7 @@ function BookmarkAddMenu({
           </Button>
         </div>
       )}
-      <BookmarkMenuFeedback error={menu.error} status="" />
+      {menu.expanded ? <BookmarkMenuFeedback error={menu.error} status="" /> : null}
     </InlineDialogPanel>
   )
 }
@@ -513,13 +514,11 @@ function BookmarkMenuFeedback({
   statusTone?: 'warning' | ''
 }) {
   return (
-    <>
-      {error ? <p className={MENU_ERROR_CLASS}>{error}</p> : null}
-      {status ? (
-        <p className={statusTone === 'warning' ? MENU_WARNING_STATUS_CLASS : MENU_STATUS_CLASS}>
-          {status}
-        </p>
-      ) : null}
-    </>
+    <StatusMessage
+      className={error ? MENU_ERROR_CLASS : statusTone === 'warning' ? MENU_WARNING_STATUS_CLASS : MENU_STATUS_CLASS}
+      tone={error ? 'error' : statusTone === 'warning' ? 'warning' : 'neutral'}
+    >
+      {error || status}
+    </StatusMessage>
   )
 }

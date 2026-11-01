@@ -188,6 +188,11 @@ export function invalidateSearchAccelerationForBookmarks(
 
 const scheduledAccelerationWarmups = new WeakSet<PopupSearchBookmark[]>()
 const ACCELERATION_WARM_CHUNK_SIZE = 32
+let accelerationWarmupPausedUntil = 0
+
+export function deferSearchAccelerationWarmup(durationMs = 180): void {
+  accelerationWarmupPausedUntil = Math.max(accelerationWarmupPausedUntil, performance.now() + durationMs)
+}
 
 function requestSearchIdle(callback: () => void, timeout = 5000): void {
   const requestIdle = (globalThis as { requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number }).requestIdleCallback
@@ -209,6 +214,11 @@ export function scheduleSearchAccelerationWarmup(bookmarks: PopupSearchBookmark[
 
   const warmChunk = () => {
     if (buildingIndexes.get(bookmarks) !== state) {
+      return
+    }
+    const inputDelay = accelerationWarmupPausedUntil - performance.now()
+    if (inputDelay > 0) {
+      setTimeout(() => requestSearchIdle(warmChunk), inputDelay + 1)
       return
     }
     const deadline = performance.now() + 4

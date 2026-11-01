@@ -72,7 +72,7 @@ export function Popover({
           <MotionPanel
             variant="popover"
             className={cx(
-              'z-50 grid max-w-80 gap-2 rounded-ds-lg border border-ds-border bg-ds-surface-2 p-3 text-sm text-ds-text-primary [filter:var(--ds-filter-popover)] outline-none',
+              'z-50 grid max-w-80 gap-2 rounded-ds-card border border-ds-border bg-ds-surface-2 ds-inset-card text-sm text-ds-text-primary [filter:var(--ds-filter-popover)] outline-none',
               popupClassName,
               className
             )}

@@ -22,7 +22,7 @@ const FOLDER_CLEANUP_EMPTY_CLASS =
 const FOLDER_CLEANUP_CARD_CLASS =
   `${OPTION_INSET_CLASS} p-[14px_16px]`
 const SPLIT_UNDO_CARD_CLASS =
-  'rounded-ds-sm border border-ds-border bg-ds-surface-1 p-[14px_16px]'
+  'rounded-ds-card border border-ds-border bg-ds-surface-1 ds-inset-card'
 const FOLDER_CLEANUP_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3'
 const FOLDER_CLEANUP_ACTIONS_CLASS =

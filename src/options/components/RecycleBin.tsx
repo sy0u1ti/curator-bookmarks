@@ -2,8 +2,9 @@ import { displayUrl } from '../../shared/text.js'
 import { useState } from 'react'
 import { Input } from '../../ui/base/Input'
 import { Button } from '../../ui/base/Button'
+import { StatusMessage } from '../../ui/base/StatusMessage'
 import { CheckboxControl } from '../../ui/base/Checkbox'
-import { useListExit } from '../../ui/motion/useListExit'
+import { useListExit, type MountedListEntry } from '../../ui/motion/useListExit'
 import { handleRecycleAction } from '../options-controller'
 import { formatDateTime } from '../shared-options/utils.js'
 import { OPTION_RESULT_CHECKBOX_CLASS, OPTION_INSET_CLASS } from './option-layout-classes.js'
@@ -44,24 +45,23 @@ export function RecycleBin() {
   const pageCount = Math.ceil(filtered.length / RECYCLE_PAGE_SIZE)
   const currentPage = Math.min(page, Math.max(0, pageCount - 1))
   const visible = filtered.slice(currentPage * RECYCLE_PAGE_SIZE, (currentPage + 1) * RECYCLE_PAGE_SIZE)
+  const rows = useListExit(visible, entry => String(entry.recycleId), `${normalizedQuery}\u0000${currentPage}`)
+  const hasRows = state.entries.length > 0 || rows.length > 0
   const visibleSelectedCount = visible.filter(entry => state.selectedIds.has(String(entry.recycleId))).length
   const hiddenSelectedCount = state.selectedIds.size - visibleSelectedCount
 
   return (
     <div className={RECYCLE_RESULTS_LIST_CLASS}>
-      {state.entries.length ? <Input aria-label="搜索回收站记录" placeholder="搜索标题、网址或原文件夹" value={query} onChange={event => { setQuery(event.target.value); setPage(0) }} /> : null}
-      {state.selectedIds.size > 0 ? (
-        <p role="status" className="m-0 text-xs text-ds-text-secondary">
-          当前页已选 {visibleSelectedCount} 条，其他页或筛选外已选 {hiddenSelectedCount} 条。
-        </p>
-      ) : null}
-      {state.entries.length ? (
-        // Remount per query/page: filtering and paging swap instantly, only
-        // restored or cleared records collapse in place.
+      {hasRows ? <Input aria-label="搜索回收站记录" placeholder="搜索标题、网址或原文件夹" value={query} onChange={event => { setQuery(event.target.value); setPage(0) }} /> : null}
+      {hasRows ? <StatusMessage className="m-0 text-xs leading-relaxed text-ds-text-secondary">
+        {state.selectedIds.size > 0
+          ? `当前页已选 ${visibleSelectedCount} 条，其他页或筛选外已选 ${hiddenSelectedCount} 条。`
+          : `共 ${filtered.length} 条`}
+      </StatusMessage> : null}
+      {hasRows ? (
         <RecycleEntryList
           disabled={state.disabled}
-          entries={visible}
-          key={`${normalizedQuery}\u0000${currentPage}`}
+          rows={rows}
           selectedIds={state.selectedIds}
         />
       ) : (
@@ -82,20 +82,19 @@ export function RecycleBin() {
 
 function RecycleEntryList({
   disabled,
-  entries,
+  rows,
   selectedIds
 }: {
   disabled: boolean
-  entries: RecycleEntryViewModel[]
+  rows: MountedListEntry<RecycleEntryViewModel>[]
   selectedIds: Set<unknown>
 }) {
-  const rows = useListExit(entries, (entry) => String(entry.recycleId))
   if (!rows.length) return null
 
   return (
     <div className={RECYCLE_ENTRY_LIST_CLASS}>
       {rows.map((row) => (
-        <div className="t-list-exit" data-exiting={row.exiting ? 'true' : 'false'} inert={row.exiting || undefined} key={row.key}>
+        <div ref={row.ref} className="t-list-exit" data-exiting={row.exiting ? 'true' : 'false'} inert={row.exiting || undefined} key={row.key}>
           <div className="t-list-exit-inner">
             <RecycleEntryCard
               disabled={disabled || row.exiting}

@@ -4,6 +4,7 @@ import { findModelsDevModel } from '../shared/models-dev.js'
 import { getModelsDevSnapshot, loadModelsDevSnapshot, subscribeModelsDevSnapshot } from '../shared/models-dev-cache.js'
 import { saveInboxWorkflowMode } from './sections/inbox-settings.js'
 import { buildFeatureSettingsView } from './sections/feature-settings-view.js'
+import { getRunPresentation } from './sections/run-presentation.js'
 import {
   BOOKMARKS_BAR_ID,
   ROOT_ID,
@@ -2987,6 +2988,17 @@ function getAvailabilityFilterCounts() {
   }
 }
 
+function getAvailabilityPresentation() {
+  return getRunPresentation({
+    active: Boolean(availabilityRunSessions.getActive()) || availabilityState.running || availabilityState.retestingSelection,
+    startedAt: availabilityState.runStartedAt || 0,
+    completedAt: availabilityState.lastCompletedAt || 0,
+    resultCount: availabilityState.reviewResults.length + availabilityState.failedResults.length + availabilityState.redirectResults.length,
+    hasError: Boolean(availabilityState.lastError),
+    hasFilter: getAvailabilityFilter() !== 'all'
+  })
+}
+
 function getAvailabilityProgressState(progressCompleted: number, progressTotal: number) {
   const activeSession = availabilityRunSessions.getActive()
   const progressLabel = progressTotal
@@ -3018,6 +3030,7 @@ function getAvailabilityProgressState(progressCompleted: number, progressTotal: 
 
   return {
     busy: isAvailabilityProgressBusy(),
+    visible: getAvailabilityPresentation().progress,
     durationLabel: getAvailabilityDurationLabel(),
     progressLabel: availabilityProgressLabel,
     progressValue: Math.max(0, Math.min(progressValue, 100)),
@@ -3064,11 +3077,12 @@ function getAvailabilityResultsHeaderState() {
   const panelCounts = getAvailabilityPanelCounts()
 
   return {
+    visible: getAvailabilityPresentation().results,
     deleteFailedDisabled: (
       isInteractionLocked() ||
       availabilityState.failedResults.length === 0
     ),
-    deleteFailedLabel: availabilityState.deleting ? '正在删除…' : '批量删除',
+    deleteFailedLabel: '批量删除',
     failedCount: `${panelCounts.failed} 条${getAvailabilityPanelCountLabel('failed')}`,
     failedLastRun: availabilityState.lastCompletedAt
       ? `${availabilityState.lastRunOutcome === 'stopped' ? '最近一次停止于' : '最近一次完成于'} ${formatDateTime(availabilityState.lastCompletedAt)}`
@@ -3303,7 +3317,7 @@ async function saveAvailabilitySettingsFromDraft() {
   const savedDraftRevision = availabilitySettingsDraftRevision
   const nextSettings = readAvailabilitySettingsFromDraft()
   availabilityState.settingsSaving = true
-  availabilityState.settingsStatus = '保存中…'
+  availabilityState.settingsStatus = ''
   availabilityState.settingsStatusTone = 'muted'
   renderAvailabilitySection()
 
@@ -3351,7 +3365,7 @@ async function resetAvailabilitySettings() {
   const savedDraftRevision = availabilitySettingsDraftRevision
   const nextSettings = getDefaultAvailabilityRunnerUserSettings()
   availabilityState.settingsSaving = true
-  availabilityState.settingsStatus = '保存中…'
+  availabilityState.settingsStatus = ''
   availabilityState.settingsStatusTone = 'muted'
   renderAvailabilitySection()
 
@@ -3837,6 +3851,7 @@ function renderShortcutSettingsSection({
   const commands = getOrderedShortcutCommands()
   const statusTone = String(managerState.shortcutStatusTone || 'muted')
   const loading = managerState.shortcutStatus === 'loading'
+  const hasAssignedShortcut = commands.some(command => Boolean(String(command.shortcut || '').trim()))
 
   publishShortcutControls({
     detail: getShortcutStatusDetail(),
@@ -3849,7 +3864,7 @@ function renderShortcutSettingsSection({
         : { kind: 'commands', commands },
     loading,
     statusLabel: getShortcutStatusLabel(),
-    statusTone
+    statusTone: statusTone === 'success' && !hasAssignedShortcut ? 'muted' : statusTone
   })
 }
 
@@ -4228,6 +4243,17 @@ function renderAiProviderConfiguration() {
   return { hasRequiredConfig, settings }
 }
 
+function getAiAnalysisPresentation() {
+  return getRunPresentation({
+    active: aiNamingState.running || Boolean(aiAnalysisRunSessions.getActive()),
+    startedAt: aiNamingState.runStartedAt || 0,
+    completedAt: aiNamingState.lastCompletedAt || 0,
+    resultCount: aiNamingState.results.length,
+    hasError: Boolean(aiNamingState.lastError),
+    hasFilter: hasActiveAiResultsFilter()
+  })
+}
+
 function renderAiNamingSection() {
   const { hasRequiredConfig, settings } = renderAiProviderConfiguration()
   const featureSwitchInFlight = aiNamingState.pendingFeatureSwitch
@@ -4263,6 +4289,7 @@ function renderAiNamingSection() {
       : progressLabel
   publishAiAnalysisProgress({
     busy: isAiProgressBusy(),
+    visible: getAiAnalysisPresentation().progress,
     progressCopy: getAiNamingProgressCopy(),
     progressLabel: aiProgressLabel,
     progressMax: Math.max(progressMax, 1),
@@ -4292,7 +4319,7 @@ function renderAiNamingSection() {
     applyDisabled: areAiResultActionsLocked() || selectedResults.length === 0,
     clearDisabled: areAiResultActionsLocked() || selectedResults.length === 0,
     countLabel: `${selectedResults.length} 条已选择`,
-    hidden: selectableResults.length === 0,
+    hidden: selectedResults.length === 0,
     moveConfirm: pendingSelectionMove,
     moveDisabled:
       areAiResultActionsLocked() ||
@@ -4313,6 +4340,7 @@ function renderAiNamingSection() {
 
   const visibleAiResults = getVisibleAiNamingResults()
   publishAiAnalysisResultsHeader({
+    visible: getAiAnalysisPresentation().results,
     resultCount: visibleAiResults.length === aiNamingState.results.length
       ? `${aiNamingState.results.length} 条结果`
       : `${visibleAiResults.length} / ${aiNamingState.results.length} 条结果`,
@@ -4321,8 +4349,8 @@ function renderAiNamingSection() {
         ? '最近失败'
         : aiNamingState.lastRunOutcome === 'stopped'
           ? '最近停止'
-          : '最近完成'}：${formatDateTime(aiNamingState.lastCompletedAt)} · 建议 ${aiNamingState.suggestedCount} · 待确认 ${aiNamingState.manualReviewCount} · 已拒绝 ${aiNamingState.rejectedCount} · 失败 ${aiNamingState.failedCount}`
-      : '展示标题建议、标签、置信度和原因。'
+          : '最近完成'}：${formatDateTime(aiNamingState.lastCompletedAt)}`
+      : ''
   })
 
   renderAiResultsFilterControls()
@@ -5087,7 +5115,7 @@ function renderAiProviderSettings(
     revealApiKey: managerState.aiRevealApiKey,
     saveDisabled: fieldsDisabled,
     // Steady config state lives in the header badge; the footer only reports an in-flight save.
-    saveStatusText: aiSettingsSaving ? '正在保存' : '',
+    saveStatusText: '',
     showSaveSettingsButton,
     testButtonSecondary: showSaveSettingsButton,
     testDisabled: !hasRequiredConfig || fieldsDisabled,
@@ -5268,6 +5296,7 @@ async function handleFetchAiModels() {
 
 function renderAiResultsFilterControls() {
   publishAiAnalysisResultsFilter({
+    visible: getAiAnalysisPresentation().filters,
     clearDisabled: !hasActiveAiResultsFilter(),
     query: aiNamingState.filterQuery,
     status: aiNamingState.filterStatus
@@ -8286,6 +8315,7 @@ function renderAvailabilityScopeControls() {
   const aiScopeMeta = getCurrentAiNamingScopeMeta()
   const scopeDisabled = hasActiveAvailabilityRunSession() || availabilityState.deleting || availabilityState.catalogLoading
   publishScopePickerTrigger('availability', {
+    countLabel: availabilityState.catalogLoading ? '读取中…' : `${availabilityState.eligibleBookmarks} 条可检测`,
     disabled: scopeDisabled,
     label: scopeMeta.label,
     copy: `当前范围：${scopeMeta.label}。`
@@ -8296,6 +8326,7 @@ function renderAvailabilityScopeControls() {
     copy: `当前范围：${scopeMeta.label}。`
   })
   publishAiAnalysisScopePicker({
+    countLabel: availabilityState.catalogLoading ? '读取中…' : `${aiNamingState.eligibleBookmarks} 条可处理`,
     disabled: aiNamingState.running || aiNamingState.applying || availabilityState.catalogLoading,
     label: aiScopeMeta.label,
     copy: `当前范围：${aiScopeMeta.label}。`
@@ -10261,7 +10292,7 @@ function renderDeleteModal() {
   publishOptionsModals({
     delete: {
       confirmDisabled: availabilityState.deleting,
-      confirmLabel: availabilityState.deleting ? '正在删除…' : '确认删除',
+      confirmLabel: '确认删除',
       copy: availabilityState.failedResults.length
         ? `确认删除当前 ${availabilityState.failedResults.length} 条高置信异常书签？这些书签会从 Chrome 书签中移除，并先进入回收站；低置信异常结果会保留。`
         : '这些书签会从 Chrome 书签中移除，并先进入回收站；低置信异常结果会保留。',

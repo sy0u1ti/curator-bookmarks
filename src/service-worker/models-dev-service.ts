@@ -1,18 +1,9 @@
-import { STORAGE_KEYS } from '../shared/constants.js'
 import { MODELS_DEV_ORIGIN } from '../shared/models-dev.js'
-import { createModelsDevSyncService, MODELS_DEV_ALARM } from '../shared/models-dev-sync.js'
-import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
+import { MODELS_DEV_ALARM } from '../shared/models-dev-sync.js'
+import { createBrowserModelsDevSyncService } from '../shared/models-dev-browser.js'
 
 export function registerModelsDevSync(): void {
-  const service = createModelsDevSyncService({
-    read: (keys = [STORAGE_KEYS.modelsDevCatalog, STORAGE_KEYS.modelsDevSync]) => getLocalStorage(keys),
-    write: setLocalStorage,
-    hasPermission: () => chrome.permissions.contains({ origins: [MODELS_DEV_ORIGIN] }),
-    schedule: async (when) => {
-      if (when === null) await chrome.alarms.clear(MODELS_DEV_ALARM)
-      else await chrome.alarms.create(MODELS_DEV_ALARM, { when })
-    }
-  })
+  const service = createBrowserModelsDevSyncService()
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type !== 'models-dev:refresh' && message?.type !== 'models-dev:configure') return
     if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) {

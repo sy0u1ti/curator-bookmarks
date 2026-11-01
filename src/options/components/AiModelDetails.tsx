@@ -3,6 +3,7 @@ import { Button } from '../../ui/base/Button'
 import { Popover } from '../../ui/base/Popover'
 import { SwitchControl } from '../../ui/base/Switch'
 import { StatusButton } from '../../ui/actions/StatusButton'
+import { StatusMessage } from '../../ui/base/StatusMessage'
 import { actionFeedback, IDLE_ACTION_FEEDBACK } from '../../shared/action-feedback.js'
 import { MODELS_DEV_ERROR_LABELS } from '../../shared/models-dev-cache.js'
 import { requestModelsDevUpdate } from '../../shared/models-dev-client.js'
@@ -43,7 +44,8 @@ export function AiModelDetails({ state }: { state: AiProviderSettingsState }) {
       if (value !== undefined) costs.push([label, price.format(value)])
     }
   }
-  const error = localError || (catalog.lastError ? MODELS_DEV_ERROR_LABELS[catalog.lastError] : '')
+  const pending = configuring || feedback.status === 'pending'
+  const error = pending ? '' : localError || (catalog.lastError ? MODELS_DEV_ERROR_LABELS[catalog.lastError] : '')
   const refresh = async () => {
     if (busy.current) return
     busy.current = true
@@ -74,11 +76,11 @@ export function AiModelDetails({ state }: { state: AiProviderSettingsState }) {
       collisionPadding={12}
       keepMounted={false}
       title="模型资料"
-      popupClassName="w-80 max-w-[calc(100vw-24px)]! max-h-[var(--available-height)] grid-rows-[auto_minmax(0,1fr)_auto] gap-3! overflow-y-auto overscroll-contain p-4!"
+      popupClassName="ai-model-details-popup w-80 max-w-[calc(100vw-24px)]! h-[min(360px,var(--available-height))] grid-rows-[auto_minmax(0,1fr)_auto] gap-3! overflow-hidden p-4!"
       triggerNativeButton
       trigger={<Button size="sm" variant="ghost" aria-label="查看模型资料">模型资料</Button>}
     >
-      <div className="min-h-0 max-h-[min(480px,55vh)] overflow-y-auto overscroll-contain pr-1">
+      <div className="min-h-0 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable]">
         {model ? (
           <>
             <p className="m-0 mb-3 break-words font-medium text-ds-text-primary">{model.name}</p>
@@ -109,13 +111,17 @@ export function AiModelDetails({ state }: { state: AiProviderSettingsState }) {
           />
         </div>
         <p className="m-0 text-xs leading-relaxed text-ds-text-secondary">仅下载公开资料，不发送密钥、书签或渠道配置。</p>
-        {error ? <p role="alert" className="m-0 text-xs leading-relaxed text-ds-danger-text">{error}</p> : null}
+        <StatusMessage
+          className="m-0 text-xs leading-relaxed text-ds-text-secondary"
+          tone={error ? 'error' : 'neutral'}
+          title={catalog.checkedAt ? new Date(catalog.checkedAt).toLocaleString('zh-CN') : undefined}
+        >
+          {error || (pending ? '正在更新模型资料…' : catalog.checkedAt
+            ? `检查于 ${new Date(catalog.checkedAt).toLocaleString('zh-CN')}` : '尚未同步')}
+        </StatusMessage>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0 text-xs leading-relaxed text-ds-text-secondary">
-            <a href="https://models.dev" target="_blank" rel="noopener noreferrer" className="rounded-sm underline underline-offset-2 focus-visible:outline-ds-focus">models.dev</a>
-            <p className="m-0" title={catalog.checkedAt ? new Date(catalog.checkedAt).toLocaleString('zh-CN') : undefined}>
-              {catalog.checkedAt ? `检查于 ${new Date(catalog.checkedAt).toLocaleDateString('zh-CN')}` : '尚未同步'}
-            </p>
+            <a href="https://models.dev" target="_blank" rel="noopener noreferrer" className="rounded-ds-xs underline underline-offset-2 focus-visible:outline-ds-focus">models.dev</a>
           </div>
           <StatusButton
             size="sm"

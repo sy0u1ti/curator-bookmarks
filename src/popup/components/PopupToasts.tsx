@@ -16,7 +16,7 @@ const TOAST_BUTTON_CLASS = [
 
 const TOAST_ROOT_CLASS = [
   't-toast pointer-events-auto relative flex min-w-60 max-w-80 items-center gap-3',
-  'rounded-ds-sm border border-ds-border bg-ds-surface-1 px-3.5 py-3 text-ds-text-primary shadow-none',
+  'rounded-ds-lg border border-ds-border bg-ds-surface-1 ds-inset-panel text-ds-text-primary shadow-none',
   'data-[type=success]:border-[rgba(245,245,247,0.48)] data-[type=error]:border-[rgba(255,138,130,0.48)]'
 ].join(' ')
 

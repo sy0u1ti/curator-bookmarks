@@ -41,11 +41,25 @@
   --ds-success-text: #00ca50;
   --ds-success-soft: rgba(0, 172, 58, 0.14);
 
+  /* Border-box insets and radii share a 4px grid. Nested contours use
+     inner radius = outer radius - inset (including the native border). */
+  --ds-radius-xs: 4px;
   --ds-radius-sm: 8px;
-  --ds-radius-md: 10px;
-  --ds-radius-lg: 12px;
-  --ds-radius-xl: 16px;
+  --ds-radius-md: 12px;
+  --ds-radius-lg: 16px;
+  --ds-radius-xl: 24px;
+  --ds-radius-2xl: 32px;
   --ds-radius-full: 9999px;
+  --ds-radius-control: var(--ds-radius-sm);
+  --ds-radius-menu: var(--ds-radius-md);
+  --ds-radius-card: var(--ds-radius-xl);
+  --ds-radius-dialog: var(--ds-radius-2xl);
+  --ds-inset-control: 4px;
+  --ds-inset-panel: 8px;
+  --ds-inset-card: 16px;
+  --ds-inset-dialog: 24px;
+  --ds-stroke-width: 1px;
+  --ds-corner-shape: superellipse(1.25);
 
   --ds-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.16);
   --ds-shadow-popover: 0 1px 1px rgba(0, 0, 0, 0.02), 0 4px 8px -4px rgba(0, 0, 0, 0.04), 0 16px 24px -8px rgba(0, 0, 0, 0.06);
@@ -59,10 +73,10 @@
   --ds-filter-dialog: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.02)) drop-shadow(0 8px 12px rgba(0, 0, 0, 0.04))
     drop-shadow(0 24px 24px rgba(0, 0, 0, 0.06));
 
-  /* transitions.dev shared motion scale. Component-specific timings below
-     may stay denser for extension UI, but reuse this vocabulary whenever
-     the documented interaction matches. */
-  --duration-stagger: 40ms;
+  /* Shared vocabulary; semantic roles below carry the Magpie-derived rhythm.
+     Feedback is quick, state changes settle, and large surfaces have a longer
+     tail without delaying their content or input. */
+  --duration-stagger: 28ms;
   --duration-micro: 80ms;
   --duration-quick: 150ms;
   --duration-fast: 250ms;
@@ -88,98 +102,115 @@
   --blur-medium: 3px;
   --blur-large: 8px;
 
-  --ds-motion-feedback: 100ms;
-  --ds-motion-fast: 130ms;
-  --ds-motion-standard: 190ms;
-  --ds-motion-surface: 300ms;
-  --ds-motion-control: var(--duration-quick);
-  --ds-motion-spring: var(--duration-fast);
-  --ds-ease-standard: var(--ease-smooth-out);
+  --ds-motion-feedback: 120ms;
+  --ds-motion-fast: 160ms;
+  --ds-motion-standard: 220ms;
+  --ds-motion-state: 280ms;
+  --ds-motion-surface: 460ms;
+  --ds-motion-control: var(--ds-motion-fast);
+  --ds-motion-spring: 570ms;
+  --ds-motion-enter-opacity: 180ms;
+  --ds-motion-exit-opacity: 140ms;
+  --ds-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ds-ease-in: cubic-bezier(0.4, 0, 1, 1);
-  --ds-ease-spring: var(--ease-smooth-out);
-  --ds-ease-settle: var(--ease-smooth-out);
-  --ds-press-scale: 0.99;
+  --ds-ease-spring: cubic-bezier(0.2, 0.9, 0.25, 1.02);
+  --ds-ease-settle: cubic-bezier(0.32, 0.72, 0, 1);
+  --ds-spring-response: 420ms;
+  --ds-spring-damping: 0.84;
+  --ds-press-scale: 0.96;
   --ds-hover-lift: -1px;
   --ds-sheet-offset: 12px;
 
-  --tabs-dur: var(--ds-motion-spring);
-  --tabs-ease: var(--ds-ease-spring);
+  --tabs-dur: var(--ds-motion-state);
+  --tabs-ease: var(--ds-ease-standard);
   --tabs-text-muted: var(--ds-text-secondary);
   --tabs-text-active: var(--ds-text-primary);
   --tabs-bar-bg: var(--ds-surface-1);
   --tabs-pill-bg: var(--ds-selected);
 
-  /* Options 侧栏选中高光：切换选中项不做位移，旧高光在原位溶解，新高光在原位成形。 */
-  --nav-select-dur: var(--duration-quick);
-  --nav-select-ease: var(--ease-in-out);
+  /* Main navigation retains velocity; its child selection stays local. */
+  --nav-select-dur: 300ms;
+  --nav-select-ease: cubic-bezier(0.25, 0.9, 0.3, 1);
+  --nav-expand-dur: var(--ds-motion-surface);
+  --nav-collapse-dur: 380ms;
+  --nav-item-dur: 380ms;
+  --nav-content-delay: 60ms;
 
   --tt-in-dur: var(--duration-quick);
   --tt-out-dur: var(--duration-micro);
   --tt-scale: var(--scale-small);
   --tt-delay: var(--duration-micro);
-  --tt-in-ease: var(--ease-out);
-  --tt-out-ease: var(--ease-out);
+  --tt-in-ease: var(--ds-ease-standard);
+  --tt-out-ease: var(--ds-ease-standard);
   --tt-bg: var(--ds-surface-2);
   --tt-fg: var(--ds-text-primary);
 
-  /* Layout settles without overshoot; the small chevron carries the spring. */
-  --acc-expand: var(--duration-fast);
-  --acc-collapse: var(--duration-fast);
-  --acc-chevron: var(--ds-motion-spring);
+  /* Disclosures change layout, so their curve must not overshoot. */
+  --acc-expand: var(--ds-motion-state);
+  --acc-collapse: var(--ds-motion-standard);
+  --acc-chevron: var(--ds-motion-state);
   --acc-ease: var(--ds-ease-settle);
+  --acc-fade-in: var(--ds-motion-standard);
+  --acc-fade-out: var(--ds-motion-exit-opacity);
+  --acc-content-delay: 0ms;
+  --acc-content-offset: var(--distance-small);
 
   --resize-dur: 380ms;
-  --resize-ease: var(--ease-smooth-out);
+  --resize-ease: var(--ds-ease-settle);
 
   /* 列表项退出：高度塌陷 + 淡出。行距收在 .t-list-exit-inner 的
      padding 里而不是容器的 gap 上，gap 不会随行收拢，否则删完会留一条空档。 */
-  --list-exit-dur: var(--duration-fast);
-  --list-exit-ease: var(--ease-smooth-out);
+  --list-exit-dur: var(--ds-motion-standard);
+  --list-exit-ease: var(--ds-ease-settle);
   --list-exit-shift: var(--distance-base);
   --list-exit-gap: 0px;
 
   /* A transition can reverse from the current thumb position. */
-  --toggle-dur: var(--ds-motion-spring);
+  --toggle-dur: var(--ds-motion-state);
   --toggle-travel: 20px;
-  --toggle-ease: var(--ds-ease-spring);
+  --toggle-ease: var(--ds-ease-standard);
 
   /* Inline status feedback stays on opacity and transform. */
-  --badge-pop-dur: var(--ds-motion-spring);
+  --badge-pop-dur: var(--ds-motion-state);
   --badge-pop-scale: var(--scale-large);
-  --badge-pop-ease: var(--ds-ease-spring);
+  --badge-pop-ease: var(--ds-ease-standard);
 
-  --digit-dur: 130ms;
+  --digit-dur: var(--ds-motion-fast);
   --digit-distance: var(--distance-base);
   --digit-stagger: 0ms;
   --digit-blur: 0px;
-  --digit-ease: var(--ease-smooth-out);
+  --digit-ease: var(--ds-ease-standard);
   --digit-dir-x: 0;
   --digit-dir-y: 1;
 
-  --dropdown-open-dur: var(--ds-motion-spring);
-  --dropdown-close-dur: var(--duration-quick);
+  --dropdown-open-dur: 420ms;
+  --dropdown-close-dur: var(--ds-motion-standard);
   --dropdown-pre-scale: var(--scale-medium);
   --dropdown-closing-scale: var(--scale-tiny);
-  --dropdown-ease: var(--ease-smooth-out);
-  --dropdown-open-ease: var(--ds-ease-spring);
+  --dropdown-ease: var(--ds-ease-settle);
+  --dropdown-open-ease: var(--ds-ease-settle);
 
-  --toast-open-dur: var(--duration-slow);
-  --toast-close-dur: var(--duration-medium);
-  --toast-offset-y: var(--distance-base);
-  --toast-scale: var(--scale-small);
-  --toast-ease: var(--ds-ease-spring);
+  --toast-open-dur: var(--ds-motion-standard);
+  --toast-close-dur: var(--ds-motion-exit-opacity);
+  --toast-offset-y: 0px;
+  --toast-scale: 1;
+  --toast-ease: var(--ds-ease-standard);
 
   --modal-open-dur: var(--ds-motion-spring);
-  --modal-close-dur: var(--duration-quick);
+  --modal-close-dur: 260ms;
+  --modal-opacity-in: 240ms;
+  --modal-opacity-out: var(--ds-motion-exit-opacity);
+  --modal-backdrop-in: var(--ds-motion-state);
+  --modal-backdrop-out: var(--ds-motion-standard);
   --modal-scale: var(--scale-large);
   --modal-scale-close: var(--scale-large);
-  --modal-ease: var(--ease-smooth-out);
+  --modal-ease: var(--ds-ease-settle);
   --modal-open-ease: var(--ds-ease-spring);
 
-  --icon-swap-dur: var(--duration-fast);
+  --icon-swap-dur: var(--ds-motion-standard);
   --icon-swap-blur: 0px;
   --icon-swap-start-scale: 0.9;
-  --icon-swap-ease: var(--ease-in-out);
+  --icon-swap-ease: var(--ds-ease-standard);
 
   --pulse-dur: 1000ms;
   --pulse-count: 1;
@@ -187,15 +218,15 @@
   /* Cold popup content becomes interactive immediately; its handoff stays brief. */
   --reveal-dur: 180ms;
   --reveal-blur: 0px;
-  --reveal-ease: var(--ease-in-out);
+  --reveal-ease: var(--ds-ease-standard);
 
   --text-swap-dur: var(--duration-quick);
   --text-swap-translate-y: 0px;
   --text-swap-blur: 0px;
-  --text-swap-ease: var(--ease-in-out);
+  --text-swap-ease: var(--ds-ease-standard);
 
-  --panel-open-dur: var(--duration-slow);
-  --panel-close-dur: var(--duration-medium);
+  --panel-open-dur: var(--ds-motion-surface);
+  --panel-close-dur: 340ms;
   --panel-translate-y: var(--distance-base);
   --tabs-panel-translate-y: var(--distance-base);
   --panel-blur: 0px;
@@ -203,16 +234,16 @@
   --drag-settle-dur: 160ms;
 
   --page-slide-dur: var(--duration-fast);
-  --page-fade-dur: var(--duration-fast);
+  --page-fade-dur: var(--modal-opacity-in);
   --page-slide-distance: var(--distance-base);
-  --page-slide-ease: var(--ease-smooth-out);
-  --page-fade-ease: var(--ease-smooth-out);
+  --page-slide-ease: var(--ds-ease-settle);
+  --page-fade-ease: var(--ds-ease-standard);
 
-  --stagger-dur: 220ms;
+  --stagger-dur: 380ms;
   --stagger-distance: var(--distance-small);
   --stagger-stagger: var(--duration-stagger);
   --stagger-blur: 0px;
-  --stagger-ease: var(--ease-smooth-out);
+  --stagger-ease: var(--ds-ease-settle);
 
   --shimmer-dur: 2000ms;
   --shimmer-base: var(--ds-text-muted);
@@ -226,10 +257,10 @@
   --progress-sheen-dur: 1750ms;
 
   --check-box: var(--duration-quick);
-  --check-draw: var(--duration-medium);
+  --check-draw: var(--ds-motion-standard);
   --check-delay: 0ms;
   --check-uncheck: var(--duration-quick);
-  --check-ease: var(--ease-smooth-out);
+  --check-ease: var(--ds-ease-standard);
   --check-len: 23;
 
   --ds-row-height: 52px;
@@ -260,20 +291,16 @@
   --motion-slow: var(--ds-motion-surface);
 }
 
-/* Surface spring: damping ratio 0.85, sampled over 10 natural time units.
-   Its single 0.63% overshoot stays quiet; button feedback uses the faster,
-   monotonic control timing instead. Large panels never overshoot. */
+/* Magpie's surface spring: 420ms response, 0.8 damping, 1.5% overshoot.
+   Only floating surfaces use it; layout and small controls stay monotonic. */
 @supports (transition-timing-function: linear(0, 1)) {
   :root {
     --ds-ease-spring: linear(
-      0, 0.0941, 0.2838, 0.483, 0.6535, 0.7835, 0.8748, 0.9344,
-      0.9708, 0.9911, 1.0013, 1.0054, 1.0063, 1.0056, 1.0044,
-      1.0032, 1.0021, 1.0013, 1.0008, 1.0004, 1
-    );
-    --ds-ease-settle: linear(
-      0, 0.0902, 0.2642, 0.4422, 0.594, 0.7127, 0.8009, 0.8641,
-      0.9084, 0.9389, 0.9596, 0.9734, 0.9826, 0.9887, 0.9927,
-      0.9953, 0.997, 0.9981, 0.9988, 0.9992, 1
+      0, 0.0203, 0.0723, 0.1448, 0.2292, 0.3188, 0.4086, 0.4951,
+      0.576, 0.6498, 0.7157, 0.7735, 0.8232, 0.8654, 0.9005, 0.9293,
+      0.9525, 0.9708, 0.9849, 0.9956, 1.0033, 1.0087, 1.0122, 1.0142,
+      1.015, 1.0151, 1.0146, 1.0136, 1.0124, 1.0111, 1.0097, 1.0084,
+      1.0071, 1.0059, 1.0049, 1.0039, 1.0031, 1.0024, 1.0018, 1.0013, 1
     );
   }
 }
@@ -283,9 +310,12 @@
     --ds-motion-feedback: 80ms;
     --ds-motion-fast: 80ms;
     --ds-motion-standard: 80ms;
+    --ds-motion-state: 1ms;
     --ds-motion-surface: 80ms;
     --ds-motion-control: 80ms;
     --ds-motion-spring: 1ms;
+    --ds-motion-enter-opacity: 80ms;
+    --ds-motion-exit-opacity: 80ms;
     --ds-ease-spring: linear;
     --ds-ease-settle: linear;
     --ds-press-scale: 1;
@@ -293,11 +323,19 @@
     --ds-sheet-offset: 0px;
     --tabs-dur: 80ms;
     --nav-select-dur: 80ms;
+    --nav-expand-dur: 1ms;
+    --nav-collapse-dur: 1ms;
+    --nav-item-dur: 1ms;
+    --nav-content-delay: 0ms;
     --tt-in-dur: 80ms;
     --tt-out-dur: 80ms;
     --acc-expand: 1ms;
     --acc-collapse: 1ms;
     --acc-chevron: 1ms;
+    --acc-fade-in: 80ms;
+    --acc-fade-out: 80ms;
+    --acc-content-delay: 0ms;
+    --acc-content-offset: 0px;
     --resize-dur: 1ms;
     --list-exit-dur: 1ms;
     --list-exit-shift: 0px;
@@ -312,6 +350,10 @@
     --toast-scale: 1;
     --modal-open-dur: 80ms;
     --modal-close-dur: 80ms;
+    --modal-opacity-in: 80ms;
+    --modal-opacity-out: 80ms;
+    --modal-backdrop-in: 80ms;
+    --modal-backdrop-out: 80ms;
     --modal-scale: 1;
     --modal-scale-close: 1;
     --icon-swap-dur: 1ms;

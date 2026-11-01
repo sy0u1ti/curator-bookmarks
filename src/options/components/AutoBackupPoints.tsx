@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { listAutoBackupPoints, type AutoBackupIndexEntry } from '../../shared/backup'
 import { STORAGE_KEYS } from '../../shared/constants'
 import { Button } from '../../ui/base/Button'
+import { StatusMessage } from '../../ui/base/StatusMessage'
 import { Icon } from '../../ui/icons/Icon'
 import { handleBackupAction } from '../options-controller'
 
@@ -44,13 +45,14 @@ export function AutoBackupPoints({ busy }: { busy: boolean }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 id="recovery-points-title" className="text-[15px] font-semibold text-ds-text-primary">自动恢复点</h2>
-          <p className="mt-2 text-[13px] leading-relaxed text-ds-text-secondary">整理前的本地备份。选中后先比较差异，再选择恢复范围。</p>
+          <StatusMessage className="mt-2 text-[13px] leading-relaxed text-ds-text-secondary" tone={error ? 'error' : 'neutral'}>
+            {error || '整理前的本地备份。选中后先比较差异，再选择恢复范围。'}
+          </StatusMessage>
         </div>
         <Button size="sm" variant="secondary" disabled={loading || busy} onClick={() => void refresh()} aria-label="刷新自动恢复点">
           <Icon name="RefreshCw" size={14} />刷新
         </Button>
       </div>
-      {error ? <p className="mt-3 text-sm text-ds-text-secondary" role="alert">{error}</p> : null}
       {!points.length ? <p className="mt-4 text-sm text-ds-text-secondary" role="status">{loading ? '正在读取恢复点…' : '暂无自动恢复点。批量清理、整理或恢复数据前会自动创建。'}</p> : (
         <ul className="mt-4 grid list-none gap-3 p-0" aria-label="可用的自动恢复点">
           {points.map(point => (

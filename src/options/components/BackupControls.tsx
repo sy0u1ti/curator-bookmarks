@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { Button } from '../../ui/base/Button'
 import { StatusButton } from '../../ui/actions/StatusButton'
+import { StatusMessage } from '../../ui/base/StatusMessage'
 import { Input } from '../../ui/base/Input'
 import { handleBackupAction } from '../options-controller'
 import { useBackupControlsState } from './backup-controls-store.js'
@@ -16,7 +17,8 @@ const BACKUP_CARD_CLASS =
 const BACKUP_HEADER_CLASS =
   'flex flex-wrap items-start justify-between gap-4'
 const BACKUP_HEAD_CLASS = `${BACKUP_HEADER_CLASS} border-b border-ds-border-subtle pb-[14px]`
-const BACKUP_ROW_CLASS = `${BACKUP_HEADER_CLASS} pt-[14px]`
+const BACKUP_ROW_CLASS =
+  'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-4 pt-4 max-[760px]:grid-cols-1'
 const BACKUP_COPY_COLUMN_CLASS = 'min-w-0'
 const BACKUP_TITLE_CLASS =
   'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
@@ -63,10 +65,7 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
         </div>
         <div className={BACKUP_ROW_CLASS}>
           <div className={BACKUP_COPY_COLUMN_CLASS}>
-            <p className={BACKUP_COPY_CLASS}>{state.tagData.updatedLabel}</p>
-            {state.tagData.status ? (
-              <p className={BACKUP_STATUS_CLASS}>{state.tagData.status}</p>
-            ) : null}
+            <StatusMessage className={BACKUP_STATUS_CLASS}>{state.tagData.status || state.tagData.updatedLabel}</StatusMessage>
           </div>
           <div className={BACKUP_ROW_ACTIONS_CLASS}>
             {state.tagData.hasRecords ? (
@@ -170,9 +169,7 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
             }}
           />
         </div>
-        {state.backup.status ? (
-          <p className={BACKUP_STATUS_CLASS} role="status">{state.backup.status}</p>
-        ) : null}
+        <StatusMessage className={BACKUP_STATUS_CLASS}>{state.backup.status}</StatusMessage>
         <div className={BACKUP_ROW_CLASS}>
           <div className={BACKUP_COPY_COLUMN_CLASS}>
             <strong className={BACKUP_TITLE_CLASS}>跨浏览器导出</strong>

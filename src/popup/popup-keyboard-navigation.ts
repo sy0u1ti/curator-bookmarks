@@ -6,6 +6,30 @@ export interface PopupKeyboardFolderRowLike {
 export type PopupKeyboardPane = 'bookmarks' | 'folders'
 export type PopupFolderPickerMode = 'edit' | 'move' | 'smart'
 
+export function createPopupNavigationBatch(
+  commit: () => void,
+  post: (task: () => void) => void = queueMicrotask
+) {
+  let generation = 0
+  let pending = false
+  const cancel = () => { generation++; pending = false }
+  return {
+    schedule() {
+      if (pending) return
+      pending = true
+      const ticket = ++generation
+      post(() => {
+        if (ticket !== generation) return
+        pending = false
+        commit()
+      })
+    },
+    flush() { cancel(); commit() },
+    cancel,
+    get pending() { return pending }
+  }
+}
+
 const folderPickerFocusHandlers = new WeakMap<HTMLElement, (edge: 'first' | 'last') => boolean>()
 
 export function registerFolderPickerFocusHandler(

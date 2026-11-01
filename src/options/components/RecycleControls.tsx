@@ -1,7 +1,7 @@
 import { OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { Button } from '../../ui/base/Button'
 import { TextSwap } from '../../ui/motion/TextSwap'
-import { MotionDisclosure } from '../../ui/motion/MotionDisclosure'
+import { SelectionDock } from './SelectionDock'
 import { handleRecycleAction } from '../options-controller'
 import { useRecycleControlsState } from './recycle-controls-store.js'
 
@@ -23,14 +23,13 @@ export function RecycleControls() {
 
   return (
     <>
-      <MotionDisclosure open={hasSelection}>
+      <SelectionDock open={hasSelection} label="已选回收站条目操作">
         <div className={RECYCLE_SELECTION_GROUP_CLASS}>
           <div className={RECYCLE_HEADER_CLASS}>
             <div className={RECYCLE_HEADER_COPY_CLASS}>
               <strong className={RECYCLE_HEADER_TITLE_CLASS}>
                 <TextSwap animate={hasSelection} text={`${state.selectedCount} 条已选择`} />
               </strong>
-              <p className={RECYCLE_HEADER_SUBTITLE_CLASS}>可批量恢复或清除记录，包含其他页及筛选外的已选项。</p>
             </div>
             <div className={RECYCLE_HEADER_ACTIONS_CLASS}>
               <Button
@@ -68,7 +67,7 @@ export function RecycleControls() {
             </div>
           </div>
         </div>
-      </MotionDisclosure>
+      </SelectionDock>
 
       <div className={RECYCLE_HEADER_CLASS}>
         <div className={RECYCLE_HEADER_COPY_CLASS}>

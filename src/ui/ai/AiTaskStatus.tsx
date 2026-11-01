@@ -58,7 +58,7 @@ export function AiTaskStatus({
   ...props
 }: AiTaskStatusProps) {
   return (
-    <section className={cx('grid gap-2 rounded-ds-md border-0 bg-ds-surface-1 p-3 text-ds-text-primary', className)} {...props}>
+    <section className={cx('grid gap-2 rounded-ds-card border-0 bg-ds-surface-1 p-4 text-ds-text-primary', className)} {...props}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           {label ? <span className={AI_TASK_STATUS_LABEL_CLASS}>{label}</span> : null}

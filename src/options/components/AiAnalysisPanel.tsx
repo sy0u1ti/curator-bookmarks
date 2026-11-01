@@ -20,6 +20,7 @@ import {
   OPTION_RUN_HEADER_CLASS
 } from './option-layout-classes.js'
 import { OptionPanelHeader } from './OptionPanelHeader.js'
+import { useAiAnalysisResultsHeader } from './ai-analysis-status-store.js'
 
 const AI_ANALYSIS_TOOLBAR_ACTIONS_CLASS = OPTION_RUN_ACTIONS_CLASS
 
@@ -59,12 +60,7 @@ export function AiAnalysisPanel({ hidden }: OptionsPanelVisibilityProps) {
 
           <AiAnalysisSelectionActions />
 
-          <div className={AI_ANALYSIS_RESULTS_GROUP_CLASS}>
-            <AiAnalysisResultsHeader />
-            <AiAnalysisResultsFilter />
-            <AiAnalysisResults />
-            <AiAnalysisResultsPagination />
-          </div>
+          <AiAnalysisResultGroup />
         </>
       ) : (
         <div className="mt-6">
@@ -76,5 +72,19 @@ export function AiAnalysisPanel({ hidden }: OptionsPanelVisibilityProps) {
         </div>
       )}
     </section>
+  )
+}
+
+function AiAnalysisResultGroup() {
+  const { visible } = useAiAnalysisResultsHeader()
+  if (!visible) return null
+
+  return (
+    <div className={AI_ANALYSIS_RESULTS_GROUP_CLASS}>
+      <AiAnalysisResultsHeader />
+      <AiAnalysisResultsFilter />
+      <AiAnalysisResults />
+      <AiAnalysisResultsPagination />
+    </div>
   )
 }

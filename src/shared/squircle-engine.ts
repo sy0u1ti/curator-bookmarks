@@ -19,6 +19,12 @@ interface TrackedEntry {
 
 const tracked = new Map<HTMLElement, TrackedEntry>()
 
+function usesNativeCorners(): boolean {
+  return document.documentElement.hasAttribute('data-curator-surface') &&
+    typeof CSS !== 'undefined' &&
+    CSS.supports('corner-shape', 'superellipse(1.25)')
+}
+
 let pendingScan: Set<HTMLElement> | null = null
 let scanScheduled = false
 let sweepRequested = false
@@ -157,6 +163,7 @@ let eagerBatch: HTMLElement[] | null = null
  * 引擎稍后扫描到这些元素时（data-sq="on"）仍会接管 resize 跟踪。
  */
 export function applySquircleClipBeforePaint(el: HTMLElement): void {
+  if (usesNativeCorners()) return
   if (typeof ResizeObserver === 'undefined') return
   if (el.closest('[data-squircle="off"], [data-squircle-subtree="off"]')) return
   if (eagerBatch) {
@@ -301,6 +308,9 @@ function handleMutations(mutations: MutationRecord[]): void {
 }
 
 export function initSquircleEngine(): void {
+  // Native corners also cover recycled rows and portals, without observers,
+  // layout reads, clip-path writes, or a second contour on the same element.
+  if (usesNativeCorners()) return
   const host = window as typeof window & Record<string, unknown>
   if (host[ENGINE_FLAG]) return
   host[ENGINE_FLAG] = true

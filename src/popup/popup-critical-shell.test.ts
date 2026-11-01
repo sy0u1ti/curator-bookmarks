@@ -1,4 +1,14 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+function readSources(dir: string): Array<{ file: string, source: string }> {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const file = join(dir, entry.name)
+    if (entry.isDirectory()) return readSources(file)
+    if (!/\.tsx?$/.test(entry.name) || /\.(test|fixture)\./.test(entry.name)) return []
+    return [{ file, source: readFileSync(file, 'utf8') }]
+  })
+}
 
 function run(): void {
   const html = readFileSync('src/popup/popup.html', 'utf8')
@@ -38,7 +48,16 @@ function run(): void {
   assert(html.includes('visibility: hidden;'), 'critical shell must hide root before popup styles are ready')
   assert(html.includes('contain: size layout paint;'), 'critical shell must isolate the fixed 800x600 root')
   assert(html.includes('padding: 45px 14px 0;'), 'preboot search must share the React search origin')
-  assert(html.includes('height: 40px;') && html.includes('border-radius: 8px;'), 'preboot search must share the React control geometry')
+  assert(
+    html.includes('height: 40px;') &&
+      html.includes('border-radius: var(--popup-radius-surface, 12px);') &&
+      html.includes('padding: 0 4px 0 12px;') &&
+      popupChrome.includes('gap-2 popup-surface') &&
+      popupChrome.includes('py-0 pl-3 pr-1'),
+    'preboot search must share the React outer radius and border-box inset'
+  )
+  assert(html.includes('width: 32px;') && html.includes('height: 32px;') && popupChrome.includes('inline-flex h-8 w-8'),
+    'preboot must reserve the same 32px controls inside the 40px search field')
   assert(html.includes('"SF Pro Text"') && html.includes('"Segoe UI Variable Text"') && html.includes('"PingFang SC"'), 'preboot and React must use the same stable platform font fallbacks')
   assert(html.includes('font-family: inherit;') && html.includes('font-weight: 400;') && html.includes('line-height: 1.4;'), 'preboot input must preserve the React font family and text metrics during adoption')
   assert(html.includes('class="popup-preboot-clear-slot"') && html.includes('class="popup-preboot-semantic"'), 'preboot search must reserve the same trailing controls as React')
@@ -48,12 +67,17 @@ function run(): void {
   assert(popupChrome.includes('w-[76px] min-w-[76px]'), 'semantic-search status labels must not resize the search field')
   assert(!popupCss.includes('--popup-row-actions-open-width') && !popupCss.includes('overflow: hidden;\n  border-radius: var(--ds-radius-sm);'), 'row actions must overlay rather than reflow bookmark titles')
   assert(/\.popup-row-actions\s*\{[^}]*width:\s*var\(--popup-row-actions-width\);/s.test(popupCss) && !/#popup-app-shell\[data-keyboard-nav="true"\] \.popup-row-actions:not\(:focus-within\)\s*\{/.test(popupCss), 'row action hit boxes must keep a fixed overlay width during hover')
-  assert(popupContent.includes("'popup-row-copy grid w-full min-w-0 gap-0.5'") && popupContent.includes("padding: '6px var(--popup-row-copy-rest-inset) 6px 13px'"), 'bookmark copy and the collapsed trigger inset must share row-action geometry')
+  assert(popupContent.includes("'popup-row-copy grid w-full min-w-0 gap-0.5'") &&
+    popupContent.includes("padding: '6px var(--popup-row-copy-rest-inset) 6px calc(var(--popup-row-label-inset) - var(--ds-stroke-width))'") &&
+    popupCss.includes('padding-inline-start: calc(var(--ds-inset-panel) + var(--popup-row-label-inset))'),
+    'bookmark copy and its heading share a text inset without disturbing the trailing action rail')
   assert(popupCss.includes('--popup-row-copy-action-overlap: calc(') && /\.popup-main-row:hover:has\([^}]+-webkit-mask-image:\s*linear-gradient\(/s.test(popupCss), 'expanded row actions must fade long bookmark copy before the first quick action')
   assert(popupCss.includes('transform: translateX(var(--popup-row-actions-slide));') && popupCss.includes('transform: translateX(0);'), 'row actions must retain their right-to-left translation without permanent 3D layers on resting rails')
   assert(/#popup-app-shell\[data-keyboard-nav="true"\][^{]+\.popup-row-copy\s*\{[^}]*mask-image:\s*none;/s.test(popupCss), 'hidden keyboard action rails must not leave bookmark copy masked')
   assert(popupContent.includes('useFixedRowWindow') && popupRowPresentation.includes('POPUP_BOOKMARK_ROW_HEIGHT = 60') && popupContent.includes('POPUP_FOLDER_ROW_HEIGHT = 34'), 'large popup trees must window compact fixed-height rows instead of mounting the full catalog')
-  assert(popupContent.includes('mountQuickActions={actionsMounted || row.active}') && popupContent.includes('const quickActions = mountQuickActions'), 'collapsed bookmark rows must defer hidden quick-action controls until interaction')
+  assert(popupContent.includes('mountQuickActions={actionsMounted || (active && !deferActions)}') &&
+    popupContent.includes('usePopupRowNavigation') && popupContent.includes('const quickActions = mountQuickActions'),
+  'collapsed and held-key bookmark rows must defer hidden quick-action controls until interaction')
   assert((popupController.match(/schedulePinyinEnrichment\(/g) || []).length === 2, 'pinyin enrichment must run only from the on-demand query path, not during cold open')
   assert(popupController.includes('batchSize: POPUP_PINYIN_BATCH_SIZE') && popupController.includes('yieldSearchTask().then(startEnrichment)'), 'foreground pinyin must be cooperatively scheduled without one idle wait per tiny batch')
   assert(
@@ -135,6 +159,32 @@ function run(): void {
   assert(main.includes("removeAttribute('data-popup-ready')"), 'popup must hide the last compositor surface before close')
   assert(main.includes("'pagehide'"), 'popup close guard must run before the action popup is discarded')
   assert(main.includes("'visibilitychange'"), 'popup close guard must run when Chrome hides the action popup')
+
+  // Chrome's action popup re-evaluates viewport media queries on every autosize
+  // pass; a width query in the popup sheet re-ran style for the whole tree per
+  // held arrow key. Compact surfaces size from the #popup-root container.
+  const sidepanelMain = readFileSync('src/sidepanel/main.tsx', 'utf8')
+  const sidepanelCss = readFileSync('src/sidepanel/sidepanel.css', 'utf8')
+  assert(
+    main.includes("'../styles/compact-globals.css'") && sidepanelMain.includes("'../styles/compact-globals.css'"),
+    'popup and side panel must load the compact stylesheet, not the full-site utility scan'
+  )
+  assert(/#popup-root\s*\{[^}]*container:\s*popup\s*\/\s*inline-size/.test(popupCss), 'popup root must be the size container for compact layout')
+  for (const [name, css] of [['popup.css', popupCss], ['popup.html', html], ['sidepanel.css', sidepanelCss]]) {
+    assert(!/@media[^{]*\b(min|max)-width\b|@media[^{]*\bwidth\s*[<>]/.test(css), `${name} must not use viewport width media queries`)
+  }
+  const viewportBreakpoint = /(?<![\w@/-])(?:max-|min-)?(?:sm|md|lg|xl|2xl|\[\d+(?:px|rem|em)\]):[a-z!-]/
+  for (const { file, source } of [...readSources('src/popup'), ...readSources('src/sidepanel')]) {
+    assert(!viewportBreakpoint.test(source), `${file} must use @max-[N]/popup container variants instead of viewport breakpoints`)
+  }
+
+  // The scroll tail only exists so the last row can clear a visible feedback
+  // layer; a permanent tail leaves blank space at the end of both lists.
+  assert(
+    !/(?:^|\})\s*\.popup-main-list[^{]*\{[^}]*padding-bottom:\s*80px/.test(popupCss) &&
+      /:has\(>\s*\.popup-feedback-layer:not\(\[hidden\]\)\)\s*:is\(\.popup-main-list,\s*\.popup-folder-tree\)\s*\{[^}]*padding-bottom:\s*80px/.test(popupCss),
+    'list scroll tail must apply only while a feedback layer is shown'
+  )
   assert(
     popupController.includes('recycleBin.restoreBookmarkFromRecycleEntry(') &&
       !popupController.includes('await recycleBin.removeRecycleEntry(payload.recycleId)'),

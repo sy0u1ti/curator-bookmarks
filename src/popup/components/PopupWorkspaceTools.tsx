@@ -71,7 +71,7 @@ export function PopupWorkspaceTools() {
       <Button id="popup-keyboard-help" size="sm" variant="ghost" aria-label="查看键盘帮助" title="键盘帮助" onClick={() => setPopupKeyboardHelpOpen(true)}><Icon name="Keyboard" size={16} /></Button>
       <Button id="open-page-archive" size="sm" variant="ghost" aria-label="存档当前页面" title="存档当前页面" onClick={() => { setError(null); void openPageArchiveWorkspace().catch(reason => setError({ message: reason.message })) }}><Icon name="Save" size={16} /></Button>
       {!isSidePanelSurface() && <Button id="open-side-panel" size="sm" variant="ghost" aria-label="打开常驻书签侧栏" title="打开常驻书签侧栏" disabled={opening} onClick={() => void openPanel()}><Icon name="PanelRight" size={16} /></Button>}
-      {error && <div className="absolute right-0 top-full z-[120] mt-2 w-[280px] max-w-[calc(100vw-28px)] rounded-ds-sm border border-ds-border bg-ds-surface-2 p-3 text-xs text-ds-text-primary" role="alert">
+      {error && <div className="absolute right-0 top-full z-[120] mt-2 w-[280px] max-w-[calc(100vw-28px)] rounded-ds-lg border border-ds-border bg-ds-surface-2 ds-inset-panel text-xs text-ds-text-primary" role="alert">
         <p className="m-0 leading-relaxed">{error.message}</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {error.manageExtension && <Button size="sm" variant="secondary" onClick={() => void manageExtension()}>打开扩展管理</Button>}
@@ -81,7 +81,7 @@ export function PopupWorkspaceTools() {
     </div>
     <DialogOverlay open={open} onOpenChange={setPopupKeyboardHelpOpen} keepMounted={false} className="fixed inset-0 z-[200] grid place-items-center p-3">
       <DialogBackdrop className="absolute inset-0 bg-black/70" />
-      <DialogPanel id="popup-keyboard-help-dialog" className="relative max-h-[calc(100dvh-24px)] w-full max-w-lg overflow-y-auto rounded-ds-md border border-ds-border bg-ds-surface-2 p-5 text-ds-text-primary" initialFocus={() => document.getElementById('popup-keyboard-help-title')}>
+      <DialogPanel id="popup-keyboard-help-dialog" className="relative max-h-[calc(100dvh-24px)] w-full max-w-lg overflow-y-auto rounded-ds-card border border-ds-border bg-ds-surface-2 ds-inset-card text-ds-text-primary" initialFocus={() => document.getElementById('popup-keyboard-help-title')}>
         <DialogTitle id="popup-keyboard-help-title" tabIndex={-1} className="text-lg font-semibold outline-none">键盘操作</DialogTitle>
         <div className="my-4 grid gap-4">
           {shortcutGroups.map((group) => (

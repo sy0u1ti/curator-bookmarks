@@ -30,15 +30,12 @@ export const navClass =
   'grid grid-cols-[minmax(0,1fr)] justify-stretch gap-1 max-[920px]:grid-cols-[repeat(auto-fit,minmax(148px,1fr))] max-[760px]:grid-cols-[minmax(0,1fr)]'
 
 export const navCollapsibleClass =
-  'grid min-w-0 gap-[3px] [--acc-expand:220ms] [--acc-collapse:180ms] [--acc-chevron:190ms] max-[920px]:w-full'
+  'options-nav-disclosure grid min-w-0 gap-[3px] max-[920px]:w-full'
 
 export const navLinkClass = [
-  'options-nav-link curator-motion-row relative isolate flex min-h-[36px] w-full items-center justify-start gap-2.5 overflow-hidden rounded-ds-sm border border-transparent bg-transparent px-2.5 py-0',
+  'options-nav-link relative z-[1] flex min-h-[36px] w-full items-center justify-start gap-2.5 overflow-hidden rounded-ds-sm border border-transparent bg-transparent px-2.5 py-0',
   '[font-family:var(--font-sans)] text-[13px] font-semibold text-left text-ds-text-secondary',
-  '[transition:background-color_var(--ds-motion-standard)_var(--ds-ease-standard),color_var(--ds-motion-standard)_var(--ds-ease-standard),transform_var(--ds-motion-fast)_var(--ds-ease-standard)]',
-  'hover:bg-ds-hover hover:text-ds-text-primary',
-  'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary',
-  'active:scale-[0.985]',
+  'outline-none focus-visible:shadow-ds-focus focus-visible:text-ds-text-primary',
   '[&[aria-current=page]]:bg-transparent [&[aria-current=page]]:text-ds-text-primary [&[aria-current=page]]:shadow-none [&[aria-current=page]]:transform-none [&[aria-current=page]]:hover:bg-transparent',
   'max-[920px]:min-h-10 max-[920px]:[overflow-wrap:anywhere] max-[920px]:transform-none',
   'max-[920px]:hover:transform-none max-[920px]:focus-visible:transform-none max-[920px]:active:transform-none max-[920px]:[&[aria-current=page]]:transform-none',
@@ -46,31 +43,28 @@ export const navLinkClass = [
 ].join(' ')
 
 export const navActiveIndicatorClass =
-  'options-nav-active-indicator pointer-events-none absolute left-0 top-0 z-[0] rounded-ds-sm bg-ds-selected opacity-0 shadow-[inset_0_0_0_1px_var(--ds-border)]'
+  'options-nav-active-indicator options-nav-selection pointer-events-none absolute left-0 top-0 z-[0] rounded-ds-sm opacity-0'
 
-/* Twin of the selection highlight. It stays parked on the row that was
-   selected and dissolves there, so a selection change hands the highlight over
-   in place instead of travelling across the sidebar. */
-export const navActiveIndicatorExitClass =
-  'options-nav-active-indicator-exit pointer-events-none absolute left-0 top-0 z-[0] rounded-ds-sm bg-ds-selected opacity-0 shadow-[inset_0_0_0_1px_var(--ds-border)]'
+export const navSubIndicatorClass =
+  'options-nav-sub-indicator options-nav-selection pointer-events-none absolute left-0 top-0 z-[0] rounded-ds-sm'
 
 export const navSublistClass = [
-  'grid gap-1 ml-2.5 pl-2.5 border-l border-ds-border-subtle',
+  'options-nav-sublist relative isolate grid gap-1 ml-2.5 pl-2.5 border-l border-ds-border-subtle',
   'max-[920px]:ml-0 max-[920px]:mt-1.5 max-[920px]:border-l-0'
 ].join(' ')
 
 export const navGroupTriggerClass =
-  'curator-motion-row relative flex items-center gap-2 min-h-[34px] max-[920px]:min-h-[38px] w-full cursor-pointer justify-between font-semibold rounded-ds-sm border-0 bg-transparent p-[0_10px] text-left text-[13px] text-ds-text-secondary hover:bg-ds-hover hover:text-ds-text-primary focus-visible:bg-ds-hover focus-visible:text-ds-text-primary [font:inherit] max-[920px]:border max-[920px]:border-ds-border max-[920px]:bg-ds-surface-1 max-[920px]:hover:bg-ds-hover max-[920px]:focus-visible:bg-ds-hover max-[920px]:[overflow-wrap:anywhere] max-[920px]:[writing-mode:horizontal-tb] max-[920px]:transform-none'
+  'options-nav-trigger t-acc-head relative flex items-center gap-2 min-h-[36px] max-[920px]:min-h-10 w-full cursor-pointer justify-between font-semibold rounded-ds-sm border border-transparent bg-transparent px-2.5 py-0 text-left text-[13px] text-ds-text-secondary no-underline outline-none focus-visible:shadow-ds-focus focus-visible:text-ds-text-primary [font-family:var(--font-sans)] max-[920px]:[overflow-wrap:anywhere] max-[920px]:[writing-mode:horizontal-tb]'
 
 export const navSubitemClass = [
   'flex min-h-8 w-full items-center justify-start gap-2 pl-3 text-left font-semibold text-ds-text-secondary',
-  'hover:text-ds-text-primary focus-visible:text-ds-text-primary',
+  'focus-visible:text-ds-text-primary',
   '[&[aria-current=page]]:font-semibold [&[aria-current=page]]:text-ds-text-primary',
   'max-[920px]:w-full max-[920px]:pl-3 max-[920px]:[overflow-wrap:anywhere] max-[920px]:[writing-mode:horizontal-tb]'
 ].join(' ')
 
 export const navLinkIconClass =
-  'relative z-[1] inline-grid size-4 shrink-0 place-items-center text-ds-text-disabled transition-[color,transform,scale] duration-ds-fast ease-ds-standard group-hover:text-ds-text-secondary group-focus-visible:text-ds-text-secondary group-aria-[current=page]:text-ds-text-primary'
+  'options-nav-icon inline-grid size-4 shrink-0 place-items-center text-ds-text-disabled'
 
 export const optionsMobileNavTriggerClass =
   'options-mobile-nav-trigger !hidden size-10 min-h-10 min-w-10 flex-none p-0 max-[920px]:!inline-flex'

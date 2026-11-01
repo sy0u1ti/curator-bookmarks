@@ -41,6 +41,7 @@ import {
 } from '../shared/bookmark-catalog.js'
 import {
   MAX_POPUP_SEARCH_RESULTS,
+  deferSearchAccelerationWarmup,
   POPUP_SEARCH_ASYNC_THRESHOLD,
   getQueryTerms,
   normalizeQuery,
@@ -89,6 +90,7 @@ import {
   dispatchPopupChromeChange,
   dispatchPopupSearchFocusRequest,
   dispatchPopupContentChange,
+  getPopupContentSnapshot,
   dispatchPopupFolderPickerChange,
   dispatchPopupModalsChange,
   dispatchPopupSearchChipsChange,
@@ -134,6 +136,7 @@ import {
   type PopupFolderFilterTokens
 } from './popup-folder-filter.js'
 import {
+  createPopupNavigationBatch,
   getBookmarkPaneKeyboardIndex,
   getFolderPaneKeyboardIndex,
   getFolderPaneTreeRoot,
@@ -187,6 +190,7 @@ const DEFAULT_POPUP_PREFERENCES = {
   naturalSearchEnabled: false
 }
 let popupDialogReturnFocusElement: HTMLElement | null = null
+let popupDialogReturnFocusBookmarkId: string | null = null
 let naturalSearchModulePromise: Promise<typeof import('./natural-search.js')> | null = null
 let naturalSearchAiModulePromise: Promise<typeof import('./natural-search-ai.js')> | null = null
 let aiSettingsModulePromise: Promise<typeof import('../options/sections/ai-settings.js')> | null = null
@@ -213,12 +217,14 @@ let popupFolderBookmarkCounts = new Map<string, number>()
 let unregisterPopupActionHandlers: (() => void) | null = null
 let unregisterPopupBrowserEventActions: (() => void) | null = null
 let queuedActiveResultIndex: number | null = null
+let queuedActiveResultRepeat = false
 let selectedSearchBookmarkId: string | null = null
 let queuedActiveFolderIndex: number | null = null
+let queuedActiveFolderRepeat = false
 type BookmarkOpenDisposition = 'new-tab' | 'background' | 'current-tab'
 let pendingSearchActivation: { query: string; folderId: string | null; bookmarkId: string | null; disposition: BookmarkOpenDisposition } | null = null
-let activeResultFrame = 0
-let activeFolderFrame = 0
+const resultNavigationBatch = createPopupNavigationBatch(flushQueuedActiveResultIndex)
+const folderNavigationBatch = createPopupNavigationBatch(flushQueuedActiveFolderIndex)
 let keyboardNavigationSettleTimer = 0
 let popupActionStateVersion = 0
 const popupCopyFeedback = new Map<string, ActionFeedback>()
@@ -1951,7 +1957,7 @@ function getNaturalSearchToggleTitle(isPending: boolean) {
 // only carries what the header cannot: transient notices, in-flight search
 // state, and how a semantic query was interpreted.
 function getViewCaptionText(): string {
-  if (state.viewNoticeMessage && !state.isLoading && !state.searchPending && !state.naturalSearchPending) {
+  if (state.viewNoticeMessage) {
     return state.viewNoticeMessage
   }
   if (!state.debouncedQuery) return ''
@@ -2023,6 +2029,16 @@ function showViewNotice(message, { durationMs = VIEW_NOTICE_MS } = {}) {
     state.viewNoticeTimer = null
   }, durationMs)
 }
+function showMutationNotice(message: string): void {
+  // The inline status is absent behind the smart workflow or an open dialog.
+  // Pick one visible channel rather than either duplicating or losing feedback.
+  if (isSmartOverlayActive() || hasOpenModal()) {
+    showToast({ type: 'success', message })
+  } else {
+    showViewNotice(message)
+  }
+}
+
 function clearViewNotice() {
   if (state.viewNoticeTimer) {
     window.clearTimeout(state.viewNoticeTimer)
@@ -2142,7 +2158,7 @@ function getPopupSmartPageViewModel() {
     classificationStatusTitle: pagePolicy.classificationMessage,
     fallbackIcon: getSmartFallbackIconLabel(title),
     favicon,
-    pinLabel: pinned ? '已固定到newtabs' : '固定到newtabs',
+    pinLabel: pinned ? '已固定' : '固定到新标签页',
     pinPending: isPopupActionPending('pin-newtab', bookmark.id),
     pinned,
     status: `已收藏 · ${formatBookmarkPath(bookmark.path) || '未归档路径'}`,
@@ -2166,7 +2182,7 @@ function getPopupSmartRecommendationViewModels() {
     }
   })
 }
-function renderMainContent({ preserveScroll }: { preserveScroll?: boolean } = {}) {
+function renderMainContent({ preserveScroll, navigation }: { preserveScroll?: boolean; navigation?: 'repeat' } = {}) {
   const hasQuery = Boolean(state.debouncedQuery)
   const pending = isPopupSearchPending()
   const showNaturalSearchSetup =
@@ -2235,7 +2251,8 @@ function renderMainContent({ preserveScroll }: { preserveScroll?: boolean } = {}
     pending
   })
   replaceContentViewModel(getPopupContentViewModel({ loading: state.isLoading, mainState, searchMode: hasQuery }), {
-    preserveScroll: shouldPreserveScroll
+    preserveScroll: shouldPreserveScroll,
+    navigation
   })
 }
 
@@ -2359,7 +2376,10 @@ function isSameContentViewModel(left: unknown, right: unknown): boolean {
   return true
 }
 
-function replaceContentViewModel(nextViewModel: PopupContentViewModel, { preserveScroll = false } = {}) {
+function replaceContentViewModel(
+  nextViewModel: PopupContentViewModel,
+  { preserveScroll = false, navigation }: { preserveScroll?: boolean; navigation?: 'repeat' } = {}
+) {
   if (!nextViewModel.loading && ((nextViewModel.rows?.length ?? 0) || (nextViewModel.mainRows?.length ?? 0) || (nextViewModel.sidebarRows?.length ?? 0))) {
     state.hasPresentedContent = true
   }
@@ -2371,7 +2391,38 @@ function replaceContentViewModel(nextViewModel: PopupContentViewModel, { preserv
   }
 
   state.contentRenderedViewModel = nextViewModel
-  dispatchPopupContentChange(nextViewModel, { preserveScroll })
+  dispatchPopupContentChange(nextViewModel, { preserveScroll, navigation })
+}
+
+function renderSelection({
+  preserveScroll = false, navigation
+}: { preserveScroll?: boolean; navigation?: 'repeat' } = {}): void {
+  const previous = state.contentRenderedViewModel as PopupContentViewModel | null
+  if (!previous || previous.loading) {
+    renderMainContent({ preserveScroll, navigation })
+    return
+  }
+  const keyboardPane = state.keyboardPane
+  const activeResultIndex = keyboardPane === 'bookmarks' ? state.activeResultIndex : -1
+  const activeFolderIndex = keyboardPane === 'folders' ? state.activeFolderKeyboardIndex : -1
+  const previousIndex = keyboardPane === 'folders' ? previous.activeFolderIndex : previous.activeResultIndex
+  const index = keyboardPane === 'folders' ? activeFolderIndex : activeResultIndex
+  const direction = previous.keyboardPane === keyboardPane && previousIndex !== undefined
+    ? Math.sign(index - previousIndex) as -1 | 0 | 1 : 0
+  if (previous.keyboardPane === keyboardPane && previous.activeResultIndex === activeResultIndex &&
+    previous.activeFolderIndex === activeFolderIndex && getPopupContentSnapshot().navigation === navigation) return
+  // Selection is two indices, not a new catalog, menus, concatenated rows or a
+  // deep equality pass over thousands of bookmark and folder records.
+  const next = { ...previous, keyboardPane, activeResultIndex, activeFolderIndex }
+  state.contentRenderedViewModel = next
+  if (state.debouncedQuery) {
+    publishPopupSearchAccessibility({
+      query: state.debouncedQuery, count: state.searchResults.length,
+      activeId: activeResultIndex >= 0 ? getPopupSearchResultId(state.searchResults[activeResultIndex]?.id || '') : '',
+      pending: isPopupSearchPending()
+    })
+  }
+  dispatchPopupContentChange(next, { preserveScroll, navigation, selectionOnly: true, direction })
 }
 
 function getPopupContentViewModel({
@@ -2393,6 +2444,8 @@ function getPopupContentViewModel({
   if (searchMode) {
     const mainRows = getSearchResultRows()
     return {
+      activeResultIndex: state.keyboardPane === 'bookmarks' ? state.activeResultIndex : -1,
+      activeFolderIndex: state.keyboardPane === 'folders' ? state.activeFolderKeyboardIndex : -1,
       emptyLabel: '未找到相关书签',
       folderFilter,
       keyboardPane: state.keyboardPane,
@@ -2414,6 +2467,8 @@ function getPopupContentViewModel({
     ? previousView.rows
     : [...sidebarRows, ...mainRows]
   return {
+    activeResultIndex: state.keyboardPane === 'bookmarks' ? state.activeResultIndex : -1,
+    activeFolderIndex: state.keyboardPane === 'folders' ? state.activeFolderKeyboardIndex : -1,
     emptyLabel: '当前文件夹下暂无书签',
     folderFilter,
     keyboardPane: state.keyboardPane,
@@ -2490,7 +2545,7 @@ function getSidebarFolderRows(
       getFolderFilterVisibility(currentRoot)
     ],
     () => buildFilteredSidebarFolderRows(currentRoot),
-    state.keyboardPane === 'folders' ? state.activeFolderKeyboardIndex : -1
+    -1
   )
 }
 
@@ -2696,7 +2751,7 @@ function getTreeBookmarkRows(): PopupContentBookmarkRowViewModel[] {
       const depth = Math.max(1, Number(bookmark.ancestorIds?.length || baseDepth) - baseDepth + 1)
       return buildBookmarkRowViewModel(bookmark, depth, false, index)
     }),
-    state.keyboardPane === 'bookmarks' ? state.activeResultIndex : -1
+    -1
   )
 }
 
@@ -2818,7 +2873,7 @@ function getSearchResultRows(): PopupContentSearchResultViewModel[] {
         url: bookmark.url || ''
       }
     }),
-    state.keyboardPane === 'bookmarks' ? state.activeResultIndex : -1
+    -1
   )
 }
 function getBookmarkActionMenuLabel(bookmark) {
@@ -2961,7 +3016,7 @@ function getSmartFolderModalView(): PopupModalsView['smartFolder'] {
     error: state.smartFolderError || (!state.smartFolderDraftTitle.trim() ? '请输入书签名称' : ''),
     saving: state.smartSaving,
     saveDisabled: state.smartSaving || hasBlockingPopupActionPending() || !folder || !state.smartFolderDraftTitle.trim(),
-    saveLabel: state.smartSaving ? '保存中…' : state.currentPageBookmarkId ? '保存更改' : '保存书签'
+   saveLabel: state.currentPageBookmarkId ? '保存更改' : '保存书签'
   }
 }
 
@@ -3021,7 +3076,7 @@ function getEditModalView(): PopupModalsView['edit'] {
     path: draftPath || '未归档路径',
     pathChanged: state.editDraftParentId !== String(bookmark.parentId || ''),
     saveDisabled: saving || !dirty,
-    saveLabel: saving ? '保存中…' : '保存',
+   saveLabel: '保存',
     title: state.editDraftTitle,
     titleDisabled: saving,
     url: state.editDraftUrl,
@@ -3384,6 +3439,22 @@ function handleSmartClassifierTitleChange(detail: PopupSmartClassifierTitleChang
   state.smartSaved = false
 }
 function handleContentAction(detail: PopupContentActionDetail) {
+  if (detail.action === 'interrupt-keyboard-navigation') {
+    const result = queuedActiveResultIndex
+    const folder = queuedActiveFolderIndex
+    clearQueuedKeyboardNavigation(false)
+    if (result !== null) {
+      state.keyboardPane = 'bookmarks'
+      state.activeResultIndex = result
+      state.activeFolderKeyboardIndex = -1
+    } else if (folder !== null) {
+      state.keyboardPane = 'folders'
+      state.activeFolderKeyboardIndex = folder
+    }
+    deferSearchAccelerationWarmup()
+    if (state.contentRenderedViewModel) renderSelection({ preserveScroll: true })
+    return
+  }
   if (detail.action === 'enter-bookmark-reorder') {
     enterBookmarkReorderMode()
     return
@@ -3423,7 +3494,7 @@ function handleContentAction(detail: PopupContentActionDetail) {
       exitEmptyFolderFilterToTree(Number(detail.index))
       return
     }
-    moveFolderFilterHighlight(Number(detail.index))
+    moveFolderFilterHighlight(Number(detail.index), detail.repeat)
     return
   }
   if (detail.action === 'exit-bookmark-reorder') {
@@ -3440,7 +3511,7 @@ function handleContentAction(detail: PopupContentActionDetail) {
     return
   }
   if (detail.action === 'keyboard-navigate') {
-    handlePopupNavigationKey(detail.menuAction || '')
+    handlePopupNavigationKey(detail.menuAction || '', { repeat: detail.repeat })
     return
   }
   if (detail.action === 'set-active-folder') {
@@ -3838,7 +3909,7 @@ function blurKeyboardEventTarget(target): void {
     target.blur()
   }
 }
-function handlePopupNavigationKey(key: string, modifiers: { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean } = {}): boolean {
+function handlePopupNavigationKey(key: string, modifiers: { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean; repeat?: boolean } = {}): boolean {
   const disposition: BookmarkOpenDisposition = modifiers.altKey ? 'current-tab' : modifiers.ctrlKey || modifiers.metaKey ? 'background' : 'new-tab'
   if (key === 'Enter') {
     // A fast Enter can arrive before the debounce applies the latest input.
@@ -3881,7 +3952,7 @@ function handlePopupNavigationKey(key: string, modifiers: { altKey?: boolean; ct
   }
 
   if ((key === 'ArrowDown' || key === 'ArrowUp') && state.keyboardPane === 'folders' && !state.debouncedQuery) {
-    queueActiveFolderDelta(key === 'ArrowDown' ? 1 : -1)
+    queueActiveFolderDelta(key === 'ArrowDown' ? 1 : -1, modifiers.repeat)
     return true
   }
 
@@ -3903,11 +3974,11 @@ function handlePopupNavigationKey(key: string, modifiers: { altKey?: boolean; ct
     return false
   }
   if (key === 'ArrowDown') {
-    queueActiveResultDelta(1)
+    queueActiveResultDelta(1, modifiers.repeat)
     return true
   }
   if (key === 'ArrowUp') {
-    queueActiveResultDelta(-1)
+    queueActiveResultDelta(-1, modifiers.repeat)
     return true
   }
   if (key === 'Enter') {
@@ -4280,7 +4351,7 @@ function getFolderFilterSelectableIndexes(sidebarRows: PopupContentFolderRowView
   return indexes
 }
 
-function moveFolderFilterHighlight(delta: number): void {
+function moveFolderFilterHighlight(delta: number, repeat = false): void {
   if (!state.folderFilterQuery || !Number.isFinite(delta)) {
     return
   }
@@ -4299,7 +4370,8 @@ function moveFolderFilterHighlight(delta: number): void {
   }
   state.keyboardPane = 'folders'
   state.activeFolderKeyboardIndex = selectable[nextIndex]
-  renderMainContent({ preserveScroll: false })
+  markKeyboardNavigationActive()
+  renderSelection({ preserveScroll: false, navigation: repeat ? 'repeat' : undefined })
 }
 
 /**
@@ -4325,7 +4397,6 @@ function exitEmptyFolderFilterToTree(delta: number): void {
       `[data-folder-row-id="${CSS.escape(sidebarRows[state.activeFolderKeyboardIndex]?.folderId || '')}"] button`
     )
     row?.focus({ preventScroll: true })
-    row?.scrollIntoView({ block: 'nearest' })
   })
 }
 
@@ -4410,14 +4481,25 @@ function rememberDialogReturnFocus(preferredElement: HTMLElement | null = null) 
   popupDialogReturnFocusElement = preferredElement instanceof HTMLElement
     ? preferredElement
     : null
+  popupDialogReturnFocusBookmarkId = preferredElement?.closest<HTMLElement>('[data-bookmark-id]')?.dataset.bookmarkId || null
 }
 function restoreDialogReturnFocus() {
   const returnElement = popupDialogReturnFocusElement
+  const bookmarkId = popupDialogReturnFocusBookmarkId
   popupDialogReturnFocusElement = null
+  popupDialogReturnFocusBookmarkId = null
   window.requestAnimationFrame(() => {
-    if (returnElement?.isConnected && !returnElement.hasAttribute('disabled')) {
+    const sameBookmark = !bookmarkId ||
+      returnElement?.closest<HTMLElement>('[data-bookmark-id]')?.dataset.bookmarkId === bookmarkId
+    if (sameBookmark && returnElement?.isConnected && !returnElement.hasAttribute('disabled')) {
       returnElement.focus()
       return
+    }
+    if (bookmarkId) {
+      const replacement = document.querySelector<HTMLElement>(
+        `.t-skel-content [data-bookmark-id="${CSS.escape(bookmarkId)}"] .popup-list-button`
+      )
+      if (replacement) { replacement.focus(); return }
     }
     focusSearchInput()
   })
@@ -4799,10 +4881,9 @@ async function finishSmartSave({ message, closeModal = true, isCurrent = () => t
   }
   renderSmartSaveSurfaces()
   showToast({ type: 'success', message })
-  showViewNotice('已保存，正在刷新书签列表')
   await refreshData({ preserveSearch: true })
   if (!isCurrent()) return
-  showViewNotice(state.loadError ? '已保存，书签列表刷新失败，请重新读取' : '已保存，书签列表已更新')
+  if (state.loadError) showViewNotice('已保存，书签列表刷新失败，请重新读取')
   window.requestAnimationFrame(() => {
     if (isCurrent() && !hasOpenModal()) {
       focusSearchInput()
@@ -4828,11 +4909,7 @@ async function moveBookmarkToFolder(folderId) {
     return
   }
   if (bookmark.parentId === folderId) {
-    showToast({
-      type: 'success',
-      message: '书签已在当前文件夹中'
-    })
-    showViewNotice('书签已在当前文件夹中')
+    showMutationNotice('书签已在当前文件夹中')
     return
   }
   const movedTitle = bookmark.title
@@ -4842,13 +4919,9 @@ async function moveBookmarkToFolder(folderId) {
   try {
     await moveBookmark(bookmark.id, folderId)
     if (session !== popupSessionId) return
-    showToast({
-      type: 'success',
-      message: '移动成功'
-    })
     closeDialogs({ force: true })
     await refreshData({ preserveSearch: true })
-    if (session === popupSessionId) showViewNotice(`已移动：${movedTitle}`)
+    if (session === popupSessionId) showMutationNotice(`已移动：${movedTitle}`)
   } catch (error) {
     if (session !== popupSessionId) return
     showToast({
@@ -4912,15 +4985,11 @@ async function saveEditedBookmark() {
       await moveBookmark(bookmark.id, savePlan.parentId)
     }
     if (session !== popupSessionId) return
-    showToast({
-      type: 'success',
-      message: '保存成功'
-    })
     state.editSaving = false
     setPopupActionPending('edit', bookmark.id, false)
     closeDialogs({ force: true })
     await refreshData({ preserveSearch: true })
-    if (session === popupSessionId) showViewNotice(`已更新：${nextTitle}`)
+    if (session === popupSessionId) showMutationNotice(`已更新：${nextTitle}`)
   } catch (error) {
     if (session !== popupSessionId) return
     showToast({
@@ -4976,7 +5045,6 @@ async function confirmDeleteBookmark() {
     })
     closeDialogs({ force: true })
     await refreshData({ preserveSearch: true })
-    if (session === popupSessionId) showViewNotice(`已删除：${bookmark.title}`)
   } catch (error) {
     if (session !== popupSessionId) return
     showToast({
@@ -4998,14 +5066,13 @@ async function undoDelete(recycleId: string) {
   setPopupActionPending('undo-delete', recycleId, true)
   try {
     const recycleBin = await loadRecycleBinModule()
-    const restored = await recycleBin.restoreBookmarkFromRecycleEntry(recycleId)
+    await recycleBin.restoreBookmarkFromRecycleEntry(recycleId)
     if (session !== popupSessionId) return
     showToast({
       type: 'success',
       message: '已撤销删除'
     })
     await refreshData({ preserveSearch: true })
-    if (session === popupSessionId) showViewNotice(`已恢复：${restored.title}`)
   } catch (error) {
     if (session !== popupSessionId) return
     showToast({
@@ -5268,7 +5335,7 @@ function isSmartPermissionRequiredError(error) {
 function formatPermissionOrigin(origin) {
   return String(origin || '').replace(/\/\*$/, '')
 }
-function queueActiveResultDelta(delta: number) {
+function queueActiveResultDelta(delta: number, repeat = false) {
   const keyboardBookmarks = getKeyboardNavigationBookmarks()
   if (!keyboardBookmarks.length) {
     return
@@ -5286,24 +5353,30 @@ function queueActiveResultDelta(delta: number) {
 
   markKeyboardNavigationActive()
   queuedActiveResultIndex = nextIndex
-  if (activeResultFrame) {
+  queuedActiveResultRepeat = repeat
+  // Coalesce a burst before rendering, not at the next display frame. rAF
+  // scheduling here adds a frame of latency before the preserved glide starts.
+  if (!repeat) {
+    resultNavigationBatch.flush()
     return
   }
-
-  activeResultFrame = window.requestAnimationFrame(flushQueuedActiveResultIndex)
+  resultNavigationBatch.schedule()
 }
 function flushQueuedActiveResultIndex() {
-  activeResultFrame = 0
   const nextIndex = queuedActiveResultIndex
+  const repeat = queuedActiveResultRepeat
   queuedActiveResultIndex = null
+  queuedActiveResultRepeat = false
   if (nextIndex === null) {
     return
   }
 
-  setActiveResultIndex(nextIndex)
+  setActiveResultIndex(nextIndex, repeat)
 }
 function markKeyboardNavigationActive() {
-  document.getElementById('popup-app-shell')?.setAttribute('data-keyboard-nav', 'true')
+  deferSearchAccelerationWarmup()
+  const shell = document.getElementById('popup-app-shell')
+  if (shell && shell.dataset.keyboardNav !== 'true') shell.dataset.keyboardNav = 'true'
   if (keyboardNavigationSettleTimer) {
     window.clearTimeout(keyboardNavigationSettleTimer)
   }
@@ -5311,20 +5384,19 @@ function markKeyboardNavigationActive() {
   keyboardNavigationSettleTimer = window.setTimeout(() => {
     keyboardNavigationSettleTimer = 0
     document.getElementById('popup-app-shell')?.removeAttribute('data-keyboard-nav')
+    if (popupControllerStarted && getPopupContentSnapshot().navigation === 'repeat') {
+      renderSelection({ preserveScroll: true })
+    }
   }, KEYBOARD_NAVIGATION_SETTLE_MS)
 }
-function clearQueuedKeyboardNavigation() {
-  selectedSearchBookmarkId = null
-  if (activeResultFrame) {
-    window.cancelAnimationFrame(activeResultFrame)
-    activeResultFrame = 0
-  }
+function clearQueuedKeyboardNavigation(resetSearchSelection = true) {
+  if (resetSearchSelection) selectedSearchBookmarkId = null
+  resultNavigationBatch.cancel()
   queuedActiveResultIndex = null
-  if (activeFolderFrame) {
-    window.cancelAnimationFrame(activeFolderFrame)
-    activeFolderFrame = 0
-  }
+  queuedActiveResultRepeat = false
+  folderNavigationBatch.cancel()
   queuedActiveFolderIndex = null
+  queuedActiveFolderRepeat = false
   if (keyboardNavigationSettleTimer) {
     window.clearTimeout(keyboardNavigationSettleTimer)
     keyboardNavigationSettleTimer = 0
@@ -5332,20 +5404,22 @@ function clearQueuedKeyboardNavigation() {
   document.getElementById('popup-app-shell')?.removeAttribute('data-keyboard-nav')
 }
 function switchKeyboardToFolders(sidebarRows: PopupContentFolderRowViewModel[]) {
+  clearQueuedKeyboardNavigation()
   state.keyboardPane = 'folders'
   state.activeFolderKeyboardIndex = getFolderPaneKeyboardIndex(sidebarRows, state.selectedFolderFilterId)
   markKeyboardNavigationActive()
-  renderMainContent({ preserveScroll: false })
+  renderSelection({ preserveScroll: false })
 }
 function switchKeyboardToBookmarks() {
+  clearQueuedKeyboardNavigation()
   const keyboardBookmarks = getKeyboardNavigationBookmarks()
   state.keyboardPane = 'bookmarks'
   state.activeResultIndex = getBookmarkPaneKeyboardIndex(state.activeResultIndex, keyboardBookmarks.length)
   state.activeFolderKeyboardIndex = -1
   markKeyboardNavigationActive()
-  renderMainContent({ preserveScroll: false })
+  renderSelection({ preserveScroll: false })
 }
-function queueActiveFolderDelta(delta: number) {
+function queueActiveFolderDelta(delta: number, repeat = false) {
   const sidebarRows = getSidebarFolderRows()
   if (!sidebarRows.length) {
     return
@@ -5359,21 +5433,24 @@ function queueActiveFolderDelta(delta: number) {
   }
   markKeyboardNavigationActive()
   queuedActiveFolderIndex = nextIndex
-  if (activeFolderFrame) {
+  queuedActiveFolderRepeat = repeat
+  if (!repeat) {
+    folderNavigationBatch.flush()
     return
   }
-  activeFolderFrame = window.requestAnimationFrame(flushQueuedActiveFolderIndex)
+  folderNavigationBatch.schedule()
 }
 function flushQueuedActiveFolderIndex() {
-  activeFolderFrame = 0
   const nextIndex = queuedActiveFolderIndex
+  const repeat = queuedActiveFolderRepeat
   queuedActiveFolderIndex = null
+  queuedActiveFolderRepeat = false
   if (nextIndex === null) {
     return
   }
-  setActiveFolderKeyboardIndex(nextIndex)
+  setActiveFolderKeyboardIndex(nextIndex, repeat)
 }
-function setActiveFolderKeyboardIndex(nextIndex: number) {
+function setActiveFolderKeyboardIndex(nextIndex: number, repeat = false) {
   const sidebarRows = getSidebarFolderRows()
   if (!sidebarRows.length) {
     return
@@ -5383,7 +5460,7 @@ function setActiveFolderKeyboardIndex(nextIndex: number) {
     return
   }
   state.activeFolderKeyboardIndex = clampedIndex
-  renderMainContent({ preserveScroll: false })
+  renderSelection({ preserveScroll: false, navigation: repeat ? 'repeat' : undefined })
 }
 function activateFolderKeyboardIndex(nextIndex: number) {
   const sidebarRows = getSidebarFolderRows()
@@ -5398,9 +5475,9 @@ function activateFolderKeyboardIndex(nextIndex: number) {
 
   state.keyboardPane = 'folders'
   state.activeFolderKeyboardIndex = clampedIndex
-  renderMainContent({ preserveScroll: true })
+  renderSelection({ preserveScroll: true })
 }
-function setActiveResultIndex(nextIndex) {
+function setActiveResultIndex(nextIndex, repeat = false) {
   const keyboardBookmarks = getKeyboardNavigationBookmarks()
   if (!keyboardBookmarks.length) {
     return
@@ -5416,7 +5493,7 @@ function setActiveResultIndex(nextIndex) {
   state.activeFolderKeyboardIndex = -1
   state.activeResultIndex = clampedIndex
   updateActiveSearchResult(previousIndex, clampedIndex)
-  renderMainContent({ preserveScroll: false })
+  renderSelection({ preserveScroll: false, navigation: repeat ? 'repeat' : undefined })
 }
 function activateResultKeyboardIndex(nextIndex: number) {
   const keyboardBookmarks = getKeyboardNavigationBookmarks()
@@ -5436,7 +5513,7 @@ function activateResultKeyboardIndex(nextIndex: number) {
   state.activeFolderKeyboardIndex = -1
   state.activeResultIndex = clampedIndex
   updateActiveSearchResult(previousIndex, clampedIndex)
-  renderMainContent({ preserveScroll: true })
+  renderSelection({ preserveScroll: true })
 }
 function getKeyboardNavigationBookmarks() {
   if (state.debouncedQuery) {

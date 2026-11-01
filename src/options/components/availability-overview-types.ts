@@ -1,5 +1,6 @@
 export interface AvailabilityProgressState {
   busy: boolean
+  visible: boolean
   durationLabel: string
   progressLabel: string
   progressValue: number
@@ -45,6 +46,7 @@ export interface AvailabilityPanelActionDetail {
 }
 
 export interface AvailabilityResultsHeaderState {
+  visible: boolean
   deleteFailedDisabled: boolean
   deleteFailedLabel: string
   failedCount: string

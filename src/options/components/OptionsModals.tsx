@@ -1,7 +1,8 @@
-import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
+import { useRef, type ReactNode, type RefObject } from 'react'
 import { Button } from '../../ui/base/Button'
 import { HoldConfirmButton } from '../../ui/actions/HoldConfirmButton'
-import { DialogBackdrop, DialogOverlay, DialogPanel } from '../../ui/base/Dialog'
+import { DialogBackdrop, DialogBody, DialogHeader, DialogOverlay, DialogPanel } from '../../ui/base/Dialog'
+import { CloseButton } from '../../ui/base/CloseButton'
 import { Input } from '../../ui/base/Input'
 import { cx } from '../../ui/base/utils'
 import { handleFolderPickerAction, handleOptionsModalAction } from '../options-controller'
@@ -44,32 +45,6 @@ function ModalBackdrop({
   open: boolean
   children: ReactNode
 }) {
-  const wasOpenRef = useRef(open)
-
-  useEffect(() => {
-    const wasOpen = wasOpenRef.current
-    wasOpenRef.current = open
-    if (!wasOpen || open || !finalFocusId) {
-      return
-    }
-
-    window.requestAnimationFrame(() => {
-      const target = getOptionsFocusTarget(finalFocusId)
-      if (!target) {
-        return
-      }
-
-      const activeElement = document.activeElement
-      const activeIsConnected = activeElement instanceof HTMLElement && activeElement.isConnected
-      const activeIsHidden = activeElement instanceof HTMLElement && !activeElement.offsetParent
-      if (activeElement === target || (activeIsConnected && !activeIsHidden)) {
-        return
-      }
-
-      target.focus()
-    })
-  }, [finalFocusId, open])
-
   return (
     <DialogOverlay
       className="fixed inset-0 z-30 grid place-items-center p-5 pointer-events-none"
@@ -91,12 +66,13 @@ function ModalBackdrop({
         }}
       />
       <DialogPanel
+        layout={modal === 'move' || modal === 'scope' ? 'workspace' : 'centered'}
         className={className}
         aria-labelledby={labelledBy}
         aria-describedby={describedBy}
         initialFocus={() => initialFocusRef?.current || true}
         finalFocus={() => {
-          return getOptionsFocusTarget(finalFocusId) || false
+          return getOptionsFocusTarget(finalFocusId) || true
         }}
       >
         {children}
@@ -214,7 +190,11 @@ export function OptionsModals() {
         open={modals.move.open}
       >
         <>
-          <h2 id="move-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>批量移动书签</h2>
+          <DialogHeader className="flex items-start justify-between gap-3">
+            <h2 id="move-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>批量移动书签</h2>
+            <CloseButton label="取消批量移动书签" variant="ghost" size="icon" className="shrink-0"
+              onClick={() => handleOptionsModalAction({ action: 'cancel', modal: 'move' })} />
+          </DialogHeader>
           <p id="move-modal-copy" className={OPTIONS_MODAL_COPY_CLASS}>
             {modals.move.copy}
           </p>
@@ -247,25 +227,14 @@ export function OptionsModals() {
               }}
             />
           </label>
-          <div
+          <DialogBody
             id="move-folder-results"
             className={OPTIONS_MODAL_RESULTS_CLASS}
             role="tree"
             aria-label="移动目标文件夹"
           >
             <FolderPickerResults kind="move" searchInputRef={moveSearchRef} />
-          </div>
-          <div className={OPTIONS_MODAL_ACTIONS_CLASS}>
-            <Button
-              className={OPTIONS_MODAL_BUTTON_CLASS}
-              type="button"
-              variant="secondary"
-              aria-label="取消批量移动书签"
-              onClick={() => handleOptionsModalAction({ action: 'cancel', modal: 'move' })}
-            >
-              取消
-            </Button>
-          </div>
+          </DialogBody>
         </>
       </ModalBackdrop>
 
@@ -279,7 +248,11 @@ export function OptionsModals() {
         open={modals.scope.open}
       >
         <>
-          <h2 id="scope-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>选择筛选文件夹</h2>
+          <DialogHeader className="flex items-start justify-between gap-3">
+            <h2 id="scope-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>选择筛选文件夹</h2>
+            <CloseButton label="关闭筛选文件夹弹窗" variant="ghost" size="icon" className="shrink-0"
+              onClick={() => handleOptionsModalAction({ action: 'cancel', modal: 'scope' })} />
+          </DialogHeader>
           <p id="scope-modal-copy" className={OPTIONS_MODAL_COPY_CLASS}>
             {modals.scope.copy}
           </p>
@@ -312,25 +285,14 @@ export function OptionsModals() {
               }}
             />
           </label>
-          <div
+          <DialogBody
             id="scope-folder-results"
             className={OPTIONS_MODAL_RESULTS_CLASS}
             role="tree"
             aria-label="筛选文件夹"
           >
             <FolderPickerResults kind="scope" searchInputRef={scopeSearchRef} />
-          </div>
-          <div className={OPTIONS_MODAL_ACTIONS_CLASS}>
-            <Button
-              className={OPTIONS_MODAL_BUTTON_CLASS}
-              type="button"
-              variant="secondary"
-              aria-label="关闭筛选文件夹弹窗"
-              onClick={() => handleOptionsModalAction({ action: 'cancel', modal: 'scope' })}
-            >
-              关闭
-            </Button>
-          </div>
+          </DialogBody>
         </>
       </ModalBackdrop>
 

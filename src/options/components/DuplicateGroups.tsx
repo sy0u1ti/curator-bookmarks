@@ -5,7 +5,8 @@ import { displayUrl } from '../../shared/text.js'
 import { Button } from '../../ui/base/Button'
 import { Checkbox } from '../../ui/base/Checkbox'
 import { TextSwap } from '../../ui/motion/TextSwap'
-import { MotionDisclosure } from '../../ui/motion/MotionDisclosure'
+import { SelectionDock } from './SelectionDock'
+import { StatusMessage } from '../../ui/base/StatusMessage'
 import { handleDuplicateAction } from '../options-controller'
 import { useDuplicateGroupsState } from './duplicate-groups-store.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
@@ -31,7 +32,7 @@ const RESULTS_CLASS = 'mt-4 flex flex-col gap-2'
 const EMPTY_CLASS =
   `${OPTION_INSET_CLASS} p-[14px_16px] text-[13px] leading-[1.55] text-ds-text-secondary shadow-none transition-colors hover:border-ds-border hover:bg-ds-hover`
 const DOCKED_SELECTION_CLASS =
-  'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 p-[12px_14px] [filter:var(--ds-filter-card)] max-[760px]:grid-cols-1'
+  'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-ds-card border border-ds-border bg-ds-surface-2 ds-inset-card [filter:var(--ds-filter-card)] max-[760px]:grid-cols-1'
 const DOCKED_COPY_CLASS = 'min-w-0'
 const DOCKED_TITLE_CLASS = 'block text-sm font-bold text-ds-text-primary'
 const DOCKED_TEXT_CLASS = 'mt-[5px] text-xs leading-[1.55] text-[rgba(245,245,247,0.58)]'
@@ -63,7 +64,7 @@ const ITEM_TITLE_CLASS =
 const ITEM_DETAIL_CLASS = 'text-right text-xs leading-relaxed text-ds-text-secondary tabular-nums'
 const ITEM_PATH_CLASS =
   'min-w-0 truncate text-xs leading-relaxed text-ds-text-secondary max-[520px]:whitespace-normal max-[520px]:[overflow-wrap:anywhere]'
-const ITEM_STATE_CLASS = 'whitespace-nowrap text-xs font-medium leading-relaxed text-ds-text-secondary'
+const ITEM_STATE_CLASS = 'min-w-12 whitespace-nowrap text-right text-xs font-medium leading-relaxed text-ds-text-secondary'
 
 export function DuplicateGroups() {
   const state = useDuplicateGroupsState()
@@ -140,7 +141,7 @@ function DuplicateDockedSelection({
   const unsafe = selectionStats.unsafeGroupCount > 0
 
   return (
-    <MotionDisclosure open={entered} className="sticky top-3 z-[5] max-[760px]:static">
+    <SelectionDock open={entered} label="已选重复书签操作">
       <section className={DOCKED_SELECTION_CLASS} aria-label="已选重复书签操作">
         <div className={DOCKED_COPY_CLASS}>
           <strong className={DOCKED_TITLE_CLASS}>
@@ -149,14 +150,11 @@ function DuplicateDockedSelection({
               text={`已选 ${selectionStats.deleteCount} 条待移入回收站`}
             />
           </strong>
-          <p className={DOCKED_TEXT_CLASS}>
-            保留 {selectionStats.keepCount} 条，涉及 {selectionStats.groupCount} 组。
-          </p>
-          {unsafe ? (
-            <p className={DOCKED_WARNING_CLASS}>
-              {selectionStats.unsafeGroupCount} 组已全选；每组至少保留 1 条后才能移入回收站。
-            </p>
-          ) : null}
+          <StatusMessage className={unsafe ? DOCKED_WARNING_CLASS : DOCKED_TEXT_CLASS} tone={unsafe ? 'error' : 'neutral'}>
+            {unsafe
+              ? `${selectionStats.unsafeGroupCount} 组已全选；每组至少保留 1 条后才能移入回收站。`
+              : `保留 ${selectionStats.keepCount} 条，涉及 ${selectionStats.groupCount} 组。`}
+          </StatusMessage>
         </div>
         <div className={DOCKED_ACTIONS_CLASS}>
           <Button
@@ -181,7 +179,7 @@ function DuplicateDockedSelection({
           </Button>
         </div>
       </section>
-    </MotionDisclosure>
+    </SelectionDock>
   )
 }
 
@@ -226,9 +224,8 @@ const DuplicateGroupCard = memo(function DuplicateGroupCard({
       <div className={GROUP_HEADER_CLASS}>
         <div className={GROUP_COPY_CLASS}>
           <strong className={GROUP_TITLE_CLASS} title={group.displayUrl}>{group.displayUrl}</strong>
-          <p className={GROUP_SUBTITLE_CLASS}>
-            {group.items.length} 个副本 · {group.folders.length} 个文件夹
-            {selectedCount > 0 ? ` · 已选 ${selectedCount} 条，保留 ${keepCount} 条` : ''}
+          <p className={`${GROUP_SUBTITLE_CLASS} tabular-nums`}>
+            {selectedCount > 0 ? `已选 ${selectedCount} 条 · 保留 ${keepCount} 条` : `${group.items.length} 个副本 · ${group.folders.length} 个文件夹`}
           </p>
         </div>
         <Button
@@ -241,10 +238,11 @@ const DuplicateGroupCard = memo(function DuplicateGroupCard({
           选择其余副本
         </Button>
       </div>
-      {reviewNote ? <p className={RECOMMENDATION_TEXT_CLASS}>{reviewNote}，请确认是否需要分别保留。</p> : null}
-      {selectedCount === group.items.length ? (
-        <p className="mb-0 mt-2 text-xs font-semibold text-ds-danger-text" role="alert">已选中全部副本，至少保留 1 条才能清理。</p>
-      ) : null}
+      <StatusMessage className={RECOMMENDATION_TEXT_CLASS} tone={selectedCount === group.items.length ? 'error' : 'neutral'}>
+        {selectedCount === group.items.length
+          ? '已选中全部副本，至少保留 1 条才能清理。'
+          : reviewNote ? `${reviewNote}，请确认是否需要分别保留。` : ''}
+      </StatusMessage>
       <div className={ITEM_LIST_CLASS}>
         {orderedItems.map((item) => (
           <DuplicateItemRow context={context} group={group} item={item} key={item.id} />
@@ -267,14 +265,13 @@ function DuplicateItemRow({
   const selected = context.selectedIds.has(itemId)
   const recommended = itemId === String(group.recommendedKeepId)
   const selectionLabel = getDuplicateItemSelectionLabel(item)
-  const sourceWarning = selected && itemId === String(group.newTabSourceItemId)
-  const showRecommendation = recommended && group.recommendation.reason &&
-    !(sourceWarning && group.recommendation.kind === 'newtab-source')
+  const isNewtabSource = itemId === String(group.newTabSourceItemId)
+  const sourceWarning = selected && isNewtabSource
+  const showRecommendation = recommended && group.recommendation.reason && !isNewtabSource
   const explainedKind = showRecommendation ? group.recommendation.kind : ''
   const tagExplained = ['manual-tags', 'ai-tags', 'summary', 'tagged'].includes(explainedKind || '')
   const details = [
     !tagExplained && itemId === String(group.taggedItemId) ? context.taggedLabel || '有整理信息' : '',
-    !sourceWarning && explainedKind !== 'newtab-source' && itemId === String(group.newTabSourceItemId) ? '新标签页来源' : '',
     explainedKind !== 'recent' && itemId === String(group.recentItemId) ? '最近访问' : '',
     isBookmarkInCurrentDuplicateScope(item, context.currentScopeFolderId) ? '当前范围' : ''
   ].filter(Boolean).join(' · ')
@@ -312,8 +309,10 @@ function DuplicateItemRow({
         </div>
         {showRecommendation ? <p className={RECOMMENDATION_TEXT_CLASS}>{group.recommendation.reason}</p> : null}
         {details ? <p className="mb-0 mt-1 text-xs leading-relaxed text-ds-text-secondary">{details}</p> : null}
-        {sourceWarning ? (
-          <p className="mb-0 mt-1 text-xs leading-relaxed text-ds-danger-text">此副本用于新标签页，清理后该入口也会移除。</p>
+        {isNewtabSource ? (
+          <StatusMessage className="mb-0 mt-1 text-xs leading-relaxed text-ds-text-secondary" tone={sourceWarning ? 'error' : 'neutral'}>
+            {sourceWarning ? '清理此副本也会移除新标签页入口。' : recommended && group.recommendation.reason ? group.recommendation.reason : '用于新标签页入口。'}
+          </StatusMessage>
         ) : null}
       </div>
     </div>

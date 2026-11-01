@@ -40,10 +40,17 @@
   --color-ds-success-text: var(--ds-success-text);
   --color-ds-success-soft: var(--ds-success-soft);
 
+  --radius-ds-xs: var(--ds-radius-xs);
   --radius-ds-sm: var(--ds-radius-sm);
   --radius-ds-md: var(--ds-radius-md);
   --radius-ds-lg: var(--ds-radius-lg);
   --radius-ds-xl: var(--ds-radius-xl);
+  --radius-ds-2xl: var(--ds-radius-2xl);
+  --radius-ds-full: var(--ds-radius-full);
+  --radius-ds-control: var(--ds-radius-control);
+  --radius-ds-menu: var(--ds-radius-menu);
+  --radius-ds-card: var(--ds-radius-card);
+  --radius-ds-dialog: var(--ds-radius-dialog);
 
   --shadow-ds-card: var(--ds-shadow-card);
   --shadow-ds-popover: var(--ds-shadow-popover);
@@ -71,4 +78,22 @@
   --color-curator-danger: var(--ds-danger);
   --color-curator-warning: var(--ds-warning);
   --color-curator-success: var(--ds-success);
+}
+
+/* The painted 1px border is part of the inset, not an extra pixel between
+   otherwise concentric corners. Borderless cards continue to use p-4. */
+@utility ds-inset-menu {
+  padding: calc(var(--ds-inset-control) - var(--ds-stroke-width));
+}
+
+@utility ds-inset-panel {
+  padding: calc(var(--ds-inset-panel) - var(--ds-stroke-width));
+}
+
+@utility ds-inset-card {
+  padding: calc(var(--ds-inset-card) - var(--ds-stroke-width));
+}
+
+@utility ds-inset-dialog {
+  padding: calc(var(--ds-inset-dialog) - var(--ds-stroke-width));
 }

@@ -1238,54 +1238,74 @@ async function verifyPopupBookmarkReorder(page, seeded, context) {
 async function verifyOptionsDisclosureIndicator(page, extensionId) {
   await page.goto(`chrome-extension://${extensionId}/src/options/options.html#inbox`, { waitUntil: 'domcontentloaded' })
   const sidebar = page.locator('aside[aria-label="设置导航"]')
-  const trigger = sidebar.getByRole('button', { name: '可用性管理', exact: true })
+  const trigger = sidebar.getByRole('link', { name: '可用性管理', exact: true })
   const waitForSelection = () => page.waitForFunction(() => {
     const sidebar = document.querySelector('aside[aria-label="设置导航"]')
     const indicator = sidebar?.querySelector(':scope > .options-nav-active-indicator')
-    const active = sidebar?.querySelector('.options-nav-link[aria-current="page"]')
-    return indicator?.dataset.ready === 'true' && active &&
-      Math.abs(indicator.getBoundingClientRect().y - active.getBoundingClientRect().y) < 0.5 &&
-      !indicator.getAnimations().some((animation) => animation.playState === 'running')
+    const parent = sidebar?.querySelector('.options-nav-trigger[data-active]')
+    const current = sidebar?.querySelector('.options-nav-link[aria-current="page"]')
+    const child = sidebar?.querySelector('.options-nav-sub-indicator')
+    const target = parent ?? current
+    return indicator?.dataset.ready === 'true' && !indicator.dataset.moving && target &&
+      Math.abs(indicator.getBoundingClientRect().y - target.getBoundingClientRect().y) < 0.5 &&
+      (!parent || (!child.hidden && Math.abs(child.getBoundingClientRect().y - current.getBoundingClientRect().y) < 0.5)) &&
+      !sidebar.getAnimations({ subtree: true }).some((animation) => animation.playState === 'running')
   })
   await waitForSelection()
-  await trigger.focus()
+  assert.equal(await trigger.getAttribute('aria-expanded'), 'false')
+  await trigger.hover()
+  assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'Hover must not open an unrelated group')
+  await trigger.click()
+  await waitForSelection()
+  assert.equal(await trigger.getAttribute('aria-expanded'), 'true')
+  assert.equal(await trigger.getAttribute('aria-current'), 'true', 'An active child must also mark its parent')
+  assert.equal(await sidebar.locator('a[data-options-section="availability"]').getAttribute('aria-current'), 'page')
 
-  const recordDisclosure = (toggleTimes) => sidebar.evaluate((element, times) => new Promise((resolve) => {
-    const trigger = element.querySelector('.t-acc-head')
+  const childMotion = await sidebar.evaluate(async (element) => {
+    const mark = element.querySelector('.options-nav-sub-indicator')
+    const main = element.querySelector(':scope > .options-nav-active-indicator')
+    const mainY = main.getBoundingClientRect().y
+    const frames = []
+    element.querySelector('a[data-options-section="history"]').click()
+    const started = performance.now()
+    do {
+      await new Promise(requestAnimationFrame)
+      frames.push({ y: mark.getBoundingClientRect().y, mainY: main.getBoundingClientRect().y, hidden: mark.hidden })
+    } while (performance.now() - started < 500)
+    return { frames, mainY }
+  })
+  assert.ok(new Set(childMotion.frames.map(frame => frame.y.toFixed(2))).size > 2, 'The child highlight glides locally')
+  assert.ok(childMotion.frames.every(frame => !frame.hidden && Math.abs(frame.mainY - childMotion.mainY) < 0.5),
+    'Selecting a child must not move or extinguish the parent highlight')
+  await waitForSelection()
+  await captureVisual(page, 'options-parent-and-child-selection')
+
+  const recordGroupChanges = (destinations) => sidebar.evaluate((element, destinations) => new Promise((resolve) => {
+    const group = element.querySelector('.options-nav-trigger')
     const panel = element.querySelector('.t-acc-panel')
-    const inner = panel.querySelector('.t-acc-panel-inner')
-    const active = element.querySelector('.options-nav-link[aria-current="page"]')
     const indicator = element.querySelector(':scope > .options-nav-active-indicator')
     const samples = []
     const sample = () => {
-      const row = active.getBoundingClientRect()
       const highlight = indicator.getBoundingClientRect()
-      const clip = inner.getBoundingClientRect()
-      const style = getComputedStyle(indicator)
-      const inset = style.clipPath.match(/^inset\(([^)]+)\)$/)?.[1].split(/\s+/) || ['0px']
-      const pixels = (value) => Number.parseFloat(value) * (value.endsWith('%') ? highlight.height / 100 : 1)
-      const top = pixels(inset[0])
-      const bottom = pixels(inset[2] || inset[0])
-      const painted = style.visibility !== 'hidden' && Number(style.opacity) > 0.01 &&
-        highlight.height - top - bottom > 0.5
+      const target = (element.querySelector('.options-nav-trigger[data-active]') ??
+        element.querySelector('.options-nav-link[aria-current="page"]')).getBoundingClientRect()
       samples.push({
-        error: row.height > 0 ? Math.abs(row.y - highlight.y) : 0,
-        overflow: panel.contains(active) && painted ? Math.max(0, highlight.bottom - bottom - clip.bottom) : 0,
-        panelHeight: clip.height
+        error: Math.abs(target.y - highlight.y),
+        panelHeight: panel.getBoundingClientRect().height,
+        finite: [highlight.x, highlight.y, highlight.width, highlight.height].every(Number.isFinite)
       })
     }
-    // ResizeObserver runs after layout and before paint, so this records the
-    // geometry actually presented during the disclosure rather than its endpoint.
     const observer = new ResizeObserver(sample)
     observer.observe(panel)
     const startedAt = performance.now()
-    let nextToggle = 0
+    let next = 0
     const tick = (now) => {
-      while (nextToggle < times.length && now - startedAt >= times[nextToggle]) {
-        trigger.click()
-        nextToggle += 1
+      while (next < destinations.length && now - startedAt >= destinations[next][0]) {
+        const destination = destinations[next][1]
+        ;(destination === 'group' ? group : element.querySelector(`a[data-options-section="${destination}"]`)).click()
+        next++
       }
-      if (now - startedAt < times.at(-1) + 650) {
+      if (now - startedAt < destinations.at(-1)[0] + 1200) {
         requestAnimationFrame(tick)
         return
       }
@@ -1293,104 +1313,36 @@ async function verifyOptionsDisclosureIndicator(page, extensionId) {
       observer.disconnect()
       resolve({
         samples: samples.length,
-        maxError: Math.max(...samples.map((value) => value.error)),
-        maxOverflow: Math.max(...samples.map((value) => value.overflow)),
+        finite: samples.every(value => value.finite),
         last: samples.at(-1),
-        open: trigger.getAttribute('aria-expanded')
+        open: group.getAttribute('aria-expanded'),
+        inert: panel.inert,
+        childHidden: element.querySelector('.options-nav-sub-indicator').hidden
       })
     }
     requestAnimationFrame(tick)
-  }), toggleTimes)
+  }), destinations)
 
-  for (const [label, times, open] of [
-    ['expand', [0], 'true'],
-    ['collapse', [0], 'false'],
-    ['rapid reversal', [0, 70, 120], 'true']
+  for (const [label, destinations, open] of [
+    ['leave group', [[0, 'inbox']], 'false'],
+    ['return to group', [[0, 'group']], 'true'],
+    ['rapid reversal', [[0, 'inbox'], [70, 'group'], [120, 'backup']], 'false']
   ]) {
-    const result = await recordDisclosure(times)
+    const result = await recordGroupChanges(destinations)
     assert.ok(result.samples >= 3, `${label} should capture intermediate layout frames`)
-    assert.ok(result.maxError <= 1, `The selected row and highlight must move together during ${label}: ${JSON.stringify(result)}`)
+    assert.ok(result.finite && result.last.error <= 1, `The spring must settle onto the row's final layout after ${label}: ${JSON.stringify(result)}`)
     assert.equal(result.open, open)
+    assert.equal(result.inert, open === 'false')
+    assert.equal(result.childHidden, open === 'false')
   }
 
-  await sidebar.locator('a[data-options-section="availability"]').click()
-  await waitForSelection()
   await trigger.focus()
-  const collapsedChild = await recordDisclosure([0])
-  assert.ok(collapsedChild.maxOverflow <= 1, `A collapsing child highlight must not spill onto the following rows: ${JSON.stringify(collapsedChild)}`)
-  await captureVisual(page, 'options-collapsed-active-child')
-  const reopenedChild = await recordDisclosure([0])
-  assert.ok(reopenedChild.maxOverflow <= 1, `The child highlight must reveal within the opening list: ${JSON.stringify(reopenedChild)}`)
+  await page.keyboard.press('Enter')
   await waitForSelection()
-  assert.equal(await trigger.evaluate((element) => document.activeElement === element), true, 'Disclosure motion must preserve keyboard focus')
-
-  const handoff = await sidebar.evaluate(async (element) => {
-    const indicator = element.querySelector(':scope > .options-nav-active-indicator')
-    const exitIndicator = element.querySelector(':scope > .options-nav-active-indicator-exit')
-    const geometryProperties = ['transform', 'translate', 'top', 'left', 'width', 'height', 'clip-path']
-    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve))
-    const collect = () => [...indicator.getAnimations(), ...exitIndicator.getAnimations()]
-    const placementError = () => Math.abs(
-      indicator.getBoundingClientRect().y -
-        element.querySelector('.options-nav-link[aria-current="page"]').getBoundingClientRect().y
-    )
-
-    // The section click commits on a later tick, so wait for the hand-off to
-    // start rather than assuming it is already running.
-    element.querySelector('a[data-options-section="inbox"]').click()
-    let started = []
-    for (let frame = 0; frame < 60 && !started.length; frame += 1) {
-      await nextFrame()
-      started = collect()
-    }
-    if (!started.length) throw new Error('Selecting another section should hand the highlight over in place')
-    // The highlight has to land on the selected row at once, with no travel.
-    const placed = placementError()
-    // Its outgoing twin dissolves on the row it was on, not somewhere between.
-    const exitPlaced = Math.abs(
-      exitIndicator.getBoundingClientRect().y -
-        element.querySelector('a[data-options-section="availability"]').getBoundingClientRect().y
-    )
-
-    // Toggling the disclosure mid-hand-off relayouts the list, so the dissolve
-    // must survive it and then settle back onto the selected row.
-    const panel = element.querySelector('.t-acc-head').closest('.t-acc').querySelector('.t-acc-panel')
-    const heightBefore = panel.getBoundingClientRect().height
-    element.querySelector('.t-acc-head').click()
-    for (let frame = 0; frame < 3; frame += 1) await nextFrame()
-    const dissolveSurvived = collect().some((animation) => animation.playState !== 'finished')
-    for (let frame = 0; frame < 60 && collect().some((animation) => animation.playState === 'running'); frame += 1) {
-      await nextFrame()
-    }
-    await nextFrame()
-    const collapsed = Math.abs(panel.getBoundingClientRect().height - heightBefore)
-    const settled = placementError()
-
-    return {
-      placed,
-      exitPlaced,
-      settled,
-      dissolveSurvived,
-      collapsed,
-      geometry: started
-        .filter((animation) => geometryProperties.includes(animation.transitionProperty)).length,
-      durations: started
-        .filter((animation) => animation.transitionProperty === 'opacity')
-        .map((animation) => animation.effect.getTiming().duration)
-    }
-  })
-  assert.equal(handoff.geometry, 0, `Section selection must not animate the highlight geometry: ${JSON.stringify(handoff)}`)
-  assert.deepEqual(
-    handoff.durations.sort((a, b) => a - b),
-    [150, 150],
-    `Section selection should cross-dissolve the outgoing and incoming highlight together over the quick token: ${JSON.stringify(handoff)}`
-  )
-  assert.ok(handoff.placed <= 1, `The highlight must land on the selected row at once: ${JSON.stringify(handoff)}`)
-  assert.ok(handoff.exitPlaced <= 1, `The outgoing highlight must dissolve on the row it was on: ${JSON.stringify(handoff)}`)
-  assert.ok(handoff.collapsed > 1, `The disclosure must actually relayout under the hand-off: ${JSON.stringify(handoff)}`)
-  assert.ok(handoff.settled <= 1, `The highlight must settle back onto the selected row: ${JSON.stringify(handoff)}`)
-  assert.equal(handoff.dissolveSurvived, true, `Disclosure layout must not cut an in-flight highlight hand-off short: ${JSON.stringify(handoff)}`)
+  assert.equal(await sidebar.locator('a[data-options-section="history"]').getAttribute('aria-current'), 'page', 'Parent navigation restores its last child')
+  await trigger.click()
   await waitForSelection()
+  assert.equal(await trigger.getAttribute('aria-expanded'), 'true', 'An active parent keeps its current sublist open')
 }
 
 async function verifyOptionsChrome(page, extensionId) {
@@ -1729,7 +1681,7 @@ async function verifyOptionsRefreshStability(page, worker, extensionId) {
       return null
     }
     const sample = (now) => {
-      const feature = findCard('功能设置')
+      const feature = findCard('收藏与整理')
       const content = findCard('网页内容索引')
       const shortcuts = findCard('快捷键')
       const switches = (element) => element

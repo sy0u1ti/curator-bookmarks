@@ -49,20 +49,14 @@ body {
   background: var(--ds-bg-page);
 }
 
-/* Status lines mount as the save flow advances; a short rise keeps them from
-   popping in. The success check reuses the popup "saved" draw timing. */
-.archive-status {
-  opacity: 1;
-  transform: translate3d(0, 0, 0);
-  transition:
-    opacity var(--duration-quick) var(--ease-smooth-out),
-    transform var(--duration-quick) var(--ease-smooth-out);
+html {
+  scrollbar-gutter: stable;
 }
 
-@starting-style {
-  .archive-status {
-    opacity: 0;
-    transform: translate3d(0, var(--distance-micro), 0);
+@media (max-width: 420px) {
+  .archive-actions > button {
+    min-width: 0;
+    padding-inline: 8px;
   }
 }
 

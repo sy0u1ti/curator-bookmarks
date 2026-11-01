@@ -1,8 +1,9 @@
 import { useAiAnalysisStatus } from './ai-analysis-status-store.js'
 import { OPTION_RUN_CELL_CLASS } from './option-layout-classes.js'
+import { StatusMessage } from '../../ui/base/StatusMessage'
 
 const AI_ANALYSIS_STATUS_META_CLASS =
-  'flex flex-wrap items-center justify-between gap-3 max-[760px]:flex-col max-[760px]:items-start'
+  'flex min-w-0 items-center justify-between gap-3'
 const AI_ANALYSIS_STATUS_TITLE_CLASS =
   'block text-[15px] font-[650] leading-normal tracking-[0] text-ds-text-primary'
 const AI_ANALYSIS_STATUS_COPY_CLASS =
@@ -25,20 +26,16 @@ export function AiAnalysisStatusCard() {
   ].join(' ')
 
   return (
-    <div
-      className={OPTION_RUN_CELL_CLASS}
-      role={isError ? 'alert' : 'status'}
-      aria-live={isError ? 'assertive' : 'polite'}
-    >
+    <div className={OPTION_RUN_CELL_CLASS}>
       <div className={AI_ANALYSIS_STATUS_META_CLASS}>
         <strong className={AI_ANALYSIS_STATUS_TITLE_CLASS}>分析状态</strong>
         <span className={badgeClassName}>
           {state.badgeText}
         </span>
       </div>
-      <p className={AI_ANALYSIS_STATUS_COPY_CLASS}>
+      <StatusMessage className={AI_ANALYSIS_STATUS_COPY_CLASS} tone={isError ? 'error' : 'neutral'}>
         {state.statusCopy}
-      </p>
+      </StatusMessage>
     </div>
   )
 }

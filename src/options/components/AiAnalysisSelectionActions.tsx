@@ -1,6 +1,5 @@
 import { Button } from '../../ui/base/Button'
-import { TextSwap } from '../../ui/motion/TextSwap'
-import { MotionDisclosure } from '../../ui/motion/MotionDisclosure'
+import { SelectionDock } from './SelectionDock'
 import {
   AI_ANALYSIS_CONFIRM_BUTTON_ACTIVE_CLASS,
   AI_ANALYSIS_CONFIRM_ICON_CLASS,
@@ -10,55 +9,26 @@ import {
 import { handleAiAnalysisAction } from '../options-controller'
 import { useAiAnalysisSelectionActions } from './ai-analysis-status-store.js'
 
-const AI_SELECTION_HEADER_CLASS =
-  'flex min-w-0 flex-wrap items-center justify-between gap-3 max-[760px]:flex-col max-[760px]:items-start'
+const AI_SELECTION_HEADER_CLASS = 'options-selection-bar'
 const AI_SELECTION_HEADER_COPY_CLASS = 'min-w-0'
 const AI_SELECTION_HEADER_TITLE_CLASS =
   'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
-const AI_SELECTION_SUBTITLE_CLASS =
-  'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
-const AI_SELECTION_ACTIONS_CLASS =
-  'flex min-w-0 flex-[0_0_auto] flex-wrap items-center justify-end gap-2.5 max-[760px]:flex-col max-[760px]:items-start max-[760px]:justify-start'
+const AI_SELECTION_ACTIONS_CLASS = 'options-selection-actions'
 
 export function AiAnalysisSelectionActions() {
   const state = useAiAnalysisSelectionActions()
   const entered = !state.hidden
 
   return (
-    <MotionDisclosure open={entered}>
+    <SelectionDock open={entered} label="已选分析建议操作">
       <div className={AI_ANALYSIS_SELECTION_GROUP_CLASS}>
         <div className={AI_SELECTION_HEADER_CLASS}>
           <div className={AI_SELECTION_HEADER_COPY_CLASS}>
             <strong className={AI_SELECTION_HEADER_TITLE_CLASS}>
-              <TextSwap animate={entered} text={state.countLabel} />
+              <span className="tabular-nums">{state.countLabel}</span>
             </strong>
-            <p className={AI_SELECTION_SUBTITLE_CLASS}>仅应用“建议改名”条目。</p>
           </div>
           <div className={AI_SELECTION_ACTIONS_CLASS}>
-            <Button
-              className={AI_ANALYSIS_SMALL_BUTTON_CLASS}
-              size="sm"
-              type="button"
-              variant="secondary"
-              aria-label="全选书签智能分析结果"
-              disabled={state.selectAllDisabled}
-              focusableWhenDisabled={state.selectAllDisabled}
-              onClick={() => handleAiAnalysisAction('select-all')}
-            >
-              全选
-            </Button>
-            <Button
-              className={AI_ANALYSIS_SMALL_BUTTON_CLASS}
-              size="sm"
-              type="button"
-              variant="secondary"
-              aria-label="全选书签智能分析高置信结果"
-              disabled={state.selectHighConfidenceDisabled}
-              focusableWhenDisabled={state.selectHighConfidenceDisabled}
-              onClick={() => handleAiAnalysisAction('select-high-confidence')}
-            >
-              全选高置信
-            </Button>
             <Button
               className={AI_ANALYSIS_SMALL_BUTTON_CLASS}
               size="sm"
@@ -106,11 +76,11 @@ export function AiAnalysisSelectionActions() {
               focusableWhenDisabled={state.applyDisabled}
               onClick={() => handleAiAnalysisAction('apply-selection')}
             >
-              应用所选建议
+              应用改名建议
             </Button>
           </div>
         </div>
       </div>
-    </MotionDisclosure>
+    </SelectionDock>
   )
 }

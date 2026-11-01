@@ -6,11 +6,12 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type MouseEvent
 } from 'react'
 import { Button } from '../ui/base/Button'
 import { CloseButton } from '../ui/base/CloseButton'
-import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../ui/base/Collapsible'
+import { CollapsiblePanel, CollapsibleRoot } from '../ui/base/Collapsible'
 import {
   DialogBackdrop,
   DialogClose,
@@ -44,7 +45,7 @@ import {
   navGroupClass,
   navGroupTriggerClass,
   navActiveIndicatorClass,
-  navActiveIndicatorExitClass,
+  navSubIndicatorClass,
   navLinkIconClass,
   navLinkClass,
   navSubitemClass,
@@ -71,6 +72,7 @@ import {
   optionsSidebarLabelClass
 } from './components/options-chrome-classes'
 import { useOptionsSectionChrome } from './useOptionsSectionChrome'
+import { attachSidebarMotion } from './options-sidebar-motion'
 
 const AvailabilityPanel = lazy(() => import('./components/AvailabilityPanel').then((module) => ({ default: module.AvailabilityPanel })))
 const AiAnalysisPanel = lazy(() => import('./components/AiAnalysisPanel').then((module) => ({ default: module.AiAnalysisPanel })))
@@ -174,27 +176,33 @@ function OptionsNavLink({
   section,
   label,
   variant,
+  motionIndex = 0,
   activeSectionKey,
   onNavigate
 }: NavLink & {
   activeSectionKey: OptionsSectionKey
   onNavigate: SectionLinkClickHandler
+  motionIndex?: number
 }) {
   const active = activeSectionKey === section
   const className = variant === 'subitem' ? navSubitemClass : ''
 
   return (
     <a
-      className={['group', navLinkClass, className].filter(Boolean).join(' ')}
+      className={[navLinkClass, className].filter(Boolean).join(' ')}
       href={href}
       aria-current={active ? 'page' : undefined}
       data-options-section={section}
+      data-nav-level={variant === 'subitem' ? 'secondary' : 'primary'}
+      style={{ '--nav-item-index': motionIndex } as CSSProperties}
       onClick={onNavigate}
     >
-      <span className={navLinkIconClass} aria-hidden="true">
-        <Icon name={icon} size={15} />
+      <span className="options-nav-content relative z-[1] flex min-w-0 items-center gap-[inherit]">
+        <span className={navLinkIconClass} aria-hidden="true">
+          <Icon name={icon} size={15} />
+        </span>
+        <span className="options-nav-label min-w-0 truncate max-[920px]:whitespace-normal">{label}</span>
       </span>
-      <span className="relative z-[1] min-w-0 truncate max-[920px]:whitespace-normal">{label}</span>
       {section === 'inbox' ? <InboxPendingCount /> : null}
     </a>
   )
@@ -264,165 +272,34 @@ function OptionsSidebar({
   variant?: 'desktop' | 'mobile'
   visible?: boolean
 }) {
-  const [availabilityOpen, setAvailabilityOpen] = useState(() => availabilitySectionKeys.has(activeSectionKey))
+  const availabilityOpen = availabilitySectionKeys.has(activeSectionKey)
+  const lastAvailabilitySection = useRef<OptionsSectionKey>('availability')
   useLayoutEffect(() => {
-    if (availabilitySectionKeys.has(activeSectionKey)) setAvailabilityOpen(true)
-  }, [activeSectionKey])
+    if (availabilityOpen) lastAvailabilitySection.current = activeSectionKey
+  }, [activeSectionKey, availabilityOpen])
   const idPrefix = variant === 'mobile' ? 'mobile-' : ''
   const sidebarRef = useRef<HTMLElement | null>(null)
   const activeIndicatorRef = useRef<HTMLSpanElement | null>(null)
-  const exitIndicatorRef = useRef<HTMLSpanElement | null>(null)
-  const activeLinkRef = useRef<HTMLElement | null>(null)
-  const exitLinkRef = useRef<HTMLElement | null>(null)
+  const sidebarMotionRef = useRef<ReturnType<typeof attachSidebarMotion> | null>(null)
 
   useLayoutEffect(() => {
     const sidebar = sidebarRef.current
     const indicator = activeIndicatorRef.current
-    const exitIndicator = exitIndicatorRef.current
-    if (!sidebar || !indicator || !exitIndicator || !visible) {
-      if (indicator) {
-        indicator.style.opacity = '0'
-        delete indicator.dataset.ready
-      }
-      if (exitIndicator) {
-        exitIndicator.style.opacity = '0'
-      }
-      activeLinkRef.current = null
-      exitLinkRef.current = null
+    if (!sidebar || !indicator || !visible) {
+      if (indicator) indicator.hidden = true
       return
     }
-
-    let readyFrame = 0
-
-    type IndicatorGeometry = {
-      clipPath: string
-      height: string
-      transform: string
-      width: string
-    }
-
-    const readGeometry = (link: HTMLElement): IndicatorGeometry | null => {
-      const sidebarRect = sidebar.getBoundingClientRect()
-      const linkRect = link.getBoundingClientRect()
-      if (!linkRect.width || !linkRect.height) {
-        return null
-      }
-      const clipRect = link.closest('.t-acc-panel-inner')?.getBoundingClientRect()
-      return {
-        clipPath: clipRect
-          ? `inset(${Math.max(0, clipRect.top - linkRect.top)}px 0px ${Math.max(0, linkRect.bottom - clipRect.bottom)}px 0px)`
-          : '',
-        height: `${linkRect.height}px`,
-        transform: `translate3d(${linkRect.left - sidebarRect.left + sidebar.scrollLeft}px, ${linkRect.top - sidebarRect.top + sidebar.scrollTop}px, 0)`,
-        width: `${linkRect.width}px`
-      }
-    }
-
-    const paintGeometry = (element: HTMLSpanElement, geometry: IndicatorGeometry) => {
-      element.style.transform = geometry.transform
-      element.style.width = geometry.width
-      element.style.height = geometry.height
-      element.style.clipPath = geometry.clipPath
-    }
-
-    // Replaying an opacity change from a known start value is what guarantees
-    // the browser commits that value before the transition runs.
-    const replayOpacity = (element: HTMLSpanElement, from: string, to: string) => {
-      element.style.transition = 'none'
-      element.style.opacity = from
-      void element.offsetWidth
-      element.style.removeProperty('transition')
-      element.style.opacity = to
-    }
-
-    const isDissolving = (element: HTMLSpanElement) =>
-      element
-        .getAnimations()
-        .some(
-          (animation) =>
-            (animation as CSSTransition).transitionProperty === 'opacity' &&
-            animation.playState !== 'finished'
-        )
-
-    const positionIndicator = () => {
-      const activeLink = sidebar.querySelector<HTMLElement>(
-        '.options-nav-link[aria-current="page"]'
-      )
-      const geometry = activeLink ? readGeometry(activeLink) : null
-      if (!activeLink || !geometry) {
-        indicator.style.opacity = '0'
-        exitIndicator.style.opacity = '0'
-        return
-      }
-
-      // The highlight never travels across the sidebar. It is placed on the
-      // active row at once, while a twin parked on the row that was selected
-      // dissolves there, so changing sections reads as one highlight handing
-      // over in place instead of a shape drifting between rows.
-      const outgoing = activeLinkRef.current
-      const selectionChanged = outgoing !== activeLink
-      // A second selection can arrive while the twin is still fading.
-      // Re-parking it then would snap a half-faded copy back to full opacity
-      // on the row in between, so that copy is left to finish where it is.
-      const outgoingGeometry =
-        selectionChanged && outgoing && !isDissolving(exitIndicator)
-          ? readGeometry(outgoing)
-          : null
-      if (outgoingGeometry) {
-        paintGeometry(exitIndicator, outgoingGeometry)
-        exitLinkRef.current = outgoing
-      }
-      activeLinkRef.current = activeLink
-      paintGeometry(indicator, geometry)
-
-      if (selectionChanged) {
-        if (outgoingGeometry) {
-          replayOpacity(exitIndicator, '1', '0')
-        }
-        // The first placement paints settled: there is nothing to hand over
-        // from, so it must not spend a frame fading in. A quick second
-        // selection also keeps the fade already running rather than
-        // restarting it from nothing.
-        if (!outgoing || isDissolving(indicator)) {
-          indicator.style.opacity = '1'
-        } else {
-          replayOpacity(indicator, '0', '1')
-        }
-      } else {
-        // Layout movement only keeps the highlight glued to its row, with no
-        // transition to ride; replaying the fade here would flicker on every
-        // resize and scroll.
-        indicator.style.opacity = '1'
-      }
-
-      // Keep an in-flight hand-off glued to the row it is dissolving on, so a
-      // resizing disclosure or a scroll never strands it somewhere else.
-      const exitLink = exitLinkRef.current
-      const exitGeometry = exitLink && isDissolving(exitIndicator) ? readGeometry(exitLink) : null
-      if (exitGeometry) {
-        paintGeometry(exitIndicator, exitGeometry)
-      }
-
-      if (!indicator.dataset.ready && !readyFrame) {
-        readyFrame = window.requestAnimationFrame(() => {
-          indicator.dataset.ready = 'true'
-        })
-      }
-    }
-
-    positionIndicator()
-    const resizeObserver = new ResizeObserver(positionIndicator)
-    resizeObserver.observe(sidebar)
-    sidebar.querySelectorAll('.t-acc-panel, .options-nav-link[aria-current="page"]').forEach((element) => {
-      resizeObserver.observe(element)
-    })
-    window.addEventListener('resize', positionIndicator)
+    const motion = attachSidebarMotion(sidebar, indicator)
+    sidebarMotionRef.current = motion
     return () => {
-      window.cancelAnimationFrame(readyFrame)
-      resizeObserver.disconnect()
-      window.removeEventListener('resize', positionIndicator)
+      motion.dispose()
+      sidebarMotionRef.current = null
     }
-  }, [activeSectionKey, variant, visible])
+  }, [variant, visible])
+
+  useLayoutEffect(() => {
+    sidebarMotionRef.current?.sync()
+  }, [activeSectionKey, availabilityOpen, variant, visible])
 
   return (
     <aside
@@ -431,7 +308,6 @@ function OptionsSidebar({
       ref={sidebarRef}
     >
       <span className={navActiveIndicatorClass} ref={activeIndicatorRef} aria-hidden="true" />
-      <span className={navActiveIndicatorExitClass} ref={exitIndicatorRef} aria-hidden="true" />
       {navGroups.map((group, groupIndex) => (
         <div
           className={[navGroupClass, groupIndex > 0 ? 'mt-[18px]' : ''].filter(Boolean).join(' ')}
@@ -453,25 +329,34 @@ function OptionsSidebar({
               <CollapsibleRoot
                 className={navCollapsibleClass}
                 open={availabilityOpen}
-                onOpenChange={setAvailabilityOpen}
               >
-                <CollapsibleTrigger
+                <a
                   className={navGroupTriggerClass}
-                  type="button"
+                  href={`#${availabilityOpen ? activeSectionKey : lastAvailabilitySection.current}`}
+                  data-options-nav-group={group.collapsible.key}
+                  data-active={availabilityOpen || undefined}
+                  data-panel-open={availabilityOpen ? '' : undefined}
+                  aria-current={availabilityOpen ? 'true' : undefined}
+                  aria-expanded={availabilityOpen}
                   aria-controls={`${idPrefix}${group.collapsible.panelId}`}
+                  onClick={onNavigate}
                 >
-                  <span>{group.collapsible.trigger}</span>
+                  <span className="options-nav-label">{group.collapsible.trigger}</span>
                   <span className="t-acc-chevron text-ds-text-disabled" aria-hidden="true">
                     <Icon name="ChevronDown" size={14} />
                   </span>
-                </CollapsibleTrigger>
+                </a>
                 <CollapsiblePanel
                   id={`${idPrefix}${group.collapsible.panelId}`}
                   className={navSublistClass}
+                  inert={!availabilityOpen}
+                  aria-hidden={!availabilityOpen || undefined}
                 >
-                  {group.collapsible.links.map((link) => (
+                  <span className={navSubIndicatorClass} hidden aria-hidden="true" />
+                  {group.collapsible.links.map((link, index) => (
                     <OptionsNavLink
                       key={link.section}
+                      motionIndex={index}
                       activeSectionKey={activeSectionKey}
                       onNavigate={onNavigate}
                       {...link}
@@ -512,7 +397,8 @@ function OptionsMobileNavigation({
       !event.metaKey &&
       !event.altKey &&
       !event.ctrlKey &&
-      !event.shiftKey
+      !event.shiftKey &&
+      !event.currentTarget.hasAttribute('data-options-nav-group')
     onNavigate(event)
     if (shouldClose) {
       onOpenChange(false)
@@ -655,8 +541,8 @@ export function OptionsApp() {
     }
   }, [])
 
-  const requestAiProviderAnchorAttention = useCallback(() => {
-    if (sectionKey !== 'ai-settings') {
+  useLayoutEffect(() => {
+    if (sectionKey !== 'ai-settings' || sectionAnchor !== 'ai-provider') {
       return
     }
 
@@ -665,7 +551,7 @@ export function OptionsApp() {
       return
     }
 
-    window.requestAnimationFrame(() => {
+    const frame = window.requestAnimationFrame(() => {
       if (aiProviderAnchorRef.current !== target) {
         return
       }
@@ -687,44 +573,22 @@ export function OptionsApp() {
       }
       setAiProviderAttentionRequestId((requestId) => requestId + 1)
     })
-  }, [sectionKey])
+    return () => window.cancelAnimationFrame(frame)
+  }, [sectionKey, sectionAnchor, sectionRevision])
 
   const handleAiProviderAnchorRef = useCallback((node: HTMLDivElement | null) => {
     aiProviderAnchorRef.current = node
-    if (node) {
-      window.requestAnimationFrame(requestAiProviderAnchorAttention)
-    }
-  }, [requestAiProviderAnchorAttention])
+  }, [])
 
-  useEffect(() => {
-    requestAiProviderAnchorAttention()
-  }, [requestAiProviderAnchorAttention, sectionRevision])
-
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (sectionAnchor) {
       return
     }
-
-    let secondFrame = 0
-    const scrollTop = () => {
-      optionsMainRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-      optionsShellRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-    }
-
-    scrollTop()
-    const firstFrame = window.requestAnimationFrame(() => {
-      scrollTop()
-      secondFrame = window.requestAnimationFrame(scrollTop)
-    })
-    const timeout = window.setTimeout(scrollTop, 0)
-    return () => {
-      window.cancelAnimationFrame(firstFrame)
-      if (secondFrame) {
-        window.cancelAnimationFrame(secondFrame)
-      }
-      window.clearTimeout(timeout)
-    }
-  }, [sectionAnchor, sectionRevision])
+    // A navigation resets once, before paint. Re-selecting the same section or
+    // publishing fresh data is not a new reading position.
+    optionsMainRef.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+    optionsShellRef.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+  }, [sectionAnchor, sectionKey])
 
   const handleSectionNavigationClick = (event: MouseEvent<HTMLAnchorElement>) => {
     if (

@@ -7,17 +7,26 @@ export async function runMotionCoverage(page) {
     console.log(`PASS ${name}: ${description}`)
   }
   await page.cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false })
+  await page.cdp('Page.bringToFront')
+  await page.cdp('Emulation.setFocusEmulationEnabled', { enabled: true })
   await page.cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] })
   const tokens = await page.evaluate(() => {
     const style = getComputedStyle(document.documentElement)
+    const milliseconds = name => {
+      const value = style.getPropertyValue(name).trim()
+      return Number.parseFloat(value) * (value.endsWith('ms') ? 1 : 1000)
+    }
     return {
       spring: style.getPropertyValue('--ds-ease-spring').trim(),
       controlEasing: style.getPropertyValue('--ds-ease-standard').trim(),
-      controlDuration: Number.parseFloat(style.getPropertyValue('--ds-motion-control')),
+      surfaceEasing: style.getPropertyValue('--ds-ease-settle').trim(),
+      controlDuration: milliseconds('--ds-motion-control'),
+      stateDuration: milliseconds('--ds-motion-state'),
+      dropdownClose: milliseconds('--dropdown-close-dur'),
       pressScale: Number.parseFloat(style.getPropertyValue('--ds-press-scale'))
     }
   })
-  assert.ok(tokens.pressScale >= 0.99 && tokens.pressScale < 1, 'Frequent presses must stay within 1% compression')
+  assert.equal(tokens.pressScale, 0.96, 'Small controls use Magpie press feedback; full-width rows opt out')
   assert.ok(tokens.controlDuration <= 160, 'Button feedback must not inherit the longer surface spring')
   await page.evaluate(() => {
     window.__motionLog = []
@@ -39,7 +48,8 @@ export async function runMotionCoverage(page) {
         window.__motionLog.push({
           selector, property: event.propertyName, pseudo: event.pseudoElement,
           duration: animation.effect.getTiming().duration, easing: animation.effect.getTiming().easing,
-          inert: event.target.inert, ending: event.target.hasAttribute('data-ending-style'),
+          inert: event.target.inert,
+          ending: event.target.hasAttribute('data-ending-style') || event.target.hasAttribute('data-closed'),
           frames: animation.effect.getKeyframes()
         })
       }
@@ -51,16 +61,19 @@ export async function runMotionCoverage(page) {
       element.getAnimations({ subtree: true }).every(animation => animation.playState === 'finished')
   }, selector, { timeout: 5000 })
   const log = selector => page.evaluate(selector => window.__motionLog.filter(event => event.selector === selector), selector)
+  const normalizeEasing = easing => easing.replace(/-?(?:\d+\.?\d*|\.\d+)/g, value => String(Number(value))).replace(/\s+/g, '')
   const easingPoints = easing => /^linear\(/.test(easing)
     ? easing.slice(easing.indexOf('(') + 1, -1).split(',').map(Number.parseFloat) : []
   const springPoints = easingPoints(tokens.spring)
-  assert.ok(Math.max(...springPoints) > 1 && Math.max(...springPoints) <= 1.01, 'Surface overshoot must stay below 1% of travel')
+  assert.ok(Math.max(...springPoints) > 1 && Math.max(...springPoints) <= 1.016, 'Only large surfaces use the measured 1.5% spring overshoot')
   const spring = events => events.some(event =>
     [event.easing, ...event.frames.map(frame => frame.easing)].some(easing => {
       const points = easingPoints(easing)
       return points.length === springPoints.length &&
         points.every((point, index) => Math.abs(point - springPoints[index]) < 0.0001)
     }))
+  const usesEasing = (events, easing, property) => events.some(event =>
+    event.property === property && [event.easing, ...event.frames.map(frame => frame.easing)].some(value => normalizeEasing(value) === normalizeEasing(easing)))
 
   const select = 'button[aria-label="Motion select"]'
   await page.click(select)
@@ -68,16 +81,18 @@ export async function runMotionCoverage(page) {
   const openEvents = await log('.base-select-popup')
   assert.ok(openEvents.some(event => event.property === 'transform' && event.frames[0].transform === 'scale(0.97)' && event.frames.at(-1).transform === 'scale(1)'),
     'Select must animate from its actual starting style, even while data-open is present')
-  assert.ok(spring(openEvents), 'Select geometry must use the shared damped spring')
-  await page.keyboard.press('Escape')
+  assert.ok(usesEasing(openEvents, tokens.surfaceEasing, 'transform'), 'Select geometry uses monotonic surface easing')
+  await page.click('loc=role:option[name="Alpha"]')
   await page.waitForFunction(() => !document.querySelector('.base-select-popup[data-open], .base-select-popup[data-ending-style]'))
   const closeEvents = await log('.base-select-popup')
-  assert.ok(closeEvents.some(event => event.property === 'transform' && event.duration === 150 && event.frames.at(-1).transform === 'scale(0.99)'),
+  assert.ok(closeEvents.some(event => event.property === 'transform' && event.duration === tokens.dropdownClose && event.frames.at(-1).transform === 'scale(0.99)'),
     'Select must retain and animate its closing state')
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Motion select')
   // Repeated input must keep the final open state and keyboard selection usable.
   await page.click(select)
+  await page.waitForFunction(() => document.querySelector('button[aria-label="Motion select"]').getAttribute('aria-expanded') === 'true')
   await page.keyboard.press('Escape')
+  await page.waitForFunction(() => document.querySelector('button[aria-label="Motion select"]').getAttribute('aria-expanded') === 'false')
   await page.click(select)
   await settle('.base-select-popup[data-open]')
   await page.keyboard.press('ArrowDown')
@@ -96,7 +111,8 @@ export async function runMotionCoverage(page) {
     }), { selector, thumb })
     assert.equal(checked.checked, 'true')
     assert.ok(Number.parseFloat(checked.travel) > 10)
-    assert.ok(spring(await log(thumb)), `${label} must use the same spring`)
+    assert.ok(usesEasing(await log(thumb), tokens.controlEasing, 'translate'), `${label} must use the shared state easing`)
+    assert.ok((await log(thumb)).some(event => event.property === 'translate' && event.duration === tokens.stateDuration))
     await page.click(selector)
     await page.click(selector)
     await page.click(selector)
@@ -131,7 +147,7 @@ export async function runMotionCoverage(page) {
     assert.ok(geometryEvents.every(event => event.duration <= 160), `${selector} must not retain a slow local override`)
     assert.ok(geometryEvents.every(event =>
       [event.easing, ...event.frames.map(frame => frame.easing)].every(easing =>
-        easing === 'linear' || easing === tokens.controlEasing)), `${selector} must settle without overshoot`)
+        easing === 'linear' || normalizeEasing(easing) === normalizeEasing(tokens.controlEasing))), `${selector} must settle without overshoot`)
   }
   await page.hover('#motion-row-button')
   const rowCenter = await page.evaluate(() => {
@@ -148,7 +164,20 @@ export async function runMotionCoverage(page) {
   await page.mouse.up()
   assert.equal(rowScale, 1, 'Wide rows must keep their text and hit targets still when pressed')
   assert.equal(await page.evaluate(() => document.querySelector('#motion-disabled-button').disabled), true)
-  passed('buttons', 'styled, unstyled, icon and card actions: 1% press, short non-overshooting release, no stacked scales')
+  const repeatedInputWrites = await page.evaluate(async () => {
+    let writes = 0
+    const observer = new MutationObserver(records => { writes += records.length })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-motion-input'] })
+    for (let index = 0; index < 20; index++) {
+      document.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'mouse', movementX: 1, bubbles: true }))
+    }
+    await Promise.resolve()
+    writes += observer.takeRecords().length
+    observer.disconnect()
+    return writes
+  })
+  assert.equal(repeatedInputWrites, 0, 'Repeated pointer input must not invalidate styles on the entire document')
+  passed('buttons', 'small actions share one press and release; wide rows stay still; no stacked scales')
 
   await page.click('[aria-label="Motion checkbox"]')
   await page.waitForFunction(() => document.querySelector('[aria-label="Motion checkbox"]').getAttribute('aria-checked') === 'true')
@@ -162,7 +191,7 @@ export async function runMotionCoverage(page) {
   assert.ok(!(await log('.base-slider-thumb')).some(event => /left|width|translate/.test(event.property)))
   await page.click('text=Three')
   await settle('.t-segmented')
-  assert.ok(spring(await log('.t-segmented')))
+  assert.ok(usesEasing(await log('.t-segmented'), tokens.controlEasing, 'transform'))
   passed('selectionControls', 'checkbox stroke, slider grip without drag lag, sliding segments')
 
   await page.click('#outer-trigger')
@@ -201,13 +230,13 @@ export async function runMotionCoverage(page) {
   await settle('[aria-label="Motion menu"][data-open]')
   await page.hover('text=Nested menu')
   await settle('.curator-cascade-popup[data-open]')
-  assert.ok(spring(await log('.curator-overlay-panel--menu')))
+  assert.ok(usesEasing(await log('.curator-overlay-panel--menu'), tokens.surfaceEasing, 'transform'))
   await page.keyboard.press('Escape')
   await page.waitForFunction(() => !document.querySelector('.curator-cascade-popup[data-open]'))
   if (await page.evaluate(() => Boolean(document.querySelector('[aria-label="Motion menu"][data-open]')))) {
     await page.keyboard.press('Escape')
   }
-  passed('menus', 'anchored root and nested menus share the same spring')
+  passed('menus', 'anchored root and nested menus share one monotonic surface curve')
 
   await page.click('#dialog-trigger')
   await settle('#motion-dialog[data-open]')
@@ -219,6 +248,15 @@ export async function runMotionCoverage(page) {
   await page.click('#dialog-close')
   await page.waitForFunction(() => !document.querySelector('#motion-dialog[data-open], #motion-dialog[data-ending-style]'))
   passed('dialog', 'spring panel, visible backdrop transition, complete exit')
+
+  await page.focus('#dialog-trigger')
+  await page.keyboard.press('Enter')
+  await settle('#motion-dialog[data-open]')
+  assert.ok(await page.evaluate(() => getComputedStyle(document.getElementById('motion-dialog')).transitionDuration.split(',').every(value => Number.parseFloat(value) === 0)))
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.motionInput), 'keyboard')
+  await page.keyboard.press('Escape')
+  await page.waitForFunction(() => !document.querySelector('#motion-dialog[data-open], #motion-dialog[data-ending-style]'))
+  passed('keyboard', 'shared controls and portals commit without interpolation on keyboard input')
 
   await page.cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] })
   await page.evaluate(() => { window.__motionLog = [] })

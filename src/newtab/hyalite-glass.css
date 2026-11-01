@@ -262,8 +262,8 @@ body:has(#newtab-settings-drawer .settings-drawer-panel[data-ending-style]) .set
 .newtab-glass-preview-scene {
   position: relative;
   overflow: hidden;
-  border-radius: var(--ds-radius-md);
-  padding: 20px;
+  border-radius: var(--ds-radius-dialog);
+  padding: var(--ds-inset-card);
   background-color: rgba(255, 255, 255, 0.025);
   background-image: repeating-linear-gradient(135deg, transparent 0 18px, rgba(255, 255, 255, 0.28) 18px 20px, transparent 20px 38px);
 }
@@ -284,8 +284,8 @@ body:has(#newtab-settings-drawer .settings-drawer-panel[data-ending-style]) .set
   z-index: 1;
   min-height: 144px;
   border: 1px solid var(--newtab-glass-stroke);
-  border-radius: 30px;
-  padding: 18px;
+  border-radius: var(--ds-radius-lg);
+  padding: calc(var(--ds-inset-card) - var(--newtab-glass-stroke-width));
   color: #f5f5f7;
   background: var(--newtab-glass-bg-fill);
   -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);

@@ -63,8 +63,8 @@ try {
     'replacing an API Key must update the controlled input immediately'
   )
 
-  await page.getByRole('button', { name: 'Base URL 与接口选项', exact: true }).click()
   const baseUrlInput = page.locator('#ai-base-url')
+  await baseUrlInput.waitFor({ state: 'visible' })
   await baseUrlInput.fill('https://openrouter.ai/api/v1')
   assert.equal(
     await apiKeyInput.inputValue(),

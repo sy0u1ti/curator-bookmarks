@@ -27,7 +27,7 @@ export function OptionActionsMenu({ actions, label }: { actions: OptionMenuActio
           <Menu.Popup
             aria-label={label}
             render={<MotionPanel variant="menu" />}
-            className="max-h-[var(--available-height)] w-[min(320px,calc(100vw_-_24px))] overflow-y-auto rounded-ds-md border border-ds-border bg-ds-surface-2 p-1.5 shadow-lg outline-none"
+            className="max-h-[var(--available-height)] w-[min(320px,calc(100vw_-_24px))] overflow-y-auto rounded-ds-menu border border-ds-border bg-ds-surface-2 ds-inset-menu shadow-lg outline-none"
           >
             {actions.map(action => (
               <Fragment key={action.id}>

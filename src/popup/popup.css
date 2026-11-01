@@ -2,6 +2,8 @@
   color-scheme: dark;
 
   --reveal-translate-y: var(--distance-micro);
+  --popup-row-label-inset: 12px;
+  --popup-radius-surface: var(--ds-radius-md);
 
   /* Both popup skeletons — the two-pane workspace and the current-page card —
      dissolve on this pair. The inherited --ease-smooth-out is a strong ease-out:
@@ -11,6 +13,51 @@
      which still serves the compact motion elsewhere. */
   --reveal-dur: 240ms;
   --reveal-ease: var(--ease-in-out);
+}
+
+/* Search, the current page, status strips and both panes are sibling surfaces,
+   not nested radius levels. Their loading placeholders use this same role. */
+.popup-surface {
+  border-radius: var(--popup-radius-surface);
+}
+
+.popup-main-pane > header {
+  padding-inline-start: calc(var(--ds-inset-panel) + var(--popup-row-label-inset));
+}
+
+.popup-feedback-layer {
+  inset-inline: 14px;
+  bottom: 14px;
+}
+
+/* Both surfaces size their responsive layout from this root, not from the
+   viewport. Chrome's action-popup autosizing shrinks the viewport on every
+   layout pass; viewport media queries flip there and force a full style
+   recalculation for each held arrow key. */
+#popup-root {
+  container: popup / inline-size;
+}
+
+/* Background status is a notification layer; it never shrinks either pane.
+   Only while it is shown does a scroll tail let the last row clear it. */
+#popup-app-shell:has(> .popup-feedback-layer:not([hidden])) :is(.popup-main-list, .popup-folder-tree) {
+  padding-bottom: 80px;
+  scroll-padding-bottom: 80px;
+}
+
+@container popup (width < 520px) {
+  .popup-feedback-layer {
+    inset-inline: 10px;
+    bottom: 10px;
+  }
+}
+
+/* The one inline acknowledgement must not collapse to zero beside a long
+   folder title and the reorder action, especially in the side panel. */
+.popup-main-pane #view-caption:not(:empty) {
+  min-width: 6em;
+  max-width: 45%;
+  flex-shrink: 0;
 }
 
 * {
@@ -95,24 +142,13 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Browser zoom shrinks the CSS viewport below the popup's design size; allow
-   the document to scroll so the clipped half stays reachable. Only `overflow`
-   may depend on the viewport: sizing the document from a media query feeds
-   back into Chrome's popup sizing and collapses the window. The side panel
-   sizes itself (sidepanel.css), so it is excluded here. */
-@media (max-width: 799px), (max-height: 599px) {
-  html:not([data-curator-surface="sidepanel"]),
-  html:not([data-curator-surface="sidepanel"]) body {
-    overflow: auto;
-  }
-
-  /* The inner shell may follow the viewport so the reflowed layout fits the
-     window; the document itself must stay fixed, because Chrome derives the
-     popup size from it. */
-  html:not([data-curator-surface="sidepanel"]) #popup-root,
-  html:not([data-curator-surface="sidepanel"]) #popup-preboot-shell {
-    width: min(800px, 100vw);
-  }
+/* Browser zoom shrinks the CSS viewport below the popup's design size. The
+   fixed 800x600 document never overflows at 100%, so it can always allow
+   scrolling for the clipped half; the side panel sizes itself instead. The
+   document must stay fixed, because Chrome derives the popup size from it. */
+html:not([data-curator-surface="sidepanel"]),
+html:not([data-curator-surface="sidepanel"]) body {
+  overflow: auto;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -235,7 +271,7 @@ body::after {
 
 .popup-active-result-indicator,
 .popup-folder-picker-card::after {
-  border-radius: var(--ds-radius-md);
+  border-radius: var(--ds-radius-sm);
   background: rgba(245, 245, 247, 0.08);
   box-shadow:
     0 0 0 1px rgba(245, 245, 247, 0.045),
@@ -243,6 +279,8 @@ body::after {
 }
 
 .popup-active-result-indicator {
+  /* Preserve the tuned selection travel independently of shared surface motion. */
+  --popup-selection-move-dur: 100ms;
   position: absolute;
   top: 0;
   left: 0;
@@ -254,7 +292,7 @@ body::after {
   transform: translate3d(0, 0, 0);
   transition:
     opacity var(--duration-micro) var(--ease-smooth-out),
-    transform var(--ds-motion-feedback) var(--ease-smooth-out);
+    transform var(--popup-selection-move-dur) var(--ease-smooth-out);
 }
 
 /* While hidden, suppress transform transition so position updates snap
@@ -266,6 +304,17 @@ body::after {
 
 .popup-active-result-indicator[data-visible="true"] {
   opacity: 1;
+}
+
+/* Virtual spacers already preserve content coordinates. Native scroll anchoring
+   would correct the same window change again and fight keyboard navigation. */
+.popup-main-list,
+.popup-folder-tree {
+  overflow-anchor: none;
+}
+
+[data-keyboard-scroll="true"] > .popup-row-layer {
+  will-change: transform;
 }
 
 .popup-main-row {
@@ -465,8 +514,8 @@ body::after {
 
 
 .edit-folder-accordion {
-  --acc-expand: var(--duration-fast);
-  --acc-collapse: var(--duration-fast);
+  --acc-expand: var(--ds-motion-state);
+  --acc-collapse: var(--ds-motion-standard);
   display: block;
   min-height: 0;
   grid-template-rows: none;
@@ -542,8 +591,8 @@ body::after {
 
 .popup-main-pane[data-reorder-mode="true"] .popup-main-row {
   transition:
-    opacity var(--duration-micro) var(--ease-smooth-out),
-    transform var(--duration-quick) var(--ease-smooth-out);
+    opacity var(--duration-micro) var(--ds-ease-standard),
+    transform var(--duration-quick) var(--ds-ease-standard);
 }
 
 .popup-main-pane[data-reorder-mode="true"] .popup-main-row[data-reorder-shift="true"] {
@@ -552,7 +601,7 @@ body::after {
 
 .popup-main-pane[data-reorder-mode="true"] .popup-main-row[data-reorder-source="true"] {
   opacity: 0;
-  transition: transform var(--duration-quick) var(--ease-smooth-out);
+  transition: transform var(--duration-quick) var(--ds-ease-standard);
 }
 
 .popup-reorder-row-content:disabled,
@@ -585,7 +634,7 @@ body::after {
   padding: 8px 7px 8px 13px;
   pointer-events: none;
   border: 1px solid var(--ds-border-hover);
-  border-radius: var(--ds-radius-md);
+  border-radius: var(--ds-radius-sm);
   background: var(--ds-surface-3);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.2),
@@ -603,14 +652,14 @@ body::after {
 }
 
 .popup-bookmark-drag-ghost[data-settling="true"] {
-  transition: transform var(--drag-settle-dur) var(--ease-smooth-out);
+  transition: transform var(--drag-settle-dur) var(--ds-ease-settle);
   will-change: auto;
 }
 
 #popup-app-shell[data-keyboard-nav="true"] {
   --resize-dur: 1ms;
   --popup-keyboard-selection-dur: var(--duration-micro);
-  --popup-keyboard-selection-ease: var(--ease-smooth-out);
+  --popup-keyboard-selection-ease: var(--ds-ease-standard);
 }
 
 #popup-app-shell[data-keyboard-nav="true"] .popup-list-button {
@@ -640,7 +689,7 @@ body::after {
   z-index: -1;
   pointer-events: none;
   opacity: 0;
-  transition: opacity var(--duration-micro) var(--ease-smooth-out);
+  transition: opacity var(--duration-micro) var(--ds-ease-standard);
 }
 
 .popup-folder-picker-card:hover,

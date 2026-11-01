@@ -6,12 +6,12 @@ import {
 import { OPTION_SURFACE_CLASS } from './option-layout-classes.js'
 
 export const AI_SETTINGS_CARD_CLASS =
-  `options-interactive-surface mt-5 overflow-hidden ${OPTION_SURFACE_CLASS} p-0 text-ds-text-primary`
+  `options-interactive-surface mt-5 overflow-hidden ${OPTION_SURFACE_CLASS} gap-0 p-0 text-ds-text-primary`
 
 export const AI_SETTINGS_NARROW_CARD_CLASS = AI_SETTINGS_CARD_CLASS
 
 export const AI_SETTINGS_HEADER_CLASS =
-  'mb-0 flex min-w-0 items-start justify-between gap-3 border-b border-ds-border-subtle p-[14px_16px] max-[760px]:flex-col'
+  'mb-0 flex min-w-0 items-start justify-between gap-3 border-b border-ds-border-subtle p-4 max-[760px]:flex-col'
 
 export const AI_SETTINGS_BODY_CLASS = 'mt-0 flex flex-col divide-y divide-ds-border-subtle'
 
@@ -33,11 +33,11 @@ export const AI_SETTINGS_STATUS_TONE_CLASS = {
 } as const
 
 export const AI_SETTINGS_ROW_CLASS =
-  'grid min-h-[54px] grid-cols-[minmax(0,1fr)_auto] items-center gap-[18px] px-4 py-3 max-[420px]:gap-3 max-[420px]:px-3.5'
+  'grid min-h-[54px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3 max-[420px]:gap-3'
 
 export const AI_SETTINGS_COPY_CLASS = 'min-w-0'
 
-export const AI_SETTINGS_TITLE_ROW_CLASS = 'flex min-w-0 flex-wrap items-center gap-2.5'
+export const AI_SETTINGS_TITLE_ROW_CLASS = 'flex min-h-6 min-w-0 items-center justify-between gap-2.5'
 
 export const AI_SETTINGS_ROW_TITLE_CLASS =
   'block text-sm font-bold leading-[1.4] text-ds-text-primary'
@@ -61,9 +61,3 @@ export const AI_SETTINGS_LOADING_SWITCH_CLASS =
   'absolute inset-0 rounded-full border-0 bg-ds-surface-3/80'
 
 export const AI_SETTINGS_READY_BODY_CLASS = 'options-settings-ready-body'
-
-export const AI_SETTINGS_HELP_TOOLTIP_CLASS =
-  'ml-1 inline-flex w-8 min-w-8 align-middle !p-0'
-
-export const AI_SETTINGS_HELP_TOOLTIP_POPUP_CLASS =
-  'z-[80] w-[min(300px,calc(100vw-48px))] rounded-ds-sm border border-ds-hover bg-ds-app p-[10px_12px] text-left text-xs font-medium leading-[1.6] text-ds-text-primary [filter:var(--ds-filter-popover)]'

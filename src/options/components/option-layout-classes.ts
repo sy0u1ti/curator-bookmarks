@@ -1,13 +1,11 @@
 export const OPTION_PANEL_ENTER_CLASS = [
-  // Section switches happen tens of times a day: a short settle, not a slide-in.
-  '[.options-motion-ready_&:not([hidden])]:transition-[opacity,translate]',
-  '[.options-motion-ready_&:not([hidden])]:duration-[var(--ds-motion-standard)]',
-  '[.options-motion-ready_&:not([hidden])]:ease-[var(--panel-ease)]',
+  // Navigation marks the movement; the settings themselves stay in place.
+  '[.options-motion-ready_&:not([hidden])]:transition-opacity',
+  '[.options-motion-ready_&:not([hidden])]:duration-[var(--page-fade-dur)]',
+  '[.options-motion-ready_&:not([hidden])]:ease-[var(--page-fade-ease)]',
   '[.options-motion-ready_&:not([hidden])]:starting:opacity-0',
-  '[.options-motion-ready_&:not([hidden])]:starting:translate-y-[var(--distance-micro)]',
   'motion-reduce:[.options-motion-ready_&:not([hidden])]:transition-opacity',
-  'motion-reduce:[.options-motion-ready_&:not([hidden])]:duration-[80ms]',
-  'motion-reduce:[.options-motion-ready_&:not([hidden])]:starting:translate-y-0'
+  'motion-reduce:[.options-motion-ready_&:not([hidden])]:duration-[80ms]'
 ].join(' ')
 
 export const OPTION_REVEAL_ENTER_CLASS = [
@@ -34,16 +32,16 @@ export const OPTION_PANEL_CLASS =
   `${OPTION_PANEL_STANDARD_LAYOUT_CLASS} ${OPTION_PANEL_SURFACE_RESET_CLASS}`
 
 export const OPTION_SURFACE_CLASS =
-  'rounded-ds-md border-0 bg-ds-surface-1 shadow-none'
+  'rounded-ds-card border-0 bg-ds-surface-1 shadow-none'
 
 export const OPTION_INSET_CLASS =
-  'rounded-ds-sm border-0 bg-ds-surface-2 shadow-none'
+  'rounded-ds-lg border-0 bg-ds-surface-2 shadow-none'
 
 export const OPTION_GROUP_CLASS =
   `options-interactive-surface curator-motion-surface mt-7 ${OPTION_SURFACE_CLASS} py-2 max-[760px]:mt-5`
 
 export const OPTION_TOOL_PANEL_CLASS =
-  `options-interactive-surface curator-motion-surface mt-5 ${OPTION_SURFACE_CLASS} p-[18px_20px_20px] ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  `options-interactive-surface curator-motion-surface mt-5 ${OPTION_SURFACE_CLASS} p-4 ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
 
 export const OPTION_RUN_HEADER_CLASS = [
   'curator-motion-surface mt-6 grid grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)_auto] items-stretch gap-3',
@@ -52,7 +50,7 @@ export const OPTION_RUN_HEADER_CLASS = [
 ].join(' ')
 
 export const OPTION_RUN_CELL_CLASS =
-  `options-interactive-surface curator-motion-surface min-w-0 ${OPTION_SURFACE_CLASS} p-[16px_18px] max-[760px]:p-4`
+  `options-interactive-surface curator-motion-surface min-w-0 ${OPTION_SURFACE_CLASS} p-4 max-[760px]:p-4`
 
 export const OPTION_RUN_CELL_TITLE_CLASS =
   'block text-[15px] font-[650] leading-normal tracking-[0] text-ds-text-primary'
@@ -61,13 +59,13 @@ export const OPTION_RUN_CELL_TEXT_CLASS =
   'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 
 export const OPTION_RUN_ACTIONS_CLASS =
-  `options-interactive-surface curator-motion-surface flex min-w-0 flex-wrap items-center justify-end gap-2.5 ${OPTION_SURFACE_CLASS} p-[14px_16px] max-[1180px]:justify-start max-[860px]:items-stretch`
+  `options-interactive-surface curator-motion-surface grid min-w-0 grid-cols-1 content-start gap-2.5 ${OPTION_SURFACE_CLASS} p-4`
 
 export const OPTION_RUN_ACTION_BUTTON_CLASS =
   'max-[860px]:w-full'
 
 export const OPTION_ROW_CLASS = [
-  'grid min-h-[66px] grid-cols-[minmax(0,1fr)_auto] items-center gap-[18px] p-[14px_16px]',
+  'grid min-h-[66px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 p-4',
   'border-ds-border-subtle bg-transparent',
   'max-[1180px]:grid-cols-1 max-[1180px]:items-start',
   'max-[760px]:gap-3 max-[760px]:p-4'
@@ -82,7 +80,7 @@ export const OPTION_COPY_TEXT_CLASS =
   'mt-[7px] mb-0 text-[13px] leading-[1.65] text-ds-text-muted'
 
 export const OPTION_EMPTY_STATE_CLASS =
-  'options-interactive-surface curator-motion-surface t-stagger rounded-ds-sm border-0 bg-ds-surface-1 p-[18px_20px] text-left shadow-none'
+  'options-interactive-surface curator-motion-surface t-stagger rounded-ds-card border-0 bg-ds-surface-1 p-4 text-left shadow-none'
 
 export const OPTION_EMPTY_STATE_TITLE_CLASS =
   'm-0 text-sm font-bold leading-[1.4] text-ds-text-primary'
@@ -111,9 +109,6 @@ export const OPTION_VALUE_CLASS = [
 export const OPTION_PAGINATION_CLASS =
   'mt-3.5 flex min-h-8 flex-wrap items-center justify-end gap-2.5 text-[13px] text-ds-text-secondary transition-opacity duration-ds-fast ease-ds-standard motion-reduce:duration-[80ms]'
 
-export const OPTION_PAGINATION_HIDDEN_CLASS =
-  'pointer-events-none invisible opacity-0'
-
 export const OPTION_PAGINATION_LABEL_CLASS =
   'font-[var(--font-sans)] text-[13px] font-semibold leading-normal text-ds-text-muted'
 
@@ -124,7 +119,7 @@ export const OPTION_PAGINATION_PAGE_VALUE_CLASS =
   'options-stable-number inline-block min-w-[7ch] text-center'
 
 export const OPTION_RESULT_CHECKBOX_CLASS =
-  'inline-grid size-[15px] cursor-pointer place-items-center rounded-[4px] border border-ds-border-hover bg-ds-surface-2 text-ds-text-inverse outline-none data-[checked]:border-ds-text-primary data-[checked]:bg-ds-text-primary data-[disabled]:cursor-default data-[disabled]:opacity-55 focus-visible:shadow-ds-focus'
+  'inline-grid size-[15px] cursor-pointer place-items-center rounded-ds-xs border border-ds-border-hover bg-ds-surface-2 text-ds-text-inverse outline-none data-[checked]:border-ds-text-primary data-[checked]:bg-ds-text-primary data-[disabled]:cursor-default data-[disabled]:opacity-55 focus-visible:shadow-ds-focus'
 
 export const SCOPE_PICKER_TRIGGER_CLASS = [
   'curator-motion-chip relative inline-flex min-h-9 min-w-[220px] max-w-full items-center justify-start gap-2 overflow-visible',

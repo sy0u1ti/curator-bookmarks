@@ -10,17 +10,17 @@ const MODEL_SELECTOR_TRIGGER_CLASS =
 const MODEL_SELECTOR_BACKDROP_CLASS =
   'model-selector-backdrop fixed inset-0 z-[1200] min-h-dvh bg-ds-overlay supports-[-webkit-touch-callout:none]:absolute'
 const MODEL_SELECTOR_CONTENT_CLASS =
-  'model-selector-content fixed left-1/2 top-[46%] z-[1201] max-h-[min(520px,calc(100dvh-72px))] w-[min(520px,calc(100vw-36px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-ds-lg border border-ds-border bg-ds-surface-2 p-0 text-ds-text-primary [filter:var(--ds-filter-dialog)] outline-none max-[760px]:top-1/2 max-[760px]:w-[min(520px,calc(100vw-24px))]'
-const MODEL_SELECTOR_COMMAND_CLASS = 'flex min-h-0 max-h-[inherit] flex-col bg-ds-surface-2'
+  'model-selector-content z-[1201] max-w-[520px] rounded-ds-lg border border-ds-border bg-ds-surface-2 p-0 text-ds-text-primary [filter:var(--ds-filter-dialog)] outline-none'
+const MODEL_SELECTOR_COMMAND_CLASS = 'flex min-h-0 flex-col bg-ds-surface-2'
 const MODEL_SELECTOR_INPUT_WRAPPER_CLASS =
-  'grid min-h-[50px] grid-cols-[18px_minmax(0,1fr)_18px] items-center gap-2.5 border-b border-ds-border-subtle px-3.5 text-ds-text-muted'
+  'curator-dialog-header grid min-h-[50px] grid-cols-[18px_minmax(0,1fr)_18px] items-center gap-2.5 border-b border-ds-border-subtle px-4 text-ds-text-muted'
 const MODEL_SELECTOR_INPUT_ICON_CLASS = 'size-[17px] text-ds-text-muted'
 const MODEL_SELECTOR_CLEAR_BUTTON_CLASS =
   'm-0 inline-flex size-[22px] touch-manipulation cursor-pointer select-none items-center justify-center rounded-ds-sm border-0 bg-transparent p-0 text-ds-text-muted opacity-0 pointer-events-none transition-[background-color,color,opacity,transform,scale] duration-ds-fast ease-ds-standard data-[visible]:pointer-events-auto data-[visible]:opacity-100 hover:bg-ds-hover hover:text-ds-text-primary focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline-none active:scale-[var(--ds-press-scale)] motion-reduce:transition-none motion-reduce:active:scale-100'
 const MODEL_SELECTOR_INPUT_CLASS =
   'h-[50px] min-h-[50px] w-full border-0 bg-transparent text-sm font-medium text-ds-text-primary shadow-none outline-none placeholder:text-ds-text-secondary'
 const MODEL_SELECTOR_LIST_CLASS =
-  'model-selector-list m-0 max-h-[min(400px,calc(100dvh-140px))] list-none overflow-y-auto p-1.5 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-width:thin]'
+  'model-selector-list curator-dialog-body m-0 max-h-[400px] list-none ds-inset-panel [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-width:thin]'
 const MODEL_SELECTOR_EMPTY_CLASS =
   'model-selector-empty px-3 py-7 text-center text-[13px] text-ds-text-muted empty:p-0'
 const MODEL_SELECTOR_GROUP_CLASS = 'model-selector-group'
@@ -115,6 +115,7 @@ export function ModelSelectorContent({
     <BaseDialog.Portal keepMounted={false}>
       <DialogBackdrop className={cx(MODEL_SELECTOR_BACKDROP_CLASS, backdropClassName)} />
       <DialogPanel
+        layout="workspace"
         aria-describedby={undefined}
         className={cx(MODEL_SELECTOR_CONTENT_CLASS, className)}
         {...props}

@@ -34,7 +34,7 @@ const VISUALLY_HIDDEN_INPUT_STYLE: InputStyle = {
 const SWITCH_ROOT_CLASS = 't-toggle relative inline-block h-6 w-11 rounded-full border border-ds-border bg-ds-hover outline-none transition-[background-color,border-color,transform] duration-ds-fast ease-ds-standard data-[checked]:border-ds-border-hover data-[checked]:bg-ds-accent focus-visible:border-ds-focus focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] data-[disabled]:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100'
 
 /* CSS owns thumb travel so rapid toggles reverse without a render or reflow. */
-const SWITCH_THUMB_CLASS = 't-toggle-thumb absolute left-0.5 top-0.5 size-5 rounded-full bg-ds-accent-subtle data-[checked]:bg-ds-page motion-reduce:transition-none'
+const SWITCH_THUMB_CLASS = 't-toggle-thumb absolute left-0.5 top-1/2 -translate-y-1/2 size-5 rounded-full bg-ds-accent-subtle data-[checked]:bg-ds-page motion-reduce:transition-none'
 
 export type SwitchControlProps = Omit<BaseSwitchRootProps, 'className' | 'children' | 'inputRef'> & {
   className?: string

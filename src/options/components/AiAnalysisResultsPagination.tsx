@@ -4,7 +4,6 @@ import { handleAiResultsPagination } from '../options-controller'
 import { useAiAnalysisResultsPagination } from './ai-analysis-status-store.js'
 import {
   OPTION_PAGINATION_CLASS,
-  OPTION_PAGINATION_HIDDEN_CLASS,
   OPTION_PAGINATION_LABEL_CLASS,
   OPTION_PAGINATION_PAGE_VALUE_CLASS,
   OPTION_PAGINATION_RANGE_VALUE_CLASS,
@@ -13,16 +12,12 @@ import {
 
 export function AiAnalysisResultsPagination() {
   const state = useAiAnalysisResultsPagination()
+  if (!state.visible) return null
 
   return (
     <div aria-label="AI 标签与命名结果分页">
       <div
-        className={[
-          OPTION_PAGINATION_CLASS,
-          state.visible ? '' : OPTION_PAGINATION_HIDDEN_CLASS
-        ].filter(Boolean).join(' ')}
-        aria-hidden={state.visible ? undefined : 'true'}
-        inert={!state.visible}
+        className={OPTION_PAGINATION_CLASS}
       >
         <span className={OPTION_PAGINATION_LABEL_CLASS}>
           {state.label} <NumberPop className={OPTION_PAGINATION_RANGE_VALUE_CLASS} text={`${state.start}-${state.end} / ${state.totalCount}`} />

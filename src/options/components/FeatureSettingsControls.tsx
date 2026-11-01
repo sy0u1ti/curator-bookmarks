@@ -1,17 +1,13 @@
 import { AiProviderCard } from '../../ui/ai/AiProviderCard'
 import { SwitchControl } from '../../ui/base/Switch'
-import { Popover } from '../../ui/base/Popover'
-import { Button } from '../../ui/base/Button'
 import { Select } from '../../ui/base/Select'
+import { StableLabel, StatusMessage } from '../../ui/base/StatusMessage'
 import type { InboxWorkflowMode } from '../../shared/inbox-workflow'
-import { Icon } from '../../ui/icons/Icon'
 import {
   AI_SETTINGS_BODY_CLASS,
   AI_SETTINGS_CARD_CLASS,
   AI_SETTINGS_COPY_CLASS,
   AI_SETTINGS_HEADER_CLASS,
-  AI_SETTINGS_HELP_TOOLTIP_CLASS,
-  AI_SETTINGS_HELP_TOOLTIP_POPUP_CLASS,
   AI_SETTINGS_INLINE_STATUS_CLASS,
   AI_SETTINGS_LOADING_SWITCH_CLASS,
   AI_SETTINGS_READY_BODY_CLASS,
@@ -26,12 +22,10 @@ import {
 } from './ai-settings-card-classes.js'
 import { handleFeatureSettingsChange } from '../options-controller'
 import { useFeatureSettingsControlsState } from './feature-settings-store.js'
-import type { FeatureSwitchItemState, FeatureSettingsControlsState } from './feature-settings-types.js'
+import { FEATURE_SWITCH_CONTENT, type FeatureSwitchItemState, type FeatureSettingsControlsState } from './feature-settings-types.js'
 
-const FEATURE_SETTINGS_LOADING_ROWS = [
-  { key: 'autoAnalyzeBookmarks', label: '自动分析', description: '对普通新增书签自动分析，高置信时可能改名、移动；Inbox 使用下方独立设置。' },
-  { key: 'allowRemoteParsing', label: '网页内容辅助解析', description: 'AI 分析时通过 Jina Reader 获取网页内容，第三方服务会收到目标网址。' }
-] as const
+const FEATURE_SETTINGS_LOADING_ROWS = FEATURE_SWITCH_CONTENT
+const FEATURE_STATUS_LABELS = ['保存中…', '待授权'] as const
 
 export function FeatureSettingsControls() {
   const state = useFeatureSettingsControlsState()
@@ -39,7 +33,7 @@ export function FeatureSettingsControls() {
   return (
     <AiProviderCard
       className={AI_SETTINGS_CARD_CLASS}
-      title={<h2 className={AI_SETTINGS_TITLE_CLASS}>功能设置</h2>}
+      title={<h2 className={AI_SETTINGS_TITLE_CLASS}>收藏与整理</h2>}
       headerClassName={AI_SETTINGS_HEADER_CLASS}
       iconName="Sparkles"
       bodyClassName={`${AI_SETTINGS_BODY_CLASS} ${state.loading ? '' : AI_SETTINGS_READY_BODY_CLASS}`}
@@ -78,10 +72,10 @@ function InboxWorkflowControl({ state }: { state: FeatureSettingsControlsState['
             if (value) handleFeatureSettingsChange({ key: 'inboxWorkflow', value: value as InboxWorkflowMode })
           }}
         />
-      ) : <span className="block h-9 rounded-md bg-ds-surface-2" />}
-      <p role={state ? 'status' : undefined} className="m-0 text-xs leading-relaxed text-ds-text-secondary">
+      ) : <span className="block h-9 rounded-ds-sm bg-ds-surface-2" />}
+      <StatusMessage className="m-0 text-xs leading-relaxed text-ds-text-secondary">
         {state?.status || 'AI 配置可用时执行；分析失败或置信度不足时保留在 Inbox。'}
-      </p>
+      </StatusMessage>
     </div>
   )
 }
@@ -95,7 +89,7 @@ function FeatureSwitchLoadingRow({
     <div className={AI_SETTINGS_ROW_CLASS} aria-hidden="true">
       <div className={AI_SETTINGS_COPY_CLASS}>
         <div className={AI_SETTINGS_TITLE_ROW_CLASS}>
-          <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>{item.label}<span className="ml-1 inline-block size-8 align-middle" aria-hidden="true" /></strong>
+          <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>{item.label}</strong>
         </div>
         <p className="mb-0 mt-1 text-xs leading-relaxed text-ds-text-secondary">{item.description}</p>
       </div>
@@ -112,21 +106,22 @@ function FeatureSwitchRow({ item }: { item: FeatureSwitchItemState }) {
       <div className={AI_SETTINGS_COPY_CLASS}>
         <div className={AI_SETTINGS_TITLE_ROW_CLASS}>
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>
-            {item.label} <FeatureHelp copy={item.help} label={item.label} />
+            {item.label}
           </strong>
-          {item.status ? (
-            <span
-              className={`${AI_SETTINGS_INLINE_STATUS_CLASS} ${AI_SETTINGS_STATUS_TONE_CLASS[item.statusTone || 'muted']}`}
-            >
-              {item.status}
-            </span>
-          ) : null}
+          <span
+            className={`${AI_SETTINGS_INLINE_STATUS_CLASS} ${AI_SETTINGS_STATUS_TONE_CLASS[item.statusTone || 'muted']} ${item.status ? '' : 'invisible'}`}
+            role="status"
+            aria-hidden={!item.status || undefined}
+          >
+            <StableLabel text={item.status || ''} reserve={FEATURE_STATUS_LABELS} />
+          </span>
         </div>
-        {item.description && <p className="mb-0 mt-1 text-xs leading-relaxed text-ds-text-secondary">{item.description}</p>}
+        {item.description && <p id={`feature-${item.key}-description`} className="mb-0 mt-1 text-xs leading-relaxed text-ds-text-secondary">{item.description}</p>}
       </div>
       <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
         <SwitchControl
           aria-label={item.label}
+          aria-describedby={item.description ? `feature-${item.key}-description` : undefined}
           checked={item.checked}
           className={AI_SETTINGS_SWITCH_CONTROL_CLASS}
           disabled={item.disabled}
@@ -139,22 +134,5 @@ function FeatureSwitchRow({ item }: { item: FeatureSwitchItemState }) {
         />
       </span>
     </div>
-  )
-}
-
-function FeatureHelp({ copy, label }: { copy: string; label: string }) {
-  return (
-    <Popover
-      title={label}
-      className={AI_SETTINGS_HELP_TOOLTIP_POPUP_CLASS}
-      align="start"
-      trigger={
-        <Button className={AI_SETTINGS_HELP_TOOLTIP_CLASS} size="sm" variant="ghost" aria-label={label + '说明'}>
-          <Icon name="CircleHelp" size={16} aria-hidden="true" />
-        </Button>
-      }
-    >
-      <p className="m-0">{copy}</p>
-    </Popover>
   )
 }

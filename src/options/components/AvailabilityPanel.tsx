@@ -15,6 +15,7 @@ import {
 import { OptionPanelHeader } from './OptionPanelHeader.js'
 import { ResultsPagination } from './ResultsPagination.js'
 import { ScopePickerTriggerButton } from './ScopePickerTrigger.js'
+import { useAvailabilityResultsHeader } from './availability-overview-store.js'
 
 interface OptionsPanelVisibilityProps {
   hidden: boolean
@@ -49,6 +50,17 @@ export function AvailabilityPanel({ hidden }: OptionsPanelVisibilityProps) {
 
       <AvailabilitySelectionActions />
 
+      <AvailabilityResultGroups />
+    </section>
+  )
+}
+
+function AvailabilityResultGroups() {
+  const { visible } = useAvailabilityResultsHeader()
+  if (!visible) return null
+
+  return (
+    <>
       <div className={AVAILABILITY_RESULTS_GROUP_CLASS}>
         <AvailabilityResultsHeader kind="review" />
         <div className={AVAILABILITY_RESULTS_LIST_CLASS}>
@@ -64,6 +76,6 @@ export function AvailabilityPanel({ hidden }: OptionsPanelVisibilityProps) {
         </div>
         <ResultsPagination kind="availability-failed" ariaLabel="高置信异常分页" />
       </div>
-    </section>
+    </>
   )
 }

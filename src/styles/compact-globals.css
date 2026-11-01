@@ -1,0 +1,16 @@
+/* Popup and side-panel stylesheet: globals.css with a narrowed utility scan.
+
+   Chrome sizes the action popup from its document after every layout, and
+   each autosize pass re-evaluates viewport media queries. A re-matched width
+   query in this large sheet invalidated the whole style tree, so a held arrow
+   key cost ~120ms of style recalculation per step. The compact surfaces use
+   container queries (`@max-[N]/popup:`); scanning the options, newtab and
+   archive sources here would only add their viewport breakpoints back. */
+@import "./globals.css";
+
+@source not "../options";
+@source not "../newtab";
+@source not "../archive";
+@source not "../**/*.{test,fixture}.*";
+@source not "../**/*{-scenarios,-browser,-fixture}*.mjs";
+@source not inline("container !container");

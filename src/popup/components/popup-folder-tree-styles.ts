@@ -9,7 +9,7 @@ export const folderCardClass = [
 export const folderCardActiveClass =
   'bg-ds-text-primary/[0.055] before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-[2px] before:rounded-full before:bg-ds-text-primary/70 before:content-[""]'
 export const folderBranchClass =
-  'relative inline-grid h-2.5 w-2.5 flex-none place-items-center justify-self-center rounded-bl-[4px] border-b border-l border-b-white/20 border-l-white/20 bg-transparent text-ds-text-secondary'
+  'relative inline-grid h-2.5 w-2.5 flex-none place-items-center justify-self-center rounded-bl-ds-xs border-b border-l border-b-white/20 border-l-white/20 bg-transparent text-ds-text-secondary'
 export const folderMainClass =
   'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-[7px]'
 export const folderTitleClass =

@@ -130,6 +130,8 @@ export interface PopupBookmarkReorderViewModel {
 }
 
 export interface PopupContentViewModel {
+  activeResultIndex?: number
+  activeFolderIndex?: number
   emptyLabel?: string
   folderFilter?: {
     ariaLabel: string

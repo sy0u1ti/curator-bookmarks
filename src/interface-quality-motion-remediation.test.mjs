@@ -35,6 +35,7 @@ const popupCss = read('src/popup/popup.css')
 const optionsChrome = read('src/options/components/options-chrome-classes.ts')
 const optionsCss = read('src/options/options.css')
 const optionsApp = read('src/options/OptionsApp.tsx')
+const sidebarMotion = read('src/options/options-sidebar-motion.ts')
 const optionsMain = read('src/options/main.tsx')
 const aiProviderSettings = read('src/options/components/AiProviderSettings.tsx')
 const aiProviderSettingsClasses = read('src/options/components/ai-provider-settings-classes.ts')
@@ -72,7 +73,7 @@ assert.ok(
 assert.ok(
   tokens.includes('--duration-quick: 150ms') &&
     tokens.includes('--ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1)') &&
-    tokens.includes('--check-draw: var(--duration-medium)') &&
+    tokens.includes('--check-draw: var(--ds-motion-standard)') &&
     globals.includes('.t-check svg path') &&
     checkbox.includes("'t-check flex") &&
     checkbox.includes('keepMounted={!unstyled}'),
@@ -117,7 +118,7 @@ assert.ok(
   globals.includes('@media (prefers-contrast: more)') &&
     ['top', 'bottom', 'left', 'right'].every((side) => globals.includes(`[data-side="${side}"]`)) &&
     globals.includes('transition-property: opacity !important') &&
-    tokens.includes('--ds-motion-fast: 130ms') &&
+    tokens.includes('--ds-motion-fast: 160ms') &&
     tokens.includes('--drag-settle-dur: 160ms'),
   'Central motion and contrast preferences must provide bounded feedback and material fallbacks.'
 )
@@ -129,7 +130,7 @@ assert.ok(
     !modelSelector.includes('data-starting-style:') &&
     modelSelector.includes('touch-manipulation') &&
     globals.includes('.model-selector-content[data-starting-style]') &&
-    globals.includes('translate: -50% -50% !important') &&
+    globals.includes('translate: -50% 0 !important') &&
     globals.includes('scale: 1 !important'),
   'The shared model selector must keep direct press feedback and use a non-spatial reduced-motion modal.'
 )
@@ -211,18 +212,21 @@ assert.ok(
 
 assert.ok(
   optionsApp.includes('id="options-mobile-navigation"') &&
-    optionsApp.includes('ResizeObserver') &&
+    sidebarMotion.includes('ResizeObserver') &&
     optionsApp.includes("variant=\"mobile\"") &&
     optionsChrome.includes('options-mobile-nav-trigger !hidden') &&
-    optionsCss.includes('.options-nav-active-indicator[data-ready="true"]') &&
-    optionsChrome.includes('options-nav-active-indicator-exit') &&
-    optionsApp.includes('replayOpacity') &&
-    optionsCss.includes('opacity var(--nav-select-dur) var(--nav-select-ease)') &&
-    tokens.includes('--nav-select-dur: var(--duration-quick)') &&
+    optionsCss.includes('.options-nav-active-indicator[data-moving]') &&
+    optionsCss.includes('.options-nav-sub-indicator[data-ready="true"]') &&
+    !optionsChrome.includes('options-nav-active-indicator-exit') &&
+    optionsApp.includes('attachSidebarMotion') &&
+    sidebarMotion.includes('advanceSpring') &&
+    sidebarMotion.includes('shouldSkipMotion()') &&
+    optionsApp.includes('inert={!availabilityOpen}') &&
+    tokens.includes('--ds-spring-response: 420ms') &&
     !optionsCss.includes('transform var(--duration-very-slow) var(--ease-smooth-out)') &&
     !optionsCss.includes('view-transition-name: options-nav-active') &&
     !switchClasses.includes('motion-reduce:transform-none'),
-  'Options navigation should hand its selection highlight over in place, keep a narrow-screen drawer, and preserve truthful reduced-motion switch state.'
+  'Options navigation must retain independent parent and child selection, a narrow-screen drawer, inert collapsed links and truthful reduced-motion state.'
 )
 
 assert.ok(

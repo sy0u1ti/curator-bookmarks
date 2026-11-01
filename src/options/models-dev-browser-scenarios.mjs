@@ -24,6 +24,12 @@ export async function runModelsDevBrowserChecks(page, origin, directory) {
   const waitFeedback = status => page.waitForFunction(status =>
     document.querySelector('[aria-label="从 models.dev 更新模型资料"]')?.dataset.feedbackState === status,
   status, { timeout: 5000 })
+  const panelGeometry = () => page.evaluate(() => [
+    '#ai-model-details', '#ai-model-details h2', '[aria-label="从 models.dev 更新模型资料"]'
+  ].map(selector => {
+    const rect = document.querySelector(selector).getBoundingClientRect()
+    return [rect.x, rect.y, rect.width, rect.height]
+  }))
   const assertPanelBounds = async label => {
     const bounds = await page.evaluate(() => ({
       viewport: [innerWidth, innerHeight],
@@ -50,6 +56,8 @@ export async function runModelsDevBrowserChecks(page, origin, directory) {
     assert.equal(await page.evaluate(() => window.__modelsDevFixture.catalogRequests.length), 0, 'opening settings must not contact models.dev')
     await page.click(details)
     await page.waitForSelector('#ai-model-details', { state: 'visible' })
+    await settle()
+    const initialPanel = await panelGeometry()
 
     if (width === 1440) {
       await page.evaluate(() => { window.__modelsDevFixture.permissionAllowed = false })
@@ -57,6 +65,7 @@ export async function runModelsDevBrowserChecks(page, origin, directory) {
       await waitFeedback('error')
       assert.equal(await page.evaluate(() => window.__modelsDevFixture.catalogRequests.length), 0, 'denied consent must not download')
       assert.match(await page.evaluate(() => document.querySelector('#ai-model-details').textContent), /未授权/)
+      assert.deepEqual(await panelGeometry(), initialPanel, 'permission errors must not resize or flip the popover')
       report.checks.push('permission-denial')
     }
 
@@ -69,6 +78,7 @@ export async function runModelsDevBrowserChecks(page, origin, directory) {
     await page.waitForFunction(() => document.querySelector('#ai-model-details')?.textContent.includes('1,048,576'))
     await settle()
     assert.deepEqual(await geometry(), initial, `${width}: successful update must not move the form`)
+    assert.deepEqual(await panelGeometry(), initialPanel, `${width}: downloaded metadata must not move the popover or its actions`)
     const popup = await page.evaluate(() => ({
       text: document.querySelector('#ai-model-details').textContent,
       left: document.querySelector('#ai-model-details').getBoundingClientRect().left,
@@ -83,10 +93,14 @@ export async function runModelsDevBrowserChecks(page, origin, directory) {
     assert.ok(popup.top >= 0 && popup.bottom <= height, `${width}: popup title and actions must stay inside vertical bounds`)
     await shot(`models-dev-${width}-matched`)
 
-    await page.click(toggle)
+    // The narrow viewport also exercises the keyboard path, without Ego's
+    // pointer annotation overlapping this small switch.
+    if (width === 390) { await page.focus(toggle); await page.press(toggle, 'Space') }
+    else await page.click(toggle)
     await page.waitForFunction(() => window.__modelsDevFixture.stored.curatorModelsDevSync?.autoUpdate === true)
     assert.deepEqual(await geometry(), initial)
-    await page.click(toggle)
+    if (width === 390) await page.press(toggle, 'Space')
+    else await page.click(toggle)
     await page.waitForFunction(() => window.__modelsDevFixture.stored.curatorModelsDevSync?.autoUpdate === false)
     await page.keyboard.press('Escape')
     await page.waitForSelector('#ai-model-details', { state: 'hidden' })

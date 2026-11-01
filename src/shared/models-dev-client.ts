@@ -1,6 +1,8 @@
 import { MODELS_DEV_ORIGIN } from './models-dev.js'
-import { MODELS_DEV_ERROR_LABELS } from './models-dev-cache.js'
+import { createBrowserModelsDevSyncService } from './models-dev-browser.js'
 import type { ModelsDevMessage, ModelsDevSyncResult } from './models-dev-sync.js'
+
+let service: ReturnType<typeof createBrowserModelsDevSyncService> | undefined
 
 export async function requestModelsDevUpdate(message: ModelsDevMessage): Promise<ModelsDevSyncResult> {
   try {
@@ -8,8 +10,13 @@ export async function requestModelsDevUpdate(message: ModelsDevMessage): Promise
     if (message.type === 'models-dev:refresh' || message.autoUpdate) {
       if (!await chrome.permissions.request({ origins: [MODELS_DEV_ORIGIN] })) return { ok: false, error: 'permission' }
     }
-    const result = await chrome.runtime.sendMessage(message) as ModelsDevSyncResult | undefined
-    if (result?.ok === true) return { ok: true, updated: result.updated === true }
-    return result?.ok === false && Object.hasOwn(MODELS_DEV_ERROR_LABELS, result.error) ? result : { ok: false, error: 'network' }
-  } catch { return { ok: false, error: 'network' } }
+  } catch { return { ok: false, error: 'permission' } }
+
+  // An explicit download belongs to this extension page. It must not depend on
+  // a sleeping, outdated or disconnected service-worker message listener.
+  service ??= createBrowserModelsDevSyncService()
+  if (message.type === 'models-dev:refresh') return service.refresh()
+  const result = await service.configure(message.autoUpdate)
+  if (result.ok && message.autoUpdate) void service.refresh(false)
+  return result
 }

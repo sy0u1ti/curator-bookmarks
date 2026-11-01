@@ -80,6 +80,7 @@
   margin-block: auto;
   min-width: 0;
   padding: 0;
+  border-radius: var(--ds-radius-xs);
 }
 
 .curator-hold-button {

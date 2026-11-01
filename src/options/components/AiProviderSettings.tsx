@@ -1,18 +1,18 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { AiProviderCard } from '../../ui/ai/AiProviderCard'
 import { Button } from '../../ui/base/Button'
 import { RevealInput } from '../../ui/actions/RevealInput'
 import { StatusButton } from '../../ui/actions/StatusButton'
+import { StatusMessage } from '../../ui/base/StatusMessage'
 import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../../ui/base/Collapsible'
-import { DialogBackdrop, DialogClose, DialogDescription, DialogOverlay, DialogPanel, DialogTitle } from '../../ui/base/Dialog'
+import { DialogBackdrop, DialogBody, DialogClose, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPanel, DialogTitle } from '../../ui/base/Dialog'
 import { Input } from '../../ui/base/Input'
 import { Select, type SelectOption } from '../../ui/base/Select'
 import { Textarea } from '../../ui/base/Textarea'
 import { ToastList, type ToastItem } from '../../ui/base/Toast'
 import { AiModelSelector } from './AiModelSelector.js'
 import { AiModelDetails } from './AiModelDetails.js'
-import { OptionDetails } from './OptionDetails.js'
 import { ReasoningEffortSelector } from './ReasoningEffortSelector.js'
 import { handleAiProviderSettingsAction } from '../options-controller'
 import {
@@ -24,8 +24,6 @@ import {
   AI_PROVIDER_BODY_CLASS,
   AI_PROVIDER_CARD_CLASS,
   AI_PROVIDER_CARD_ATTENTION_CLASS,
-  AI_PROVIDER_CONNECTIVITY_CLASS,
-  AI_PROVIDER_CONNECTIVITY_TONE_CLASS,
   AI_PROVIDER_COPY_CLASS,
   AI_PROVIDER_DIALOG_ACTIONS_CLASS,
   AI_PROVIDER_DIALOG_BACKDROP_CLASS,
@@ -41,11 +39,6 @@ import {
   AI_PROVIDER_FIELD_CLASS,
   AI_PROVIDER_FIELD_HEAD_CLASS,
   AI_PROVIDER_FIELD_LABEL_CLASS,
-  AI_PROVIDER_FLOW_CLASS,
-  AI_PROVIDER_FLOW_COPY_CLASS,
-  AI_PROVIDER_FLOW_INDEX_CLASS,
-  AI_PROVIDER_FLOW_STEP_CLASS,
-  AI_PROVIDER_FLOW_TITLE_CLASS,
   AI_PROVIDER_GRID_CLASS,
   AI_PROVIDER_HEADER_CLASS,
   AI_PROVIDER_INLINE_ACTION_CLASS,
@@ -56,8 +49,6 @@ import {
   AI_PROVIDER_MODEL_LABEL_CLASS,
   AI_PROVIDER_MODEL_ROW_CLASS,
   AI_PROVIDER_MODEL_SELECT_HOST_CLASS,
-  AI_PROVIDER_SAVE_STATE_CLASS,
-  AI_PROVIDER_SAVE_TONE_CLASS,
   AI_PROVIDER_SELECT_HOST_CLASS,
   AI_PROVIDER_SELECT_ROOT_CLASS,
   AI_PROVIDER_SELECT_TRIGGER_CLASS,
@@ -71,13 +62,6 @@ import {
 import { useAiProviderSettingsState } from './ai-provider-settings-store.js'
 import type { AiProviderSettingsState } from './ai-provider-settings-types.js'
 
-const aiProviderSteps = [
-  { id: 'api-key', index: '1', title: '填写密钥', copy: '填写渠道密钥；本机服务可留空' },
-  { id: 'fetch-models', index: '2', title: '获取模型', copy: '读取可用列表' },
-  { id: 'select-model', index: '3', title: '选择模型', copy: '可按模型调推理强度' },
-  { id: 'test-connection', index: '4', title: '测试连接', copy: '确认模型可用' },
-  { id: 'save-settings', index: '5', title: '保存', copy: '同步到 AI 功能' }
-] as const
 const AI_PROVIDER_TEST_LABELS = { idle: '测试连接', pending: '测试中', success: '连接成功', error: '连接失败' }
 const AI_PROVIDER_FETCH_LABELS = { idle: '获取模型', pending: '获取中', success: '已获取', error: '获取失败' }
 
@@ -103,10 +87,6 @@ export function AiProviderSettings({
       {state.configStatusText}
     </span>
   ), [state.configStatusText, state.configTone])
-  const connectivityClassName = [
-    AI_PROVIDER_CONNECTIVITY_CLASS,
-    aiProviderToneClass(state.connectivityTone, AI_PROVIDER_CONNECTIVITY_TONE_CLASS)
-  ].filter(Boolean).join(' ')
   const apiStyleOptions = state.apiStyleOptions.map((option): SelectOption => ({
     label: option.label,
     value: option.value
@@ -128,6 +108,7 @@ export function AiProviderSettings({
   }, [attentionState.requestId, attentionState.visible])
 
   const title = useMemo(() => <h2 className={AI_PROVIDER_TITLE_CLASS}>自定义 AI 渠道</h2>, [])
+  const manageModelsRef = useRef<HTMLButtonElement | null>(null)
 
   return (
     <>
@@ -145,78 +126,64 @@ export function AiProviderSettings({
         iconName="Bot"
         bodyClassName={AI_PROVIDER_BODY_CLASS}
       >
-        <OptionDetails label="配置步骤" ariaLabel="查看 AI 渠道配置步骤">
-          <ol className={AI_PROVIDER_FLOW_CLASS} aria-label="AI 渠道配置流程">
-          {aiProviderSteps.map((step) => (
-            <li className={AI_PROVIDER_FLOW_STEP_CLASS} key={step.id}>
-              <span className={AI_PROVIDER_FLOW_INDEX_CLASS}>{step.index}</span>
-              <strong className={AI_PROVIDER_FLOW_TITLE_CLASS}>{step.title}</strong>
-              <p className={AI_PROVIDER_FLOW_COPY_CLASS}>{step.copy}</p>
-            </li>
-          ))}
-          </ol>
-        </OptionDetails>
-
-        <div className={AI_PROVIDER_FIELD_CLASS}>
-          <div className={AI_PROVIDER_FIELD_HEAD_CLASS}>
-            <label className={AI_PROVIDER_FIELD_LABEL_CLASS} htmlFor="ai-api-key">API Key</label>
+        <div className={AI_PROVIDER_GRID_CLASS}>
+          <label className={AI_PROVIDER_FIELD_CLASS} htmlFor="ai-base-url">
+            <span className={AI_PROVIDER_FIELD_HEAD_CLASS}>
+              <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>服务地址（Base URL）</span>
+            </span>
+            <Input
+              id="ai-base-url"
+              className={AI_PROVIDER_INPUT_CLASS}
+              type="url"
+              spellCheck={false}
+              autoComplete="off"
+              placeholder="https://api.openai.com/v1"
+              value={state.baseUrl}
+              disabled={state.fieldsDisabled}
+              onValueChange={(value) => handleAiProviderSettingsAction({
+                action: 'change',
+                field: 'baseUrl',
+                value
+              })}
+              unstyled
+            />
+          </label>
+          <div className={AI_PROVIDER_FIELD_CLASS}>
+            <div className={AI_PROVIDER_FIELD_HEAD_CLASS}>
+              <label className={AI_PROVIDER_FIELD_LABEL_CLASS} htmlFor="ai-api-key">API Key</label>
+            </div>
+            <RevealInput
+              id="ai-api-key"
+              className={AI_PROVIDER_INPUT_CLASS}
+              revealed={state.revealApiKey}
+              onRevealChange={(value) => handleAiProviderSettingsAction({ action: 'toggle-api-key', value })}
+              spellCheck={false}
+              autoComplete="off"
+              placeholder={state.apiKeyPlaceholder}
+              value={state.apiKey}
+              disabled={state.fieldsDisabled}
+              onValueChange={(value) => handleAiProviderSettingsAction({
+                action: 'change',
+                field: 'apiKey',
+                value
+              })}
+              unstyled
+            />
           </div>
-          <RevealInput
-            id="ai-api-key"
-            className={AI_PROVIDER_INPUT_CLASS}
-            revealed={state.revealApiKey}
-            onRevealChange={(value) => handleAiProviderSettingsAction({ action: 'toggle-api-key', value })}
-            spellCheck={false}
-            autoComplete="off"
-            placeholder={state.apiKeyPlaceholder}
-            value={state.apiKey}
-            disabled={state.fieldsDisabled}
-            onValueChange={(value) => handleAiProviderSettingsAction({
-              action: 'change',
-              field: 'apiKey',
-              value
-            })}
-            unstyled
-          />
         </div>
 
         <div className={AI_PROVIDER_MODEL_FIELD_CLASS}>
           <AiProviderModelToolsContent
+            manageModelsRef={manageModelsRef}
             state={state}
             onOpenCustomModels={() => setCustomModelsOpen(true)}
           />
         </div>
 
-        {state.connectivityVisible ? (
-          <p className={connectivityClassName}>
-            {state.connectivityCopy}
-          </p>
-        ) : null}
-
         <CollapsibleRoot id="ai-advanced-settings" className={AI_PROVIDER_ADVANCED_CLASS}>
-          <CollapsibleTrigger className={AI_PROVIDER_ADVANCED_TRIGGER_CLASS} render={<Button size="sm" variant="secondary" />}>Base URL 与接口选项</CollapsibleTrigger>
+          <CollapsibleTrigger className={AI_PROVIDER_ADVANCED_TRIGGER_CLASS} render={<Button size="sm" variant="secondary" />}>接口与请求设置</CollapsibleTrigger>
           <CollapsiblePanel className={AI_PROVIDER_ADVANCED_PANEL_CLASS}>
             <div className={AI_PROVIDER_GRID_CLASS}>
-              <label className={AI_PROVIDER_FIELD_CLASS} htmlFor="ai-base-url">
-                <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>自定义 API 接口地址</span>
-                <Input
-                  id="ai-base-url"
-                  className={AI_PROVIDER_INPUT_CLASS}
-                  type="url"
-                  spellCheck={false}
-                  autoComplete="off"
-                  placeholder="https://api.openai.com/v1"
-                  value={state.baseUrl}
-                  disabled={state.fieldsDisabled}
-                  onValueChange={(value) => handleAiProviderSettingsAction({
-                    action: 'change',
-                    field: 'baseUrl',
-                    value
-                  })}
-                  unstyled
-                />
-              </label>
-
               <div className={AI_PROVIDER_FIELD_CLASS}>
                 <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>接口类型</span>
                 <div className={AI_PROVIDER_SELECT_HOST_CLASS}>
@@ -234,28 +201,6 @@ export function AiProviderSettings({
                   />
                 </div>
               </div>
-
-              <label className={AI_PROVIDER_FIELD_CLASS} htmlFor="ai-timeout-ms" hidden>
-                <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>请求超时 (ms)</span>
-                <Input
-                  id="ai-timeout-ms"
-                  className={AI_PROVIDER_INPUT_CLASS}
-                  type="number"
-                  min="5000"
-                  max="120000"
-                  step="1000"
-                  inputMode="numeric"
-                  placeholder="30000"
-                  value={state.timeoutMs}
-                  disabled={state.fieldsDisabled}
-                  onValueChange={(value) => handleAiProviderSettingsAction({
-                    action: 'change',
-                    field: 'timeoutMs',
-                    value
-                  })}
-                  unstyled
-                />
-              </label>
 
               <label className={AI_PROVIDER_FIELD_CLASS} htmlFor="ai-batch-size">
                 <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>每批最大请求数</span>
@@ -283,14 +228,25 @@ export function AiProviderSettings({
         </CollapsibleRoot>
 
         <div className={AI_PROVIDER_ACTIONS_CLASS}>
-          {state.saveStatusText ? (
-            <span
-              className={`${AI_PROVIDER_SAVE_STATE_CLASS} ${aiProviderToneClass(state.configTone, AI_PROVIDER_SAVE_TONE_CLASS)}`}
-            >
-              {state.saveStatusText}
-            </span>
-          ) : null}
+          <StatusMessage
+            className="m-0 text-[13px] leading-relaxed text-ds-text-secondary"
+            tone={state.connectivityTone === 'danger' ? 'error' : 'neutral'}
+          >
+            {state.saveStatusText || (state.connectivityVisible ? state.connectivityCopy : '')}
+          </StatusMessage>
           <div className={AI_PROVIDER_ACTION_BUTTONS_CLASS}>
+            <Button
+              className={state.showSaveSettingsButton ? undefined : 'invisible'}
+              variant="primary"
+              type="button"
+              aria-label="保存自定义 AI 渠道设置"
+              aria-hidden={!state.showSaveSettingsButton || undefined}
+              tabIndex={state.showSaveSettingsButton ? undefined : -1}
+              disabled={state.saveDisabled || !state.showSaveSettingsButton}
+              onClick={() => handleAiProviderSettingsAction({ action: 'save' })}
+            >
+              保存设置
+            </Button>
             <StatusButton
               variant={state.testButtonSecondary ? 'secondary' : 'primary'}
               feedback={state.testFeedback}
@@ -302,35 +258,26 @@ export function AiProviderSettings({
               focusableWhenDisabled={state.testingConnection}
               onClick={() => handleAiProviderSettingsAction({ action: 'test-connection' })}
             />
-            {state.showSaveSettingsButton ? (
-              <Button
-                variant="primary"
-                type="button"
-                aria-label="保存自定义 AI 渠道设置"
-                disabled={state.saveDisabled}
-                onClick={() => handleAiProviderSettingsAction({ action: 'save' })}
-              >
-                保存设置
-              </Button>
-            ) : null}
           </div>
         </div>
       </AiProviderCard>
       <AiCustomModelsDialog
-        key={state.customModels.join('\n')}
         disabled={state.modelToolsDisabled}
         open={customModelsOpen}
         value={state.customModels.join('\n')}
         onOpenChange={setCustomModelsOpen}
+        finalFocusRef={manageModelsRef}
       />
     </>
   )
 }
 
 function AiProviderModelToolsContent({
+  manageModelsRef,
   onOpenCustomModels,
   state
 }: {
+  manageModelsRef: RefObject<HTMLButtonElement | null>
   onOpenCustomModels: () => void
   state: AiProviderSettingsState
 }) {
@@ -396,6 +343,7 @@ function AiProviderModelToolsContent({
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <AiModelDetails state={state} />
         <Button
+          ref={manageModelsRef}
           className={AI_PROVIDER_INLINE_ACTION_CLASS}
           type="button"
           aria-label="打开自定义模型列表设置"
@@ -426,20 +374,19 @@ function AiCustomModelsDialog({
   disabled,
   onOpenChange,
   open,
-  value
+  value,
+  finalFocusRef
 }: {
   disabled: boolean
   onOpenChange: (open: boolean) => void
   open: boolean
   value: string
+  finalFocusRef: RefObject<HTMLButtonElement | null>
 }) {
-  const [draft, setDraft] = useState(() => value)
-
   const handleOpenChange = (nextOpen: boolean) => {
     if (disabled && nextOpen) {
       return
     }
-    setDraft(value)
     onOpenChange(nextOpen)
   }
 
@@ -451,13 +398,31 @@ function AiCustomModelsDialog({
     >
       <DialogBackdrop className={AI_PROVIDER_DIALOG_BACKDROP_CLASS} />
       <DialogPanel
+        layout="workspace"
         className={AI_PROVIDER_DIALOG_CLASS}
         aria-describedby="ai-model-modal-copy"
-        initialFocus={false}
-        finalFocus={false}
+        finalFocus={finalFocusRef}
       >
+        <AiCustomModelsForm initialValue={value} disabled={disabled} onOpenChange={onOpenChange} />
+      </DialogPanel>
+    </DialogOverlay>
+  )
+}
+
+/** The draft belongs to the mounted editing session, not a changing catalog. */
+function AiCustomModelsForm({ initialValue, disabled, onOpenChange }: {
+  initialValue: string
+  disabled: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const [draft, setDraft] = useState(initialValue)
+  return (
+    <>
+      <DialogHeader>
         <p className={AI_PROVIDER_DIALOG_EYEBROW_CLASS}>AI 模型</p>
         <DialogTitle className={AI_PROVIDER_DIALOG_TITLE_CLASS}>自定义模型列表</DialogTitle>
+      </DialogHeader>
+      <DialogBody>
         <DialogDescription id="ai-model-modal-copy" className={AI_PROVIDER_DIALOG_COPY_CLASS}>
           每行一个模型 ID，保存后加入选择器。
         </DialogDescription>
@@ -472,7 +437,8 @@ function AiCustomModelsDialog({
           />
         </label>
         <p className={AI_PROVIDER_DIALOG_HINT_CLASS}>重复项会自动合并，空行会被忽略。</p>
-        <div className={AI_PROVIDER_DIALOG_ACTIONS_CLASS}>
+      </DialogBody>
+      <DialogFooter className={AI_PROVIDER_DIALOG_ACTIONS_CLASS}>
           <DialogClose
             className={AI_PROVIDER_DIALOG_CLOSE_CLASS}
             type="button"
@@ -482,6 +448,7 @@ function AiCustomModelsDialog({
           </DialogClose>
           <Button
             variant="primary"
+            disabled={disabled}
             type="button"
             aria-label="保存自定义模型列表"
             onClick={() => {
@@ -494,8 +461,7 @@ function AiCustomModelsDialog({
           >
             保存模型
           </Button>
-        </div>
-      </DialogPanel>
-    </DialogOverlay>
+      </DialogFooter>
+    </>
   )
 }

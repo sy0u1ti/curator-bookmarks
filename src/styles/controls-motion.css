@@ -9,10 +9,10 @@
 .t-toggle,
 .options-switch-control {
   transition:
-    background-color var(--ds-motion-fast) var(--ease-smooth-out),
-    border-color var(--ds-motion-fast) var(--ease-smooth-out),
-    color var(--ds-motion-fast) var(--ease-smooth-out),
-    opacity var(--ds-motion-fast) var(--ease-smooth-out),
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    border-color var(--ds-motion-fast) var(--ds-ease-standard),
+    color var(--ds-motion-fast) var(--ds-ease-standard),
+    opacity var(--ds-motion-fast) var(--ds-ease-standard),
     transform var(--ds-motion-control) var(--ds-ease-standard),
     scale var(--ds-motion-control) var(--ds-ease-standard);
 }
@@ -20,7 +20,7 @@
 :is(.curator-button, .curator-control, .base-select-trigger, .base-toggle-group-item, .curator-checkbox, .t-check, .t-toggle, .options-switch-control):where(:not(:disabled):not([aria-disabled="true"]):not([data-disabled]):not(.dragging):not([data-dragging="true"])):active {
   scale: var(--control-press-scale, var(--ds-press-scale));
   transition-duration: var(--ds-motion-feedback);
-  transition-timing-function: var(--ease-smooth-out);
+  transition-timing-function: var(--ds-ease-standard);
 }
 
 /* Full-width fields and rows should not squeeze their text on every press.
@@ -30,6 +30,11 @@
   .model-selector-trigger,
   .reasoning-effort-trigger,
   .t-acc-head,
+  .curator-motion-row,
+  .curator-menu-item,
+  .curator-cascade-item,
+  .base-select-option,
+  .model-selector-option,
   .options-nav-link,
   .popup-list-button,
   .popup-folder-row,
@@ -45,15 +50,15 @@
 .base-input,
 .base-textarea {
   transition:
-    background-color var(--ds-motion-fast) var(--ease-smooth-out),
-    border-color var(--ds-motion-fast) var(--ease-smooth-out),
-    color var(--ds-motion-fast) var(--ease-smooth-out);
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    border-color var(--ds-motion-fast) var(--ds-ease-standard),
+    color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 .options-switch-thumb {
   transition:
     translate var(--toggle-dur) var(--toggle-ease),
-    background-color var(--ds-motion-fast) var(--ease-smooth-out);
+    background-color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 .base-select-option,
@@ -62,15 +67,15 @@
 .newtab-search-engine-item,
 .newtab-search-web-hint {
   transition:
-    background-color var(--ds-motion-fast) var(--ease-smooth-out),
-    color var(--ds-motion-fast) var(--ease-smooth-out),
-    opacity var(--ds-motion-fast) var(--ease-smooth-out);
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    color var(--ds-motion-fast) var(--ds-ease-standard),
+    opacity var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 .base-menu-trigger-arrow,
 .curator-menu-chevron {
   transform: none;
-  transition: transform var(--ds-motion-spring) var(--ds-ease-spring);
+  transition: transform var(--ds-motion-state) var(--ds-ease-standard);
 }
 
 [data-popup-open] > .base-menu-trigger-arrow {
@@ -83,7 +88,7 @@
 
 .folder-picker-toggle-icon,
 .popup-folder-picker-chevron {
-  transition: rotate var(--ds-motion-spring) var(--ds-ease-spring);
+  transition: rotate var(--ds-motion-state) var(--ds-ease-standard);
 }
 
 .base-select-indicator,
@@ -93,7 +98,7 @@
   opacity: 1;
   transition:
     transform var(--ds-motion-control) var(--ds-ease-standard),
-    opacity var(--duration-quick) var(--ease-smooth-out);
+    opacity var(--duration-quick) var(--ds-ease-standard);
 }
 
 .base-select-indicator[data-starting-style],
@@ -109,7 +114,7 @@
 .curator-checkbox-indicator[data-ending-style],
 .model-selector-selection-indicator:not([data-selected]) {
   transition-duration: var(--duration-quick);
-  transition-timing-function: var(--ease-smooth-out);
+  transition-timing-function: var(--ds-ease-standard);
 }
 
 @starting-style {
@@ -125,8 +130,8 @@
   scale: 1;
   transition:
     scale var(--ds-motion-control) var(--ds-ease-standard),
-    background-color var(--ds-motion-fast) var(--ease-smooth-out),
-    border-color var(--ds-motion-fast) var(--ease-smooth-out);
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    border-color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 .base-slider:not([data-disabled]):is([data-dragging], :focus-within) .base-slider-thumb {
@@ -150,10 +155,10 @@
   scale: 1;
   transition:
     display var(--duration-quick) allow-discrete,
-    opacity var(--duration-quick) var(--ease-smooth-out),
+    opacity var(--duration-quick) var(--ds-ease-standard),
     scale var(--ds-motion-control) var(--ds-ease-standard),
-    background-color var(--ds-motion-fast) var(--ease-smooth-out),
-    color var(--ds-motion-fast) var(--ease-smooth-out);
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 .newtab-search-clear[hidden] {
@@ -161,7 +166,7 @@
   scale: 0.9;
   pointer-events: none;
   transition-duration: var(--duration-quick);
-  transition-timing-function: var(--ease-smooth-out);
+  transition-timing-function: var(--ds-ease-standard);
 }
 
 @starting-style {

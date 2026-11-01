@@ -145,7 +145,10 @@ assert.ok(drawer.includes('searchSettings.enabled ? <>') && drawer.includes('tim
 assert.ok(drawer.includes('searchSettings.webSearchEnabled ? <>'))
 assert.ok(drawer.includes("iconPreview.layoutMode === 'fixed' ? (") && drawer.includes('iconPreview.showTitles ? ('))
 assert.ok(classes.includes('h-[var(--search-control-size)]') && !classes.includes('inline-flex h-[30px]'))
-assert.ok(classes.includes('calc(var(--search-height)_-_10px)'))
+assert.ok(classes.includes('calc(var(--search-height)_-_16px)'))
+assert.ok(classes.includes('--search-control-inset:calc((var(--search-height)_-_var(--search-control-size))/2)') &&
+  classes.includes('--search-radius:calc(var(--ds-radius-control)_+_var(--search-control-inset))'),
+  'Search controls and the shell must retain concentric corners at every supported height.')
 assert.ok(widget.includes('normalizeSearchHeight(shell.height)') && !widget.includes('formStyle'))
 assert.ok(widget.includes('!view.buttons.engine.disabled ? <>'), 'Local-only search should not render inactive web actions.')
 assert.ok(widget.includes('`${SEARCH_WIDTH_MIN_PX}px`') && classes.includes('var(--search-min-width)'), 'The widget and settings share the same minimum width.')

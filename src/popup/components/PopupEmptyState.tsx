@@ -18,7 +18,7 @@ const EMPTY_TITLE_CLASS = 'm-0 text-[13px] font-[750] [color:var(--ds-text-prima
 const EMPTY_HINT_CLASS = 'm-0 [color:var(--ds-text-secondary)]'
 const EMPTY_ACTIONS_CLASS = 'mt-0.5 flex flex-wrap justify-center gap-[7px]'
 const EMPTY_ACTION_CLASS = [
-  'inline-flex min-h-7 items-center justify-center rounded-[7px] border px-2.5 text-xs font-bold',
+  'inline-flex min-h-7 items-center justify-center rounded-ds-sm border px-2.5 text-xs font-bold',
   'border-[rgba(245,245,247,0.28)] bg-ds-surface-2 [color:var(--ds-text-secondary)]',
   'transition-[background-color,border-color,color,transform] duration-[var(--duration-quick)] ease-ds-standard',
   'hover:border-[rgba(245,245,247,0.54)] hover:bg-ds-hover hover:[color:var(--ds-text-primary)]',

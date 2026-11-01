@@ -12,7 +12,7 @@ const pathKey = (path: readonly string[]) => JSON.stringify(path)
 const hasChildren = (action: InlineMenuAction) =>
   typeof action.children === 'function' || Boolean(action.children?.length)
 const SUBMENU_OVERLAP_PX = 8
-const SUBMENU_INSET_PX = 7 // 6px padding and a 1px border.
+const SUBMENU_INSET_PX = 4 // Border-box inset: 3px padding and a 1px border.
 
 export function useMenuCascade({
   actions,

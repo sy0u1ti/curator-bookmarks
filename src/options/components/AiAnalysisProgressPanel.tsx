@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from 'react'
 import { AiThinkingOrb } from '../../ui/ai/AiThinkingOrb'
 import { AiTaskStatus } from '../../ui/ai/AiTaskStatus'
+import { StatusMessage } from '../../ui/base/StatusMessage'
 import {
   SHEEN_PROGRESS_BAR_CLASS,
   SHEEN_PROGRESS_TRACK_CLASS,
@@ -29,7 +30,7 @@ export function AiAnalysisProgressPanel({ children }: { children: ReactNode }) {
     ? (state.progressValue / state.progressMax) * 100
     : 0
   const title = useMemo(() => (
-    <strong>
+    <strong className="block min-h-5 tabular-nums">
       {state.busy ? (
         <span className={AI_ANALYSIS_BUSY_LABEL_CLASS}>
           <AiThinkingOrb state="composing" size={20} />
@@ -41,11 +42,13 @@ export function AiAnalysisProgressPanel({ children }: { children: ReactNode }) {
     </strong>
   ), [state.busy, state.progressLabel])
   const description = useMemo(() => (
-    <p className={AI_ANALYSIS_PROGRESS_COPY_CLASS}>
+    <StatusMessage className={AI_ANALYSIS_PROGRESS_COPY_CLASS}>
       {state.progressCopy}
-    </p>
+    </StatusMessage>
   ), [state.progressCopy])
   const statusNode = useMemo(() => <span className={OPTION_VALUE_CLASS}>{durationLabel}</span>, [durationLabel])
+
+  if (!state.visible) return null
 
   return (
     <AiTaskStatus

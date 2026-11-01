@@ -59,6 +59,7 @@ export function ScopePickerTriggerButton({
       className={[SCOPE_PICKER_TRIGGER_CLASS, className].filter(Boolean).join(' ')}
       type="button"
       aria-label={sourceAriaLabels[source]}
+      aria-describedby={state.countLabel ? `${prefix}-scope-count` : undefined}
       title={state.label}
       disabled={state.disabled}
       focusableWhenDisabled={state.disabled}
@@ -66,6 +67,7 @@ export function ScopePickerTriggerButton({
       unstyled
     >
       <span className={SCOPE_PICKER_LABEL_CLASS}>{state.label}</span>
+      {state.countLabel ? <span id={`${prefix}-scope-count`} className="shrink-0 text-xs font-medium text-ds-text-secondary tabular-nums">{state.countLabel}</span> : null}
       <Icon className="ml-auto shrink-0 text-ds-text-secondary" name="ChevronDown" size={14} aria-hidden="true" />
     </Button>
   )

@@ -175,7 +175,7 @@ import {
   isFeaturedBackgroundProvider
 } from './featured-background-providers.js'
 import { getSpeedDialFaviconLoadAttributes } from './speed-dial-load-attributes.js'
-import { buildSpeedDialItems, createSpeedDialEmptyState } from './speed-dial.js'
+import { buildSpeedDialItems, createSpeedDialEmptyState, getSpeedDialStatus } from './speed-dial.js'
 import type { SpeedDialItem } from './speed-dial-types.js'
 import {
   createFolderDragSectionRectSnapshot,
@@ -3029,8 +3029,8 @@ function syncSpeedDialReorderBusyState(): void {
     ...current,
     ariaBusy: state.reorderingSpeedDial,
     content,
-    meta: state.speedDialReorderError || current.meta,
-    metaTone: state.speedDialReorderError ? 'error' : current.metaTone
+    meta: getSpeedDialStatus(state.reorderingSpeedDial, state.speedDialReorderError),
+    metaTone: state.speedDialReorderError ? 'error' : ''
   })
 }
 
@@ -4554,7 +4554,7 @@ async function settleNewtabDragGhost(
     ],
     {
       duration: getMotionDurationMs('--drag-settle-dur', 160),
-      easing: getMotionEasing('--ease-smooth-out', 'cubic-bezier(0.22, 1, 0.36, 1)'),
+      easing: getMotionEasing('--ds-ease-settle', 'cubic-bezier(0.32, 0.72, 0, 1)'),
       fill: 'forwards'
     }
   )
@@ -4610,7 +4610,7 @@ function renderWithFolderFlip(): void {
         // 与书签卡片让位（BOOKMARK_TILE_DRAG_RESTING_MOTION_CLASS）共用
         // drag settle 时长和 easing，避免不同拖拽模式在落位时变速。
         duration: getMotionDurationMs('--drag-settle-dur', 160),
-        easing: getMotionEasing('--ease-smooth-out', 'cubic-bezier(0.22, 1, 0.36, 1)')
+        easing: getMotionEasing('--ds-ease-settle', 'cubic-bezier(0.32, 0.72, 0, 1)')
       }
     )
   }
@@ -8155,7 +8155,7 @@ function renderSpeedDialPanel(
         type: 'empty',
         state: createSpeedDialEmptyState()
       },
-      meta: state.speedDialReorderError || '尚未固定',
+      meta: getSpeedDialStatus(false, state.speedDialReorderError),
       metaTone: state.speedDialReorderError ? 'error' : ''
     })
     return
@@ -8178,7 +8178,7 @@ function renderSpeedDialPanel(
       busy: state.reorderingSpeedDial,
       items: cardModels
     },
-    meta: state.speedDialReorderError || `${items.length} 个固定入口`,
+    meta: getSpeedDialStatus(state.reorderingSpeedDial, state.speedDialReorderError),
     metaTone: state.speedDialReorderError ? 'error' : ''
   })
 }

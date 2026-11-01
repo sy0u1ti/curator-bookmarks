@@ -24,7 +24,7 @@ const historyMetrics = [
 }>
 
 const BOOKMARK_ADD_HISTORY_SUMMARY_CLASS =
-  'mt-4 grid grid-cols-[minmax(150px,0.65fr)_minmax(0,2fr)] gap-4 rounded-ds-sm border-ds-border-subtle bg-ds-surface-1 p-4 max-[760px]:grid-cols-1'
+  'mt-4 grid grid-cols-[minmax(150px,0.65fr)_minmax(0,2fr)] gap-4 rounded-ds-card border-ds-border-subtle bg-ds-surface-1 p-4 max-[760px]:grid-cols-1'
 const BOOKMARK_ADD_HISTORY_PRIMARY_CLASS = 'grid content-center gap-1 border-r border-ds-border-subtle pr-4 max-[760px]:border-r-0 max-[760px]:border-b max-[760px]:pb-3 max-[760px]:pr-0'
 const BOOKMARK_ADD_HISTORY_SECONDARY_CLASS = 'grid grid-cols-3 gap-x-5 gap-y-2 max-[620px]:grid-cols-1'
 const BOOKMARK_ADD_HISTORY_SECONDARY_ITEM_CLASS = 'flex items-baseline justify-between gap-3 border-b border-ds-border-subtle py-1.5'

@@ -1,6 +1,7 @@
 import { OPTION_SURFACE_CLASS } from './option-layout-classes.js'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '../../ui/base/Button.js'
+import { StatusMessage } from '../../ui/base/StatusMessage.js'
 import { STORAGE_KEYS } from '../../shared/constants.js'
 import { cleanStorageCategory, getStorageUsage, type StorageCleanupCategory } from '../../shared/storage-maintenance.js'
 
@@ -68,7 +69,7 @@ export function StorageManagement() {
         <Button size="sm" variant="secondary" disabled={busy || !usage.previewBytes} onClick={() => void clean('previews')}>清除预览缓存</Button>
       </StorageRow>
     </> : <p className="text-[13px] text-ds-text-secondary">{busy ? '正在读取用量…' : '用量暂不可用，请点击刷新用量重试。'}</p>}
-    {status ? <p role="status" className="text-[13px] text-ds-text-secondary">{status}</p> : null}
+    <StatusMessage className="mt-2 text-[13px] leading-relaxed text-ds-text-secondary">{status}</StatusMessage>
   </section>
 }
 

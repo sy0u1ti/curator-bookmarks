@@ -9,7 +9,7 @@ import {
 } from '../popup-controller-store'
 
 const STATUS_BASE_CLASS =
-  'relative z-[1] grid min-h-[38px] flex-none grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-2.5 overflow-hidden rounded-[7px] border border-ds-border bg-ds-surface-1 px-2 py-[7px] pl-2.5 shadow-none'
+  'popup-surface popup-feedback-layer absolute z-20 grid min-h-[38px] grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-2.5 overflow-hidden border border-ds-border bg-ds-surface-1 px-2 py-[7px] pl-2.5 shadow-none'
 
 const STATUS_STATE_CLASS: Record<string, string> = {
   queued: '',
@@ -26,7 +26,7 @@ const STATUS_INDICATOR_CLASS: Record<string, string> = {
 }
 
 const actionClass =
-  'inline-flex min-h-[26px] min-w-[34px] items-center justify-center rounded-md border border-ds-border bg-ds-surface-1 px-2 text-xs font-semibold leading-none text-ds-text-primary outline-none transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover active:scale-[var(--ds-press-scale)]'
+  'inline-flex min-h-[26px] min-w-[34px] items-center justify-center rounded-ds-sm border border-ds-border bg-ds-surface-1 px-2 text-xs font-semibold leading-none text-ds-text-primary outline-none transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover active:scale-[var(--ds-press-scale)]'
 
 const ghostActionClass =
   'border-transparent bg-transparent text-ds-text-secondary hover:text-ds-text-primary focus-visible:text-ds-text-primary'

@@ -1,5 +1,5 @@
 import { getInboxWorkflowMode, type InboxWorkflowSettings } from '../../shared/inbox-workflow.js'
-import type { FeatureSettingsControlsState } from '../components/feature-settings-types.js'
+import { FEATURE_SWITCH_CONTENT, type FeatureSettingsControlsState } from '../components/feature-settings-types.js'
 
 interface FeatureSettingsViewInput {
   settings: { autoAnalyzeBookmarks?: boolean; allowRemoteParsing?: boolean }
@@ -18,20 +18,16 @@ export function buildFeatureSettingsView(input: FeatureSettingsViewInput): Featu
   return {
     loading: input.loading,
     switches: [{
-      key: 'autoAnalyzeBookmarks', label: '自动分析',
-      description: '新增书签后自动生成标签与建议，高置信度时建议调整名称或移动；待整理箱采用独立策略。',
-      help: '新增网页书签后自动生成分析与标签，高置信时会调整名称和文件夹。快捷键收藏到待整理箱后的处理方式可在下方单独选择。',
+      ...FEATURE_SWITCH_CONTENT[0],
       checked: Boolean(settings.autoAnalyzeBookmarks),
       disabled: locked || input.testingConnection || pending === 'autoAnalyzeBookmarks',
-      status: pending === 'autoAnalyzeBookmarks' ? '保存中…' : undefined,
+     status: undefined,
       statusTone: 'muted'
     }, {
-      key: 'allowRemoteParsing', label: '网页内容辅助解析',
-      description: 'AI 分析时通过 Jina Reader 获取网页内容，第三方服务会收到目标网址。',
-      help: '结合 Jina Reader 内容；第三方服务会收到目标 URL。',
+      ...FEATURE_SWITCH_CONTENT[1],
       checked: remoteEnabled,
       disabled: locked || pending === 'allowRemoteParsing',
-      status: pending === 'allowRemoteParsing' ? '保存中…' : remoteEnabled && !input.remoteParserGranted ? '待授权' : undefined,
+     status: remoteEnabled && !input.remoteParserGranted ? '待授权' : undefined,
       statusTone: remoteEnabled && !input.remoteParserGranted ? 'warning' : 'muted'
     }],
     inboxWorkflow: {

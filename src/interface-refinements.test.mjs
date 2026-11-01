@@ -99,7 +99,7 @@ assert.ok(subject.buildFeatureSettingsView(input).switches.every(item => !item.s
 const needsPermission = subject.buildFeatureSettingsView({ ...input, settings: { allowRemoteParsing: true } }).switches[1]
 assert.equal(needsPermission.status, '待授权')
 assert.match(needsPermission.description, /第三方服务会收到目标网址/)
-assert.equal(subject.buildFeatureSettingsView({ ...input, pending: 'autoAnalyzeBookmarks' }).switches[0].status, '保存中…')
+assert.ok(!subject.buildFeatureSettingsView({ ...input, pending: 'autoAnalyzeBookmarks' }).switches[0].status, 'no status text during pending')
 
 const custom = { ...subject.DEFAULT_ICON_SETTINGS, titleLines: 2, tileWidth: 210, iconShellSize: 34, columns: 6 }
 const normalized = subject.normalizeIconSettings(custom)

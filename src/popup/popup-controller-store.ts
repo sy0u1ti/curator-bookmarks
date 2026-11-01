@@ -28,6 +28,9 @@ export interface PopupSearchChipView {
 
 export interface PopupContentChangeDetail {
   preserveScroll: boolean
+  navigation?: 'repeat'
+  selectionOnly?: boolean
+  direction?: -1 | 0 | 1
   state: PopupContentViewModel
 }
 
@@ -39,6 +42,7 @@ export interface PopupContentActionDetail {
   folderId?: string
   index?: number
   menuAction?: string
+  repeat?: boolean
   returnFocusElement?: HTMLElement | null
   value?: string
 }
@@ -446,10 +450,12 @@ export function dispatchPopupSearchChipsChange(chips: PopupSearchChipView[]): vo
 
 export function dispatchPopupContentChange(
   state: PopupContentViewModel,
-  options: { preserveScroll?: boolean } = {}
+  options: { preserveScroll?: boolean; navigation?: 'repeat'; selectionOnly?: boolean; direction?: -1 | 0 | 1 } = {}
 ): void {
   const detail: PopupContentChangeDetail = {
     preserveScroll: Boolean(options.preserveScroll),
+    ...(options.navigation ? { navigation: options.navigation } : {}),
+    ...(options.selectionOnly ? { selectionOnly: true, direction: options.direction || 0 } : {}),
     state: { ...state }
   }
   updatePopupViewStore({ content: detail })

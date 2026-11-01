@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { AiThinkingOrb } from '../../ui/ai/AiThinkingOrb'
 import { Button } from '../../ui/base/Button'
+import { StatusMessage } from '../../ui/base/StatusMessage'
 import { DotMatrixLoader } from '../../ui/base/DotMatrixLoader'
 import { Input } from '../../ui/base/Input'
 import { Progress } from '../../ui/base/Progress'
@@ -18,7 +19,7 @@ import { isSidePanelSurface } from '../../shared/extension-surfaces'
 import type { PopupSmartClassifierViewModel, PopupSmartPageViewModel } from './PopupViewModels'
 
 const SMART_ERROR_BANNER_CLASS =
-  'relative z-[1] flex-none rounded-ds-lg border border-[rgba(255,138,130,0.42)] bg-[rgba(255,138,130,0.10)] px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-ds-danger-text shadow-none'
+  'popup-surface relative z-[1] flex-none border border-[rgba(255,138,130,0.42)] bg-[rgba(255,138,130,0.10)] px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-ds-danger-text shadow-none'
 
 const pageRevealShellClass = 't-skel popup-t-skel popup-page-reveal relative min-h-12 w-full'
 const pageLayerClass = 'absolute inset-0 min-h-12'
@@ -31,10 +32,10 @@ const pageContentLayerClass = cx(
   't-skel-content popup-page-content z-[2]'
 )
 const pageCardClass =
-  'grid min-h-12 w-full grid-cols-[minmax(0,1fr)_156px] items-center gap-2 overflow-hidden rounded-ds-sm border-0 bg-ds-surface-1 py-1.5 pl-2.5 pr-1.5 shadow-none max-[520px]:grid-cols-[minmax(0,1fr)] max-[520px]:items-stretch max-[520px]:gap-2 max-[520px]:p-2.5'
+  'popup-surface grid min-h-12 w-full grid-cols-[minmax(0,1fr)_156px] items-center gap-2 overflow-hidden border-0 bg-ds-surface-1 py-1.5 pl-2.5 pr-1.5 shadow-none @max-[520px]/popup:grid-cols-[minmax(0,1fr)] @max-[520px]/popup:items-stretch @max-[520px]/popup:gap-2 @max-[520px]/popup:p-2.5'
 const pageMainClass = 'grid min-w-0 grid-cols-[26px_minmax(0,1fr)] items-center gap-2.5'
 const pageIconClass =
-  'grid h-[26px] w-[26px] place-items-center overflow-hidden rounded-md border-0 bg-ds-surface-2 text-sm font-bold leading-none text-ds-text-primary'
+  'grid h-[26px] w-[26px] place-items-center overflow-hidden rounded-ds-sm border-0 bg-ds-surface-2 text-sm font-bold leading-none text-ds-text-primary'
 const pageFaviconClass = 'block h-full w-full object-cover'
 const pageCopyClass = 'min-w-0'
 const pageTitleClass = 'm-0 min-w-0 truncate text-[13px] font-semibold leading-tight text-ds-text-primary'
@@ -45,9 +46,9 @@ const placeholderTitleClass = 'text-ds-text-primary'
 const placeholderStatusClass = 'text-ds-text-muted'
 
 const currentPageActionsClass =
-  'grid w-[156px] grid-cols-[minmax(0,1fr)_auto] gap-1 justify-self-end max-[520px]:w-full max-[520px]:grid-cols-2 max-[520px]:justify-self-stretch'
+  'grid w-[156px] grid-cols-[minmax(0,1fr)_auto] gap-1 justify-self-end @max-[520px]/popup:w-full @max-[520px]/popup:grid-cols-2 @max-[520px]/popup:justify-self-stretch'
 const currentPageActionBaseClass = [
-  'inline-flex min-h-6 min-w-0 items-center justify-center overflow-hidden truncate whitespace-nowrap rounded-md border px-[7px] text-xs font-semibold leading-none outline-none',
+  'inline-flex min-h-6 min-w-0 items-center justify-center overflow-hidden truncate whitespace-nowrap rounded-ds-sm border px-[7px] text-xs font-semibold leading-none outline-none',
   'transition-[border-color,background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)] disabled:cursor-default disabled:opacity-70'
@@ -76,12 +77,12 @@ const placeholderPrimaryActionClass = cx(
 const skeletonBarClass =
   'block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)] rounded-full bg-[rgba(255,255,255,0.065)]'
 const skeletonDotClass =
-  'block h-7 w-7 rounded-md bg-[rgba(255,255,255,0.065)]'
+  'block h-7 w-7 rounded-ds-sm bg-[rgba(255,255,255,0.065)]'
 const pageSkeletonCopyClass = 'grid min-w-0 gap-[7px]'
 const pageSkeletonTitleClass = cx(skeletonBarClass, 'h-[11px] min-w-24')
 const pageSkeletonStatusClass = cx(skeletonBarClass, 'h-2 min-w-[132px] opacity-[0.68]')
 const pageSkeletonActionsClass = cx(currentPageActionsClass, 'items-center')
-const pageSkeletonActionClass = cx(skeletonBarClass, 'h-6 w-full rounded-md')
+const pageSkeletonActionClass = cx(skeletonBarClass, 'h-6 w-full rounded-ds-sm')
 const pageSkeletonSecondaryActionClass = cx(pageSkeletonActionClass, 'min-w-[42px]')
 
 const panelCardClass =
@@ -92,7 +93,7 @@ const panelHeaderWithMarginClass = cx(panelHeaderClass, 'mb-3.5')
 const panelHeaderLargeMarginClass = panelHeaderClass
 const panelHeaderStandaloneClass = panelHeaderClass
 const exitButtonClass = [
-  'inline-flex h-7 min-w-[42px] items-center justify-center rounded-md border border-ds-border bg-ds-surface-2 px-2 text-xs font-[650] text-ds-text-secondary outline-none',
+  'inline-flex h-7 min-w-[42px] items-center justify-center rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2 text-xs font-[650] text-ds-text-secondary outline-none',
   'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
@@ -100,9 +101,9 @@ const exitButtonClass = [
 ].join(' ')
 
 const actionsClass = 'mt-3 grid grid-cols-[repeat(auto-fit,minmax(86px,1fr))] gap-2'
-const actionsThreeClass = cx(actionsClass, 'grid-cols-3 max-[430px]:grid-cols-1')
+const actionsThreeClass = cx(actionsClass, 'grid-cols-3 @max-[430px]/popup:grid-cols-1')
 const actionButtonBaseClass = [
-  'inline-flex min-h-[38px] w-full items-center justify-center gap-2 rounded-lg border px-3 text-[13px] font-semibold leading-none outline-none',
+  'inline-flex min-h-[38px] w-full items-center justify-center gap-2 rounded-ds-sm border px-3 text-[13px] font-semibold leading-none outline-none',
   'transition-[border-color,background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)] disabled:cursor-default'
@@ -123,7 +124,7 @@ const savedActionButtonClass =
   'border-ds-success bg-ds-success-soft text-ds-success-text disabled:opacity-100'
 
 const manualButtonClass = [
-  'mx-auto inline-flex w-fit items-center justify-center gap-[7px] rounded-md border border-transparent bg-transparent px-2 py-1.5 text-xs font-semibold text-ds-text-secondary outline-none',
+  'mx-auto inline-flex w-fit items-center justify-center gap-[7px] rounded-ds-sm border border-transparent bg-transparent px-2 py-1.5 text-xs font-semibold text-ds-text-secondary outline-none',
   'transition-[color,background-color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
@@ -138,13 +139,13 @@ const permissionCopyClass = 'm-0 text-xs leading-[1.55] text-ds-text-secondary'
 const permissionErrorClass = 'm-0 text-xs leading-[1.55] text-ds-danger-text'
 const permissionOriginsClass = 'flex flex-wrap gap-1.5'
 const permissionOriginClass =
-  'max-w-full overflow-hidden truncate whitespace-nowrap rounded-md border border-ds-border bg-ds-surface-2 px-2 py-1.5 text-xs leading-tight text-ds-text-primary'
+  'max-w-full overflow-hidden truncate whitespace-nowrap rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2 py-1.5 text-xs leading-tight text-ds-text-primary'
 
 const buttonLoadingLabelClass = 'inline-flex min-w-0 items-center justify-center gap-[7px]'
 const buttonDotLoaderClass = 'h-3.5 w-3.5'
 const loadingCardClass = cx(panelCardClass, 'flex h-full min-h-0 flex-col overflow-hidden px-[18px] py-4')
 const loadingStageClass = 'flex min-h-0 flex-1 items-center justify-center pb-8'
-const loadingBodyClass = 'grid w-full max-w-[590px] grid-cols-[64px_minmax(0,1fr)] items-center gap-4 max-[430px]:grid-cols-[minmax(0,1fr)] max-[430px]:justify-items-center max-[430px]:text-center'
+const loadingBodyClass = 'grid w-full max-w-[590px] grid-cols-[64px_minmax(0,1fr)] items-center gap-4 @max-[430px]/popup:grid-cols-[minmax(0,1fr)] @max-[430px]/popup:justify-items-center @max-[430px]/popup:text-center'
 const loadingLoaderClass = 'opacity-90'
 const loadingContentClass = 'min-w-0'
 const loadingCopyClass =
@@ -161,7 +162,7 @@ const sectionLabelClass = 'mb-[9px] mt-0 text-xs font-semibold text-ds-text-seco
 const recommendationsClass =
   'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const folderOptionBaseClass = [
-  'grid min-h-[50px] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2.5 rounded-lg border border-ds-border bg-ds-surface-2 px-3 py-2.5 text-left outline-none max-[430px]:grid-cols-[minmax(0,1fr)]',
+  'grid min-h-[50px] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 py-2.5 text-left outline-none @max-[430px]/popup:grid-cols-[minmax(0,1fr)]',
   'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[0.993]'
@@ -333,11 +334,12 @@ function PopupSmartPageCardContent({
             type="button"
             data-current-page-action="pin-newtab"
             aria-pressed={page.pinned}
+            aria-label={page.pinned ? '取消当前页的固定入口' : '将当前页固定到新标签页'}
             disabled={page.pinPending}
             onClick={() => handlers?.onCurrentPageAction?.('pin-newtab')}
             unstyled
           >
-            {page.pinPending ? <PopupButtonLoadingLabel label={page.pinned ? '取消中' : '固定中'} /> : page.pinLabel}
+           {page.pinLabel}
           </Button>
           <Button
             className={currentPageSecondaryActionClass}
@@ -482,7 +484,7 @@ function PopupSmartPermission({
             {state.permissionOrigins.map((origin) => <span className={permissionOriginClass} key={origin}>{origin}</span>)}
           </div>
         ) : null}
-        {state.error ? <p className={permissionErrorClass}>{state.error}</p> : null}
+        <StatusMessage className={permissionErrorClass} tone="error">{state.error}</StatusMessage>
       </div>
       <Toolbar className={actionsClass} unstyled>
         <Button
@@ -659,7 +661,7 @@ function PopupSmartResult({
           unstyled
         >
           {state.saving ? (
-            <PopupButtonLoadingLabel label="保存中" />
+           null
           ) : (
             <span className="popup-save-action-label">
               {state.saved ? (

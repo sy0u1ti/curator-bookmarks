@@ -12,9 +12,12 @@ import {
   type RefObject
 } from 'react'
 import { Button } from '../../ui/base/Button'
+import { StatusMessage } from '../../ui/base/StatusMessage'
+import { Popover } from '../../ui/base/Popover'
 import { getMotionAwareScrollBehavior } from '../../shared/motion'
 import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../../ui/base/Collapsible'
 import { cx } from '../../ui/base/utils'
+import { getFolderSourceSecondaryPath } from '../folder-source-presentation'
 import { DrawerOverlay, DrawerPanel } from '../../ui/base/Drawer'
 import { Icon } from '../../ui/icons/Icon'
 import { Input } from '../../ui/base/Input'
@@ -73,7 +76,7 @@ import {
 import { NEWTAB_BACKGROUND_TYPE_OPTIONS } from '../newtab-background-types'
 import type { SettingsDrawerSection } from '../settings-group-sync'
 import { useSettingsDrawerModalMode } from '../settings-drawer-mode'
-import { BACKGROUND_MASK_META, BACKGROUND_MASK_STYLES, isPaperShaderMaskStyle } from '../background-mask-settings'
+import { BACKGROUND_MASK_META, BACKGROUND_MASK_STYLES, isPaperShaderMaskStyle, isWallpaperFilterMaskStyle } from '../background-mask-settings'
 import { getBackgroundFilterUnavailableReason, useBackgroundFilterStatus } from '../background-filter-runtime'
 import {
   dispatchNewtabSettingsDrawerActiveGroupChange,
@@ -120,20 +123,20 @@ const settingsTabs = [
 
 const DRAWER_PORTALED_CONTENT_ATTRIBUTES = { 'data-drawer-content': '' } as const
 const SETTINGS_DRAWER_CLASS = 'fixed inset-0 z-[10020] overflow-hidden bg-transparent'
-const SETTINGS_DRAWER_SURFACE_CLASS = 'settings-drawer-panel @container/settings isolate rounded-ds-lg border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-transparent text-ds-text-primary [box-shadow:var(--newtab-glass-drop-shadow)] [filter:none] [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-autospace:no-autospace] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-spacing-trim:space-all]'
-const SETTINGS_DRAWER_PANEL_CLASS = 'pointer-events-auto fixed inset-y-0 right-0 z-[1] grid h-dvh w-[min(520px,calc(100vw-24px))] max-w-full grid-rows-[minmax(0,1fr)] overflow-hidden opacity-100 [transform:translateX(var(--drawer-swipe-movement-x))] transition-[transform,scale,opacity] duration-[var(--panel-open-dur)] ease-[var(--panel-ease)] data-swiping:duration-0 data-ending-style:duration-[var(--panel-close-dur)] data-starting-style:opacity-0 data-ending-style:opacity-0 data-starting-style:[transform:translateX(100%)] data-ending-style:[transform:translateX(100%)] motion-reduce:transition-opacity motion-reduce:duration-[80ms] motion-reduce:[transform:none] max-[600px]:w-full max-[600px]:rounded-none max-[600px]:border-x-0'
+const SETTINGS_DRAWER_SURFACE_CLASS = 'settings-drawer-panel @container/settings isolate rounded-l-ds-dialog rounded-r-none border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-transparent text-ds-text-primary [box-shadow:var(--newtab-glass-drop-shadow)] [filter:none] [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-autospace:no-autospace] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-spacing-trim:space-all]'
+const SETTINGS_DRAWER_PANEL_CLASS = 'pointer-events-auto fixed inset-y-0 right-0 z-[1] grid h-dvh w-[min(520px,calc(100vw-24px))] max-w-full grid-rows-[minmax(0,1fr)] overflow-hidden opacity-100 [transform:translateX(var(--drawer-swipe-movement-x))] curator-drawer-motion data-starting-style:opacity-0 data-ending-style:opacity-0 data-starting-style:[transform:translateX(100%)] data-ending-style:[transform:translateX(100%)] motion-reduce:transition-opacity motion-reduce:duration-[80ms] motion-reduce:[transform:none] max-[600px]:w-full max-[600px]:rounded-none max-[600px]:border-x-0'
 const SETTINGS_DRAWER_SCROLL_CLASS = 'settings-drawer-scroll h-full min-h-0 overflow-x-hidden overflow-y-auto px-6 pb-6 pt-4 @max-[440px]/settings:px-4 @max-[440px]/settings:pb-5'
 const SETTINGS_ROOT_CLASS = 'grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]'
 const SETTINGS_CHROME_CLASS = 'settings-drawer-chrome grid gap-3 border-b border-ds-border-subtle px-6 pb-4 pt-4 @max-[440px]/settings:px-4'
-const SETTINGS_HEADER_CLASS = 'grid min-h-10 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3'
+const SETTINGS_HEADER_CLASS = 'grid min-h-10 grid-cols-[minmax(0,1fr)_96px_auto] items-center gap-x-3'
 const SETTINGS_TITLE_CLASS = 'm-0 text-xl font-semibold leading-tight text-ds-text-primary'
-const SETTINGS_SAVE_STATUS_CLASS = 'col-span-2 mt-1 text-xs font-semibold text-ds-accent-text data-[state=error]:text-ds-danger-text'
+const SETTINGS_SAVE_STATUS_CLASS = 'm-0 text-right text-xs font-medium leading-4 text-ds-text-secondary'
 const SETTINGS_TABS_LIST_CLASS = 't-tabs grid grid-cols-5 gap-1 rounded-ds-md border-0 bg-[rgba(245,245,247,0.06)] p-1'
 const SETTINGS_TAB_CLASS = 't-tab min-h-8 min-w-0 whitespace-nowrap rounded-ds-sm bg-transparent px-2 text-xs font-semibold outline-none hover:text-ds-text-primary data-[active]:text-ds-text-primary data-[selected]:text-ds-text-primary data-[state=active]:text-ds-text-primary focus-visible:shadow-ds-focus @max-[380px]/settings:px-0'
 const SETTINGS_TABS_INDICATOR_CLASS = 't-tabs-pill'
 const SETTINGS_TAB_PANELS_CLASS = 'settings-tab-panels grid min-w-0 items-start'
 const SETTINGS_TAB_PANEL_CLASS = 'grid min-w-0 gap-4 outline-none [grid-area:1/1]'
-const SETTINGS_NESTED_SURFACE_CLASS = 'border-0 rounded-ds-sm bg-[rgba(245,245,247,0.045)] shadow-none'
+const SETTINGS_NESTED_SURFACE_CLASS = 'border-0 rounded-ds-lg bg-[rgba(245,245,247,0.045)] shadow-none'
 const SETTINGS_SELECTED_SURFACE_CLASS = 'border-[rgba(245,245,247,0.24)] bg-[rgba(245,245,247,0.14)] text-ds-text-primary shadow-none'
 const SETTINGS_SEGMENTED_BUTTON_CLASS = 'min-h-7 min-w-20 rounded-ds-sm border border-transparent bg-transparent px-2 text-xs font-semibold text-ds-text-secondary shadow-none data-[pressed]:border-ds-border-hover data-[pressed]:bg-ds-selected data-[pressed]:text-ds-text-primary data-[pressed]:shadow-none'
 const SETTINGS_PSEUDO_SHADOW_RESET_CLASS = '[&::before]:shadow-none [&::after]:shadow-none'
@@ -145,14 +148,14 @@ const SETTINGS_INPUT_INTERACTION_CLASS = 'outline-none transition-colors duratio
 const SETTINGS_CONTROL_CLASS = cx(SETTINGS_INPUT_SURFACE_CLASS, SETTINGS_INPUT_INTERACTION_CLASS)
 const SETTINGS_TEXT_INPUT_FOCUS_CLASS = 'focus:border-ds-focus focus:bg-ds-hover focus:outline-none focus:shadow-ds-focus focus-visible:border-ds-focus focus-visible:bg-ds-hover focus-visible:outline-none focus-visible:shadow-ds-focus'
 const SETTINGS_TEXT_INPUT_CLASS = cx('h-9 min-h-9 w-full min-w-0 px-3 text-xs font-semibold', SETTINGS_INPUT_SURFACE_CLASS, SETTINGS_INPUT_INTERACTION_CLASS, SETTINGS_TEXT_INPUT_FOCUS_CLASS)
-const SETTINGS_ROW_CLASS = 'grid min-h-12 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-ds-sm border-0 bg-[rgba(245,245,247,0.045)] px-3 py-2.5 @max-[440px]/settings:grid-cols-1 @max-[440px]/settings:justify-items-stretch'
+const SETTINGS_ROW_CLASS = 'settings-control-row grid min-h-12 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-ds-lg border-0 bg-[rgba(245,245,247,0.045)] p-2 @max-[440px]/settings:grid-cols-1 @max-[440px]/settings:justify-items-stretch'
 const SETTINGS_ROW_DISABLED_CLASS = 'opacity-60'
 // Switch rows keep label and control side by side at every drawer width.
 const SETTINGS_SWITCH_ROW_CLASS = 'settings-switch-row @max-[440px]/settings:grid-cols-[minmax(0,1fr)_auto]'
 const SETTINGS_ROW_SLIDER_CLASS = 'grid-cols-[minmax(0,1fr)_minmax(150px,42%)]'
-const SETTINGS_LABEL_STACK_CLASS = 'grid min-w-0 gap-1'
-const SETTINGS_LABEL_CLASS = 'min-w-0 text-sm font-semibold leading-snug text-ds-text-primary'
-const SETTINGS_DESCRIPTION_CLASS = 'text-xs font-medium leading-snug text-ds-text-secondary'
+const SETTINGS_LABEL_STACK_CLASS = 'settings-label-stack grid min-w-0 gap-1'
+const SETTINGS_LABEL_CLASS = 'min-w-0 text-sm font-semibold leading-5 text-ds-text-primary'
+const SETTINGS_DESCRIPTION_CLASS = 'text-xs font-medium leading-5 text-ds-text-secondary'
 const SETTINGS_VALUE_CLASS = 'text-ds-text-secondary tabular-nums'
 const SETTINGS_SWITCH_WRAP_CLASS = OPTION_SWITCH_WRAP_CLASS
 const SETTINGS_SWITCH_CLASS = OPTION_SWITCH_CONTROL_CLASS
@@ -169,11 +172,11 @@ const SETTINGS_PICKER_BUTTON_CLASS = 'min-h-9 min-w-32 max-w-56 justify-center o
 const SETTINGS_FILE_INPUT_CLASS = 'sr-only'
 const SETTINGS_STATUS_CLASS = 'block min-h-8 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 py-2 text-xs leading-snug text-ds-text-secondary data-[tone=error]:border-ds-danger/60 data-[tone=error]:text-ds-danger-text data-[tone=success]:text-ds-text-primary'
 const FOLDER_STACK_CLASS = 'grid min-w-0 gap-2'
-const FOLDER_SUMMARY_CLASS = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 rounded-ds-sm border-0 bg-ds-surface-2 px-2.5 py-2'
-const FOLDER_SELECTED_COPY_CLASS = 'grid min-w-0 gap-0.5 text-xs text-ds-text-secondary'
+const FOLDER_SUMMARY_CLASS = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-ds-lg border-0 bg-ds-surface-2 p-2'
+const FOLDER_SELECTED_COPY_CLASS = 'grid min-w-0 gap-0.5 p-1 text-xs leading-[18px] text-ds-text-secondary'
 const FOLDER_REMOVE_BUTTON_CLASS = 'curator-compact-hit-target group/folder-remove inline-flex size-8 min-h-8 min-w-8 items-center justify-center rounded-ds-sm border border-[rgba(245,245,247,0.07)] bg-[rgba(245,245,247,0.045)] p-0 text-[rgba(245,245,247,0.9)] outline-none transition-[background-color,border-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard hover:border-[rgba(255,138,130,0.24)] hover:bg-[rgba(255,138,130,0.11)] hover:text-[rgba(255,210,205,0.95)] focus-visible:border-[rgba(255,138,130,0.28)] focus-visible:bg-[rgba(255,138,130,0.12)] focus-visible:text-[rgba(255,210,205,0.95)] focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] motion-reduce:transition-colors motion-reduce:duration-[80ms] motion-reduce:active:scale-100 [&_svg]:size-[15px] [&_svg]:stroke-[1.9]'
 const FOLDER_EMPTY_CLASS = SETTINGS_NOTE_CLASS
-const FOLDER_CANDIDATES_PANEL_CLASS = cx('grid gap-2 px-2.5 py-2', SETTINGS_NESTED_SURFACE_CLASS)
+const FOLDER_CANDIDATES_PANEL_CLASS = cx('grid gap-2 p-2', SETTINGS_NESTED_SURFACE_CLASS)
 const FOLDER_CANDIDATE_LIST_CLASS = 'grid max-h-56 gap-1 overflow-y-auto'
 const FOLDER_CANDIDATE_CARD_CLASS = 'folder-candidate-card grid min-h-14 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 overflow-hidden rounded-ds-sm border border-transparent bg-transparent px-2.5 py-2 text-left text-ds-text-primary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover aria-pressed:border-ds-border-hover aria-pressed:bg-ds-selected aria-pressed:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:shadow-ds-focus'
 const FOLDER_CANDIDATE_COPY_CLASS = 'grid min-w-0 gap-0.5'
@@ -181,20 +184,20 @@ const FOLDER_CANDIDATE_TITLE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whit
 const FOLDER_CANDIDATE_META_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-snug text-ds-text-secondary'
 const FOLDER_CANDIDATE_BADGE_CLASS = 'inline-flex min-h-5 items-center justify-center rounded-full bg-ds-surface-1 px-2 text-xs font-semibold text-ds-text-secondary whitespace-nowrap'
 const MODULE_SWITCH_LABEL_CLASS = SETTINGS_SWITCH_WRAP_CLASS
-const SETTING_COLOR_CLASS = 'inline-grid min-h-9 min-w-40 grid-cols-[minmax(0,1fr)_34px] items-center gap-2 overflow-hidden rounded-ds-sm border border-ds-border bg-ds-surface-2 p-1 pl-2.5'
+const SETTING_COLOR_CLASS = 'inline-grid min-h-9 min-w-40 grid-cols-[minmax(0,1fr)_34px] items-center gap-2 overflow-hidden rounded-ds-menu border border-ds-border bg-ds-surface-2 ds-inset-menu pl-3'
 const SETTING_COLOR_VALUE_CLASS = 'text-xs font-semibold text-ds-text-primary'
 const SETTING_COLOR_INPUT_CLASS = 'h-7 min-h-7 w-8 min-w-8 overflow-hidden rounded-ds-sm border-0 bg-transparent p-0'
-const ICON_PREVIEW_PANEL_CLASS = 'grid gap-2.5 rounded-ds-sm border-0 bg-ds-surface-2 p-3'
-const ICON_PREVIEW_HEADER_CLASS = 'grid gap-1 text-xs font-semibold text-ds-text-primary'
+const ICON_PREVIEW_PANEL_CLASS = 'grid gap-3 rounded-ds-card border-0 bg-ds-surface-2 p-2'
+const ICON_PREVIEW_HEADER_CLASS = 'grid gap-1 px-2 pt-1 text-xs font-semibold leading-5 text-ds-text-primary'
 const ICON_PREVIEW_SUMMARY_CLASS = 'min-w-0 text-xs font-medium leading-relaxed text-ds-text-secondary'
-const ICON_LIVE_PREVIEW_CLASS = 'm-0 overflow-x-auto rounded-ds-sm border border-ds-border bg-ds-app px-2.5 py-4 outline-none focus-visible:shadow-ds-focus [scrollbar-width:thin] [scrollbar-color:var(--ds-border-hover)_transparent]'
+const ICON_LIVE_PREVIEW_CLASS = 'm-0 overflow-x-auto rounded-ds-lg border border-ds-border bg-ds-app px-2.5 py-4 outline-none focus-visible:shadow-ds-focus [scrollbar-width:thin] [scrollbar-color:var(--ds-border-hover)_transparent]'
 const ICON_LIVE_PREVIEW_GRID_CLASS = 'mx-auto grid w-[var(--preview-grid-max-width)] content-center [column-gap:var(--preview-column-gap)] [row-gap:var(--preview-row-gap)]'
 const ICON_PRESET_ROW_CLASS = 'grid grid-cols-3 gap-2'
-const ICON_PRESET_CARD_CLASS = 'grid min-h-24 min-w-0 content-center gap-3 rounded-ds-sm border border-ds-border bg-ds-surface-1 p-2.5 text-left text-ds-text-secondary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-ds-focus'
+const ICON_PRESET_CARD_CLASS = 'grid min-h-24 min-w-0 content-center gap-3 rounded-ds-lg border border-ds-border bg-ds-surface-1 ds-inset-panel text-left text-ds-text-secondary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-ds-focus'
 const ICON_PRESET_PREVIEW_CLASS = 'grid min-h-11 content-center rounded-ds-sm bg-ds-app'
-const ICON_PRESET_PREVIEW_CELL_CLASS = 'block rounded-ds-sm bg-ds-surface-2'
-const ICON_PRESET_NAME_CLASS = 'min-w-0 overflow-hidden text-ellipsis text-xs font-semibold text-ds-text-primary'
-const SETTINGS_SEGMENTED_CLASS = 'inline-flex min-h-9 items-center gap-1 rounded-ds-sm border border-ds-border bg-ds-surface-2 p-1 @max-[440px]/settings:w-full'
+const ICON_PRESET_PREVIEW_CELL_CLASS = 'block rounded-ds-xs bg-ds-surface-2'
+const ICON_PRESET_NAME_CLASS = 'min-w-0 overflow-hidden text-ellipsis px-1 pb-1 text-xs font-semibold leading-5 text-ds-text-primary'
+const SETTINGS_SEGMENTED_CLASS = 'inline-flex min-h-9 items-center gap-1 rounded-ds-menu border border-ds-border bg-ds-surface-2 ds-inset-menu @max-[440px]/settings:w-full'
 const ICON_CONTROL_ROW_CLASS = 'grid-cols-[minmax(0,1fr)_auto]'
 const SEARCH_ENGINE_ROW_CLASS = 'items-start'
 const SEARCH_ENGINE_GRID_CLASS = 'grid min-w-0 grid-cols-3 gap-1.5'
@@ -444,16 +447,32 @@ function SettingsDrawerHeader({ closeButtonRef }: { closeButtonRef: Ref<HTMLButt
   return (
     <header className={SETTINGS_HEADER_CLASS}>
       <h1 id="newtab-settings-title" className={SETTINGS_TITLE_CLASS}>新标签页设置</h1>
-      <SettingsDrawerClose buttonRef={closeButtonRef} className={SETTINGS_CONTROL_CLASS} />
-      <output
+      <StatusMessage
         id="settings-save-status"
         className={SETTINGS_SAVE_STATUS_CLASS}
-        aria-live="polite"
+        tone={view.saveState === 'error' ? 'error' : 'neutral'}
         data-state={view.saveState}
-        hidden={view.saveState === 'idle'}
+        title={view.saveMessage || undefined}
+        aria-label={view.saveState === 'error' ? view.saveMessage : undefined}
+        style={{ overflow: 'visible', scrollbarGutter: 'auto' }}
       >
-        {view.saveMessage}
-      </output>
+        {view.saveState === 'error' ? (
+          <Popover
+            title="设置保存失败"
+            align="end"
+            sideOffset={8}
+            collisionPadding={16}
+            showArrow={false}
+            popupClassName="w-[min(320px,calc(100vw_-_32px))] max-h-[min(320px,var(--available-height))] overflow-auto"
+            trigger={<Button size="sm" variant="ghost" className="w-full px-1 text-ds-danger-text" aria-label="查看保存失败详情">
+              保存失败 <Icon name="ChevronDown" size={12} aria-hidden="true" />
+            </Button>}
+          >
+            <p className="m-0 text-sm leading-relaxed [overflow-wrap:anywhere]">{view.saveMessage}</p>
+          </Popover>
+        ) : view.saveState === 'idle' ? '' : view.saveMessage}
+      </StatusMessage>
+      <SettingsDrawerClose buttonRef={closeButtonRef} className={SETTINGS_CONTROL_CLASS} />
     </header>
   )
 }
@@ -774,13 +793,12 @@ const SourceSettingsSection = memo(function SourceSettingsSection({
 
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="source" aria-labelledby="settings-folder-title">
-      <h2 id="settings-folder-title" className={SETTINGS_SECTION_TITLE_CLASS}>书签来源</h2>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 id="settings-folder-title" className={SETTINGS_SECTION_TITLE_CLASS}>书签来源</h2>
+        <span id="folder-selected-count" className="text-xs text-ds-text-secondary tabular-nums" aria-label={`已选 ${folderSource.selectedCount} 个来源文件夹`}>{folderSource.selectedCount}</span>
+      </div>
       <Surface className={SETTINGS_LIST_CLASS} variant="plain">
         <div className={FOLDER_STACK_CLASS}>
-          <div className="flex items-center justify-between gap-2.5 px-0.5 py-1">
-            <span className={SETTINGS_LABEL_CLASS}>已选文件夹</span>
-            <strong id="folder-selected-count" className="text-sm font-semibold text-ds-text-primary tabular-nums">{folderSource.selectedCount}</strong>
-          </div>
           <div id="folder-selected-list" className={FOLDER_STACK_CLASS}>
             <SelectedFolderSourceList state={folderSource.selected} />
           </div>
@@ -799,7 +817,7 @@ const SourceSettingsSection = memo(function SourceSettingsSection({
               aria-controls="folder-candidates-panel"
             >
               <span data-folder-toggle-label>
-                {candidatesExpanded ? '收起候选文件夹' : '展开候选文件夹'}
+                {candidatesExpanded ? '完成选择' : '添加来源文件夹'}
               </span>
             </CollapsibleTrigger>
             <CollapsiblePanel
@@ -898,7 +916,9 @@ function SelectedFolderSourceList({ state }: { state: NewtabSelectedFolderSource
         <div className={FOLDER_SUMMARY_CLASS} key={item.folderId}>
           <span className={FOLDER_SELECTED_COPY_CLASS}>
             <strong className={SETTINGS_LABEL_CLASS}>{item.title}</strong>
-            <span className="overflow-hidden text-ellipsis whitespace-nowrap">{item.path}</span>
+            {getFolderSourceSecondaryPath(item.title, item.path) ? (
+              <span className="overflow-hidden text-ellipsis whitespace-nowrap">{item.path}</span>
+            ) : null}
             <span className="overflow-hidden text-ellipsis whitespace-nowrap">{item.stats}</span>
           </span>
           <Button
@@ -1002,7 +1022,7 @@ function FolderCandidateItem({
     >
       <span className={FOLDER_CANDIDATE_COPY_CLASS}>
         <strong className={FOLDER_CANDIDATE_TITLE_CLASS}>{item.title || '未命名文件夹'}</strong>
-        <span className={FOLDER_CANDIDATE_META_CLASS}>{`${item.path || item.title || '未命名文件夹'} · ${item.stats}`}</span>
+        <span className={FOLDER_CANDIDATE_META_CLASS}>{[getFolderSourceSecondaryPath(item.title || '未命名文件夹', item.path), item.stats].filter(Boolean).join(' · ')}</span>
       </span>
       <span className={FOLDER_CANDIDATE_BADGE_CLASS}>{item.badge}</span>
     </Button>
@@ -1058,7 +1078,16 @@ const BackgroundSettingsSection = memo(function BackgroundSettingsSection({
 
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="appearance" aria-labelledby="settings-background-title">
-      <h2 id="settings-background-title" className={SETTINGS_SECTION_TITLE_CLASS}>背景</h2>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+        <h2 id="settings-background-title" className={SETTINGS_SECTION_TITLE_CLASS}>背景</h2>
+        <StatusMessage
+          id="background-status"
+          className="m-0 text-right text-xs leading-4 text-ds-text-secondary"
+          tone={backgroundSettings.backgroundStatusTone === 'error' ? 'error' : backgroundSettings.backgroundStatusTone === 'warning' ? 'warning' : 'neutral'}
+        >
+          {backgroundSettings.backgroundStatus}
+        </StatusMessage>
+      </div>
       <Surface className={SETTINGS_LIST_CLASS} variant="plain">
         <SettingsSelect
           id="background-type"
@@ -1136,15 +1165,6 @@ const BackgroundSettingsSection = memo(function BackgroundSettingsSection({
             />
           </span>
         </div>
-        <output
-          id="background-status"
-          className={SETTINGS_STATUS_CLASS}
-          aria-live="polite"
-          data-tone={backgroundSettings.backgroundStatusTone}
-          hidden={!backgroundSettings.backgroundStatus}
-        >
-          {backgroundSettings.backgroundStatus}
-        </output>
         <BackgroundMaskSettings panelElement={panelElement} />
       </Surface>
     </section>
@@ -1193,7 +1213,9 @@ const BackgroundMaskSettings = memo(function BackgroundMaskSettings({ panelEleme
           valueClassName={SETTINGS_SELECT_VALUE_CLASS}
         />
       </div>
-      {backgroundSettings.maskEnabled && filterMessage ? <p id="background-filter-status" className={SETTINGS_STATUS_CLASS} role="status">{filterMessage}</p> : null}
+      {backgroundSettings.maskEnabled && (isPaperShaderMaskStyle(backgroundSettings.maskStyle) || isWallpaperFilterMaskStyle(backgroundSettings.maskStyle)) ? <StatusMessage id="background-filter-status" className={SETTINGS_STATUS_CLASS}>
+        {filterMessage}
+      </StatusMessage> : null}
       <SwitchRow
         id="background-mask-filter-hover"
         title="悬停效果"
@@ -1247,14 +1269,13 @@ const GlassSettingsSection = memo(function GlassSettingsSection({
           disabled={!view.ready} aria-pressed={presetId === preset.id} title={preset.description}
           onClick={() => applyNewtabGlassPreset({ ...preset.settings })}>{preset.label}</Button>)}
       </div>
-      {presetId === 'custom' ? <p className={SETTINGS_NOTE_CLASS}>当前使用自定义材质。</p> : null}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Button size="sm" variant="secondary" disabled={!view.ready || !view.canUndo} onClick={undoNewtabGlassEditSession}>撤销本次调整</Button>
         <Button size="sm" variant="secondary" onClick={resetNewtabGlassSettings} disabled={!view.ready}>恢复玻璃默认值</Button>
       </div>
-      <output className={SETTINGS_NOTE_CLASS} aria-live="polite">
-        {view.saveState === 'error' ? '设置保存失败，请重试。' : view.saveState === 'saving' ? '正在保存…' : view.saveState === 'saved' ? '已保存' : ''}
-      </output>
+      <StatusMessage lines={1} className={SETTINGS_NOTE_CLASS} tone={view.saveState === 'error' ? 'error' : 'neutral'}>
+        {view.saveState === 'error' ? '设置保存失败，请重试。' : ''}
+      </StatusMessage>
       <CollapsibleRoot className="newtab-glass-controls">
         <CollapsibleTrigger
           render={<Button unstyled ref={firstControlRef} />}
@@ -1362,7 +1383,6 @@ const IconSettingsSection = memo(function IconSettingsSection({
             </Button>
           ))}
         </div>
-        {iconPreview.preset === 'custom' ? <p className={SETTINGS_NOTE_CLASS}>自定义密度</p> : null}
         <IconSettingSwitchRow
           id="icon-show-titles"
           title="显示标题"

@@ -1,0 +1,25 @@
+/* Defaults belong below utilities. A caller's p-0 or smaller nested radius
+   must replace them, not compete with another utility in generated CSS order. */
+@layer components {
+  .curator-card {
+    border-radius: var(--ds-radius-card);
+    padding: var(--ds-inset-card);
+  }
+
+  .curator-surface-group {
+    border-radius: var(--ds-radius-card);
+  }
+
+  .curator-surface-panel {
+    border-radius: var(--ds-radius-dialog);
+  }
+
+  .curator-ai-card,
+  .curator-classification-card {
+    padding: var(--ds-inset-card);
+  }
+
+  .curator-ai-card {
+    gap: 12px;
+  }
+}

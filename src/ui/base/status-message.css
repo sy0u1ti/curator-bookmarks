@@ -1,0 +1,44 @@
+.curator-status-message {
+  min-width: 0;
+  min-height: 0;
+  box-sizing: content-box;
+  block-size: calc(var(--status-message-lines, 2) * 1lh);
+  flex-shrink: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.curator-status-message[data-tone="error"] {
+  color: var(--ds-danger-text);
+}
+
+.curator-status-message[data-tone="warning"] {
+  color: var(--ds-warning);
+}
+
+.curator-status-message[data-tone="success"] {
+  color: var(--ds-success-text);
+}
+
+.curator-status-message[data-empty="true"] {
+  border-color: transparent;
+  background: transparent;
+}
+
+.curator-stable-label {
+  display: inline-grid;
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.curator-stable-label > * {
+  grid-area: 1 / 1;
+}
+
+.curator-stable-label-reserve {
+  visibility: hidden;
+  pointer-events: none;
+}

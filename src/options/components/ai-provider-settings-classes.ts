@@ -2,7 +2,7 @@ import { OPTIONS_REDUCED_MOTION_SURFACE_CLASS } from './options-motion-classes.j
 import { OPTION_SURFACE_CLASS } from './option-layout-classes.js'
 
 export const AI_PROVIDER_CARD_CLASS =
-  `mt-5 ${OPTION_SURFACE_CLASS} p-[26px_24px_24px] text-ds-text-primary max-[760px]:p-4`
+  `mt-5 ${OPTION_SURFACE_CLASS} gap-0 p-6 text-ds-text-primary max-[760px]:p-4`
 
 export const AI_PROVIDER_CARD_ATTENTION_CLASS = 'outline outline-1 outline-ds-border-hover outline-offset-2'
 
@@ -14,13 +14,13 @@ export const AI_PROVIDER_COPY_CLASS = 'min-w-0'
 export const AI_PROVIDER_TITLE_CLASS =
   'm-0 text-[17px] font-bold leading-[1.35] text-ds-text-primary'
 
-export const AI_PROVIDER_BODY_CLASS = 'mt-[22px] flex flex-col gap-[18px]'
+export const AI_PROVIDER_BODY_CLASS = 'mt-6 flex flex-col gap-4'
 
 export const AI_PROVIDER_SUBTITLE_CLASS =
   'm-0 mt-2 text-[13px] leading-[1.7] text-ds-text-disabled'
 
 export const AI_PROVIDER_STATUS_BADGE_CLASS =
-  'inline-flex min-h-6 w-fit flex-none items-center justify-center rounded-full border px-2.5 text-xs font-semibold leading-none tracking-[0]'
+  'inline-flex min-h-6 min-w-20 w-fit flex-none items-center justify-center whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold leading-none tracking-[0]'
 
 export const AI_PROVIDER_STATUS_TONE_CLASS: Record<string, string> = {
   danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
@@ -29,22 +29,7 @@ export const AI_PROVIDER_STATUS_TONE_CLASS: Record<string, string> = {
   warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
 }
 
-export const AI_PROVIDER_FLOW_CLASS =
-  'grid list-none grid-cols-5 gap-2.5 p-0 m-0 max-[900px]:grid-cols-[repeat(auto-fit,minmax(112px,1fr))]'
-
-export const AI_PROVIDER_FLOW_STEP_CLASS =
-  'min-w-0 rounded-ds-md bg-ds-surface-2 p-3 text-ds-text-muted'
-
-export const AI_PROVIDER_FLOW_INDEX_CLASS =
-  'mb-2.5 inline-grid size-[22px] place-items-center rounded-full bg-ds-hover text-xs font-bold text-ds-text-secondary'
-
-export const AI_PROVIDER_FLOW_TITLE_CLASS =
-  'block overflow-hidden text-ellipsis whitespace-nowrap text-xs font-bold text-ds-text-primary'
-
-export const AI_PROVIDER_FLOW_COPY_CLASS =
-  'm-0 mt-[5px] overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-[1.35] text-ds-text-disabled'
-
-export const AI_PROVIDER_FIELD_CLASS = 'm-0 flex min-w-0 flex-col gap-2.5 border-0 p-0'
+export const AI_PROVIDER_FIELD_CLASS = 'm-0 flex min-w-0 flex-col gap-2 border-0 p-0'
 
 export const AI_PROVIDER_FIELD_HEAD_CLASS =
   'flex min-h-[22px] flex-wrap items-center justify-between gap-x-4 gap-y-1.5'
@@ -71,7 +56,7 @@ export const AI_PROVIDER_EFFORT_HOST_CLASS =
 
 export const AI_PROVIDER_HINTS_CLASS = 'flex min-w-0 flex-col gap-1.5'
 
-export const AI_PROVIDER_MODEL_CONTROL_CLASS = 'flex min-w-0 flex-col gap-2.5'
+export const AI_PROVIDER_MODEL_CONTROL_CLASS = 'flex min-w-0 flex-col gap-2'
 
 export const AI_PROVIDER_MODEL_LABEL_CLASS =
   'block text-xs font-semibold leading-[1.2] text-ds-text-secondary'
@@ -100,10 +85,10 @@ export const AI_PROVIDER_CONNECTIVITY_TONE_CLASS: Record<string, string> = {
 }
 
 export const AI_PROVIDER_ACTIONS_CLASS =
-  'mt-0.5 flex flex-wrap items-center justify-between gap-3.5 border-t border-ds-border-subtle pt-[18px]'
+  'mt-0.5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 border-t border-ds-border-subtle pt-[18px] max-[520px]:grid-cols-1'
 
 export const AI_PROVIDER_ACTION_BUTTONS_CLASS =
-  'ml-auto flex flex-wrap items-center justify-end gap-2.5'
+  'ml-auto flex items-center justify-end gap-2.5'
 
 export const AI_PROVIDER_SAVE_STATE_CLASS =
   'relative inline-flex min-h-[34px] items-center rounded-full pl-[18px] text-[13px] font-semibold before:absolute before:left-0 before:size-2 before:rounded-full'
@@ -136,7 +121,7 @@ export const AI_PROVIDER_DIALOG_BACKDROP_CLASS =
   `options-modal-backdrop ai-provider-dialog-backdrop fixed inset-0 z-30 grid place-items-center bg-black/70 p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 export const AI_PROVIDER_DIALOG_CLASS =
-  `options-modal-panel ai-provider-dialog-panel fixed left-1/2 top-1/2 z-40 max-h-[calc(100vh-40px)] w-full max-w-[520px] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-ds-md border border-ds-border-subtle bg-ds-app p-[24px_24px_22px] text-ds-text-primary shadow-none max-[640px]:max-w-[calc(100vw-32px)] max-[640px]:p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
+  `options-modal-panel ai-provider-dialog-panel z-40 max-w-[520px] rounded-ds-dialog border border-ds-border-subtle bg-ds-app ds-inset-dialog text-ds-text-primary shadow-none max-[640px]:rounded-ds-card max-[640px]:ds-inset-card ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 export const AI_PROVIDER_DIALOG_EYEBROW_CLASS =
   'm-0 text-xs font-medium leading-4 text-ds-text-secondary'
@@ -166,9 +151,6 @@ export const AI_CONFIG_LINK_CLASS =
 
 export const AI_CONFIG_LINK_DEFAULT_CLASS =
   'border-ds-border bg-ds-surface-2 text-ds-text-primary hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover'
-
-export const AI_CONFIG_LINK_CONFIGURED_CLASS =
-  'border-ds-success/35 bg-ds-success-soft text-ds-success-text hover:border-ds-success focus-visible:border-ds-success'
 
 export function aiProviderToneClass(tone: string | undefined, classes: Record<string, string>) {
   return classes[tone || 'muted'] || classes.muted || ''

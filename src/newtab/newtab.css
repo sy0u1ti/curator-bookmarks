@@ -192,6 +192,12 @@ body {
   -ms-overflow-style: none;
 }
 
+/* Keep controls on the 8px nested inset, but text 12px from the curved edge.
+   This does not move the controls or shrink their hit targets. */
+.settings-control-row > :first-child:where(span, label) {
+  padding-inline-start: var(--ds-inset-control);
+}
+
 #newtab-settings-drawer .settings-drawer-scroll::-webkit-scrollbar {
   width: 0;
   height: 0;
@@ -326,7 +332,7 @@ body {
   z-index: 1;
   color: var(--tabs-text-muted);
   transition:
-    color var(--ds-motion-fast) var(--ease-smooth-out),
+    color var(--ds-motion-fast) var(--ds-ease-standard),
     transform var(--ds-motion-control) var(--ds-ease-standard),
     scale var(--ds-motion-control) var(--ds-ease-standard);
 }
@@ -456,7 +462,7 @@ body {
   scale: 1;
   transform: scale(var(--control-press-scale, var(--ui-press-scale, var(--ds-press-scale))));
   transition-duration: var(--ds-motion-feedback, 80ms);
-  transition-timing-function: var(--ease-smooth-out);
+  transition-timing-function: var(--ds-ease-standard);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -543,7 +549,7 @@ body {
   --bookmark-control-border: var(--ds-border);
   --bookmark-control-border-focus: var(--ds-focus);
   min-height: 46px;
-  padding: 8px;
+  padding: calc(var(--ds-inset-panel) - var(--newtab-glass-stroke-width));
   border-color: var(--newtab-glass-border);
   background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg));
   box-shadow: var(--newtab-glass-inset);
@@ -561,7 +567,7 @@ body {
 
 .bookmark-edit-menu,
 .bookmark-add-menu.expanded {
-  padding: 10px;
+  padding: calc(var(--ds-inset-panel) - var(--newtab-glass-stroke-width));
   border-color: var(--newtab-glass-border);
   background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg));
   box-shadow: var(--newtab-glass-inset);
@@ -723,9 +729,9 @@ body {
 
 .bookmark-menu-surface .bookmark-menu-action {
   transition:
-    background-color var(--ds-motion-fast) var(--ease-smooth-out),
-    color var(--ds-motion-fast) var(--ease-smooth-out),
-    opacity var(--ds-motion-fast) var(--ease-smooth-out),
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    color var(--ds-motion-fast) var(--ds-ease-standard),
+    opacity var(--ds-motion-fast) var(--ds-ease-standard),
     transform var(--ds-motion-control) var(--ds-ease-standard);
 }
 
@@ -763,7 +769,6 @@ body {
   color: rgba(245, 245, 247, 0.7);
   line-height: 1.35;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
-  animation: newtab-bookmark-menu-feedback-enter var(--ds-motion-standard) var(--dropdown-ease) both;
 }
 
 .bookmark-edit-menu .bookmark-menu-warning {
@@ -799,19 +804,10 @@ body {
 
 .bookmark-add-menu .bookmark-menu-error {
   color: #ffb7b0;
-  animation: newtab-bookmark-add-error-enter var(--duration-fast) var(--dropdown-ease) both;
 }
 
-@keyframes newtab-bookmark-menu-feedback-enter {
-  from {
-    opacity: 0;
-    transform: translateY(-3px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.bookmark-menu-feedback[data-empty="true"] {
+  visibility: hidden;
 }
 
 @keyframes newtab-bookmark-add-error-enter {
@@ -1175,9 +1171,9 @@ body {
   appearance: none;
   color: rgba(245, 245, 247, 0.58);
   transition:
-    background-color var(--ds-motion-fast) var(--ease-smooth-out),
-    border-color var(--ds-motion-fast) var(--ease-smooth-out),
-    color var(--ds-motion-fast) var(--ease-smooth-out);
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    border-color var(--ds-motion-fast) var(--ds-ease-standard),
+    color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 /* Reorder result lines mount after a drop; a short rise keeps them from
@@ -1186,8 +1182,8 @@ body {
   opacity: 1;
   transform: translate3d(0, 0, 0);
   transition:
-    opacity var(--duration-quick) var(--ease-smooth-out),
-    transform var(--duration-quick) var(--ease-smooth-out);
+    opacity var(--duration-quick) var(--ds-ease-standard),
+    transform var(--duration-quick) var(--ds-ease-standard);
 }
 
 @starting-style {
@@ -1260,8 +1256,8 @@ body {
   transform: translateY(0) scale(1);
   transition:
     transform var(--ds-motion-control) var(--ds-ease-standard),
-    background-color var(--ds-motion-fast) var(--ease-smooth-out),
-    border-color var(--ds-motion-fast) var(--ease-smooth-out);
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    border-color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 .newtab-search-chip-button:focus-visible::before,
@@ -1281,7 +1277,7 @@ body {
 .newtab-search-chip-button:enabled[aria-expanded="true"]::before {
   transform: translateY(0) scale(var(--ds-press-scale));
   transition-duration: var(--ds-motion-feedback);
-  transition-timing-function: var(--ease-smooth-out);
+  transition-timing-function: var(--ds-ease-standard);
 }
 
 .newtab-search-natural.active:not(.fallback)::before {
@@ -1296,7 +1292,7 @@ body {
 
 .newtab-search-engine-caret {
   transform: rotate(0deg);
-  transition: transform var(--ds-motion-spring) var(--ds-ease-spring);
+  transition: transform var(--ds-motion-state) var(--ds-ease-standard);
 }
 
 .newtab-search-engine[aria-expanded="true"] .newtab-search-engine-caret {
@@ -1329,7 +1325,7 @@ body {
   container-name: newtab-search;
   pointer-events: none;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
-  border-radius: var(--ui-radius-group);
+  border-radius: var(--search-radius, var(--ds-radius-lg));
   transform-origin: 50% 0;
   /* Lift the field as one unit. Scaling its live text and native controls
      changes glyph rasterization and makes them snap as the layer settles. */
@@ -1361,9 +1357,9 @@ body {
      it. Keep that travel short and without overshoot: this opens on most
      searches, and a bounce here reads as the field wobbling. */
   transition:
-    grid-template-rows var(--duration-quick) var(--ease-smooth-out),
-    transform var(--duration-quick) var(--ease-smooth-out),
-    opacity var(--duration-quick) var(--ease-smooth-out);
+    grid-template-rows var(--duration-quick) var(--ds-ease-standard),
+    transform var(--duration-quick) var(--ds-ease-standard),
+    opacity var(--duration-quick) var(--ds-ease-standard);
 }
 .newtab-search-suggestions-panel[data-starting-style],
 .newtab-search-suggestions-panel[data-ending-style] {
@@ -1385,18 +1381,18 @@ body {
 }
 .newtab-search-panel-content {
   display: grid;
-  gap: 3px;
+  gap: var(--ds-inset-control);
   max-height: min(312px, calc(100vh - 180px));
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 6px 6px 8px;
+  padding: var(--search-control-inset, var(--ds-inset-panel));
   scrollbar-color: rgba(245, 245, 247, 0.22) transparent;
   scrollbar-width: thin;
 }
 @container newtab-search (max-width: 400px) {
   .newtab-search {
     gap: 4px;
-    padding-inline: 10px 6px;
+    padding-inline: 12px var(--search-control-inset);
   }
   .newtab-search-natural {
     width: 40px;
@@ -1405,7 +1401,7 @@ body {
   }
   .newtab-search-engine {
     min-width: 42px;
-    padding-inline: 7px;
+    padding-inline: 8px;
   }
 }
 @media (hover: hover) and (pointer: fine) {
@@ -1462,7 +1458,7 @@ body {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 18px;
-  padding: 10px 12px;
+  padding: calc(var(--ds-inset-card) - var(--newtab-glass-stroke-width));
 }
 
 .newtab-speed-dial[data-content-type="empty"] .newtab-module-heading {
@@ -1486,7 +1482,7 @@ body {
   }
 
   .newtab-speed-dial-card {
-    min-height: 52px;
+    min-height: 56px;
   }
 }
 
@@ -1551,9 +1547,9 @@ body {
   }
 
   .newtab-search {
-    gap: 6px;
+    gap: 4px;
     padding-left: 12px;
-    padding-right: 6px;
+    padding-right: var(--search-control-inset);
   }
 
   .newtab-search-natural {
@@ -1636,8 +1632,8 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 18px;
-  padding: 18px 18px 14px;
+  gap: var(--ds-inset-card);
+  padding: calc(var(--ds-inset-dialog) - var(--newtab-glass-stroke-width));
   border-bottom: 1px solid rgba(245, 245, 247, 0.11);
   background: transparent;
 }
@@ -1694,7 +1690,7 @@ body {
   scale: 1;
   transform: scale(var(--ds-press-scale));
   transition-duration: var(--ds-motion-feedback);
-  transition-timing-function: var(--ease-smooth-out);
+  transition-timing-function: var(--ds-ease-standard);
 }
 
 .featured-wallpaper-close {
@@ -1706,7 +1702,7 @@ body {
 .featured-wallpaper-grid {
   min-height: 0;
   overflow-y: auto;
-  padding: 18px;
+  padding: calc(var(--ds-inset-card) - var(--newtab-glass-stroke-width));
   scrollbar-color: rgba(245, 245, 247, 0.22) transparent;
   scrollbar-width: thin;
 }
@@ -1777,9 +1773,9 @@ body {
   transition:
     transform var(--ds-motion-control) var(--ds-ease-standard),
     scale var(--ds-motion-control) var(--ds-ease-standard),
-    border-color var(--ds-motion-fast) var(--ease-smooth-out),
-    background-color var(--ds-motion-fast) var(--ease-smooth-out),
-    box-shadow var(--ds-motion-fast) var(--ease-smooth-out);
+    border-color var(--ds-motion-fast) var(--ds-ease-standard),
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    box-shadow var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 .featured-wallpaper-card:hover,
@@ -1808,7 +1804,7 @@ body {
   scale: 1;
   transform: translateY(0) scale(var(--ds-press-scale));
   transition-duration: var(--ds-motion-feedback);
-  transition-timing-function: var(--ease-smooth-out);
+  transition-timing-function: var(--ds-ease-standard);
 }
 
 .featured-wallpaper-preview {
@@ -1827,7 +1823,7 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform var(--ds-motion-spring) var(--ds-ease-spring);
+  transition: transform var(--ds-motion-state) var(--ds-ease-standard);
 }
 
 .featured-wallpaper-preview:not([data-state="ready"]) .featured-wallpaper-preview-image {
@@ -1988,7 +1984,7 @@ body {
   box-shadow: var(--newtab-glass-inset);
   filter: var(--newtab-glass-drop);
   color: var(--ds-text-primary);
-  padding: 12px;
+  padding: calc(var(--ds-inset-panel) - var(--newtab-glass-stroke-width));
   pointer-events: auto;
   -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
   backdrop-filter: var(--newtab-glass-backdrop-filter);
@@ -2066,7 +2062,7 @@ body {
   scale: 1;
   transform: scale(var(--ds-press-scale));
   transition-duration: var(--ds-motion-feedback);
-  transition-timing-function: var(--ease-smooth-out);
+  transition-timing-function: var(--ds-ease-standard);
 }
 
 .newtab-delete-toast-actions button:disabled {
@@ -2093,11 +2089,12 @@ body {
     width: calc(100vw - 24px);
     max-height: calc(100vh - 24px);
     max-height: calc(100dvh - 24px);
+    border-radius: var(--ds-radius-card);
   }
 
   .featured-wallpaper-head {
     gap: 12px;
-    padding: 14px;
+    padding: calc(var(--ds-inset-card) - var(--newtab-glass-stroke-width));
   }
 
   .featured-wallpaper-actions {
@@ -2113,7 +2110,7 @@ body {
   }
 
   .featured-wallpaper-grid {
-    padding: 14px;
+    padding: calc(var(--ds-inset-panel) - var(--newtab-glass-stroke-width));
   }
 
   .featured-wallpaper-section-grid {

@@ -17,9 +17,13 @@ export type ModelsDevMessage =
 
 export type ModelsDevSyncResult = { ok: true; updated?: boolean } | { ok: false; error: ModelsDevSyncError }
 
-export interface ModelsDevSyncDependencies {
+export interface ModelsDevStorage {
   read: (keys?: string[]) => Promise<Record<string, unknown>>
   write: (values: Record<string, unknown>) => Promise<void>
+}
+
+export interface ModelsDevSyncDependencies extends ModelsDevStorage {
+  transaction?: (task: (storage: ModelsDevStorage) => Promise<void>) => Promise<void>
   hasPermission: () => Promise<boolean>
   schedule: (when: number | null) => Promise<void>
   fetch?: typeof fetch
@@ -46,16 +50,17 @@ export function createModelsDevSyncService(deps: ModelsDevSyncDependencies) {
   let configurationSequence = 0
   let writeQueue = Promise.resolve()
   // Fetch outside the queue; commits re-read preferences so a concurrent opt-out wins.
-  function commit(task: (stored: Record<string, unknown>) => Promise<void>): Promise<void> {
-    const next = writeQueue.catch(() => {}).then(async () => task(await deps.read([STORAGE_KEYS.modelsDevSync])))
+  function commit(task: (stored: Record<string, unknown>, storage: ModelsDevStorage) => Promise<void>): Promise<void> {
+    const apply = async (storage: ModelsDevStorage) => task(await storage.read([STORAGE_KEYS.modelsDevSync]), storage)
+    const next = writeQueue.catch(() => {}).then(() => deps.transaction ? deps.transaction(apply) : apply(deps))
     writeQueue = next.catch(() => {})
     return next
   }
 
   async function schedule(): Promise<void> {
-    await commit(async (stored) => {
+    await commit(async (stored, storage) => {
       const settings = normalizeModelsDevSyncSettings(stored[STORAGE_KEYS.modelsDevSync])
-      const cached = settings.autoUpdate ? await deps.read([STORAGE_KEYS.modelsDevCatalog]) : {}
+      const cached = settings.autoUpdate ? await storage.read([STORAGE_KEYS.modelsDevCatalog]) : {}
       const cache = normalizeModelsDevCache(cached[STORAGE_KEYS.modelsDevCatalog])
       await deps.schedule(settings.autoUpdate ? Math.max(now() + 60000, getModelsDevNextRefresh(cache, settings, now())) : null)
     })
@@ -95,7 +100,11 @@ export function createModelsDevSyncService(deps: ModelsDevSyncDependencies) {
         if (response.status === 304 && cache) {
           nextCache = { ...cache, checkedAt: now() }
         } else {
-          if (!response.ok) throw new Error('network')
+          if (!response.ok) {
+            failure = 'http'
+            await response.body?.cancel().catch(() => {})
+            throw new Error('http')
+          }
           const contentType = response.headers.get('content-type') ?? ''
           if (!/^application\/(?:[\w.+-]+\+)?json(?:;|$)/i.test(contentType)) throw new Error('invalid_catalog')
           const json = await readCatalogResponse(response)
@@ -106,27 +115,34 @@ export function createModelsDevSyncService(deps: ModelsDevSyncDependencies) {
           }
           updated = true
         }
+      } catch (error) {
+        if (controller.signal.aborted) failure = 'timeout'
+        throw error
       } finally {
         clearTimeout(timer)
         activeController = null
       }
       if (!manual && startedGeneration !== generation) return { ok: true, updated: false }
       failure = 'storage'
-      await commit(async (latest) => {
+      let committed = false
+      await commit(async (latest, storage) => {
         if (!manual && startedGeneration !== generation) return
         const latestSettings = normalizeModelsDevSyncSettings(latest[STORAGE_KEYS.modelsDevSync])
-        await deps.write({
+        if (!manual && !latestSettings.autoUpdate) return
+        await storage.write({
           [STORAGE_KEYS.modelsDevCatalog]: nextCache,
           [STORAGE_KEYS.modelsDevSync]: { ...latestSettings, lastAttemptAt: now(), failures: 0, lastError: '' }
         })
+        committed = true
       })
-      return { ok: true, updated }
+      return { ok: true, updated: committed && updated }
     } catch (error) {
       if (!manual && startedGeneration !== generation) return { ok: true, updated: false }
       if (error instanceof Error && ['invalid_catalog', 'too_large'].includes(error.message)) failure = error.message as ModelsDevSyncError
-      await commit(async (latest) => {
+      await commit(async (latest, storage) => {
         const latestSettings = normalizeModelsDevSyncSettings(latest[STORAGE_KEYS.modelsDevSync])
-        await deps.write({
+        if (!manual && !latestSettings.autoUpdate) return
+        await storage.write({
           [STORAGE_KEYS.modelsDevSync]: { ...latestSettings, lastAttemptAt: now(), failures: Math.min(10, latestSettings.failures + 1), lastError: failure }
         })
       }).catch(() => {})
@@ -159,10 +175,10 @@ export function createModelsDevSyncService(deps: ModelsDevSyncDependencies) {
         generation += 1
         if (activeIsAutomatic) activeController?.abort()
       }
-      await commit(async (stored) => {
+      await commit(async (stored, storage) => {
         if (sequence !== configurationSequence) return
         const settings = normalizeModelsDevSyncSettings(stored[STORAGE_KEYS.modelsDevSync])
-        await deps.write({ [STORAGE_KEYS.modelsDevSync]: { ...settings, autoUpdate } })
+        await storage.write({ [STORAGE_KEYS.modelsDevSync]: { ...settings, autoUpdate } })
       })
       await schedule()
       return { ok: true }

@@ -1,9 +1,9 @@
 import { AiProviderCard } from '../../ui/ai/AiProviderCard'
 import { SwitchControl } from '../../ui/base/Switch'
+import { StatusMessage } from '../../ui/base/StatusMessage'
 import {
   AI_SETTINGS_BODY_CLASS,
   AI_SETTINGS_COPY_CLASS,
-  AI_SETTINGS_FIELD_TIP_CLASS,
   AI_SETTINGS_HEADER_CLASS,
   AI_SETTINGS_LOADING_SWITCH_CLASS,
   AI_SETTINGS_NARROW_CARD_CLASS,
@@ -21,10 +21,6 @@ import { handleContentSnapshotSettingsChange } from '../options-controller'
 import { useContentSnapshotControlsState } from './content-snapshot-store.js'
 
 const contentSnapshotTitle = <h2 className={AI_SETTINGS_TITLE_CLASS}>网页内容索引</h2>
-const contentSnapshotDescription = (
-  <p className={AI_SETTINGS_SUBTITLE_CLASS}>在本地保存网页摘要，用于全文快速搜索与 AI 精准分类。</p>
-)
-
 export function ContentSnapshotControls() {
   const state = useContentSnapshotControlsState()
 
@@ -32,7 +28,9 @@ export function ContentSnapshotControls() {
     <AiProviderCard
       className={AI_SETTINGS_NARROW_CARD_CLASS}
       title={contentSnapshotTitle}
-      description={contentSnapshotDescription}
+      description={<StatusMessage className={AI_SETTINGS_SUBTITLE_CLASS}>
+        {state.loading ? '正在读取本地设置…' : state.statusCopy || '在本地保存网页摘要，用于全文快速搜索与 AI 精准分类。'}
+      </StatusMessage>}
       headerClassName={AI_SETTINGS_HEADER_CLASS}
       iconName="ArchiveRestore"
       bodyClassName={`${AI_SETTINGS_BODY_CLASS} ${state.loading ? '' : AI_SETTINGS_READY_BODY_CLASS}`}
@@ -81,11 +79,6 @@ export function ContentSnapshotControls() {
           )}
         </span>
       </div>
-      {state.loading || state.statusCopy ? (
-        <p className={AI_SETTINGS_FIELD_TIP_CLASS} role="status">
-          {state.loading ? '正在读取本地设置…' : state.statusCopy}
-        </p>
-      ) : null}
     </AiProviderCard>
   )
 }

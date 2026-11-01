@@ -8,7 +8,8 @@ import {
   useRef,
   useState
 } from 'react'
-import { getMotionDurationMs, getMotionEasing, prefersReducedMotion } from '../../shared/motion'
+import { getMotionDurationMs, getMotionEasing, getMotionSpring, shouldSkipMotion } from '../../shared/motion'
+import { advanceSpring, springSettled } from '../../shared/motion-spring'
 import { Button } from '../../ui/base/Button'
 import { Popover } from '../../ui/base/Popover'
 import { cx } from '../../ui/base/utils'
@@ -47,8 +48,6 @@ type SelectorView = 'menu' | 'advanced'
 const FALLBACK_LEVEL: ReasoningEffortLevel = { id: 'default', label: '—' }
 const FALLBACK_LEVELS: ReasoningEffortLevel[] = [FALLBACK_LEVEL]
 const KNOB_DIAMETER_PX = 34
-const SPRING_STIFFNESS = 900
-const SPRING_DAMPING = 51
 const VELOCITY_WINDOW_MS = 90
 const VELOCITY_MAX = 2.2
 
@@ -68,7 +67,7 @@ const TRIGGER_CLASS = cx(
 
 const VIEW_TRACK_CLASS = cx(
   'reasoning-selector-view-track grid min-w-0',
-  'transition-[grid-template-rows,opacity,transform] duration-[var(--acc-collapse)] ease-[var(--ease-smooth-out)]'
+  'transition-[grid-template-rows,opacity,transform] duration-[var(--resize-dur)] ease-[var(--resize-ease)]'
 )
 
 const MENU_ROW_CLASS =
@@ -76,7 +75,7 @@ const MENU_ROW_CLASS =
 
 const HEADER_LAYER_CLASS = cx(
   'absolute inset-0 flex items-center opacity-0 translate-y-[3px] pointer-events-none',
-  'transition-[opacity,transform] duration-[var(--text-swap-dur)] ease-[var(--ease-smooth-out)]',
+  'transition-[opacity,transform] duration-[var(--text-swap-dur)] ease-[var(--text-swap-ease)]',
   'data-[active=true]:translate-y-0 data-[active=true]:opacity-100 data-[active=true]:pointer-events-auto'
 )
 
@@ -205,22 +204,24 @@ export function ReasoningEffortSelector({
       updateVisualProgress(targetProgress)
       springFrameRef.current = 0
     }
-    if (prefersReducedMotion() || Math.abs(positionRef.current - targetProgress) < 0.001) {
+    if (shouldSkipMotion() || Math.abs(positionRef.current - targetProgress) < 0.001) {
       settle()
       return
     }
 
-    let springPosition = positionRef.current
-    let velocity = Math.max(-VELOCITY_MAX, Math.min(VELOCITY_MAX, initialVelocity))
+    const axis = {
+      position: positionRef.current,
+      velocity: Math.max(-VELOCITY_MAX, Math.min(VELOCITY_MAX, initialVelocity))
+    }
+    const spring = getMotionSpring()
     let previousTime = performance.now()
     const step = (time: number) => {
-      const delta = Math.min((time - previousTime) / 1000, 0.032)
+      if (shouldSkipMotion() || document.hidden) { settle(); return }
+      const delta = (time - previousTime) / 1000
       previousTime = time
-      const acceleration = -SPRING_STIFFNESS * (springPosition - targetProgress) - SPRING_DAMPING * velocity
-      velocity += acceleration * delta
-      springPosition = Math.min(1, Math.max(0, springPosition + velocity * delta))
-      updateVisualProgress(springPosition)
-      if (Math.abs(springPosition - targetProgress) < 0.001 && Math.abs(velocity) < 0.01) {
+      advanceSpring(axis, targetProgress, delta, spring)
+      updateVisualProgress(axis.position)
+      if (springSettled(axis, targetProgress, 0.001, 0.01)) {
         settle()
         return
       }
@@ -344,20 +345,20 @@ export function ReasoningEffortSelector({
     }
     previousAnimatedIndexRef.current = safePreviewIndex
     const label = tierLabelRef.current
-    if (!label || prefersReducedMotion() || !label.animate) {
+    if (!label || shouldSkipMotion() || draggingRef.current || !label.animate) {
       return
     }
     label.getAnimations().forEach((animation) => animation.cancel())
     label.animate(
       [
-        { opacity: 0, transform: 'translateY(3px)' },
-        { opacity: 1, transform: 'translateY(0)' }
+        { opacity: 0.72 },
+        { opacity: 1 }
       ],
       {
         // 和 newtab-controller 的拖拽落位一样从 token 读，字面量只当 fallback：
         // 档位标签是原地换值，走 text swap 的时长。
         duration: getMotionDurationMs('--text-swap-dur', 130),
-        easing: getMotionEasing('--ease-smooth-out', 'cubic-bezier(0.22, 1, 0.36, 1)')
+        easing: getMotionEasing('--text-swap-ease', 'cubic-bezier(0.2, 0.8, 0.2, 1)')
       }
     )
   }, [safePreviewIndex])
@@ -434,7 +435,7 @@ export function ReasoningEffortSelector({
         </span>
       </span>
       <ChevronDownIcon
-        className="ml-2 size-3.5 flex-none text-ds-text-muted transition-transform duration-[var(--ds-motion-spring)] ease-ds-spring group-aria-expanded:rotate-180 motion-reduce:transition-none"
+        className="ml-2 size-3.5 flex-none text-ds-text-muted transition-transform duration-[var(--ds-motion-state)] ease-ds-standard group-aria-expanded:rotate-180 motion-reduce:transition-none"
         aria-hidden="true"
       />
     </Button>
@@ -597,7 +598,7 @@ export function ReasoningEffortSelector({
                   </div>
                   <div
                     ref={fillRef}
-                    className="absolute inset-0 z-10 overflow-hidden rounded-full bg-[#006efe] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-[linear-gradient(90deg,#006efe_0%,#9440d5_68%,#c472fb_100%)] after:opacity-0 after:transition-opacity after:duration-[300ms] after:ease-[var(--ease-smooth-out)] data-[highest=true]:after:opacity-100 motion-reduce:after:transition-none"
+                    className="absolute inset-0 z-10 overflow-hidden rounded-full bg-[#006efe] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-[linear-gradient(90deg,#006efe_0%,#9440d5_68%,#c472fb_100%)] after:opacity-0 after:transition-opacity after:duration-[var(--ds-motion-state)] after:ease-ds-standard data-[highest=true]:after:opacity-100 motion-reduce:after:transition-none"
                     data-highest={isHighestLevel}
                   />
                 </div>

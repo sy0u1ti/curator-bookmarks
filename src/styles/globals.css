@@ -1,6 +1,7 @@
 @import "./tokens.css";
 @import "../shared/ui-refresh.css";
 @import "./tailwind.css";
+@import "./corners.css";
 @import "./controls-motion.css";
 
 .curator-react-root {
@@ -199,18 +200,25 @@ body {
   --curator-overlay-open-duration: var(--dropdown-open-dur);
   --curator-overlay-close-duration: var(--dropdown-close-dur);
   --curator-overlay-open-ease: var(--dropdown-open-ease);
+  --curator-overlay-close-ease: var(--dropdown-ease);
+  --curator-overlay-opacity-in: var(--ds-motion-enter-opacity);
+  --curator-overlay-opacity-out: var(--ds-motion-exit-opacity);
   opacity: 1;
   transform: translate3d(0, 0, 0) scale(1);
   transition:
-    opacity var(--curator-overlay-open-duration) var(--dropdown-ease),
+    opacity var(--curator-overlay-opacity-in) var(--ds-ease-standard),
     transform var(--curator-overlay-open-duration) var(--curator-overlay-open-ease);
 }
 
 .curator-overlay-panel--dialog {
+  --curator-overlay-enter-y: var(--ds-sheet-offset);
   --curator-overlay-enter-scale: var(--modal-scale);
   --curator-overlay-open-duration: var(--modal-open-dur);
   --curator-overlay-close-duration: var(--modal-close-dur);
   --curator-overlay-open-ease: var(--modal-open-ease);
+  --curator-overlay-close-ease: var(--modal-ease);
+  --curator-overlay-opacity-in: var(--modal-opacity-in);
+  --curator-overlay-opacity-out: var(--modal-opacity-out);
 }
 
 .curator-overlay-panel--drawer {
@@ -218,6 +226,22 @@ body {
   --curator-overlay-open-duration: var(--panel-open-dur);
   --curator-overlay-close-duration: var(--panel-close-dur);
   --curator-overlay-open-ease: var(--panel-ease);
+  --curator-overlay-close-ease: var(--panel-ease);
+}
+
+.curator-drawer-motion {
+  transition:
+    transform var(--panel-open-dur) var(--panel-ease),
+    scale var(--panel-open-dur) var(--panel-ease),
+    opacity var(--ds-motion-enter-opacity) var(--ds-ease-standard);
+}
+
+.curator-drawer-motion[data-ending-style] {
+  transition-duration: var(--panel-close-dur), var(--panel-close-dur), var(--ds-motion-exit-opacity);
+}
+
+.curator-drawer-motion[data-swiping] {
+  transition-duration: 0s;
 }
 
 .curator-overlay-panel--menu,
@@ -270,8 +294,8 @@ body {
 
 .curator-overlay-panel[data-ending-style] {
   pointer-events: none;
-  transition-duration: var(--curator-overlay-close-duration);
-  transition-timing-function: var(--ease-smooth-out);
+  transition-duration: var(--curator-overlay-opacity-out), var(--curator-overlay-close-duration);
+  transition-timing-function: var(--ds-ease-standard), var(--curator-overlay-close-ease);
 }
 
 .curator-overlay-panel--menu[data-ending-style],
@@ -284,7 +308,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .curator-overlay-panel,
   .curator-overlay-panel[data-starting-style],
-  .curator-overlay-panel[data-ending-style] {
+  .curator-overlay-panel[data-ending-style],
+  .curator-drawer-motion {
     transform: none !important;
     transition-property: opacity !important;
     transition-duration: 80ms !important;
@@ -299,16 +324,16 @@ body {
 .t-tabs:not(.grid) {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 3px;
-  border-radius: 48px;
+  gap: var(--ds-inset-control);
+  padding: var(--ds-inset-control);
+  border-radius: var(--ds-radius-full);
 }
 .t-tab {
   position: relative;
   z-index: 1;
   color: var(--tabs-text-muted);
   transition:
-    color var(--ds-motion-fast) var(--ease-smooth-out),
+    color var(--ds-motion-fast) var(--ds-ease-standard),
     transform var(--ds-motion-control) var(--ds-ease-standard),
     scale var(--ds-motion-control) var(--ds-ease-standard);
 }
@@ -316,7 +341,7 @@ body {
   appearance: none;
   height: 30px;
   border: 0;
-  border-radius: 48px;
+  border-radius: var(--ds-radius-full);
   background: transparent;
   padding: 4px 12px;
   cursor: pointer;
@@ -330,12 +355,12 @@ body {
 }
 .t-tabs-pill {
   position: absolute;
-  top: var(--active-tab-top, 3px);
+  top: var(--active-tab-top, var(--ds-inset-control));
   left: 0;
   z-index: 0;
   width: var(--active-tab-width, 0);
   height: var(--active-tab-height, 30px);
-  border-radius: 48px;
+  border-radius: var(--ds-radius-full);
   background: var(--tabs-pill-bg);
   pointer-events: none;
   transform: translateX(var(--active-tab-left, 0));
@@ -350,22 +375,23 @@ body {
 /* Equal-width settings segments need no layout reads or animation frames.
    Percent travel also stays aligned when the inspector changes width. */
 .t-segmented {
-  --segment-inset: 4px;
+  --segment-inset: var(--ds-inset-control);
   position: relative;
   isolation: isolate;
   display: inline-grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   gap: 0;
-  padding: var(--segment-inset);
+  padding: calc(var(--segment-inset) - var(--segment-border, var(--ds-stroke-width)));
+  border-radius: var(--ds-radius-menu);
 }
 
 .t-segmented::before {
   content: "";
   position: absolute;
-  inset-block: var(--segment-inset);
-  left: var(--segment-inset);
-  width: calc((100% - var(--segment-inset) * 2) / var(--segment-count));
+  inset-block: calc(var(--segment-inset) - var(--segment-border, var(--ds-stroke-width)));
+  left: calc(var(--segment-inset) - var(--segment-border, var(--ds-stroke-width)));
+  width: calc((100% - (var(--segment-inset) - var(--segment-border, var(--ds-stroke-width))) * 2) / var(--segment-count));
   box-sizing: border-box;
   border: 1px solid var(--ds-border-hover);
   border-radius: var(--ds-radius-sm);
@@ -400,7 +426,7 @@ body {
   pointer-events: none;
   transition:
     transform var(--panel-close-dur) var(--panel-ease),
-    opacity   var(--panel-close-dur) var(--panel-ease);
+    opacity   var(--ds-motion-exit-opacity) var(--ds-ease-standard);
 }
 .t-panel-slide[data-open="true"] {
   transform: translateY(0);
@@ -408,7 +434,7 @@ body {
   pointer-events: auto;
   transition:
     transform var(--panel-open-dur) var(--panel-ease),
-    opacity   var(--panel-open-dur) var(--panel-ease);
+    opacity   var(--ds-motion-enter-opacity) var(--ds-ease-standard);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -458,11 +484,11 @@ body {
   min-height: 0;
   overflow: hidden;
   opacity: 0;
-  transition: opacity var(--acc-collapse) var(--acc-ease);
+  transition: opacity var(--acc-fade-out) var(--ds-ease-standard);
 }
 .t-acc-panel[data-open] > .t-acc-panel-inner {
   opacity: 1;
-  transition: opacity var(--acc-expand) var(--acc-ease);
+  transition: opacity var(--acc-fade-in) var(--ds-ease-standard) var(--acc-content-delay);
 }
 @starting-style {
   .t-acc-panel[data-open] {
@@ -484,7 +510,7 @@ body {
   display: inline-flex;
   transform: scaleY(1);
   transform-origin: center;
-  transition: transform var(--acc-chevron) var(--ds-ease-spring);
+  transition: transform var(--acc-chevron) var(--acc-ease);
 }
 .t-acc-chevron path { vector-effect: non-scaling-stroke; }
 .t-acc-head[data-panel-open] .t-acc-chevron {
@@ -504,7 +530,7 @@ body {
   pointer-events: none;
   transition:
     transform var(--dropdown-open-dur) var(--dropdown-open-ease),
-    opacity   var(--duration-quick) var(--dropdown-ease);
+    opacity   var(--ds-motion-enter-opacity) var(--ds-ease-standard);
 }
 .t-dropdown[data-origin="top-right"]     { transform-origin: top right; }
 .t-dropdown[data-origin="top-center"]    { transform-origin: top center; }
@@ -541,7 +567,7 @@ body {
   pointer-events: none;
   transition:
     transform var(--dropdown-close-dur) var(--dropdown-ease),
-    opacity   var(--dropdown-close-dur) var(--dropdown-ease);
+    opacity   var(--ds-motion-exit-opacity) var(--ds-ease-standard);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -572,7 +598,7 @@ body {
   transform: translateY(0) scale(1);
   transition:
     transform var(--toast-open-dur) var(--toast-ease),
-    opacity   var(--duration-quick) var(--ease-smooth-out);
+    opacity   var(--toast-open-dur) var(--toast-ease);
 }
 .t-toast[data-starting-style] {
   opacity: 0;
@@ -583,8 +609,8 @@ body {
   pointer-events: none;
   transform: scale(var(--toast-scale));
   transition:
-    transform var(--toast-close-dur) var(--ease-smooth-out),
-    opacity   var(--toast-close-dur) var(--ease-smooth-out);
+    transform var(--toast-close-dur) var(--toast-ease),
+    opacity   var(--toast-close-dur) var(--toast-ease);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -597,7 +623,7 @@ body {
 .t-modal-backdrop {
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--modal-open-dur) var(--modal-ease);
+  transition: opacity var(--modal-backdrop-in) var(--ds-ease-standard);
 }
 .t-modal-backdrop.is-open,
 .t-modal-backdrop:where([data-open]:not([data-open="false"])) {
@@ -612,7 +638,7 @@ body {
 .t-modal-backdrop[data-ending-style] {
   opacity: 0;
   pointer-events: none;
-  transition-duration: var(--modal-close-dur);
+  transition-duration: var(--modal-backdrop-out);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -627,7 +653,7 @@ body {
   .model-selector-content,
   .model-selector-content[data-starting-style],
   .model-selector-content[data-ending-style] {
-    translate: -50% -50% !important;
+    translate: -50% 0 !important;
     scale: 1 !important;
     transition: opacity 80ms linear !important;
   }
@@ -823,7 +849,7 @@ body {
   width: 20px;
   height: 20px;
   /* An arrival, not an in-place swap: enter curve, not --icon-swap-ease. */
-  animation: t-status-icon-arrive var(--duration-quick) var(--ease-smooth-out) backwards;
+  animation: t-status-icon-arrive var(--ds-motion-fast) var(--ds-ease-standard) backwards;
 }
 
 @keyframes t-status-icon-arrive {
@@ -867,10 +893,10 @@ body {
   opacity: 1;
   transform: translate3d(0, 0, 0) scale(1);
   transition:
-    border-color var(--ds-motion-standard) var(--resize-ease),
-    background-color var(--ds-motion-standard) var(--resize-ease),
-    box-shadow var(--ds-motion-standard) var(--resize-ease),
-    opacity var(--ds-motion-standard) var(--resize-ease),
+    border-color var(--ds-motion-fast) var(--ds-ease-standard),
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    box-shadow var(--ds-motion-fast) var(--ds-ease-standard),
+    opacity var(--ds-motion-enter-opacity) var(--ds-ease-standard),
     transform var(--ds-motion-standard) var(--resize-ease);
 }
 
@@ -884,11 +910,11 @@ body {
 .curator-motion-card {
   transform: translate3d(0, 0, 0) scale(1);
   transition:
-    border-color var(--ds-motion-fast) var(--resize-ease),
-    background-color var(--ds-motion-fast) var(--resize-ease),
-    box-shadow var(--ds-motion-fast) var(--resize-ease),
-    color var(--ds-motion-fast) var(--resize-ease),
-    opacity var(--ds-motion-standard) var(--resize-ease),
+    border-color var(--ds-motion-fast) var(--ds-ease-standard),
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    box-shadow var(--ds-motion-fast) var(--ds-ease-standard),
+    color var(--ds-motion-fast) var(--ds-ease-standard),
+    opacity var(--ds-motion-fast) var(--ds-ease-standard),
     transform var(--ds-motion-control) var(--ds-ease-standard),
     scale var(--ds-motion-control) var(--ds-ease-standard);
 }
@@ -897,10 +923,10 @@ body {
 .curator-motion-chip {
   transform: translate3d(0, 0, 0);
   transition:
-    border-color var(--ds-motion-fast) var(--resize-ease),
-    background-color var(--ds-motion-fast) var(--resize-ease),
-    color var(--ds-motion-fast) var(--resize-ease),
-    opacity var(--ds-motion-fast) var(--resize-ease),
+    border-color var(--ds-motion-fast) var(--ds-ease-standard),
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    color var(--ds-motion-fast) var(--ds-ease-standard),
+    opacity var(--ds-motion-fast) var(--ds-ease-standard),
     transform var(--ds-motion-control) var(--ds-ease-standard),
     scale var(--ds-motion-control) var(--ds-ease-standard);
 }
@@ -910,7 +936,7 @@ body {
   transform: translate3d(0, 0, 0) scale(1);
   transform-origin: var(--transform-origin, var(--radix-popover-content-transform-origin, top right));
   transition:
-    opacity var(--dropdown-open-dur) var(--dropdown-ease),
+    opacity var(--ds-motion-enter-opacity) var(--ds-ease-standard),
     transform var(--dropdown-open-dur) var(--dropdown-open-ease);
 }
 
@@ -918,8 +944,8 @@ body {
 .curator-motion-popover.is-closing {
   opacity: 0;
   transform: translate3d(0, -4px, 0) scale(var(--dropdown-closing-scale));
-  transition-duration: var(--dropdown-close-dur);
-  transition-timing-function: var(--dropdown-ease);
+  transition-duration: var(--ds-motion-exit-opacity), var(--dropdown-close-dur);
+  transition-timing-function: var(--ds-ease-standard), var(--dropdown-ease);
   will-change: opacity, transform;
 }
 .curator-motion-popover[data-starting-style] {
@@ -940,7 +966,7 @@ body {
   scale: 1;
   transform: scale(var(--control-press-scale, var(--ds-press-scale)));
   transition-duration: var(--ds-motion-feedback);
-  transition-timing-function: var(--ease-smooth-out);
+  transition-timing-function: var(--ds-ease-standard);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -969,6 +995,25 @@ body {
 
 .curator-compact-hit-target {
   position: relative;
+}
+
+/* Keyboard input commits immediately. Keep transforms that encode the final
+   state (switch travel, drawer position); only remove their interpolation.
+   Per-element opt-ins retain approved tracking motion, not whole subtrees. */
+:root[data-motion-input="keyboard"] {
+  --ds-press-scale: 1;
+}
+
+:root[data-motion-input="keyboard"] *:not([data-motion-keyboard="preserve"]),
+:root[data-motion-input="keyboard"] *:not([data-motion-keyboard="preserve"])::before,
+:root[data-motion-input="keyboard"] *:not([data-motion-keyboard="preserve"])::after {
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}
+
+:root[data-motion-input="keyboard"] :is(.t-text-swap-value, .t-number-value, .t-badge-pop, .t-status-icon, .reasoning-selector-menu-row) {
+  animation: none !important;
 }
 
 @media (pointer: coarse) {

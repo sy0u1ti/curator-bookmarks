@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type RefObject } from 'react'
+import { useLayoutEffect, useRef, type CSSProperties, type RefObject } from 'react'
 import { Button } from '../../ui/base/Button'
 import { cx } from '../../ui/base/utils'
 import { Icon } from '../../ui/icons/Icon'
@@ -46,15 +46,25 @@ export function FolderPickerResults({
   }
   const optionRefMap = optionRefs.current
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const focusId = state.focusRequestId
     if (typeof focusId !== 'string') {
       return
     }
 
-    window.setTimeout(() => {
-      optionRefMap.get(focusId)?.focus()
-    }, 0)
+    const target = optionRefMap.get(focusId)
+    if (!target?.isConnected || target.closest('[hidden], [inert]')) return
+    target.focus({ preventScroll: true })
+    const tree = target.closest<HTMLElement>('[role="tree"]')
+    if (!tree || document.activeElement !== target) return
+    const viewport = tree.getBoundingClientRect()
+    const row = target.getBoundingClientRect()
+    const top = viewport.top + tree.clientTop
+    const bottom = top + tree.clientHeight
+    const delta = row.top < top ? row.top - top : row.bottom > bottom ? row.bottom - bottom : 0
+    // Reveal keyboard selection inside its own list, never by scrolling the
+    // dialog or page, and never through a stale deferred focus task.
+    if (delta) tree.scrollBy({ top: delta, behavior: 'instant' })
   }, [optionRefMap, state.focusRequestId])
 
   const setOptionRef = (folderId: string, button: HTMLElement | null) => {
@@ -174,7 +184,7 @@ function FolderPickerTreeOption({
           event.preventDefault()
           event.stopPropagation()
           if (event.key === 'Escape') {
-            searchInputRef?.current?.focus()
+            searchInputRef?.current?.focus({ preventScroll: true })
             return
           }
           handleFolderPickerAction({

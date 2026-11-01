@@ -176,7 +176,7 @@ function IgnoreRuleList({
   return (
     <>
       {entries.map((entry) => (
-        <div className="t-list-exit" data-exiting={entry.exiting ? 'true' : 'false'} key={entry.key}>
+        <div ref={entry.ref} className="t-list-exit" data-exiting={entry.exiting ? 'true' : 'false'} inert={entry.exiting || undefined} key={entry.key}>
           <div className="t-list-exit-inner">
             <IgnoreRuleCard kind={kind} rule={entry.item} locked={locked} />
           </div>

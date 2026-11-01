@@ -3,7 +3,7 @@ import { Button } from '../../ui/base/Button'
 import { Popover } from '../../ui/base/Popover'
 
 const searchHelpPopoverClass =
-  '[z-index:90] w-[min(320px,calc(100vw-28px))] max-w-[320px] gap-2 rounded-ds-lg border-ds-border bg-ds-surface-2 p-3 text-xs leading-snug text-ds-text-secondary shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2'
+  '[z-index:90] w-[min(320px,calc(100vw-28px))] max-w-[320px] gap-2 rounded-ds-card border-ds-border bg-ds-surface-2 ds-inset-card text-xs leading-snug text-ds-text-secondary shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2'
 const searchHelpTitleClass = 'text-sm font-semibold text-ds-text-primary'
 const searchHelpListClass = 'm-0 grid list-none gap-1.5 p-0'
 const searchHelpItemClass = 'grid grid-cols-[52px_minmax(0,1fr)] items-baseline gap-2'
@@ -12,7 +12,7 @@ const searchHelpTagClass =
 const searchHelpExampleClass =
   'flex min-w-0 flex-wrap items-center gap-1 text-ds-text-primary'
 const searchHelpCodeClass =
-  'rounded-[5px] border border-ds-border bg-ds-app px-1 py-0.5 font-mono text-xs text-ds-text-primary'
+  'rounded-ds-xs border border-ds-border bg-ds-app px-1 py-0.5 font-mono text-xs text-ds-text-primary'
 const searchHelpHintClass = 'text-xs text-ds-text-muted'
 const searchHelpToggleClass = 'w-8 min-w-8 !p-0'
 

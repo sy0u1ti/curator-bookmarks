@@ -27,7 +27,7 @@ export function AiClassificationResult({
   ...props
 }: AiClassificationResultProps) {
   return (
-    <Surface className={cx('grid gap-2 p-3', className)} variant="group" {...props}>
+    <Surface className={cx('curator-classification-card grid gap-2', className)} variant="group" {...props}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Icon name="Sparkles" size={16} aria-hidden="true" />

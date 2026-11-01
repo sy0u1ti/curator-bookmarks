@@ -2,7 +2,7 @@ import { STORAGE_KEYS } from './constants.js'
 import { parseModelsDevCatalog, type ModelsDevCatalog } from './models-dev.js'
 import { getLocalStorage } from './storage.js'
 
-export type ModelsDevSyncError = 'permission' | 'network' | 'invalid_catalog' | 'too_large' | 'storage'
+export type ModelsDevSyncError = 'permission' | 'network' | 'timeout' | 'http' | 'invalid_catalog' | 'too_large' | 'storage'
 
 export interface ModelsDevCache {
   version: 1
@@ -35,6 +35,8 @@ export const DEFAULT_MODELS_DEV_SETTINGS: ModelsDevSyncSettings = {
 export const MODELS_DEV_ERROR_LABELS: Record<ModelsDevSyncError, string> = {
   permission: '未授权访问 models.dev',
   network: '暂时无法连接 models.dev，请稍后重试',
+  timeout: 'models.dev 响应超时，请重试',
+  http: 'models.dev 暂时无法提供资料，请稍后重试',
   invalid_catalog: '模型资料格式无效，已保留本地资料',
   too_large: '模型资料超过大小限制，已保留本地资料',
   storage: '模型资料未能保存，请稍后重试'

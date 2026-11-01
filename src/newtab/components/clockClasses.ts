@@ -2,9 +2,9 @@ import type { NewTabTimeSettings } from '../time-settings'
 import { cx } from '../../ui/base/utils'
 
 const CLOCK_BASE_CLASS = 'newtab-clock grid w-fit max-w-[min(100%,1229px)] auto-cols-max items-center justify-center border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-hero)] text-center text-[var(--ui-text-primary)] shadow-none [filter:var(--newtab-glass-drop)] select-none [-webkit-backdrop-filter:var(--newtab-glass-filter-hero)] [backdrop-filter:var(--newtab-glass-filter-hero)]'
-const CLOCK_COMPACT_CLASS = 'min-h-[calc(24px*var(--clock-scale))] grid-flow-col gap-[calc(8px*var(--clock-scale))] rounded-[calc(12px*var(--clock-scale))] p-0'
-const CLOCK_BALANCED_CLASS = 'min-h-[calc(38px*var(--clock-scale))] grid-flow-col gap-[calc(10px*var(--clock-scale))] rounded-[calc(12px*var(--clock-scale))] px-[calc(11px*var(--clock-scale))] py-[calc(7px*var(--clock-scale))]'
-const CLOCK_COMFORTABLE_CLASS = 'min-w-[min(100%,300px)] grid-flow-row gap-[calc(6px*var(--clock-scale))] rounded-[calc(16px*var(--clock-scale))] px-[calc(18px*var(--clock-scale))] py-[calc(13px*var(--clock-scale))]'
+const CLOCK_COMPACT_CLASS = 'min-h-[calc(24px*var(--clock-scale))] grid-flow-col gap-[calc(8px*var(--clock-scale))] rounded-[calc(var(--ds-radius-md)*var(--clock-scale))] p-0'
+const CLOCK_BALANCED_CLASS = 'min-h-[calc(38px*var(--clock-scale))] grid-flow-col gap-[calc(10px*var(--clock-scale))] rounded-[calc(var(--ds-radius-md)*var(--clock-scale))] px-[calc(11px*var(--clock-scale))] py-[calc(7px*var(--clock-scale))]'
+const CLOCK_COMFORTABLE_CLASS = 'min-w-[min(100%,300px)] grid-flow-row gap-[calc(6px*var(--clock-scale))] rounded-[calc(var(--ds-radius-lg)*var(--clock-scale))] px-[calc(18px*var(--clock-scale))] py-[calc(13px*var(--clock-scale))]'
 const CLOCK_COMFORTABLE_HEIGHT_CLASS = 'min-h-[calc(74px*var(--clock-scale))]'
 const CLOCK_COMFORTABLE_DATE_ONLY_CLASS = 'min-h-[calc(54px*var(--clock-scale))]'
 

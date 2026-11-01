@@ -8,6 +8,7 @@ import {
   type ModelsDevCache
 } from './models-dev-cache.js'
 import { createModelsDevSyncService, getModelsDevNextRefresh } from './models-dev-sync.js'
+import { requestModelsDevUpdate } from './models-dev-client.js'
 import { STORAGE_KEYS } from './constants.js'
 import { getModelReasoningProfile, getReasoningTransport } from './ai-reasoning.js'
 import { buildAiProviderConnectivityRequestBody, requestStructuredAiOutput, clearAiProviderCompatibilityCache } from './ai-runtime.js'
@@ -314,6 +315,7 @@ test('network, malformed JSON, wrong MIME and oversized responses keep the last 
   const cache = cacheAt()
   for (const [fetcher, error] of [
     [async () => { throw new Error('offline') }, 'network'],
+    [async () => new Response('Unavailable', { status: 503 }), 'http'],
     [async () => json({}), 'invalid_catalog'],
     [async () => new Response('{', { headers: { 'content-type': 'application/json' } }), 'invalid_catalog'],
     [async () => new Response('<html>', { headers: { 'content-type': 'text/html' } }), 'invalid_catalog'],
@@ -396,7 +398,7 @@ test('timed-out downloads abort and retain the last-good cache', async () => {
       init!.signal!.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
     })
   })
-  assert.deepEqual(await service.refresh(), { ok: false, error: 'network' })
+  assert.deepEqual(await service.refresh(), { ok: false, error: 'timeout' })
   assert.deepEqual(fixture.stored[STORAGE_KEYS.modelsDevCatalog], original)
 })
 
@@ -406,6 +408,98 @@ test('catalog metadata is never serialized into the saved channel settings', () 
   }))
   assert.equal('modelMetadata' in result, false)
   assert.equal(JSON.stringify(result).includes('canonicalId'), false)
+})
+
+test('an opt-out in another extension context prevents a background response from committing', async () => {
+  const fixture = syncFixture()
+  const page = createModelsDevSyncService(fixture.dependencies)
+  await fixture.service.configure(true)
+  let release!: () => void
+  let started!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const start = new Promise<void>(resolve => { started = resolve })
+  fixture.fetcher = async () => { started(); await gate; return json(fixturePayload()) }
+  const automatic = fixture.service.refresh(false)
+  await start
+  await page.configure(false)
+  release()
+  assert.deepEqual(await automatic, { ok: true, updated: false })
+  assert.equal(fixture.stored[STORAGE_KEYS.modelsDevCatalog], undefined)
+  assert.equal(normalizeModelsDevSyncSettings(fixture.stored[STORAGE_KEYS.modelsDevSync]).autoUpdate, false)
+  assert.equal(fixture.schedules.at(-1), null)
+})
+
+test('catalog commits and alarm decisions use the shared storage transaction', async () => {
+  const fixture = syncFixture()
+  let transactions = 0
+  let active = false
+  const service = createModelsDevSyncService({
+    ...fixture.dependencies,
+    write: async () => { throw new Error('write outside transaction') },
+    transaction: async task => {
+      transactions++
+      active = true
+      try { await task(fixture.dependencies) } finally { active = false }
+    },
+    schedule: async when => {
+      assert.equal(active, true)
+      fixture.schedules.push(when)
+    }
+  })
+  assert.deepEqual(await service.refresh(), { ok: true, updated: true })
+  await service.configure(true)
+  assert.ok(transactions >= 4)
+  assert.equal(normalizeModelsDevSyncSettings(fixture.stored[STORAGE_KEYS.modelsDevSync]).autoUpdate, true)
+})
+
+test('manual updates work with a disconnected worker and never send provider data', async () => {
+  const originalChrome = globalThis.chrome
+  const originalFetch = globalThis.fetch
+  let allowed = false
+  let requests = 0
+  let permissionRequests = 0
+  let runtimeMessages = 0
+  const stored: Record<string, unknown> = {
+    [STORAGE_KEYS.aiProviderSettings]: { apiKey: 'not-for-models-dev', baseUrl: 'https://private.invalid' }
+  }
+  ;(globalThis as any).chrome = {
+    runtime: { sendMessage: () => { runtimeMessages++; throw new Error('Receiving end does not exist') } },
+    permissions: {
+      request: async (query: unknown) => {
+        permissionRequests++
+        assert.deepEqual(query, { origins: ['https://models.dev/*'] })
+        return allowed
+      },
+      contains: async () => allowed
+    },
+    storage: { local: {
+      get: (keys: string[], callback: (value: unknown) => void) => callback(Object.fromEntries(keys.map(key => [key, stored[key]]))),
+      set: (values: Record<string, unknown>, callback: () => void) => { Object.assign(stored, structuredClone(values)); callback() }
+    } },
+    alarms: { clear: async () => true, create: async () => {} }
+  }
+  globalThis.fetch = async (url, init) => {
+    requests++
+    assert.equal(url, MODELS_DEV_URL)
+    assert.equal(init?.credentials, 'omit')
+    assert.equal(init?.body, undefined)
+    assert.equal(new Headers(init?.headers).has('authorization'), false)
+    return json(fixturePayload())
+  }
+  try {
+    assert.deepEqual(await requestModelsDevUpdate({ type: 'models-dev:refresh' }), { ok: false, error: 'permission' })
+    assert.equal(requests, 0)
+    allowed = true
+    assert.deepEqual(await requestModelsDevUpdate({ type: 'models-dev:refresh' }), { ok: true, updated: true })
+    assert.equal(requests, 1)
+    assert.equal(permissionRequests, 2)
+    assert.equal(runtimeMessages, 0)
+    assert.ok(normalizeModelsDevCache(stored[STORAGE_KEYS.modelsDevCatalog]))
+    assert.deepEqual(stored[STORAGE_KEYS.aiProviderSettings], { apiKey: 'not-for-models-dev', baseUrl: 'https://private.invalid' })
+  } finally {
+    globalThis.chrome = originalChrome
+    globalThis.fetch = originalFetch
+  }
 })
 
 test('runtime snapshots local catalog across fallback attempts and observes updates on the next call', async () => {

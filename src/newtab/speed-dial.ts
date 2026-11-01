@@ -49,6 +49,10 @@ export function createSpeedDialEmptyState(): SpeedDialEmptyState {
   }
 }
 
+export function getSpeedDialStatus(busy: boolean, error: string): string {
+  return error || ''
+}
+
 function createSpeedDialItem(bookmark: SpeedDialBookmarkLike, pinnedOrder: number): SpeedDialItem | null {
   const id = String(bookmark.id || '').trim()
   const url = String(bookmark.url || '').trim()

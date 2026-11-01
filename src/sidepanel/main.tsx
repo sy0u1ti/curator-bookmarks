@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client'
-import '../styles/globals.css'
+import '../styles/compact-globals.css'
 import '../popup/popup.css'
 import './sidepanel.css'
 import { PopupApp } from '../popup/PopupApp'

@@ -9,6 +9,7 @@ import type {
 
 const defaultProgressState: AvailabilityProgressState = {
   busy: false,
+  visible: false,
   durationLabel: '未开始',
   progressLabel: '未开始',
   progressValue: 0,
@@ -36,6 +37,7 @@ const defaultFiltersState: AvailabilityFiltersState = {
 }
 
 const defaultResultsHeaderState: AvailabilityResultsHeaderState = {
+  visible: false,
   deleteFailedDisabled: true,
   deleteFailedLabel: '批量删除',
   failedCount: '0 条异常',

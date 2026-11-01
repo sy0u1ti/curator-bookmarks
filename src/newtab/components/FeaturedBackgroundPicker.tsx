@@ -16,7 +16,7 @@ import { FEATURED_WALLPAPER_CONTROL_CLASS } from './featuredWallpaperControlClas
 const FEATURED_BACKGROUND_INITIAL_PREVIEW_HYDRATION_LIMIT = 16
 const FEATURED_BACKGROUND_PREVIEW_OBSERVER_ROOT_MARGIN = '280px 0px'
 const FEATURED_BACKGROUND_PICKER_CARD_CLASS =
-  'featured-wallpaper-card rounded-ds-sm border-0 bg-ds-surface-1 shadow-none'
+  'featured-wallpaper-card rounded-ds-lg border-0 bg-ds-surface-1 shadow-none'
 const FEATURED_BACKGROUND_PICKER_CARD_SELECTED_CLASS =
   'bg-ds-selected text-ds-text-primary'
 const FEATURED_BACKGROUND_CARD_ACTION_CLASS = `featured-wallpaper-card-action ${FEATURED_WALLPAPER_CONTROL_CLASS}`

@@ -120,14 +120,11 @@ try {
       }
       if (!before && section === 'ai-settings') {
         const setupSteps = panel.getByRole('list', { name: 'AI 渠道配置流程' })
-        const setupHelp = panel.getByRole('button', { name: '查看 AI 渠道配置步骤', exact: true })
-        assert.equal(await setupSteps.count(), 0, 'setup steps remain collapsed until requested')
-        await setupHelp.click()
-        await setupSteps.waitFor({ state: 'visible' })
-        assert.equal(await setupSteps.getByRole('listitem').count(), 5)
-        await setupHelp.click()
-        await setupSteps.waitFor({ state: 'hidden' })
-        const advancedBorder = await panel.getByRole('button', { name: 'Base URL 与接口选项', exact: true }).evaluate(node => parseFloat(getComputedStyle(node).borderTopWidth))
+        assert.equal(await setupSteps.count(), 0, 'the live fields replace the redundant setup walkthrough')
+        await panel.locator('#ai-base-url').waitFor({ state: 'visible' })
+        assert.equal(await panel.locator('#ai-base-url').evaluate(node => Boolean(node.closest('#ai-advanced-settings'))), false,
+          'the service address is a primary field, not an extra configuration step')
+        const advancedBorder = await panel.getByRole('button', { name: '接口与请求设置', exact: true }).evaluate(node => parseFloat(getComputedStyle(node).borderTopWidth))
         assert.ok(advancedBorder >= 1, 'advanced settings need a visible button')
       }
       await page.screenshot({ path: path.join(output, section + '-' + width + '.png'), animations: 'disabled', fullPage: true })

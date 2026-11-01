@@ -23,7 +23,7 @@ const PopupToasts = lazy(() => import('./components/PopupToasts').then(module =>
 
 const appShellBaseClass = [
   'group relative flex h-full flex-col overflow-hidden border border-ds-border bg-ds-app text-ds-text-primary',
-  'px-3.5 pb-3.5 pt-0 [font-family:var(--font-sans)] tracking-normal [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start] max-[520px]:px-2.5 max-[520px]:pb-2.5'
+  'px-3.5 pb-3.5 pt-0 [font-family:var(--font-sans)] tracking-normal [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start] @max-[520px]/popup:px-2.5 @max-[520px]/popup:pb-2.5'
 ].join(' ')
 const appShellDefaultClass = 'gap-2'
 const appShellSmartClass = 'gap-2'

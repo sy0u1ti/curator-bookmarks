@@ -86,7 +86,7 @@ function SpeedDialPanel({ dragUi, state }: { dragUi: NewtabDragUiView; state: Sp
     <>
       <div className={SPEED_DIAL_HEADING_CLASS}>
         <h2 className={SPEED_DIAL_TITLE_CLASS}>固定入口</h2>
-        <span className={SPEED_DIAL_META_CLASS} data-tone={state.metaTone || undefined}>{state.meta}</span>
+        <span className={SPEED_DIAL_META_CLASS} role={state.metaTone === 'error' ? 'alert' : 'status'} data-tone={state.metaTone || undefined}>{state.meta}</span>
       </div>
       <SpeedDialContent dragUi={dragUi} state={state.content} />
     </>

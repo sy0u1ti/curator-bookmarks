@@ -35,7 +35,7 @@ export function AiProviderCard({
     : 'flex min-w-0 items-center gap-2'
 
   return (
-    <Surface className={cx('grid gap-3 p-3', className)} variant="group" {...props}>
+    <Surface className={cx('curator-ai-card grid', className)} variant="group" {...props}>
       <header className={cx('flex items-start justify-between gap-3', headerClassName)}>
         <div className={cx('grid min-w-0 gap-1', copyClassName)}>
           <div className={cx(titleLayoutClassName, titleClassName)}>

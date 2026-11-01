@@ -123,7 +123,7 @@ function testSearchResultsReclaimBookmarkKeyboardSelection(): void {
   )
   assert(
     searchResultRows.includes('searchResultRowsCache.getRows(') &&
-      searchResultRows.includes("state.keyboardPane === 'bookmarks' ? state.activeResultIndex : -1"),
+      source.includes("activeResultIndex: state.keyboardPane === 'bookmarks' ? state.activeResultIndex : -1"),
     'search result highlight state must follow the active keyboard pane'
   )
   assert(
@@ -233,7 +233,8 @@ function testMainFolderTreeHasTreeItemSemantics(): void {
 
   assert(source.includes('role="treeitem"'), 'main popup folder rows should expose treeitem semantics')
   assert(source.includes('aria-level={row.depth + 1}'), 'main popup folder rows should expose their tree depth')
-  assert(source.includes('aria-selected={row.keyboardActive ?'), 'main popup folder rows should expose keyboard selection state')
+  assert(source.includes('aria-selected={keyboardActive ?') && source.includes("usePopupRowNavigation('folders'"),
+    'main popup folder rows should expose current keyboard selection state from their subscribed row selector')
 }
 
 function testContentRowsForwardEnterToKeyboardNavigation(): void {
@@ -243,7 +244,7 @@ function testContentRowsForwardEnterToKeyboardNavigation(): void {
   assert(isPopupContentNavigationKey('ArrowDown'), 'focused content rows should keep forwarding vertical navigation')
   assert(!isPopupContentNavigationKey(' '), 'content row navigation should preserve native Space activation')
   assert(
-    source.includes('isPopupContentNavigationKey(event.key)') && source.includes('handlers?.onKeyboardNavigate?.(event.key)'),
+    source.includes('isPopupContentNavigationKey(event.key)') && source.includes('handlers?.onKeyboardNavigate?.(event.key, event.repeat)'),
     'PopupContent should route Enter through the controller instead of activating the stale focused row'
   )
 }
@@ -274,8 +275,9 @@ function testContentHostReobservesActiveKeyboardRows(): void {
     'active result indicator ResizeObserver should be keyed to the current active folder row'
   )
   assert(
-    source.includes('[activeFolderObserverKey, activeResultObserverKey, remeasureIndicator, state.keyboardPane]'),
-    'active result indicator ResizeObserver should reattach when keyboard highlight moves to another row'
+    /\[activeFolderObserverKey,\s*activeResultObserverKey,[^\]]*remeasureIndicator,\s*state\.keyboardPane\]/.test(source) &&
+      source.includes('target && !pinnedEdgeRef.current'),
+    'the observer should track ordinary selection changes without reobserving every row during edge-held scrolling'
   )
 }
 

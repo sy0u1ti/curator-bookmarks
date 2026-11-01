@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-curator-surface="popup">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,19 +18,20 @@
       #popup-root {
         width: 800px;
         height: 600px;
+      }
+
+      #popup-preboot-shell,
+      #popup-root {
         overflow: hidden;
       }
 
-      /* Browser zoom shrinks the CSS viewport below the popup's design size;
-         allow the document to scroll so the clipped half stays reachable.
-         Only `overflow` may depend on the viewport here — sizing it from a
-         media query feeds back into Chrome's popup sizing and collapses the
-         window to the preboot logo. */
-      @media (max-width: 799px), (max-height: 599px) {
-        html,
-        body {
-          overflow: auto;
-        }
+      /* The fixed document never overflows at 100% zoom, so it can always
+         scroll the clipped half at browser zoom. A viewport media query here
+         would re-match on each autosize pass of the action popup and force
+         a full style recalculation per layout. */
+      html,
+      body {
+        overflow: auto;
       }
 
       html,
@@ -109,11 +110,11 @@
         height: 40px;
         min-height: 40px;
         align-items: center;
-        gap: 6px;
+        gap: 8px;
         border: 0;
-        border-radius: 8px;
+        border-radius: var(--popup-radius-surface, 12px);
         background: #1f1f1f;
-        padding: 0 6px 0 12px;
+        padding: 0 4px 0 12px;
         color: #ededed;
       }
 
@@ -159,8 +160,8 @@
       }
 
       .popup-preboot-clear-slot {
-        width: 26px;
-        height: 26px;
+        width: 32px;
+        height: 32px;
         flex: none;
         visibility: hidden;
       }
@@ -169,17 +170,24 @@
         display: inline-flex;
         width: 76px;
         min-width: 76px;
-        height: 28px;
+        height: 32px;
         flex: none;
         align-items: center;
         justify-content: center;
-        border-radius: 8px;
+        border-radius: var(--ds-radius-sm, 8px);
         color: #7d7d7d;
         font-size: 12px;
         font-weight: 500;
         line-height: 16px;
         letter-spacing: 0.01em;
         white-space: nowrap;
+      }
+
+      @supports (corner-shape: superellipse(1.25)) {
+        .popup-preboot-search,
+        .popup-preboot-semantic {
+          corner-shape: var(--ds-corner-shape, superellipse(1.25));
+        }
       }
 
       @media (prefers-reduced-transparency: reduce) {

@@ -1,5 +1,6 @@
 import type { HTMLAttributes } from 'react'
 import { cx } from './utils'
+import './surfaces.css'
 
 type SurfaceVariant = 'plain' | 'group' | 'panel' | 'row'
 
@@ -10,8 +11,8 @@ export interface SurfaceProps extends HTMLAttributes<HTMLElement> {
 
 const variantClass: Record<SurfaceVariant, string> = {
   plain: 'bg-transparent text-ds-text-primary',
-  group: 'rounded-ds-md border-0 bg-ds-surface-1 text-ds-text-primary shadow-none',
-  panel: 'rounded-ds-lg border border-ds-border bg-ds-surface-2 text-ds-text-primary [filter:var(--ds-filter-dialog)]',
+  group: 'curator-surface-group border-0 bg-ds-surface-1 text-ds-text-primary shadow-none',
+  panel: 'curator-surface-panel border border-ds-border bg-ds-surface-2 text-ds-text-primary [filter:var(--ds-filter-dialog)]',
   row: 'border-ds-border bg-transparent text-ds-text-primary'
 }
 

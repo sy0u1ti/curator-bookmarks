@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import { StatusBusyLoadingLabel } from './LoadingLabel.js'
-import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
 import {
   SHEEN_PROGRESS_BAR_CLASS,
   SHEEN_PROGRESS_TRACK_CLASS,
@@ -10,6 +9,7 @@ import {
 } from '../../ui/base/sheen-progress'
 import { useAvailabilityProgress } from './availability-overview-store.js'
 import { OPTION_SURFACE_CLASS, OPTION_VALUE_CLASS } from './option-layout-classes.js'
+import { StatusMessage } from '../../ui/base/StatusMessage'
 
 const AVAILABILITY_DECISION_PANEL_CLASS =
   `mt-5 ${OPTION_SURFACE_CLASS} p-[20px_22px] max-[760px]:p-4`
@@ -33,16 +33,7 @@ const AVAILABILITY_PROGRESS_COPY_CLASS =
 
 export function AvailabilityDecisionPanel({ children }: { children: ReactNode }) {
   const state = useAvailabilityProgress()
-  const hasMeaningfulStatus = Boolean(
-    state.statusCopy &&
-    state.statusCopy !== '仅检测适合外部访问的 http/https 书签；敏感地址会自动跳过。'
-  )
-  const hasRunSignal =
-    state.busy ||
-    state.durationLabel !== '未开始' ||
-    state.progressValue > 0 ||
-    hasMeaningfulStatus
-  const emptyEntered = useMotionEntrance(!hasRunSignal)
+  if (!state.visible) return null
 
   return (
     <div
@@ -57,54 +48,44 @@ export function AvailabilityDecisionPanel({ children }: { children: ReactNode })
         </div>
         <span className={OPTION_VALUE_CLASS}>{state.durationLabel}</span>
       </div>
-      {hasRunSignal ? (
-        <>
-          <div className={AVAILABILITY_PROGRESS_ROW_CLASS}>
-            <div>
-              <span className={AVAILABILITY_LABEL_CLASS}>检测进度</span>
-              <strong className={AVAILABILITY_PROGRESS_META_TITLE_CLASS}>
-                {state.busy ? (
-                  <StatusBusyLoadingLabel label={state.progressLabel} />
-                ) : (
-                  state.progressLabel
-                )}
-              </strong>
-            </div>
-            <div>
-              <div
-                className={AVAILABILITY_PROGRESS_TRACK_CLASS}
-                style={getSheenProgressTrackStyle(state.progressValue, state.busy)}
-                aria-label="可用性检测进度"
-                aria-valuemax={100}
-                aria-valuemin={0}
-                aria-valuenow={normalizeSheenProgressPercent(state.progressValue)}
-                role="progressbar"
-              >
-                <span
-                  aria-hidden="true"
-                  className={AVAILABILITY_PROGRESS_BAR_CLASS}
-                  style={getSheenProgressBarStyle(state.progressValue)}
-                />
-              </div>
-              <p
-                className={AVAILABILITY_PROGRESS_COPY_CLASS}
-                aria-atomic="true"
-                aria-live="polite"
-                role="status"
-              >
-                {state.statusCopy}
-              </p>
-            </div>
-          </div>
-          {children}
-        </>
-      ) : (
-        <div className={['t-stagger mt-4 border-t border-ds-border-subtle pt-4', emptyEntered ? 'is-shown' : ''].filter(Boolean).join(' ')}>
-          <strong className="t-stagger-line t-stagger-line--1 block text-sm font-semibold text-ds-text-primary">
-            尚未开始检测
+      <div className={AVAILABILITY_PROGRESS_ROW_CLASS}>
+        <div>
+          <span className={AVAILABILITY_LABEL_CLASS}>检测进度</span>
+          <strong className={AVAILABILITY_PROGRESS_META_TITLE_CLASS}>
+            {state.busy ? (
+              <StatusBusyLoadingLabel label={state.progressLabel} />
+            ) : (
+              state.progressLabel
+            )}
           </strong>
         </div>
-      )}
+        <div>
+          <div
+            className={AVAILABILITY_PROGRESS_TRACK_CLASS}
+            style={getSheenProgressTrackStyle(state.progressValue, state.busy)}
+            aria-label="可用性检测进度"
+            aria-valuemax={100}
+            aria-valuemin={0}
+            aria-valuenow={normalizeSheenProgressPercent(state.progressValue)}
+            role="progressbar"
+          >
+            <span
+              aria-hidden="true"
+              className={AVAILABILITY_PROGRESS_BAR_CLASS}
+              style={getSheenProgressBarStyle(state.progressValue)}
+            />
+          </div>
+          <StatusMessage
+            className={AVAILABILITY_PROGRESS_COPY_CLASS}
+            aria-atomic="true"
+            aria-live="polite"
+            role="status"
+          >
+            {state.statusCopy}
+          </StatusMessage>
+        </div>
+      </div>
+      {children}
     </div>
   )
 }

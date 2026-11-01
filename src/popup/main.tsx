@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client'
-import '../styles/globals.css'
+import '../styles/compact-globals.css'
 import './popup.css'
 import { initSquircleEngine } from '../shared/squircle-engine'
 import { PopupApp } from './PopupApp'

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import { AiSetupPrompt } from '../../ui/ai/AiSetupPrompt'
 import { Icon } from '../../ui/icons/Icon'
 import { Button } from '../../ui/base/Button'
+import { StableLabel, StatusMessage } from '../../ui/base/StatusMessage'
 import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../../ui/base/Collapsible'
 import { Input } from '../../ui/base/Input'
 import { cx } from '../../ui/base/utils'
@@ -92,16 +93,16 @@ const modalAiSetupPromptClass = [
   'grid grid-cols-[auto_minmax(0,1fr)] items-start gap-[9px]',
   '[&_.ai-setup-prompt-copy]:grid [&_.ai-setup-prompt-copy]:gap-1',
   '[&_.ai-setup-prompt-icon]:inline-flex [&_.ai-setup-prompt-icon]:h-[26px] [&_.ai-setup-prompt-icon]:w-[26px] [&_.ai-setup-prompt-icon]:items-center [&_.ai-setup-prompt-icon]:justify-center',
-  '[&_.ai-setup-prompt-icon]:rounded-lg [&_.ai-setup-prompt-icon]:border [&_.ai-setup-prompt-icon]:border-white/10 [&_.ai-setup-prompt-icon]:bg-ds-text-primary/[0.04] [&_.ai-setup-prompt-icon]:text-ds-text-secondary'
+  '[&_.ai-setup-prompt-icon]:rounded-ds-sm [&_.ai-setup-prompt-icon]:border [&_.ai-setup-prompt-icon]:border-white/10 [&_.ai-setup-prompt-icon]:bg-ds-text-primary/[0.04] [&_.ai-setup-prompt-icon]:text-ds-text-secondary'
 ].join(' ')
 const modalNoteClass = 'm-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 const modalActionsClass = 'flex items-center justify-between gap-2.5'
 const modalStackClass =
-  'relative grid h-full max-h-full min-h-0 w-full min-w-0 place-items-center overflow-hidden p-[18px] outline-none'
+  'relative grid h-full max-h-full min-h-0 w-full min-w-0 place-items-center overflow-hidden p-4 outline-none'
 const modalDismissLayerClass =
   'absolute inset-0 z-0 block cursor-default border-0 bg-transparent'
 const modalCardShellClass = [
-  'relative z-[1] flex min-h-0 flex-col gap-4 overflow-hidden rounded-ds-xl border border-ds-border bg-ds-surface-1 p-[18px] text-ds-text-primary shadow-none outline-none',
+  'relative z-[1] flex min-h-0 flex-col gap-4 overflow-hidden rounded-ds-card border border-ds-border bg-ds-surface-1 ds-inset-card text-ds-text-primary shadow-none outline-none',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.86)] focus-visible:outline-offset-2'
 ].join(' ')
 const modalStandardCardClass = cx(
@@ -341,7 +342,7 @@ function SmartFolderModal({
         disabled={view.saving}
       />
       <PopupFolderPickerHost id="smart-folder-list" className={modalListClass} mode="smart" />
-      {view.error ? <p id="smart-folder-error" className="m-0 shrink-0 text-xs leading-normal text-ds-danger-text" role="alert">{view.error}</p> : null}
+      <StatusMessage id="smart-folder-error" className="m-0 text-xs leading-normal" tone="error">{view.error}</StatusMessage>
       <footer className={cx(modalActionsClass, 'shrink-0')}>
         <div className="min-w-0 flex-1">
           <p className={modalCardLabelClass}>保存到</p>
@@ -358,7 +359,7 @@ function SmartFolderModal({
           onClick={() => dispatchPopupModalAction('save-smart-folder')}
           unstyled
         >
-          {view.saveLabel}
+         <StableLabel text={view.saveLabel} reserve={['保存书签', '保存更改']} />
         </Button>
       </footer>
     </section>

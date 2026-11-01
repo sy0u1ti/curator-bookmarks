@@ -1,12 +1,14 @@
 import { useEffect, useRef } from 'react'
 import { AVAILABILITY_NAVIGATION_CONCURRENCY_LIMIT } from '../../shared/messages.js'
 import { Button } from '../../ui/base/Button'
+import { StableLabel, StatusMessage } from '../../ui/base/StatusMessage'
 import { Input } from '../../ui/base/Input'
 import { Popover } from '../../ui/base/Popover'
 import { cx } from '../../ui/base/utils'
 import { ButtonBusyLoadingLabel } from './LoadingLabel.js'
 import { handleAvailabilityControlsAction } from '../options-controller'
 import { useAvailabilityControls } from './availability-controls-store.js'
+import { RunActionSlot } from './RunActionSlot'
 import {
   OPTION_RUN_ACTIONS_CLASS,
   OPTION_RUN_ACTION_BUTTON_CLASS,
@@ -16,7 +18,7 @@ import {
 const AVAILABILITY_PERMISSION_CARD_CLASS =
   OPTION_RUN_CELL_CLASS
 const AVAILABILITY_PERMISSION_META_CLASS =
-  'flex flex-wrap items-center justify-between gap-3 max-[760px]:flex-col max-[760px]:items-start'
+  'flex min-w-0 items-center justify-between gap-3'
 const AVAILABILITY_PERMISSION_TITLE_CLASS =
   'block text-[15px] font-[650] leading-normal tracking-[0] text-ds-text-primary'
 const AVAILABILITY_PERMISSION_COPY_CLASS =
@@ -87,6 +89,7 @@ function BusyLabel({
 
 export function AvailabilityControls() {
   const state = useAvailabilityControls()
+  const active = !state.pauseHidden || !state.stopHidden
   const concurrencyInputRef = useRef<HTMLInputElement | null>(null)
   const badgeClassName = cx(
     AVAILABILITY_BADGE_BASE_CLASS,
@@ -127,9 +130,9 @@ export function AvailabilityControls() {
             {state.badgeText}
           </span>
         </div>
-        <p className={AVAILABILITY_PERMISSION_COPY_CLASS}>
+        <StatusMessage className={AVAILABILITY_PERMISSION_COPY_CLASS} tone={state.badgeTone === 'danger' ? 'error' : 'neutral'}>
           {state.permissionCopy}
-        </p>
+        </StatusMessage>
       </div>
 
       <div className={AVAILABILITY_CONTROLS_ACTIONS_CLASS}>
@@ -230,11 +233,12 @@ export function AvailabilityControls() {
             </div>
           </Popover>
         </div>
-        <Button
+        <RunActionSlot active={active} primary={<Button
           className={AVAILABILITY_BUTTON_MOBILE_FULL_CLASS}
           type="button"
           variant="primary"
-          disabled={state.actionDisabled}
+          disabled={state.actionDisabled || active}
+          tabIndex={active ? -1 : undefined}
           focusableWhenDisabled={state.actionDisabled}
           onClick={() => handleAvailabilityControlsAction({ action: 'start' })}
         >
@@ -243,27 +247,28 @@ export function AvailabilityControls() {
             label={state.actionLabel}
             reserveLabels={AVAILABILITY_ACTION_LABELS}
           />
-        </Button>
-        {state.pauseHidden ? null : (
+        </Button>}>
           <Button
-            className={AVAILABILITY_BUTTON_MOBILE_FULL_CLASS}
+            className={state.pauseHidden ? 'invisible' : undefined}
             size="sm"
             type="button"
             variant="secondary"
-            disabled={state.pauseDisabled}
+            disabled={state.pauseDisabled || state.pauseHidden}
+            aria-hidden={state.pauseHidden || undefined}
+            tabIndex={state.pauseHidden ? -1 : undefined}
             focusableWhenDisabled={state.pauseDisabled}
             onClick={() => handleAvailabilityControlsAction({ action: 'pause-toggle' })}
           >
-            {state.pauseLabel}
+            <StableLabel text={state.pauseLabel} reserve={['继续检测', '暂停检测']} />
           </Button>
-        )}
-        {state.stopHidden ? null : (
           <Button
-            className={AVAILABILITY_BUTTON_MOBILE_FULL_CLASS}
+            className={state.stopHidden ? 'invisible' : undefined}
             size="sm"
             type="button"
             variant="secondary"
-            disabled={state.stopDisabled}
+            disabled={state.stopDisabled || state.stopHidden}
+            aria-hidden={state.stopHidden || undefined}
+            tabIndex={state.stopHidden ? -1 : undefined}
             focusableWhenDisabled={state.stopDisabled}
             onClick={() => handleAvailabilityControlsAction({ action: 'stop' })}
           >
@@ -273,7 +278,7 @@ export function AvailabilityControls() {
               reserveLabels={AVAILABILITY_STOP_LABELS}
             />
           </Button>
-        )}
+        </RunActionSlot>
       </div>
     </>
   )

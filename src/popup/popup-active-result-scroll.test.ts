@@ -89,7 +89,7 @@ function testTopRevealClampsToStart(): void {
 function testScrollBehaviorRespectsReducedMotion(): void {
   assert(getActiveResultRevealScrollBehavior(false, false) === 'smooth', 'non-keyboard active result reveals should use smooth scrolling by default')
   assert(getActiveResultRevealScrollBehavior(true, false) === 'auto', 'active result reveal should avoid smooth scrolling for reduced motion')
-  assert(getActiveResultRevealScrollBehavior(false, true) === 'auto', 'held keyboard navigation should scroll immediately so the highlight cannot outrun the viewport')
+  assert(getActiveResultRevealScrollBehavior(false, true) === 'auto', 'individual keyboard steps keep their immediate reveal; held navigation has a separate retargetable scroll owner')
 }
 
 function testIndicatorGeometryClipsToScrollViewport(): void {
@@ -124,7 +124,7 @@ function testContentHostUsesSmoothThresholdReveal(): void {
     'PopupContentHost should not use offsetTop minus container offset after the list became a positioned scroll container.'
   )
   assert(
-    source.includes('getActiveResultRevealScrollTop') && source.includes('getActiveResultContentTop'),
+    source.includes('getActiveResultRevealScrollTop') && source.includes('getPopupRowOffset'),
     'PopupContentHost should route active-row reveal through the tested threshold helper.'
   )
   assert(
@@ -133,11 +133,11 @@ function testContentHostUsesSmoothThresholdReveal(): void {
   )
   assert(
     source.includes('isKeyboardNavigationActive()') && source.includes('behavior: revealScrollBehavior'),
-    'PopupContentHost should keep repeated keyboard navigation synchronized with immediate scrolling.'
+    'PopupContentHost should retain immediate scrolling for individual keyboard steps.'
   )
   assert(
-    source.includes('getClippedActiveResultIndicatorGeometry(workspaceRect, targetRect, viewportRect)'),
-    'PopupContentHost should clip the workspace indicator to the active pane scroll viewport.'
+    source.includes('getActiveResultTrackingGeometry(workspaceRect, {'),
+    'PopupContentHost should track and clip the indicator using its cached active-pane measurement.'
   )
 }
 

@@ -6,7 +6,6 @@ import { normalizeAiNamingSettings } from './sections/ai-settings'
 import { actionFeedback, IDLE_ACTION_FEEDBACK } from '../shared/action-feedback'
 import { findModelsDevModel } from '../shared/models-dev'
 import { getModelsDevSnapshot, loadModelsDevSnapshot, subscribeModelsDevSnapshot } from '../shared/models-dev-cache'
-import { createModelsDevSyncService, type ModelsDevMessage } from '../shared/models-dev-sync'
 import { getModelReasoningProfile, getReasoningEffortOptions, resolveReasoningEffortForModel } from '../shared/ai-reasoning'
 import { STORAGE_KEYS } from '../shared/constants'
 
@@ -47,12 +46,7 @@ const write = async (values: Record<string, unknown>) => {
   for (const listener of storageListeners) listener(changes, 'local')
 }
 const read = async (keys: string[] = Object.keys(stored)) => Object.fromEntries(keys.map((key) => [key, stored[key]]))
-const service = createModelsDevSyncService({
-  read,
-  write,
-  hasPermission: async () => probe.permissionAllowed,
-  schedule: async (when) => { probe.schedule = when },
-  fetch: async (url, init) => {
+window.fetch = async (url, init) => {
     probe.catalogRequests.push({ url: String(url), credentials: init?.credentials, body: init?.body })
     if (probe.catalogMode === 'error') throw new Error('isolated network failure')
     if (probe.catalogMode === 'delayed') await new Promise<void>((resolve) => { probe.completeCatalog = resolve })
@@ -61,26 +55,30 @@ const service = createModelsDevSyncService({
       ;(data.providers.deepseek.models['deepseek-flash'] as any).reasoning_options = [{ type: 'budget_tokens', min: 128, max: 32768 }]
     }
     return new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json', etag: '"ui-fixture"' } })
-  }
-})
+}
 ;(window as any).chrome = {
   runtime: {
     id: 'isolated-ui-fixture', getURL: (path: string) => `/${path}`,
-    sendMessage: async (message: ModelsDevMessage) => {
-      if (message.type === 'models-dev:refresh') return service.refresh()
-      const result = await service.configure(message.autoUpdate)
-      if (result.ok && message.autoUpdate) void service.refresh(false)
-      return result
-    }
+    sendMessage: async () => { throw new Error('Disconnected worker fixture') }
   },
   storage: {
-    local: { get: (keys: string[], callback: (values: Record<string, unknown>) => void) => { void read(keys).then(callback) } },
+    local: {
+      get: (keys: string[], callback: (values: Record<string, unknown>) => void) => { void read(keys).then(callback) },
+      set: (values: Record<string, unknown>, callback: () => void) => { void write(values).then(callback) }
+    },
     onChanged: {
       addListener: (listener: (changes: Record<string, chrome.storage.StorageChange>, area: string) => void) => storageListeners.add(listener),
       removeListener: (listener: (changes: Record<string, chrome.storage.StorageChange>, area: string) => void) => storageListeners.delete(listener)
     }
   },
-  permissions: { request: async (query: unknown) => { probe.permissionRequests.push(query); return probe.permissionAllowed } }
+  permissions: {
+    request: async (query: unknown) => { probe.permissionRequests.push(query); return probe.permissionAllowed },
+    contains: async () => probe.permissionAllowed
+  },
+  alarms: {
+    clear: async () => { probe.schedule = null; return true },
+    create: async (_name: string, info: { when: number }) => { probe.schedule = info.when }
+  }
 }
 let modelsFeedback = IDLE_ACTION_FEEDBACK
 let modelsStatus = ''
