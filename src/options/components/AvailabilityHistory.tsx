@@ -289,7 +289,7 @@ function HistoryRunCard({
         <div className={HISTORY_RUN_TREND_CLASS}>
           <div className={HISTORY_TREND_META_CLASS}>
             <strong className={HISTORY_TREND_META_TITLE_CLASS}>异常 {abnormalCount} 条</strong>
-            <span className={HISTORY_TREND_META_COPY_CLASS}>低置信 {reviewCount} · 高置信 {failedCount}</span>
+            <span className={HISTORY_TREND_META_COPY_CLASS}>待确认 {reviewCount} · 无法访问 {failedCount}</span>
           </div>
           <div className={HISTORY_TREND_BAR_TRACK_CLASS} aria-hidden="true">
             <span className={HISTORY_TREND_BAR_CLASS} style={{ width: `${width}%` }} />

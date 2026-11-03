@@ -78,6 +78,7 @@ export interface NavigationNetworkEvidence {
   fromCache?: boolean
   contentType?: string
   attachment?: boolean
+  challenge?: boolean
   retryAfterMs?: number
   redirects: NavigationNetworkRedirect[]
   timing: NavigationNetworkTiming
@@ -101,6 +102,7 @@ export interface ProbeResult {
   statusCode?: number
   retryAfterMs?: number
   errorCode?: string
+  requiresLogin?: boolean
 }
 
 export interface NavigationEvidence {
@@ -120,6 +122,8 @@ export interface AvailabilityResult extends BookmarkRecord {
   finalUrl: string
   detail: string
   errorCode?: string
+  requiresLogin?: boolean
+  verifiedFailure?: 'http-missing' | 'repeated-network'
   historyStatus?: 'new' | 'persistent' | ''
   abnormalStreak?: number
 }

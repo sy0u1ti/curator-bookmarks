@@ -25,7 +25,7 @@ const DETAIL_TEXT = 'm-0 text-[13px] leading-[1.65] text-ds-text-secondary [over
 
 export function AvailabilityResults({ kind }: { kind: AvailabilityResultPanelKind }) {
   const state = useAvailabilityResultsState(kind)
-  if (!state.results.length) return <OptionEmptyState title={kind === 'failed' ? '没有高置信异常' : '没有待确认异常'} description={state.emptyMessage} />
+  if (!state.results.length) return <OptionEmptyState title={state.emptyMessage} />
   return <>{state.results.map(result => <AvailabilityResultCard key={result.bookmarkId} kind={kind} result={result} />)}</>
 }
 
@@ -36,12 +36,6 @@ function AvailabilityResultCard({ kind, result }: { kind: AvailabilityResultPane
     separatorBefore: action.action === 'ignore-bookmark',
     onSelect: () => handleAvailabilityResultAction({ action: action.action, bookmarkId: result.bookmarkId, panel: kind })
   }))
-  if (result.actionButton) {
-    const action = result.actionButton
-    actions.push({ id: action.action, label: action.label, disabled: action.disabled, separatorBefore: true,
-      description: action.action === 'promote-failed' ? '手动归类，移入高置信异常区' : '保留结果，等待进一步确认',
-      onSelect: () => handleAvailabilityResultAction({ action: action.action, bookmarkId: result.bookmarkId, panel: kind }) })
-  }
   return (
     <article data-availability-result={result.bookmarkId} className={cx(CARD_CLASS, result.selected && 'border-ds-border-hover bg-ds-selected')}>
       <div className="flex min-w-0 items-start gap-3">
@@ -80,9 +74,14 @@ function AvailabilityResultCard({ kind, result }: { kind: AvailabilityResultPane
           {result.url ? <Button size="sm" variant="secondary" aria-label={result.openLabel} render={<a aria-label={result.openLabel} href={result.url} target="_blank" rel="noreferrer noopener" />}>
             <Icon name="ExternalLink" size={14} aria-hidden="true" />打开链接
           </Button> : null}
-          {result.selectable ? <Button size="sm" variant="secondary" disabled={result.retestDisabled} aria-label={'重新检测：' + result.title}
+          {result.selectable ? <Button size="sm" variant="secondary" disabled={result.retestDisabled} aria-label={(result.retestLabel || '重新检测') + '：' + result.title}
             onClick={() => handleAvailabilityResultAction({ action: 'retest', bookmarkId: result.bookmarkId, panel: kind })}>
-            <Icon name="RefreshCw" size={14} aria-hidden="true" />重新检测
+            <Icon name="RefreshCw" size={14} aria-hidden="true" />{result.retestLabel || '重新检测'}
+          </Button> : null}
+          {result.selectable ? <Button size="sm" variant="danger" disabled={result.deleteDisabled}
+            aria-label={'删除书签：' + result.title}
+            onClick={() => handleAvailabilityResultAction({ action: 'delete', bookmarkId: result.bookmarkId, panel: kind })}>
+            <Icon name="Trash2" size={14} aria-hidden="true" />删除
           </Button> : null}
           <OptionActionsMenu actions={actions} label={'更多操作：' + result.title} />
         </>}

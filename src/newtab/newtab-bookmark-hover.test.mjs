@@ -11,7 +11,8 @@ await mkdir(output, { recursive: true })
 await mkdir(profileRoot, { recursive: true })
 const report = {}
 
-for (const deviceScaleFactor of [1, 1.25, 1.5, 2]) {
+// A fractional ratio exposes subpixel glyph re-snapping; an integer one covers the common case.
+for (const deviceScaleFactor of [1.25, 2]) {
   const profile = await mkdtemp(path.join(profileRoot, 'bookmark-hover-'))
   // Set DPI on the context itself: screenshot capture can reset a CDP-only override.
   const context = await chromium.launchPersistentContext(profile, {
@@ -66,4 +67,4 @@ for (const deviceScaleFactor of [1, 1.25, 1.5, 2]) {
 }
 
 await writeFile(path.join(output, 'verification.json'), JSON.stringify(report, null, 2))
-console.log('Bookmark hover: single/multiline glyph pixels, neighboring tiles, and interrupted exits are stable at 1x, 1.25x, 1.5x, and 2x DPI.')
+console.log('Bookmark hover: single/multiline glyph pixels, neighboring tiles, and interrupted exits are stable at 1.25x and 2x DPI.')

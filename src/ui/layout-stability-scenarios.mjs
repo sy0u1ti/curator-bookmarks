@@ -4,7 +4,7 @@ const cases = {
   feedback: { selectors: ['#fixture-status', '#fixture-stable-button', '#fixture-tail'], phases: ['saving', 'long-error', 'success', 'idle'] },
   general: { selectors: ['#fixture-features', '#fixture-snapshot', '#fixture-shortcuts', '#fixture-tail'], phases: ['loading', 'idle', 'saving', 'error', 'long-error', 'success', 'idle'] },
   ai: { selectors: ['#ai > div:first-of-type', '#ai-title', '#fixture-tail'], phases: ['running', 'paused', 'error', 'long-error', 'success', 'idle', 'selected', 'idle'] },
-  availability: { selectors: ['#availability > div:first-of-type', '#availability-title', '#fixture-tail'], phases: ['running', 'paused', 'error', 'long-error', 'success', 'idle', 'selected', 'idle'] },
+  availability: { selectors: ['#availability > div:first-of-type', '#availability-title', '#fixture-tail'], phases: ['loading', 'pending', 'idle', 'running', 'paused', 'error', 'long-error', 'success', 'idle', 'selected', 'idle'] },
   duplicates: { selectors: ['[data-duplicate-group]', '[data-bookmark-id="copy"]', '#fixture-tail'], phases: ['selected', 'all-selected', 'idle'] },
   recycle: { selectors: ['#recycle', '#fixture-tail'], phases: ['selected', 'idle'] },
   redirects: { selectors: ['#redirects', '#fixture-tail'], phases: ['selected', 'idle'] },

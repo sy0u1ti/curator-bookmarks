@@ -30,7 +30,8 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
 const origin = 'http://options-ui.example.net:' + server.address().port
 const manifestPath = path.join(extensionPath, 'manifest.json')
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-manifest.host_permissions = [...manifest.host_permissions, 'http://options-ui.example.net/*', 'http://127.0.0.1/*']
+// The availability runner also requests each HTTP bookmark's HTTPS upgrade.
+manifest.host_permissions = [...manifest.host_permissions, 'http://options-ui.example.net/*', 'https://options-ui.example.net/*', 'http://127.0.0.1/*']
 await writeFile(manifestPath, JSON.stringify(manifest))
 let context
 let page
@@ -184,7 +185,6 @@ try {
     assert.ok(buttonStyle.height >= 31.99 && buttonStyle.border >= 1, `detail actions need an obvious button affordance: ${JSON.stringify(buttonStyle)}`)
     await details.click()
     await card.getByText('检测依据', { exact: true }).waitFor({ state: 'visible' })
-    assert.ok((await card.innerText()).includes('私有资源和登录后内容'), 'full evidence must remain available')
     await page.screenshot({ path: path.join(output, 'availability-details.png'), animations: 'disabled' })
     await details.press('Space')
     await card.getByText('检测依据', { exact: true }).waitFor({ state: 'hidden' })
@@ -192,8 +192,7 @@ try {
     await more.focus(); await more.press('ArrowDown')
     const menu = page.getByRole('menu', { name: '更多操作：' + seeded.guide.title, exact: true })
     await menu.waitFor({ state: 'visible' })
-    assert.equal(await menu.getByRole('menuitem').count(), 5)
-    assert.ok((await menu.innerText()).includes('子文件夹'))
+    assert.equal(await menu.getByRole('menuitem').count(), 4)
     await page.keyboard.press('Escape'); await menu.waitFor({ state: 'hidden' })
     assert.equal(await more.evaluate(node => node === document.activeElement), true, 'Escape restores trigger focus')
     const restrictedSelection = page.locator('#availability article').filter({ hasText: seeded.restricted.title }).getByRole('checkbox')
@@ -317,6 +316,8 @@ try {
     }
     await page.goto(base + '#duplicates')
     const duplicates = page.locator('#duplicates')
+    // Selection actions float in a portaled dock outside the section.
+    const duplicateDock = page.getByRole('region', { name: '已选重复书签操作', exact: true })
     const applyKeepRule = async (rule) => {
       await duplicates.getByRole('combobox', { name: /保留规则/ }).click()
       await page.getByRole('option', { name: rule, exact: true }).click()
@@ -324,14 +325,14 @@ try {
     }
     for (const strategy of ['最新', '最早', '路径最短', '有标签', '新标签页来源', '最近访问']) {
       await applyKeepRule(`保留${strategy}`)
-      await duplicates.getByText('已选 2 条待移入回收站', { exact: true }).waitFor()
+      await duplicateDock.getByText('已选 2 条待移入回收站', { exact: true }).waitFor()
     }
     await applyKeepRule('按推荐保留')
     const group = duplicates.locator('article').first()
     for (const checkbox of await group.getByRole('checkbox').all()) await checkbox.check()
-    assert.equal(await duplicates.getByRole('button', { name: '移入回收站', exact: true }).isDisabled(), true)
+    assert.equal(await duplicateDock.getByRole('button', { name: '移入回收站', exact: true }).isDisabled(), true)
     await applyKeepRule('保留最早')
-    await duplicates.getByRole('button', { name: '移入回收站', exact: true }).click()
+    await duplicateDock.getByRole('button', { name: '移入回收站', exact: true }).click()
     await confirmMutation()
     await page.waitForFunction(async url => (await chrome.bookmarks.search({ url })).length === 1, origin + '/article')
     const recycled = await worker.evaluate(async () => (await chrome.storage.local.get('curatorBookmarkRecycleBin')).curatorBookmarkRecycleBin)
@@ -363,9 +364,9 @@ try {
       }
     })
     await apply.click()
-    const failedStatus = page.locator('#ai [role="alert"]').filter({ hasText: '分析状态' })
-    await failedStatus.getByText('操作失败', { exact: true }).waitFor()
-    assert.ok((await failedStatus.innerText()).includes('测试改名失败'))
+    // Only the status message is the live region; the badge carries the visible state.
+    await page.locator('#ai').getByText('操作失败', { exact: true }).waitFor()
+    await page.locator('#ai [role="alert"]').filter({ hasText: '测试改名失败' }).waitFor()
     assert.equal((await worker.evaluate(id => chrome.bookmarks.get(id), seeded.guide.id))[0].title, seeded.guide.title)
     await worker.evaluate(async () => {
       const key = 'curatorBookmarkAiAnalysisCheckpoint'
@@ -373,15 +374,14 @@ try {
       await chrome.storage.local.set({ [key]: { ...saved, outcome: 'failed' } })
     })
     await page.reload()
-    await page.locator('#ai [role="alert"]').getByText('运行失败', { exact: true }).waitFor()
+    await page.locator('#ai').getByText('运行失败', { exact: true }).waitFor()
     await apply.click()
     await page.waitForFunction(async id => (await chrome.bookmarks.get(id))[0].title === 'iOS 自签名安装指南', seeded.guide.id)
     const renamed = await worker.evaluate(id => chrome.bookmarks.get(id), seeded.guide.id)
     assert.equal(renamed[0].url, seeded.guide.url)
     assert.equal(renamed[0].parentId, seeded.guide.parentId)
-    const aiStatus = page.locator('#ai [role="status"]').filter({ hasText: '分析状态' })
-    await aiStatus.getByText('已应用 1 条书签命名建议。', { exact: true }).waitFor()
-    assert.equal(await page.locator('#ai [role="alert"]').filter({ hasText: '分析状态' }).count(), 0, 'A successful rename must not be announced as an error')
+    await page.locator('#ai [role="status"]').filter({ hasText: '已应用 1 条书签命名建议。' }).waitFor()
+    assert.equal(await page.locator('#ai [role="alert"]').filter({ hasText: '已应用 1 条书签命名建议。' }).count(), 0, 'A successful rename must not be announced as an error')
     await page.screenshot({ path: path.join(output, 'ai-applied.png'), animations: 'disabled' })
 
   }

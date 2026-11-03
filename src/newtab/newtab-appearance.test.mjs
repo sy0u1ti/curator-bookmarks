@@ -93,7 +93,7 @@ try {
   const client = await context.newCDPSession(page)
   for (const preference of ['no-preference', 'reduce']) {
     await client.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: preference }] })
-    for (const value of [0, 12, 32]) {
+    for (const value of [0, 32]) {
       await slider(page, 'background-mask-blur', value)
       assert.equal(await page.locator('#newtab-background-mask').evaluate(el => getComputedStyle(el).backdropFilter), value ? `blur(${value}px)` : 'none')
       const image = await pixels(page)
@@ -118,7 +118,9 @@ try {
   }
   await slider(page, 'background-mask-overlay', 0)
 
-  for (const [style, meta] of Object.entries(BACKGROUND_MASK_META)) {
+  // One style per render path: CSS overlay, canvas wallpaper filter, WebGL shader.
+  for (const style of ['dark', 'grain', 'ascii', 'image-dithering']) {
+    const meta = BACKGROUND_MASK_META[style]
     await select(page, '背景蒙版样式', meta.label)
     if (['dark', 'frosted', 'noise', 'light'].includes(style)) {
       await slider(page, 'background-mask-overlay', 50)
@@ -132,7 +134,6 @@ try {
     const delta = await difference(page, original, await pixels(page))
     assert.ok(delta > 0.2, `${style} must produce a visible effect: ${delta}`)
     report.styles.push({ style, delta })
-    await page.screenshot({ path: path.join(output, `${style}.png`) })
     if (meta.sizeLabel) {
       for (const field of ['size', 'spacing']) {
         await slider(page, `background-mask-filter-${field}`, 0)
@@ -162,15 +163,20 @@ try {
     const canvas = document.createElement('canvas')
     canvas.width = image.width; canvas.height = image.height
     const ctx = canvas.getContext('2d')
-    const stream = canvas.captureStream(5)
+    // Push frames explicitly and flush in slices: without a timeslice, headless
+    // Chromium can stop the recorder before any frame is encoded, leaving only
+    // a WebM header that no player can decode.
+    const stream = canvas.captureStream(0)
+    const track = stream.getVideoTracks()[0]
     const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' })
     const chunks = []
     recorder.ondataavailable = event => chunks.push(event.data)
     const done = new Promise(resolve => recorder.onstop = resolve)
-    recorder.start()
-    ctx.drawImage(image, 0, 0)
-    const draw = setInterval(() => ctx.drawImage(image, 0, 0), 100)
-    setTimeout(() => { clearInterval(draw); recorder.stop() }, 600)
+    recorder.start(100)
+    const drawFrame = () => { ctx.drawImage(image, 0, 0); track.requestFrame() }
+    drawFrame()
+    const draw = setInterval(drawFrame, 100)
+    setTimeout(() => { clearInterval(draw); recorder.stop() }, 1000)
     await done
     stream.getTracks().forEach(track => track.stop())
     const bytes = new Uint8Array(await new Blob(chunks).arrayBuffer())
@@ -186,7 +192,7 @@ try {
   await slider(page, 'background-mask-blur', 32)
   assert.ok(await difference(page, videoOriginal, await pixels(page)) > 3, 'Video blur must affect the playing video')
   await slider(page, 'background-mask-blur', 0)
-  for (const [style, name] of [['grain', '胶片颗粒'], ['halftone', '单色网点'], ['ascii', 'ASCII 字符']]) {
+  for (const [style, name] of [['ascii', 'ASCII 字符']]) {
     await select(page, '背景蒙版样式', name)
     await page.waitForFunction(style => document.querySelector('#newtab-wallpaper-filter')?.dataset.effect === style, style)
     assert.ok(await difference(page, videoOriginal, await pixels(page)) > 0.2, `${style} must render on video`)

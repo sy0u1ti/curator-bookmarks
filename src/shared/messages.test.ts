@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import {
+  AVAILABILITY_ENGINE_VERSION,
   AVAILABILITY_NAVIGATION_CONCURRENCY_LIMIT,
   AVAILABILITY_NAVIGATION_TIMEOUT_MAX_MS,
   AVAILABILITY_NAVIGATION_TIMEOUT_MIN_MS,
+  assertAvailabilityEngineReady,
   parseAvailabilityProbeMessage,
   parseBackupRestoreMessage,
   parseNavigationCancelMessage,
@@ -235,5 +237,24 @@ await assert.rejects(
     return true
   }
 )
+
+const engineMessages: unknown[] = []
+for (const version of [undefined, 1, AVAILABILITY_ENGINE_VERSION + 1, AVAILABILITY_ENGINE_VERSION]) {
+  Object.defineProperty(globalThis, 'chrome', {
+    configurable: true,
+    value: { runtime: { sendMessage: (message: unknown, callback: (response: unknown) => void) => {
+      engineMessages.push(message)
+      callback({ ok: true, result: { version } })
+    } } }
+  })
+  if (version === AVAILABILITY_ENGINE_VERSION) await assertAvailabilityEngineReady()
+  else await assert.rejects(assertAvailabilityEngineReady(), (error: unknown) => {
+    assert.equal((error as { code?: string }).code, 'availability-engine-mismatch')
+    assert.match((error as Error).message, /现有检测结果已保留/)
+    return true
+  })
+}
+assert.deepEqual(engineMessages, Array.from({ length: 4 }, () => ({ type: 'availability:engine' })),
+  'engine compatibility must not start any bookmark navigation or probe')
 
 console.log('Availability runtime message tests passed.')

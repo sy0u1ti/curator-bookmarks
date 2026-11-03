@@ -206,7 +206,9 @@ export function AvailabilityControls() {
                 }}
               />
             </label>
-            <p className={SETTINGS_NOTE_CLASS}>超时或 HTTP 429 时会自动降速。</p>
+            <StatusMessage className={SETTINGS_NOTE_CLASS} tone={state.settingsError ? 'error' : 'neutral'}>
+              {state.settingsError || '超时或 HTTP 429 时会自动降速。'}
+            </StatusMessage>
             <div className={SETTINGS_ACTIONS_CLASS}>
               <Button
                 className={AVAILABILITY_BUTTON_MOBILE_FULL_CLASS}
@@ -249,26 +251,20 @@ export function AvailabilityControls() {
           />
         </Button>}>
           <Button
-            className={state.pauseHidden ? 'invisible' : undefined}
             size="sm"
             type="button"
             variant="secondary"
             disabled={state.pauseDisabled || state.pauseHidden}
-            aria-hidden={state.pauseHidden || undefined}
-            tabIndex={state.pauseHidden ? -1 : undefined}
             focusableWhenDisabled={state.pauseDisabled}
             onClick={() => handleAvailabilityControlsAction({ action: 'pause-toggle' })}
           >
             <StableLabel text={state.pauseLabel} reserve={['继续检测', '暂停检测']} />
           </Button>
           <Button
-            className={state.stopHidden ? 'invisible' : undefined}
             size="sm"
             type="button"
             variant="secondary"
             disabled={state.stopDisabled || state.stopHidden}
-            aria-hidden={state.stopHidden || undefined}
-            tabIndex={state.stopHidden ? -1 : undefined}
             focusableWhenDisabled={state.stopDisabled}
             onClick={() => handleAvailabilityControlsAction({ action: 'stop' })}
           >

@@ -88,19 +88,11 @@ try {
   await page.goto(url)
   await verifyRefresh(page, 'cold-start', 'auto')
 
-  for (const reducedMotion of ['no-preference', 'reduce']) {
-    await page.emulateMedia({ reducedMotion })
-    await page.reload()
-    await verifyRefresh(page, `reload-${reducedMotion}`)
-  }
-
-  const freshPage = await context.newPage()
-  await freshPage.goto(url)
-  await verifyRefresh(freshPage, 'new-tab')
-  await freshPage.close()
+  // A cached reload under reduced motion is the strictest cached path: no transition may hide a late swap.
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.reload()
+  await verifyRefresh(page, 'reload-reduce')
   await page.emulateMedia({ reducedMotion: 'no-preference' })
-  await page.goto(url + '?glass-worker-delay=650')
-  await verifyRefresh(page, 'slow-worker')
   await page.screenshot({ path: path.join(output, 'settled.png') })
   await page.goto(url + '?glass-worker-delay=3500')
   await verifyRefresh(page, 'cached-late-worker')

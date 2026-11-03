@@ -15,7 +15,7 @@ export type AvailabilityResultActionDetail =
       panel: AvailabilityResultPanelKind
     }
   | {
-      action: 'promote-failed' | 'demote-review' | 'retest'
+      action: 'retest' | 'delete'
       bookmarkId: string
       panel: AvailabilityResultPanelKind
     }
@@ -26,12 +26,6 @@ export type AvailabilityResultActionDetail =
     }
 
 export interface AvailabilityResultCardViewModel {
-  actionButton: {
-    action: 'promote-failed' | 'demote-review'
-    disabled: boolean
-    label: string
-    ariaLabel: string
-  } | null
   badgeText: string
   bookmarkId: string
   evidenceCopy: string
@@ -40,9 +34,10 @@ export interface AvailabilityResultCardViewModel {
   openLabel: string
   path: string
   quickActions: AvailabilityQuickActionViewModel[]
-  recommendation: string
   summary: string
   retestDisabled: boolean
+  retestLabel?: string
+  deleteDisabled?: boolean
   selectable: boolean
   selected: boolean
   selectionDisabled: boolean

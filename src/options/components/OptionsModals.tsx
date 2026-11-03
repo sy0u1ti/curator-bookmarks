@@ -105,7 +105,7 @@ export function OptionsModals() {
         open={modals.delete.open}
       >
         <>
-          <h2 id="delete-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>批量删除高置信异常书签？</h2>
+          <h2 id="delete-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>删除本区无法访问的书签？</h2>
           <p id="delete-modal-copy" className={OPTIONS_MODAL_COPY_CLASS}>
             {modals.delete.copy}
           </p>
@@ -115,7 +115,7 @@ export function OptionsModals() {
               ref={cancelDeleteRef}
               type="button"
               variant="secondary"
-              aria-label="取消批量删除高置信异常书签"
+              aria-label="取消删除本区书签"
               onClick={() => handleOptionsModalAction({ action: 'cancel', modal: 'delete' })}
             >
               取消
@@ -124,7 +124,7 @@ export function OptionsModals() {
               className={cx(OPTIONS_MODAL_BUTTON_CLASS, OPTIONS_MODAL_DANGER_BUTTON_CLASS)}
               type="button"
               variant="danger"
-              aria-label="确认批量删除高置信异常书签"
+              aria-label="确认删除本区书签"
               disabled={modals.delete.confirmDisabled}
               focusableWhenDisabled={modals.delete.confirmDisabled}
               onClick={() => handleOptionsModalAction({ action: 'confirm', modal: 'delete' })}

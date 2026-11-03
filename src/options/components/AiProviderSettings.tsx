@@ -230,9 +230,9 @@ export function AiProviderSettings({
         <div className={AI_PROVIDER_ACTIONS_CLASS}>
           <StatusMessage
             className="m-0 text-[13px] leading-relaxed text-ds-text-secondary"
-            tone={state.connectivityTone === 'danger' ? 'error' : 'neutral'}
+            tone={state.saveError || (!state.saveStatusText && state.connectivityTone === 'danger') ? 'error' : 'neutral'}
           >
-            {state.saveStatusText || (state.connectivityVisible ? state.connectivityCopy : '')}
+            {state.saveError || state.saveStatusText || (state.connectivityVisible ? state.connectivityCopy : '')}
           </StatusMessage>
           <div className={AI_PROVIDER_ACTION_BUTTONS_CLASS}>
             <Button

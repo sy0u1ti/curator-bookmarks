@@ -126,6 +126,7 @@ export const availabilityState = {
   settingsOpen: false,
   settingsStatus: '',
   settingsStatusTone: 'muted',
+  settingsError: '',
   settingsSaving: false,
   settings: {
     concurrency: 2,
@@ -177,6 +178,7 @@ export const managerState = {
   shortcutStatus: 'loading',
   shortcutStatusTone: 'muted',
   inboxSettings: getDefaultInboxSettings(),
+  inboxSettingsSaving: false,
   inboxSettingsStatus: ''
 }
 
@@ -184,6 +186,7 @@ export const contentSnapshotState = {
   settings: { ...DEFAULT_CONTENT_SNAPSHOT_SETTINGS } as ContentSnapshotSettings,
   index: { version: 1, updatedAt: 0, records: {} } as ContentSnapshotIndex,
   statusMessage: '',
+  aiRunError: '',
   aiRunSavedCount: 0,
   aiRunFailedCount: 0
 }
@@ -213,6 +216,8 @@ export const aiNamingState = {
   pendingMoveResultIds: new Set(),
   pendingMoveSelection: false,
   settingsDirty: false,
+  settingsError: '',
+  featureSwitchErrors: {} as Partial<Record<'autoAnalyzeBookmarks' | 'allowRemoteParsing', string>>,
   testingConnection: false,
   fetchingModels: false,
   lastFetchModelsAt: 0,

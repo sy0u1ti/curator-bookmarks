@@ -28,26 +28,22 @@ export function AiAnalysisActions() {
       </Button>
     }>
         <Button
-          className={`${AI_ANALYSIS_SMALL_BUTTON_CLASS} ${state.pauseHidden ? 'invisible' : ''}`}
+          className={AI_ANALYSIS_SMALL_BUTTON_CLASS}
           size="sm"
           type="button"
           variant="secondary"
           disabled={state.pauseDisabled || state.pauseHidden}
-          aria-hidden={state.pauseHidden || undefined}
-          tabIndex={state.pauseHidden ? -1 : undefined}
           focusableWhenDisabled={state.pauseDisabled}
           onClick={() => handleAiAnalysisAction('pause-toggle')}
         >
           <StableLabel text={state.pauseLabel} reserve={['继续生成', '暂停生成']} />
         </Button>
         <Button
-          className={`${AI_ANALYSIS_SMALL_BUTTON_CLASS} ${state.stopHidden ? 'invisible' : ''}`}
+          className={AI_ANALYSIS_SMALL_BUTTON_CLASS}
           size="sm"
           type="button"
           variant="secondary"
           disabled={state.stopDisabled || state.stopHidden}
-          aria-hidden={state.stopHidden || undefined}
-          tabIndex={state.stopHidden ? -1 : undefined}
           focusableWhenDisabled={state.stopDisabled}
           onClick={() => handleAiAnalysisAction('stop')}
         >

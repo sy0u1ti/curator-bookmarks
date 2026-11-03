@@ -56,26 +56,26 @@ export function AvailabilityPanel({ hidden }: OptionsPanelVisibilityProps) {
 }
 
 function AvailabilityResultGroups() {
-  const { visible } = useAvailabilityResultsHeader()
+  const { visible, reviewVisible = true, failedVisible = true } = useAvailabilityResultsHeader()
   if (!visible) return null
 
   return (
     <>
-      <div className={AVAILABILITY_RESULTS_GROUP_CLASS}>
-        <AvailabilityResultsHeader kind="review" />
-        <div className={AVAILABILITY_RESULTS_LIST_CLASS}>
-          <AvailabilityResults kind="review" />
-        </div>
-        <ResultsPagination kind="availability-review" ariaLabel="低置信异常分页" />
-      </div>
-
-      <div className={AVAILABILITY_RESULTS_GROUP_CLASS}>
+      {failedVisible ? <div className={AVAILABILITY_RESULTS_GROUP_CLASS}>
         <AvailabilityResultsHeader kind="failed" />
         <div className={AVAILABILITY_RESULTS_LIST_CLASS}>
           <AvailabilityResults kind="failed" />
         </div>
-        <ResultsPagination kind="availability-failed" ariaLabel="高置信异常分页" />
-      </div>
+        <ResultsPagination kind="availability-failed" ariaLabel="无法访问的书签分页" />
+      </div> : null}
+
+      {reviewVisible ? <div className={AVAILABILITY_RESULTS_GROUP_CLASS}>
+        <AvailabilityResultsHeader kind="review" />
+        <div className={AVAILABILITY_RESULTS_LIST_CLASS}>
+          <AvailabilityResults kind="review" />
+        </div>
+        <ResultsPagination kind="availability-review" ariaLabel="待确认书签分页" />
+      </div> : null}
     </>
   )
 }

@@ -1,5 +1,5 @@
 import { displayUrl, normalizeText } from '../../shared/text.js'
-import { isExternallyCheckableUrl } from '../../shared/sensitive-url.js'
+import { isAuthenticationEntryUrl, isExternallyCheckableUrl } from '../../shared/sensitive-url.js'
 import type {
   AvailabilityResult,
   BookmarkRecord,
@@ -10,7 +10,7 @@ import type {
   ProbeResult
 } from '../../shared/types.js'
 import type { AvailabilityProbeResult } from '../../shared/messages.js'
-import { hasVerifiedHttpFailure, isHttpRedirectStatus } from '../../shared/availability-evidence.js'
+import { hasVerifiedHttpFailure, hasVerifiedLoginRequirement, isHttpRedirectStatus } from '../../shared/availability-evidence.js'
 
 export const FETCH_TIMEOUT_MS = 20000
 
@@ -19,6 +19,9 @@ const RETRYABLE_NAVIGATION_ERRORS = new Set([
   'net::ERR_ABORTED',
   'net::ERR_CONNECTION_CLOSED',
   'net::ERR_CONNECTION_RESET',
+  'net::ERR_CONNECTION_REFUSED',
+  'net::ERR_NAME_NOT_RESOLVED',
+  'net::ERR_ADDRESS_UNREACHABLE',
   'net::ERR_CONNECTION_TIMED_OUT',
   'net::ERR_TIMED_OUT'
 ])
@@ -62,7 +65,8 @@ const UNVERIFIED_AVAILABILITY_ERROR_CODES = new Set([
   'unsupported-dns-boundary',
   'unverified-network-endpoint',
   'site-cooldown',
-  'detection-budget-exhausted'
+  'detection-budget-exhausted',
+  'challenge-required'
 ])
 
 const TIMEOUT_NAVIGATION_ERRORS = new Set([
@@ -71,27 +75,79 @@ const TIMEOUT_NAVIGATION_ERRORS = new Set([
   'net::ERR_CONNECTION_TIMED_OUT'
 ])
 
-const RESTRICTED_STATUS_CODES = new Set([401, 403, 407, 429, 451])
+const RESTRICTED_STATUS_CODES = new Set([403, 407, 429, 451])
 const MISSING_STATUS_CODES = new Set([404, 410])
 const TEMPORARY_STATUS_CODES = new Set([408, 500, 502, 503, 504, 522, 523, 524])
+const REPEATABLE_CONNECTION_ERRORS = new Set([
+  'net::ERR_CONNECTION_CLOSED', 'net::ERR_CONNECTION_RESET', 'net::ERR_CONNECTION_REFUSED',
+  'net::ERR_NAME_NOT_RESOLVED', 'net::ERR_ADDRESS_UNREACHABLE'
+])
+const UNANSWERED_CONNECTION_ERRORS = new Set([...REPEATABLE_CONNECTION_ERRORS, ...TIMEOUT_NAVIGATION_ERRORS])
 
 export function buildNavigationSuccess(
   bookmark: BookmarkRecord,
   navigationResult: NavigationAttempt,
   label: string
 ): AvailabilityResult {
+  if (hasVerifiedLoginRequirement(navigationResult) || isAuthenticationEntryUrl(navigationResult.finalUrl)) {
+    return buildLoginAvailabilityResult(bookmark, joinEvidenceDetail(label, navigationResult.detail))
+  }
   const finalUrl = navigationResult.finalUrl || bookmark.url
   const redirected = isRedirectedNavigation(bookmark.url, finalUrl)
 
   return {
     ...bookmark,
     status: redirected ? 'redirected' : 'available',
-    badgeText: redirected ? '后台跳转成功' : '后台导航成功',
+    badgeText: redirected ? '跳转后可访问' : '可访问',
     finalUrl,
     detail: redirected
       ? `${label}，最终打开 ${displayUrl(finalUrl)}`
       : `${label}，后台标签页完成页面导航。`
   }
+}
+
+function buildLoginAvailabilityResult(bookmark: BookmarkRecord, evidence: string): AvailabilityResult {
+  return {
+    ...bookmark, status: 'available', badgeText: '可访问', requiresLogin: true,
+    errorCode: undefined, verifiedFailure: undefined, historyStatus: '', abnormalStreak: 0,
+    finalUrl: bookmark.url,
+    detail: joinEvidenceDetail(evidence, '网站正常响应，需要登录；保留原书签，不更新为登录地址')
+  }
+}
+
+function buildVerificationGateResult(bookmark: BookmarkRecord, evidence: string): AvailabilityResult {
+  return {
+    ...bookmark, status: 'available', badgeText: '可访问',
+    errorCode: undefined, verifiedFailure: undefined, historyStatus: '', abnormalStreak: 0,
+    finalUrl: bookmark.url,
+    detail: joinEvidenceDetail(evidence, '网站返回了人机验证页，站点在线；验证需在浏览器中手动完成')
+  }
+}
+
+/** A blocked next hop still proves the bookmark's own server answered. Only the
+ * target remains unrequested, so it is a redirect, not an availability fault. */
+function getRespondingRedirectTarget(bookmark: BookmarkRecord, attempt: NavigationAttempt | undefined): string {
+  const evidence = attempt?.networkEvidence
+  if (attempt?.errorCode !== 'ungranted-redirect' || !evidence?.requestSent || evidence.challenge) return ''
+  const target = getSafeAvailabilityRedirectUrl(evidence.requestedUrl || bookmark.url, attempt)
+  if (!target) return ''
+  const status = Number(evidence.statusCode) || 0
+  const redirect = evidence.redirects?.at(-1)
+  const serverRedirect = Boolean(redirect && isHttpRedirectStatus(status) && redirect.statusCode === status &&
+    normalizeNavigationUrl(redirect.redirectUrl) === normalizeNavigationUrl(target))
+  const loadedSource = evidence.finalResponseObserved === true && (status >= 200 && status < 300 || status === 304)
+  return serverRedirect || loadedSource ? target : ''
+}
+
+/** A server that redirects into a protected flow (billing, account actions) has
+ * responded; only that protected target is withheld from further requests. */
+function hasRespondingProtectedRedirect(attempt: NavigationAttempt | undefined): boolean {
+  const evidence = attempt?.networkEvidence
+  if (attempt?.errorCode !== 'sensitive-redirect' || !evidence?.requestSent || evidence.challenge) return false
+  const status = Number(evidence.statusCode) || 0
+  const redirect = evidence.redirects?.at(-1)
+  return Boolean(redirect && isHttpRedirectStatus(status) && redirect.statusCode === status &&
+    normalizeNavigationUrl(redirect.url) === normalizeNavigationUrl(evidence.statusUrl || evidence.requestedUrl))
 }
 
 export function buildFailureClassification(
@@ -119,19 +175,96 @@ export function buildFailureClassification(
   const navigationEvidence = summarizeNavigationEvidence(attempts)
   const navigationSummary = formatNavigationAttemptSummary(attempts)
   const requestProbe = classifyNavigationNetworkEvidenceFromAttempts(attempts)
-  const effectiveProbe = chooseEffectiveProbe(probe, requestProbe)
-  const effectiveProbeEnabled = probeEnabled || Boolean(effectiveProbe)
   const lastAttempt = attempts.at(-1)
-  const unverifiedAttempt = isUnverifiedAvailabilityErrorCode(lastAttempt?.errorCode) ? lastAttempt : undefined
-  const unverifiedProbe = isUnverifiedAvailabilityErrorCode(probe?.errorCode) && !hasVerifiedHttpFailure(lastAttempt)
+  const unverifiedAttempt = isUnverifiedAvailabilityErrorCode(lastAttempt?.errorCode) ||
+    lastAttempt?.errorCode === 'login-required' ? lastAttempt : undefined
+  // A probe that could not run adds no evidence; it must not replace what real navigations observed.
+  const probeUnavailable = isUnverifiedAvailabilityErrorCode(probe?.errorCode)
+  const navigationRequested = attempts.some(attempt => attempt.networkEvidence?.requestSent)
+  const usableProbe = probeUnavailable && navigationRequested ? null : probe
+  const unverifiedProbe = probeUnavailable && !navigationRequested
+  const effectiveProbe = chooseEffectiveProbe(usableProbe, requestProbe)
+  const effectiveProbeEnabled = probeEnabled || Boolean(effectiveProbe)
+
+  if (lastAttempt?.networkEvidence?.challenge || lastAttempt?.errorCode === 'challenge-required') {
+    // A CDN only serves a challenge for a configured, reachable site; a dead origin yields 52x instead.
+    const evidence = lastAttempt.networkEvidence
+    if (evidence?.requestSent && evidence.challenge && Number(evidence.statusCode) > 0) {
+      return buildVerificationGateResult(bookmark, navigationSummary)
+    }
+    return {
+      ...baseResult, status: 'review', badgeText: '需要站点验证', errorCode: 'challenge-required',
+      detail: joinEvidenceDetail(navigationSummary, '站点验证尚未完成；未把验证页当成失效页面，可打开完成验证后重测')
+    }
+  }
+
+  if (hasVerifiedHttpFailure(lastAttempt) && MISSING_STATUS_CODES.has(Number(lastAttempt?.networkEvidence?.statusCode))) {
+    const statusCode = Number(lastAttempt!.networkEvidence!.statusCode)
+    return {
+      ...baseResult, status: 'failed', badgeText: statusCode === 410 ? '页面已移除' : '页面不存在',
+      errorCode: 'http-' + statusCode, verifiedFailure: 'http-missing',
+      detail: joinEvidenceDetail(navigationSummary,
+        `当前浏览器的页面请求已确认 HTTP ${statusCode}，本次无法访问；不是仅凭匿名 HEAD 探测得出的结论`,
+        '私有资源仍可能用此状态隐藏内容，删除前请确认；可从回收站恢复')
+    }
+  }
+
+  const lastTwo = attempts.slice(-2)
+  if (lastTwo.length === 2 && lastTwo.every(attempt =>
+    attempt.errorCode === lastAttempt?.errorCode && REPEATABLE_CONNECTION_ERRORS.has(attempt.errorCode) &&
+    attempt.networkEvidence?.requestSent && !attempt.networkEvidence.statusCode
+  )) {
+    return {
+      ...baseResult, status: 'failed', badgeText: '连接失败', errorCode: lastAttempt!.errorCode,
+      verifiedFailure: 'repeated-network',
+      detail: joinEvidenceDetail(navigationSummary, '两次实际页面导航均在连接层失败，本次无法访问；不代表网站永久失效，删除前仍可打开或重测')
+    }
+  }
+
+  // Timeouts can be transient, so they become failures only when a later run repeats them.
+  if (usableProbe?.kind !== 'ok' && lastTwo.length === 2 && lastTwo.every(attempt =>
+    UNANSWERED_CONNECTION_ERRORS.has(attempt.errorCode) &&
+    attempt.networkEvidence?.requestSent && !attempt.networkEvidence.statusCode
+  )) {
+    const timedOut = lastTwo.some(attempt => TIMEOUT_NAVIGATION_ERRORS.has(attempt.errorCode))
+    return {
+      ...baseResult, status: 'failed', badgeText: timedOut ? '连接超时' : '连接失败', errorCode: lastAttempt!.errorCode,
+      detail: joinEvidenceDetail(navigationSummary, '两次实际页面导航均未收到网站响应，本次无法访问')
+    }
+  }
+
+  const redirectTarget = getRespondingRedirectTarget(bookmark, lastAttempt)
+  if (redirectTarget) {
+    return {
+      ...baseResult, status: 'redirected', badgeText: '已跳转', finalUrl: redirectTarget,
+      errorCode: undefined, verifiedFailure: undefined, historyStatus: '', abnormalStreak: 0,
+      detail: joinEvidenceDetail(navigationSummary, formatNavigationNetworkEvidence(lastAttempt?.networkEvidence),
+        `原网站正常响应并跳转到 ${displayUrl(redirectTarget)}；新地址未授权，未继续访问，更新书签前请打开确认`)
+    }
+  }
+
+  if (hasRespondingProtectedRedirect(lastAttempt)) {
+    const respondingUrl = lastAttempt!.networkEvidence!.requestedUrl || bookmark.url
+    const moved = isRedirectedNavigation(bookmark.url, respondingUrl)
+    return {
+      ...baseResult, status: moved ? 'redirected' : 'available', badgeText: moved ? '已跳转' : '可访问',
+      finalUrl: moved ? respondingUrl : bookmark.url,
+      errorCode: undefined, verifiedFailure: undefined, historyStatus: '', abnormalStreak: 0,
+      detail: joinEvidenceDetail(navigationSummary, formatNavigationNetworkEvidence(lastAttempt?.networkEvidence),
+        '网站正常响应并跳转到受保护页面；未继续访问该页面')
+    }
+  }
 
   if (
-    probe?.kind === 'ok' &&
-    !probe.errorCode &&
+    usableProbe?.kind === 'ok' &&
+    !usableProbe.errorCode &&
     hasOnlyClientBlockingNavigationErrors(attempts)
   ) {
-    const finalUrl = probe.finalUrl || bookmark.url
-    const redirected = Boolean(probe.redirected) ||
+    if (usableProbe.requiresLogin) {
+      return buildLoginAvailabilityResult(bookmark, joinEvidenceDetail(navigationSummary, usableProbe.detail))
+    }
+    const finalUrl = usableProbe.finalUrl || bookmark.url
+    const redirected = Boolean(usableProbe.redirected) ||
       isRedirectedNavigation(bookmark.url, finalUrl)
     return {
       ...baseResult,
@@ -140,7 +273,7 @@ export function buildFailureClassification(
       badgeText: redirected ? '网络校验跳转' : '网络校验可访问',
       detail: joinEvidenceDetail(
         navigationSummary,
-        probe.detail,
+        usableProbe.detail,
         '后台标签页受本地扩展或浏览器规则拦截；独立网络校验已确认目标可达'
       )
     }
@@ -157,7 +290,8 @@ export function buildFailureClassification(
   }
 
   if (unverifiedAttempt || unverifiedProbe) {
-    const errorCode = String(unverifiedAttempt?.errorCode || probe?.errorCode)
+    const rawErrorCode = String(unverifiedAttempt?.errorCode || probe?.errorCode)
+    const errorCode = rawErrorCode === 'login-required' ? 'unverified-network-endpoint' : rawErrorCode
     return {
       ...baseResult,
       finalUrl: unverifiedAttempt?.finalUrl || probe?.finalUrl || baseResult.finalUrl,
@@ -177,22 +311,25 @@ export function buildFailureClassification(
     return {
       ...baseResult,
       status: 'review',
-      badgeText: '低置信异常',
+      badgeText: '未完成验证',
       detail: joinEvidenceDetail(
         navigationSummary,
-        '未获得目标网站授权或未取得网络校验证据，暂归为低置信异常，不建议直接删除'
+        '未取得足够的页面响应证据，可打开链接确认或重新检测'
       )
     }
   }
 
   if (effectiveProbe.kind === 'ok') {
+    if (effectiveProbe.requiresLogin) {
+      return buildLoginAvailabilityResult(bookmark, joinEvidenceDetail(navigationSummary, effectiveProbe.detail))
+    }
     return {
       ...baseResult,
       status: 'review',
-      badgeText: '低置信异常',
+      badgeText: '页面加载待确认',
       detail: joinEvidenceDetail(
         navigationSummary,
-        `网络探测(${effectiveProbe.method})返回可访问，站点可能仍可用；暂归为低置信异常，建议人工确认`
+        `网络探测(${effectiveProbe.method})返回可访问，但页面导航未完成，可打开确认`
       )
     }
   }
@@ -201,10 +338,10 @@ export function buildFailureClassification(
     return {
       ...baseResult,
       status: 'review',
-      badgeText: '受限/低置信',
+      badgeText: '访问受限',
       detail: joinEvidenceDetail(
         navigationSummary,
-        `网络探测(${effectiveProbe.method})返回 ${effectiveProbe.label}，站点可能需要登录、地区许可或反爬验证；暂归为低置信异常`
+        `网络探测(${effectiveProbe.method})返回 ${effectiveProbe.label}，本次请求受到限制，尚未确认正常页面响应；不作为死链处理`
       )
     }
   }
@@ -228,7 +365,7 @@ export function buildFailureClassification(
       badgeText: '资源不存在·待确认',
       detail: joinEvidenceDetail(
         navigationSummary,
-        `匿名网络探测(${effectiveProbe.method})返回 ${effectiveProbe.label}；私有资源和登录后内容也可能用 404/410 隐藏访问状态，需由你确认后再移入异常`
+        `匿名网络探测(${effectiveProbe.method})返回 ${effectiveProbe.label}；私有资源和登录后内容也可能用 404/410 隐藏访问状态，请打开确认`
       )
     }
   }
@@ -236,15 +373,15 @@ export function buildFailureClassification(
   if (effectiveProbe.kind === 'network') {
     if (
       effectiveProbe.method !== '主请求' &&
-      shouldClassifyAsHighConfidence(navigationEvidence, effectiveProbe.kind)
+      hasCorroboratingConnectionFailure(navigationEvidence, effectiveProbe.kind)
     ) {
       return {
         ...baseResult,
         status: 'failed',
-        badgeText: '高置信异常',
+        badgeText: '连接失败',
         detail: joinEvidenceDetail(
           navigationSummary,
-          `网络探测也失败：${stripEvidencePunctuation(effectiveProbe.detail)}，多层结果都指向连接层故障，已按高置信异常归类`
+          `网络探测也失败：${stripEvidencePunctuation(effectiveProbe.detail)}，多层结果都指向连接层故障`
         )
       }
     }
@@ -252,10 +389,10 @@ export function buildFailureClassification(
     return {
       ...baseResult,
       status: 'review',
-      badgeText: '低置信异常',
+      badgeText: '连接待确认',
       detail: joinEvidenceDetail(
         navigationSummary,
-        `网络探测也失败：${stripEvidencePunctuation(effectiveProbe.detail)}，证据仍不足以直接删除，暂归为低置信异常`
+        `网络探测也失败：${stripEvidencePunctuation(effectiveProbe.detail)}，尚不能确定是网站还是网络环境问题`
       )
     }
   }
@@ -263,15 +400,15 @@ export function buildFailureClassification(
   if (effectiveProbe.kind === 'unknown') {
     if (
       effectiveProbe.method !== '主请求' &&
-      shouldClassifyAsHighConfidence(navigationEvidence, effectiveProbe.kind)
+      hasCorroboratingConnectionFailure(navigationEvidence, effectiveProbe.kind)
     ) {
       return {
         ...baseResult,
         status: 'failed',
-        badgeText: '高置信异常',
+        badgeText: '连接失败',
         detail: joinEvidenceDetail(
           navigationSummary,
-          `${stripEvidencePunctuation(effectiveProbe.detail)}，且后台导航连续给出强失败信号，已按高置信异常归类`
+          `${stripEvidencePunctuation(effectiveProbe.detail)}，且后台导航连续给出相同的连接失败信号`
         )
       }
     }
@@ -279,10 +416,10 @@ export function buildFailureClassification(
     return {
       ...baseResult,
       status: 'review',
-      badgeText: '低置信异常',
+      badgeText: '未完成验证',
       detail: joinEvidenceDetail(
         navigationSummary,
-        `${stripEvidencePunctuation(effectiveProbe.detail)}；证据仍不足以直接删除，暂归为低置信异常`
+        `${stripEvidencePunctuation(effectiveProbe.detail)}；尚未取得明确的页面响应，可打开确认`
       )
     }
   }
@@ -290,10 +427,10 @@ export function buildFailureClassification(
   return {
     ...baseResult,
     status: 'review',
-    badgeText: '低置信异常',
+    badgeText: '待确认',
     detail: joinEvidenceDetail(
       navigationSummary,
-      `${stripEvidencePunctuation(effectiveProbe.detail)}；暂归为低置信异常，建议人工确认`
+      `${stripEvidencePunctuation(effectiveProbe.detail)}；可打开链接确认`
     )
   }
 }
@@ -347,7 +484,7 @@ function chooseEffectiveProbe(
 }
 
 export function shouldRetryNavigation(result: NavigationAttempt | null | undefined): boolean {
-  if (!result || result.status === 'available' || hasVerifiedHttpFailure(result)) {
+  if (!result || result.status === 'available' || hasVerifiedLoginRequirement(result) || hasVerifiedHttpFailure(result)) {
     return false
   }
 
@@ -355,6 +492,7 @@ export function shouldRetryNavigation(result: NavigationAttempt | null | undefin
 }
 
 export function shouldAcceptNavigationSuccess(result: NavigationAttempt | null | undefined): boolean {
+  if (hasVerifiedLoginRequirement(result)) return true
   if (!result || result.status !== 'available' || result.errorCode) {
     return false
   }
@@ -365,7 +503,7 @@ export function shouldAcceptNavigationSuccess(result: NavigationAttempt | null |
     return false
   }
 
-  if (evidence?.errorCode || statusCode >= 400) {
+  if (evidence?.errorCode || evidence?.challenge || statusCode >= 400) {
     return false
   }
 
@@ -376,7 +514,7 @@ export function shouldAcceptNavigationSuccess(result: NavigationAttempt | null |
   return isHttpNavigationUrl(result.finalUrl)
 }
 
-export function getSafeSameOriginRedirectUrl(
+export function getSafeAvailabilityRedirectUrl(
   sourceUrl: unknown,
   attempt: NavigationAttempt | null | undefined
 ): string {
@@ -387,10 +525,14 @@ export function getSafeSameOriginRedirectUrl(
   try {
     const source = new URL(String(sourceUrl || '').trim())
     const target = new URL(String(attempt.finalUrl || '').trim())
+    source.hash = ''
+    const targetRequest = new URL(target.href)
+    targetRequest.hash = ''
     if (
       !/^https?:$/i.test(target.protocol) ||
-      source.origin !== target.origin ||
-      normalizeNavigationUrl(source.href) === normalizeNavigationUrl(target.href) ||
+      !/^https?:$/i.test(source.protocol) ||
+      source.protocol === 'https:' && target.protocol !== 'https:' ||
+      source.href === targetRequest.href ||
       !isExternallyCheckableUrl(target.href)
     ) {
       return ''
@@ -437,7 +579,7 @@ function hasOnlyClientBlockingNavigationErrors(
   })
 }
 
-function shouldClassifyAsHighConfidence(
+function hasCorroboratingConnectionFailure(
   navigationEvidence: NavigationEvidence | null | undefined,
   probeKind: ProbeKind | string
 ): boolean {
@@ -462,7 +604,7 @@ function shouldClassifyAsHighConfidence(
 }
 
 export function shouldFallbackToGet(statusCode: number): boolean {
-  return [401, 403, 404, 405, 410, 451, 500, 501, 502, 503, 504].includes(statusCode)
+  return [403, 404, 405, 410, 451, 500, 501, 502, 503, 504].includes(statusCode)
 }
 
 export function classifyProbeResponse(
@@ -471,6 +613,13 @@ export function classifyProbeResponse(
 ): ProbeResult {
   const statusCode = response.status || 0
   const label = `HTTP ${statusCode}`
+
+  if (statusCode === 401 || response.ok && isAuthenticationEntryUrl(response.url)) {
+    return {
+      kind: 'ok', method, label, statusCode, requiresLogin: true,
+      detail: `网络探测(${method})返回 ${label}；网站正常响应，需要登录。`
+    }
+  }
 
   if (response.ok) {
     return {
@@ -544,6 +693,7 @@ export function classifyAvailabilityProbeResult(
     }, method),
     finalUrl: result.finalUrl,
     redirected: result.redirected,
+    ...(result.requiresLogin && result.ok && isHttpRedirectStatus(result.status) ? { requiresLogin: true } : {}),
     ...(result.retryAfterMs === undefined ? {} : { retryAfterMs: result.retryAfterMs })
   }
 }
@@ -556,7 +706,7 @@ export function requireRepeatedFailureEvidence(
   result: AvailabilityResult,
   hasMatchingPreviousEvidence: boolean
 ): AvailabilityResult {
-  if (result.status !== 'failed' || hasMatchingPreviousEvidence) {
+  if (result.status !== 'failed' || hasMatchingPreviousEvidence || result.verifiedFailure) {
     return result
   }
 
@@ -566,12 +716,14 @@ export function requireRepeatedFailureEvidence(
     badgeText: '首次异常·待复核',
     detail: joinEvidenceDetail(
       result.detail,
-      '匿名探测可能受登录墙或访问策略影响；首次异常只列入复核，连续检测仍异常后才升级为失效'
+      '尚缺少实际页面请求的明确失败证据，保留为待确认；可打开链接或重新检测'
     )
   }
 }
 
 function getUnverifiedAvailabilityBadge(errorCode: string): string {
+  if (errorCode === 'challenge-required') return '需要站点验证'
+  if (errorCode === 'unverified-network-endpoint') return '未完成验证'
   if (errorCode === 'ungranted-redirect') {
     return '待授权重定向'
   }
@@ -588,6 +740,8 @@ function getUnverifiedAvailabilityBadge(errorCode: string): string {
 }
 
 function getUnverifiedAvailabilityDetail(errorCode: string): string {
+  if (errorCode === 'challenge-required') return '站点验证尚未完成，可打开完成验证后重测'
+  if (errorCode === 'unverified-network-endpoint') return '未取得有效的页面响应，不能仅凭地址推断网页是否可访问'
   if (errorCode === 'ungranted-redirect') {
     return '已在发出下一跳请求前阻断；最终地址尚未验证，可授权后重新测试'
   }

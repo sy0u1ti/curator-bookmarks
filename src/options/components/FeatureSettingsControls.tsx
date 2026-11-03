@@ -1,7 +1,10 @@
+import { useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { AiProviderCard } from '../../ui/ai/AiProviderCard'
 import { SwitchControl } from '../../ui/base/Switch'
 import { Select } from '../../ui/base/Select'
 import { StableLabel, StatusMessage } from '../../ui/base/StatusMessage'
+import { ToastList, type ToastItem } from '../../ui/base/Toast'
 import type { InboxWorkflowMode } from '../../shared/inbox-workflow'
 import {
   AI_SETTINGS_BODY_CLASS,
@@ -29,25 +32,44 @@ const FEATURE_STATUS_LABELS = ['保存中…', '待授权'] as const
 
 export function FeatureSettingsControls() {
   const state = useFeatureSettingsControlsState()
+  const notifications = useMemo<ToastItem[]>(() => state.switches.flatMap(item => item.error ? [{
+    id: `feature-${item.key}-${item.error}`,
+    description: item.error,
+    priority: 'high',
+    type: 'error'
+  }] : []), [state.switches])
 
   return (
-    <AiProviderCard
-      className={AI_SETTINGS_CARD_CLASS}
-      title={<h2 className={AI_SETTINGS_TITLE_CLASS}>收藏与整理</h2>}
-      headerClassName={AI_SETTINGS_HEADER_CLASS}
-      iconName="Sparkles"
-      bodyClassName={`${AI_SETTINGS_BODY_CLASS} ${state.loading ? '' : AI_SETTINGS_READY_BODY_CLASS}`}
-      aria-busy={state.loading ? 'true' : undefined}
-    >
-      {state.loading
-        ? FEATURE_SETTINGS_LOADING_ROWS.map((item) => (
-            <FeatureSwitchLoadingRow item={item} key={item.key} />
-          ))
-        : state.switches.map((item) => (
-            <FeatureSwitchRow item={item} key={item.key} />
-          ))}
-      <InboxWorkflowControl state={state.loading ? undefined : state.inboxWorkflow} />
-    </AiProviderCard>
+    <>
+      <AiProviderCard
+        className={AI_SETTINGS_CARD_CLASS}
+        title={<h2 className={AI_SETTINGS_TITLE_CLASS}>收藏与整理</h2>}
+        headerClassName={AI_SETTINGS_HEADER_CLASS}
+        iconName="Sparkles"
+        bodyClassName={`${AI_SETTINGS_BODY_CLASS} ${state.loading ? '' : AI_SETTINGS_READY_BODY_CLASS}`}
+        aria-busy={state.loading ? 'true' : undefined}
+      >
+        {state.loading
+          ? FEATURE_SETTINGS_LOADING_ROWS.map((item) => (
+              <FeatureSwitchLoadingRow item={item} key={item.key} />
+            ))
+          : state.switches.map((item) => (
+              <FeatureSwitchRow item={item} key={item.key} />
+            ))}
+        <InboxWorkflowControl state={state.loading ? undefined : state.inboxWorkflow} />
+      </AiProviderCard>
+      {createPortal(
+        <ToastList
+          className="pointer-events-none fixed bottom-4 right-4 z-50 grid w-[min(400px,calc(100vw-32px))] gap-2"
+          rootClassName="pointer-events-auto data-[type=error]:border-ds-danger/35"
+          contentClassName="min-w-0 flex-1"
+          descriptionClassName="m-0 text-[13px] leading-relaxed [overflow-wrap:anywhere]"
+          closeClassName="shrink-0"
+          items={notifications}
+        />,
+        document.body
+      )}
+    </>
   )
 }
 

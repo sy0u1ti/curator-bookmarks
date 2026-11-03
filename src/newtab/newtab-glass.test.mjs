@@ -202,11 +202,10 @@ try {
   await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).click()
   await waitForLens(page)
 
+  // One control per renderer path: blur filter, lens-map rebuild, and lens-map reuse.
+  // The per-parameter physics is covered above without a browser.
   for (const [key, name, low, high] of [
-    ['blur', '玻璃模糊', 0, 12], ['bevel', '边缘范围', 4, 48],
-    ['thickness', '折射强度', 2, 40], ['dispersion', '色散', 0, 0.16],
-    ['rim', '边缘高光', 0, 1.6], ['light', '光照方向', -180, 0],
-    ['smooth', '边缘柔化', 0, 3]
+    ['blur', '玻璃模糊', 0, 12], ['bevel', '边缘范围', 4, 48], ['rim', '边缘高光', 0, 1.6]
   ]) {
     const slider = page.getByRole('slider', { name, exact: true })
     await slider.press('Home')
@@ -224,13 +223,9 @@ try {
     assert.notEqual(after.primitives, before.primitives, `${name} must update its live SVG primitives`)
     assert.notEqual(hash(afterImage), hash(beforeImage), `${name} must change actual painted pixels`)
     assert.notEqual(hash(await page.locator('.newtab-search-surface').screenshot()), hash(beforeCachedImage), `${name} must also change the cached wallpaper refraction`)
-    if (['bevel', 'thickness', 'light'].includes(key)) assert.notEqual(after.map, before.map, `${name} must rebuild its lens map`)
+    if (key === 'bevel') assert.notEqual(after.map, before.map, `${name} must rebuild its lens map`)
     else assert.equal(after.map, before.map, `${name} must reuse the map when geometry does not change`)
     report.parameters.push({ key, low, high, svgChanged: true, pixelsChanged: true, cachedPixelsChanged: true })
-    if (key === 'blur') {
-      await writeFile(path.join(output, 'glass-blur-0.png'), beforeImage)
-      await writeFile(path.join(output, 'glass-blur-12.png'), afterImage)
-    }
     await resetGlass(page)
   }
 
@@ -246,15 +241,17 @@ try {
   const blur = page.getByRole('slider', { name: '玻璃模糊', exact: true })
   await blur.press('Home')
   for (let step = 0; step < 8; step++) await blur.press('ArrowRight')
-  // Settings now save silently without status text; wait for storage to be updated instead
-  await page.waitForFunction(async () => {
-    const result = await chrome.storage.local.get('curatorBookmarkNewTabGlassSettings')
-    return result.curatorBookmarkNewTabGlassSettings?.blur === 4
-  }, undefined, { timeout: 15000 }).catch(async error => {
-    console.log(await page.evaluate(async () => ({ outputs: [...document.querySelectorAll('#settings-panel-glass output')].map(element => element.textContent), stored: await chrome.storage.local.get('curatorBookmarkNewTabGlassSettings'), locks: await navigator.locks.query() })))
-    throw error
+  // Saving is silent and debounced. waitForFunction does not await an async
+  // predicate (a Promise is truthy), so poll storage inside the page instead.
+  const savedBlur = await page.evaluate(async () => {
+    for (const deadline = Date.now() + 15000; Date.now() < deadline;) {
+      const { curatorBookmarkNewTabGlassSettings: stored } = await chrome.storage.local.get('curatorBookmarkNewTabGlassSettings')
+      if (stored?.blur === 4) return 4
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+    return (await chrome.storage.local.get('curatorBookmarkNewTabGlassSettings')).curatorBookmarkNewTabGlassSettings?.blur
   })
-  assert.equal(await page.evaluate(async () => (await chrome.storage.local.get('curatorBookmarkNewTabGlassSettings')).curatorBookmarkNewTabGlassSettings?.blur), 4)
+  assert.equal(savedBlur, 4, 'Keyboard slider input must persist to Chrome storage')
   report.beforeReload = await page.evaluate(async () => ({ cache: localStorage.getItem('curator-newtab-glass-v1'), stored: await chrome.storage.local.get('curatorBookmarkNewTabGlassSettings'), css: document.documentElement.style.getPropertyValue('--newtab-glass-background-blur') }))
   await page.reload()
   await waitForLens(page, '.newtab-search-surface')
@@ -297,7 +294,8 @@ try {
     const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform)
     return { x: matrix.a, y: matrix.d, lift: matrix.f }
   })
-  assert.deepEqual(focusedTransform, { x: 1, y: 1, lift: -2 }, 'Focus should lift the joined search field without resizing its text or controls')
+  const hoverLift = await page.locator('.newtab-search-shell').evaluate(element => Number.parseFloat(getComputedStyle(element).getPropertyValue('--ds-hover-lift')))
+  assert.deepEqual(focusedTransform, { x: 1, y: 1, lift: hoverLift }, 'Focus should lift the joined search field by the shared hover lift without resizing its text or controls')
   const joinedSearch = await page.evaluate(() => {
     const surface = document.querySelector('.newtab-search-surface')
     const panel = document.querySelector('.newtab-search-suggestions-panel')

@@ -11,6 +11,12 @@ export const AVAILABILITY_NAVIGATION_TIMEOUT_MIN_MS = 1000
 export const AVAILABILITY_NAVIGATION_TIMEOUT_MAX_MS = 120000
 export const AVAILABILITY_NAVIGATION_CHECK_ID_MAX_LENGTH = 128
 export const AVAILABILITY_NAVIGATION_URL_MAX_LENGTH = 8192
+// Bump when evidence semantics change so a cached worker cannot silently run old rules.
+export const AVAILABILITY_ENGINE_VERSION = 2
+
+export interface AvailabilityEngineMessage {
+  type: 'availability:engine'
+}
 
 export interface NavigationCheckMessage {
   type: 'availability:navigate'
@@ -42,6 +48,7 @@ export interface BackupRestoreMessage {
 
 export interface AvailabilityProbeResult {
   retryAfterMs?: number
+  requiresLogin?: boolean
   ok: boolean
   status: number
   finalUrl: string
@@ -291,6 +298,20 @@ export function parseBackupRestoreMessage(
   }
 }
 
+export async function assertAvailabilityEngineReady(): Promise<void> {
+  try {
+    const result = await sendAvailabilityRuntimeMessage<{ version: number }>(
+      { type: 'availability:engine' }, 3000, false
+    )
+    if (result?.version === AVAILABILITY_ENGINE_VERSION) return
+  } catch {
+    // Older installed workers do not recognize the compatibility message.
+  }
+  throw Object.assign(new Error(
+    'Curator 后台检测引擎未就绪或版本不一致。请在扩展管理页重新加载 Curator 后重试；现有检测结果已保留。'
+  ), { code: 'availability-engine-mismatch' })
+}
+
 export function requestNavigationCheck(
   url: string,
   timeoutMs?: number,
@@ -441,13 +462,13 @@ function availabilityMessageTimeout(timeoutMs: unknown, deadlineAtMs?: unknown):
 }
 
 function sendAvailabilityRuntimeMessage<TResult>(
-  message: NavigationCheckMessage | AvailabilityProbeMessage | NavigationCancelMessage,
+  message: NavigationCheckMessage | AvailabilityProbeMessage | NavigationCancelMessage | AvailabilityEngineMessage,
   timeoutMs: number,
   cancelOnTimeout = true
 ): Promise<TResult> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
-      if (cancelOnTimeout && message.checkId) void cancelNavigationCheck(message.checkId).catch(() => {})
+      if (cancelOnTimeout && 'checkId' in message && message.checkId) void cancelNavigationCheck(message.checkId).catch(() => {})
       reject(Object.assign(new Error('Curator 后台检测服务未按时响应，已停止本次等待。'), { code: 'availability-runtime-timeout' }))
     }, timeoutMs)
     sendRuntimeMessage<TResult>(message).then(

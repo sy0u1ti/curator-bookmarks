@@ -38,6 +38,7 @@ export async function inspectAvailabilityWithEvidence(bookmark: BookmarkRecord, 
   })
   const terminalResult = (attempt: NavigationAttempt, label: string): AvailabilityResult | null => {
     if (shouldAcceptNavigationSuccess(attempt)) return buildNavigationSuccess(bookmark, attempt, label)
+    if (attempt.networkEvidence?.challenge) return buildFailureClassification(bookmark, attempts, null, false)
     // The actual main-document GET already supplied the relevant HTTP evidence.
     if (hasVerifiedHttpFailure(attempt)) return buildFailureClassification(bookmark, attempts, null, false)
     return null
@@ -61,7 +62,7 @@ export async function inspectAvailabilityWithEvidence(bookmark: BookmarkRecord, 
     activeUrl = target
     navigation = await runNavigation(activeUrl, timeouts.retryNavigationTimeoutMs)
     if (!navigation) return budgetExhausted ? exhaustedResult() : null
-    result = terminalResult(navigation, '站内重定向验证成功')
+    result = terminalResult(navigation, '重定向目标验证成功')
     if (result) return result
   }
   if (shouldRetryNavigation(navigation)) {
@@ -72,7 +73,10 @@ export async function inspectAvailabilityWithEvidence(bookmark: BookmarkRecord, 
   }
   // A denied target, an offline machine, or a local certificate/proxy failure
   // cannot be repaired by issuing another request to the same bookmark.
-  const shouldProbe = probe && !isUnverifiedAvailabilityErrorCode(navigation.errorCode) &&
+  const verifiedNavigationFailure = buildFailureClassification(bookmark, attempts, null, false)
+  if (verifiedNavigationFailure.verifiedFailure) return verifiedNavigationFailure
+  const shouldProbe = probe && !isUnverifiedAvailabilityErrorCode(verifiedNavigationFailure.errorCode) &&
+    !isUnverifiedAvailabilityErrorCode(navigation.errorCode) &&
     !/ERR_(?:INTERNET_DISCONNECTED|NETWORK_CHANGED|PROXY_|TUNNEL_|MANDATORY_PROXY_|BLOCKED_BY_ADMINISTRATOR|CERT_|SSL_)/.test(navigation.errorCode)
   let probeResult: ProbeResult | null = null
   if (shouldProbe) {
@@ -112,8 +116,8 @@ export function createAvailabilityEvidenceCache(capacity = 512) {
       const result = await pending
       // Metadata always belongs to this bookmark, even when URLs are duplicated.
       if (!result) return null
-      const { status, badgeText, finalUrl, detail, errorCode } = result
-      return { ...bookmark, status, badgeText, finalUrl, detail, errorCode }
+      const { status, badgeText, finalUrl, detail, errorCode, verifiedFailure, requiresLogin } = result
+      return { ...bookmark, status, badgeText, finalUrl, detail, errorCode, verifiedFailure, requiresLogin }
     }
   }
 }

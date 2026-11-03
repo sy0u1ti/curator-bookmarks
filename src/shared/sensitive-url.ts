@@ -18,11 +18,13 @@ export interface SensitiveExternalUrlDecision {
 }
 
 const ACCOUNT_PATH_RE = /(?:^|\/)(?:login|log-in|signin|sign-in|signup|sign-up|account|accounts|auth|oauth|sso|session|sessions)(?:\/|$)/i
+const LOGIN_ENTRY_PATH_RE = /(?:^|\/)(?:login|log[-_]?in|signin|sign[-_]?in|auth|authenticate|oauth2?|sso)(?:\.(?:php|aspx?|html?))?(?:\/|$)/i
+const SESSION_HANDSHAKE_PATH_RE = /(?:^|\/)v1\/client\/handshake\/?$/i
 const FINANCIAL_PATH_RE = /(?:^|\/)(?:checkout|billing|bill|payment|payments|pay|bank|wallet|invoice|invoices|subscription|subscriptions)(?:\/|$)/i
 const MEDICAL_PATH_RE = /(?:^|\/)(?:medical|health|patient|patients|clinic|hospital|mychart)(?:\/|$)/i
 const DOCUMENT_PATH_RE = /(?:^|\/)(?:document|documents|doc|docs|workspace|workspaces|share|shared)(?:\/|$)/i
-const CAPABILITY_ACTION_PATH_RE = /(?:^|\/)(?:logout|log[-_]?out|signout|sign[-_]?out|unsubscribe|reset|password[-_]?reset|reset[-_]?password|verify|verification|confirm|confirmation|delete|remove|activate|magic[-_]?(?:link|login)|accept[-_]?invite|(?:verify|confirm|activate)[-_]?(?:email|account|invite))(?:\/|$)/i
-const CAPABILITY_QUERY_KEY_RE = /^(?:(?:access|refresh|id|auth|session)[_-]?token|token|code|oob[_-]?code|jwt|ticket|credential|credentials|key|api[_-]?key|secret|signature|sig|auth|authorization|password|passwd|reset[_-]?password[_-]?token|confirmation[_-]?token|verification[_-]?token|invitation[_-]?token|x-amz-.+|x-goog-.+)$/i
+const CAPABILITY_ACTION_PATH_RE = /(?:^|\/)(?:logout|log[-_]?out|signout|sign[-_]?out|unsubscribe|reset|password[-_]?reset|reset[-_]?password|verify|verification|confirm|confirmation|delete|remove|activate|magic[-_]?(?:link|login)|accept[-_]?invite|(?:verify|confirm|activate)[-_]?(?:email|account|invite))(?:\.(?:php|aspx?|html?))?(?:\/|$)/i
+const CAPABILITY_QUERY_KEY_RE = /^_*(?:(?:access|refresh|id|auth|session)[_-]?token|session|samlrequest|samlresponse|samlart|token|code|oob[_-]?code|jwt|ticket|credential|credentials|key|api[_-]?key|secret|signature|sig|auth|authorization|password|passwd|reset[_-]?password[_-]?token|confirmation[_-]?token|verification[_-]?token|invitation[_-]?token|x-amz-.+|x-goog-.+)$/i
 const CAPABILITY_ACTION_QUERY_KEY_RE = /^(?:action|operation|op|cmd|command|do)$/i
 const CAPABILITY_ACTION_QUERY_VALUE_RE = /^(?:accept[-_]?(?:invite|invitation)|activate(?:[-_]?(?:account|email))?|cancel|confirm(?:[-_]?(?:account|email|invite))?|delete|disable|logout|log[-_]?out|remove|reset(?:[-_]?password)?|revoke|signout|sign[-_]?out|unsubscribe|verify(?:[-_]?(?:account|email|invite))?)$/i
 const PRIVATE_DNS_ALIAS_HOSTS = [
@@ -185,6 +187,49 @@ function classifySensitiveExternalUrl(url: string): SensitiveExternalUrlReason |
 
 export function isExternallyCheckableUrl(url: unknown): boolean {
   return !assessSensitiveExternalUrl(url).sensitive
+}
+
+/** Interprets an observed destination, never authorizes a request to it. */
+export function isAuthenticationEntryUrl(value: unknown): boolean {
+  const url = parseUrl(value)
+  if (!url || !/^https?:$/i.test(url.protocol) || url.username || url.password ||
+    isLocalOrPrivateHostname(normalizeHostname(url.hostname))) return false
+
+  const pathname = decodePathname(url.pathname)
+  const fragment = decodePathname(url.hash.replace(/^#/, ''))
+  const hashPath = fragment.split('?', 1)[0]
+  if (CAPABILITY_ACTION_PATH_RE.test(pathname) || CAPABILITY_ACTION_PATH_RE.test(hashPath)) return false
+  const hashParams = new URLSearchParams(fragment.includes('?') ? fragment.slice(fragment.indexOf('?') + 1) : fragment)
+  for (const params of [url.searchParams, hashParams]) {
+    for (const [key, action] of params) {
+      if (CAPABILITY_ACTION_QUERY_KEY_RE.test(key) && CAPABILITY_ACTION_QUERY_VALUE_RE.test(action.trim())) return false
+    }
+  }
+  return LOGIN_ENTRY_PATH_RE.test(pathname) || LOGIN_ENTRY_PATH_RE.test(hashPath) ||
+    /^(?:login|signin|auth|sso)\./i.test(url.hostname) || isSessionHandshakeEntry(url, pathname)
+}
+
+function isSessionHandshakeEntry(url: URL, pathname: string): boolean {
+  // Clerk session refresh uses a browser redirect, including on custom auth domains.
+  // This is response evidence only: the session-bearing target must never be followed.
+  if (!SESSION_HANDSHAKE_PATH_RE.test(pathname) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('__clerk_api_version') || '')) return false
+  const returnUrl = parseUrl(url.searchParams.get('redirect_url'))
+  return Boolean(returnUrl && /^https?:$/i.test(returnUrl.protocol) &&
+    !returnUrl.username && !returnUrl.password &&
+    !isLocalOrPrivateHostname(normalizeHostname(returnUrl.hostname)))
+}
+
+/** An observed same-site session exit proves a responding auth flow, not permission to execute it. */
+export function isAuthenticationExitUrl(value: unknown, source: unknown): boolean {
+  const url = parseUrl(value)
+  const sourceUrl = parseUrl(source)
+  const pathname = url ? decodePathname(url.pathname) : ''
+  return Boolean(url && sourceUrl && /^https?:$/i.test(url.protocol) &&
+    url.origin === sourceUrl.origin && !url.username && !url.password && !sourceUrl.username && !sourceUrl.password &&
+    !isLocalOrPrivateHostname(normalizeHostname(url.hostname)) && !url.search && !url.hash &&
+    !CAPABILITY_ACTION_PATH_RE.test(pathname.replace(/\/[^/]+\/?$/, '')) &&
+    /(?:^|\/)(?:logout|log[-_]?out|signout|sign[-_]?out)(?:\.(?:php|aspx?|html?))?\/?$/i.test(pathname))
 }
 
 function buildSensitiveDecision(reason: SensitiveExternalUrlReason): SensitiveExternalUrlDecision {

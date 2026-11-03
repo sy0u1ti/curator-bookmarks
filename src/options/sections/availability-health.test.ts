@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import { buildDeferredAvailabilityResult, createAvailabilityEvidenceCache, inspectAvailabilityWithEvidence } from './availability-pipeline.js'
 import { createAvailabilityRunScheduler, runAvailabilityQueue } from './availability-runner.js'
-import { buildFailureClassification, isRedirectedNavigation, shouldAcceptNavigationSuccess } from './classifier.js'
-import { extractAvailabilityHttpStatus, getNavigationHeaderOutcome, isHttpRedirectStatus, parseAvailabilityRetryAfter, readAvailabilityResponseHeaders } from '../../shared/availability-evidence.js'
-import { cancelNavigationCheck, requestNavigationCheck, requestAvailabilityProbe } from '../../shared/messages.js'
+import { buildFailureClassification, classifyAvailabilityProbeResult, getSafeAvailabilityRedirectUrl, isRedirectedNavigation, isUnverifiedAvailabilityErrorCode, requireRepeatedFailureEvidence, shouldAcceptNavigationSuccess, shouldFallbackToGet } from './classifier.js'
+import { extractAvailabilityHttpStatus, getNavigationHeaderOutcome, hasVerifiedHttpFailure, hasVerifiedLoginRequirement, isHttpRedirectStatus, parseAvailabilityRetryAfter, readAvailabilityResponseHeaders, shouldWaitForNavigationChallenge } from '../../shared/availability-evidence.js'
+import { buildAvailabilityDeletionRequest, collectAvailabilityPermissionOrigins, getAvailabilityRetestLabel } from './availability-actions.js'
+import { finalizeAvailabilityHistoryRun } from './history.js'
+import { assertAvailabilityEngineReady, cancelNavigationCheck, requestNavigationCheck, requestAvailabilityProbe } from '../../shared/messages.js'
 import type { AvailabilityResult, BookmarkRecord, NavigationAttempt } from '../../shared/types.js'
 
 const bookmark = (id = '1', url = 'https://example.net/page'): BookmarkRecord => ({
@@ -33,8 +35,190 @@ for (const status of [400, 401, 403, 404, 410, 429, 500, 503, 521, 599]) test('f
   })
   assert.equal(navigations, 1)
   assert.equal(probes, 0)
-  assert.equal(result?.status, 'review', 'anonymous HTTP errors do not prove a bookmark is safe to delete')
+  assert.equal(result?.status, status === 401 ? 'available' : [404, 410].includes(status) ? 'failed' : 'review',
+    'authentication is normal; actual missing pages fail, while other restrictions and server faults remain reviewable')
   assert.match(result!.detail, new RegExp(String(status)))
+})
+
+test('verified login redirects are normal, preserve the bookmark and stop before further requests', async () => {
+  for (const errorCode of ['', 'login-required', 'sensitive-redirect', 'ungranted-redirect']) {
+    const item = bookmark()
+    const target = 'https://identity.example.org/oauth/authorize?SAMLRequest=fixture'
+    const attempt: NavigationAttempt = {
+      ...failure(errorCode), finalUrl: item.url,
+      networkEvidence: { requestSent: true, requestedUrl: item.url, statusUrl: item.url, finalUrl: target,
+        statusCode: 302, finalResponseObserved: false,
+        redirects: [{ url: item.url, redirectUrl: target, statusCode: 302 }], timing: {} }
+    }
+    assert.equal(hasVerifiedLoginRequirement(attempt), true)
+    const result = await inspectAvailabilityWithEvidence(item, {
+      timeouts, ready: async () => true, navigate: async () => attempt,
+      resolveRedirect: async () => { throw Error('login is not a bookmark migration') },
+      probe: async () => { throw Error('a responding login gate needs no fallback') }
+    })
+    assert.equal(result?.status, 'available')
+    assert.equal(result?.requiresLogin, true)
+    assert.equal(result?.finalUrl, item.url)
+    assert.equal(result?.errorCode, undefined)
+    assert.equal(buildAvailabilityDeletionRequest([result!]), null, 'normal login pages never become cleanup candidates')
+  }
+  assert.equal(isUnverifiedAvailabilityErrorCode('login-required'), false)
+})
+
+test('HTTP 401 and loaded login pages are healthy without logging in or changing the saved URL', () => {
+  const direct = navigation(200, { finalUrl: 'https://example.net/login' })
+  direct.networkEvidence!.finalUrl = direct.finalUrl
+  const domOnly = { ...direct, networkEvidence: undefined }
+  for (const attempt of [navigation(401), direct, domOnly]) {
+    const result = buildFailureClassification(bookmark(), [attempt], null, false)
+    assert.equal(shouldAcceptNavigationSuccess(attempt), true)
+    assert.equal(result.status, 'available')
+    assert.equal(result.requiresLogin, true)
+    assert.equal(result.finalUrl, bookmark().url)
+    assert.equal(result.verifiedFailure, undefined)
+  }
+  assert.equal(getNavigationHeaderOutcome(401, {})?.status, 'available')
+  assert.equal(hasVerifiedHttpFailure(navigation(401)), false)
+  assert.equal(shouldFallbackToGet(401), false, 'an anonymous HEAD login requirement does not need a GET')
+  const previousFailure: AvailabilityResult = {
+    ...bookmark(), status: 'failed', finalUrl: bookmark().url, detail: 'old failure', badgeText: 'old',
+    errorCode: 'http-404', verifiedFailure: 'http-missing', historyStatus: 'persistent', abnormalStreak: 3
+  }
+  const retested = buildFailureClassification(previousFailure, [navigation(401)], null, false)
+  assert.equal(retested.errorCode, undefined)
+  assert.equal(retested.verifiedFailure, undefined)
+  assert.equal(retested.abnormalStreak, 0)
+})
+
+test('a verified session-refresh handshake is normal without following or storing its token URL', async () => {
+  const item = bookmark('session', 'https://app.example.net/keys')
+  const target = 'https://session.example.org/v1/client/handshake?redirect_url=https%3A%2F%2Fapp.example.net%2Fkeys&__clerk_api_version=2026-05-12&__session=fixture'
+  const attempt: NavigationAttempt = {
+    ...failure('sensitive-redirect'), finalUrl: item.url,
+    networkEvidence: { requestSent: true, requestedUrl: item.url, statusUrl: item.url, finalUrl: target,
+      statusCode: 307, finalResponseObserved: false,
+      redirects: [{ url: item.url, redirectUrl: target, statusCode: 307 }], timing: {} }
+  }
+  const result = await inspectAvailabilityWithEvidence(item, {
+    timeouts, ready: async () => true, navigate: async () => attempt,
+    resolveRedirect: async () => { throw Error('session refresh is not a bookmark migration') },
+    probe: async () => { throw Error('the token-bearing target must not be requested') }
+  })
+  assert.equal(result?.status, 'available')
+  assert.equal(result?.finalUrl, item.url)
+  assert.equal(buildAvailabilityDeletionRequest([result!]), null)
+  assert.equal(JSON.stringify(result).includes('__session'), false)
+  assert.equal(hasVerifiedLoginRequirement({ ...failure('ungranted-redirect'), finalUrl: target }), false,
+    'a handshake-looking URL alone does not prove any response')
+})
+
+test('a responding same-site session-expiry redirect is normal without executing logout', async () => {
+  const item = bookmark('expired', 'https://example.net/orders')
+  const target = 'https://example.net/logout'
+  const attempt: NavigationAttempt = {
+    ...failure('sensitive-redirect'), finalUrl: item.url,
+    networkEvidence: { requestSent: true, requestedUrl: item.url, statusUrl: item.url, finalUrl: target,
+      statusCode: 302, finalResponseObserved: false,
+      redirects: [{ url: item.url, redirectUrl: target, statusCode: 302 }], timing: {} }
+  }
+  const result = await inspectAvailabilityWithEvidence(item, {
+    timeouts, ready: async () => true, navigate: async () => attempt,
+    resolveRedirect: async () => { throw Error('logout must not execute') }
+  })
+  assert.equal(result?.status, 'available')
+  assert.equal(result?.finalUrl, item.url)
+  assert.equal(buildAvailabilityDeletionRequest([result!]), null)
+  assert.equal(hasVerifiedLoginRequirement({ ...failure('sensitive-redirect'), finalUrl: target }), false)
+})
+
+test('HTTP upgrades and known safe redirects are requested together without broadening permission scope', () => {
+  const item = bookmark('http', 'http://original.example.net/article')
+  const other = bookmark('https', 'https://same.example.net/page')
+  const result = { ...healthy(item), status: 'review' as const, errorCode: 'ungranted-redirect', finalUrl: 'https://moved.example.org/article' }
+  const origins = collectAvailabilityPermissionOrigins([item, other], [result, result])
+  assert.deepEqual(origins, [
+    'http://original.example.net/*', 'https://moved.example.org/*',
+    'https://original.example.net/*', 'https://same.example.net/*'
+  ])
+  assert.equal(origins.some(origin => origin.includes('*://') || origin.includes('://*')), false)
+})
+
+test('permission planning never includes stale, out-of-scope, unsafe or session-bearing destinations', () => {
+  const item = bookmark('current')
+  const base = { ...healthy(item), errorCode: 'ungranted-redirect' }
+  const results = [
+    { ...base, url: 'https://edited.example.net/old', finalUrl: 'https://stale.example.net/' },
+    { ...base, id: 'outside', finalUrl: 'https://outside.example.net/' },
+    { ...base, finalUrl: 'http://downgrade.example.net/' },
+    { ...base, finalUrl: 'https://other.example.net/logout' },
+    { ...base, finalUrl: 'http://127.0.0.1/' },
+    { ...base, finalUrl: 'https://session.example.org/v1/client/handshake?__session=fixture' }
+  ]
+  assert.deepEqual(collectAvailabilityPermissionOrigins([item], results), ['https://example.net/*'])
+})
+
+test('URL-only login hints, blocked requests and challenge pages never invent a successful response', () => {
+  const noResponse = failure('login-required')
+  const noRequest = navigation(401)
+  noRequest.networkEvidence!.requestSent = false
+  const unfinished = navigation(401)
+  unfinished.networkEvidence!.finalResponseObserved = false
+  const challenge = navigation(401)
+  challenge.networkEvidence!.challenge = true
+  const urlOnly = { ...failure('ungranted-redirect'), finalUrl: 'https://example.net/login' }
+  const cancelled = navigation(401, { errorCode: 'cancelled' })
+  const missing = navigation(404, { finalUrl: 'https://example.net/login' })
+  for (const attempt of [noResponse, noRequest, unfinished, challenge, urlOnly, cancelled, missing]) {
+    assert.equal(hasVerifiedLoginRequirement(attempt), false)
+    assert.equal(shouldAcceptNavigationSuccess(attempt), false)
+    if (attempt === challenge) continue
+    const result = buildFailureClassification(bookmark(), [attempt], null, false)
+    assert.notEqual(result.status, 'available')
+    assert.equal(result.requiresLogin, undefined)
+  }
+  const gate = buildFailureClassification(bookmark(), [challenge], null, false)
+  assert.equal(gate.requiresLogin, undefined, 'a responding challenge is not a login requirement')
+  assert.equal(buildFailureClassification(bookmark(), [noResponse], null, false).errorCode, 'unverified-network-endpoint')
+})
+
+test('independent authentication responses count as available but denied probes cannot supply that evidence', () => {
+  for (const method of ['HEAD', 'GET']) {
+    for (const status of [401, 302]) {
+      const probe = classifyAvailabilityProbeResult({
+        ok: status === 302, status, finalUrl: bookmark().url, redirected: false, errorCode: '',
+        detail: 'HTTP ' + status, ...(status === 302 ? { requiresLogin: true } : {})
+      }, method)
+      for (const errorCode of ['timeout', 'net::ERR_BLOCKED_BY_CLIENT']) {
+        const result = buildFailureClassification(bookmark(), [failure(errorCode)], probe, true)
+        assert.equal(result.status, 'available')
+        assert.equal(result.requiresLogin, true)
+        assert.equal(result.finalUrl, bookmark().url)
+      }
+    }
+  }
+  const blocked = classifyAvailabilityProbeResult({
+    ok: false, status: 401, finalUrl: bookmark().url, redirected: false, errorCode: 'permission-missing',
+    detail: 'Not requested', requiresLogin: true
+  }, 'HEAD')
+  assert.equal(buildFailureClassification(bookmark(), [failure('permission-missing')], blocked, true).status, 'review')
+})
+
+test('login availability survives duplicate caching and recovers old abnormal history without deletion', async () => {
+  const cache = createAvailabilityEvidenceCache()
+  const item = bookmark()
+  const first = await cache.inspect(item, async () => buildFailureClassification(item, [navigation(401)], null, false))
+  const cached = await cache.inspect(bookmark('duplicate'), async () => { throw Error('same-run success should be reused') })
+  assert.equal(cached?.requiresLogin, true)
+  assert.equal(cached?.status, 'available')
+  assert.equal(cached?.id, 'duplicate')
+  const history = finalizeAvailabilityHistoryRun({
+    checkedHealthyBookmarks: new Map([[item.id, first!.url]]), currentEntries: [],
+    previousEntries: [{ ...item, status: 'review', streak: 3 }], completedAt: 1234
+  })
+  assert.equal(history.summary.totalAbnormal, 0)
+  assert.equal(history.summary.recoveredCount, 1)
+  assert.equal(history.recoveredResults[0].id, item.id)
+  assert.equal(buildAvailabilityDeletionRequest([first!, cached!]), null)
 })
 
 test('resolved redirect and unsupported optional DNS do not erase real HTTP evidence', () => {
@@ -43,7 +227,8 @@ test('resolved redirect and unsupported optional DNS do not erase real HTTP evid
   const result = buildFailureClassification(bookmark(), [redirected, navigation(404)], {
     kind: 'unknown', method: 'HEAD', label: 'unsupported', detail: 'DNS API unavailable', errorCode: 'unsupported-dns-boundary'
   }, true)
-  assert.equal(result.badgeText, '资源不存在·待确认')
+  assert.equal(result.badgeText, '页面不存在')
+  assert.equal(result.verifiedFailure, 'http-missing')
   assert.match(result.detail, /404/)
 })
 
@@ -73,7 +258,7 @@ test('response headers distinguish HTML, no-content, attachments and HTTP errors
     { name: 'Content-Disposition', value: 'attachment; filename="file.pdf"' },
     { name: 'Retry-After', value: '1.5' }
   ])
-  assert.deepEqual(metadata, { contentType: 'application/pdf', attachment: true, retryAfterMs: 1500 })
+  assert.deepEqual(metadata, { contentType: 'application/pdf', attachment: true, challenge: false, retryAfterMs: 1500 })
   assert.equal(getNavigationHeaderOutcome(200, metadata)?.status, 'available')
   assert.equal(getNavigationHeaderOutcome(403, metadata)?.status, 'failed')
   assert.equal(getNavigationHeaderOutcome(204, {})?.status, 'available')
@@ -82,6 +267,201 @@ test('response headers distinguish HTML, no-content, attachments and HTTP errors
   assert.equal(isHttpRedirectStatus(304), false)
   assert.equal(isHttpRedirectStatus(302), true)
   assert.equal(shouldAcceptNavigationSuccess(navigation(304)), true)
+})
+
+test('intermediate browser challenges are not terminal HTTP verdicts or successful DOM loads', () => {
+  for (const status of [200, 401, 403, 503]) {
+    const metadata = readAvailabilityResponseHeaders([{ name: 'CF-Mitigated', value: 'challenge' }], 0, status)
+    assert.equal(metadata.challenge, true)
+    assert.equal(getNavigationHeaderOutcome(status, metadata), null)
+    const attempt = navigation(status)
+    Object.assign(attempt.networkEvidence!, metadata)
+    assert.equal(hasVerifiedHttpFailure(attempt), false)
+    assert.equal(shouldAcceptNavigationSuccess(attempt), false)
+    assert.equal(shouldWaitForNavigationChallenge(attempt.networkEvidence, true), true)
+    const result = buildFailureClassification(bookmark(), [attempt], null, false)
+    assert.equal(result.status, 'available', 'a CDN challenge response proves the site is online')
+    assert.equal(result.errorCode, undefined)
+    assert.equal(result.finalUrl, bookmark().url)
+  }
+  const unobserved = buildFailureClassification(bookmark(), [failure('challenge-required')], null, false)
+  assert.equal(unobserved.status, 'review', 'a challenge without an observed response proves nothing')
+  assert.equal(isUnverifiedAvailabilityErrorCode(unobserved.errorCode), true)
+  const jiasule = readAvailabilityResponseHeaders([{ name: 'X-Via-JSL', value: 'fixture,-' }], 0, 521)
+  assert.equal(jiasule.challenge, true, 'observed Jiasule 521 browser checks need time for the reload')
+  assert.equal(getNavigationHeaderOutcome(521, jiasule), null)
+  assert.equal(readAvailabilityResponseHeaders([{ name: 'X-Via-JSL', value: 'fixture,-' }], 0, 200).challenge, false)
+  assert.equal(getNavigationHeaderOutcome(521, readAvailabilityResponseHeaders([], 0, 521))?.status, 'failed',
+    'a plain origin 521 is not invented into a challenge')
+  assert.equal(shouldWaitForNavigationChallenge({ requestSent: true, requestedUrl: bookmark().url, redirects: [], timing: {} }, true), true)
+  assert.equal(shouldWaitForNavigationChallenge(navigation().networkEvidence, true), false)
+})
+
+test('challenge completion is healthy; an unresolved challenge never triggers anonymous fallback', async () => {
+  const confirmed = await inspectAvailabilityWithEvidence(bookmark(), {
+    timeouts, ready: async () => true, resolveRedirect: async () => '',
+    navigate: async () => navigation()
+  })
+  assert.equal(confirmed?.status, 'available')
+  const unresolved = navigation(403, { errorCode: 'challenge-required' })
+  unresolved.networkEvidence!.challenge = true
+  const pending = await inspectAvailabilityWithEvidence(bookmark(), {
+    timeouts, ready: async () => true, navigate: async () => unresolved,
+    resolveRedirect: async () => { throw Error('challenge should not be treated as a redirect') },
+    probe: async () => { throw Error('an anonymous probe cannot complete a browser challenge') }
+  })
+  assert.equal(pending?.status, 'available')
+})
+
+test('safe authorized cross-origin hops reach a verified result but denied hops remain pending', async () => {
+  const item = bookmark()
+  const canonical = 'https://canonical.example.org/page'
+  for (const granted of [true, false]) {
+    const visited: string[] = []
+    const result = await inspectAvailabilityWithEvidence(item, {
+      timeouts, ready: async () => true,
+      navigate: async url => {
+        visited.push(url)
+        return url === item.url ? { ...failure('ungranted-redirect'), finalUrl: canonical } : navigation(200, { finalUrl: url })
+      },
+      resolveRedirect: async (url, attempt) => {
+        const candidate = getSafeAvailabilityRedirectUrl(url, attempt)
+        return granted ? candidate : ''
+      },
+      probe: async () => { throw Error('redirect permissions cannot be bypassed by probing') }
+    })
+    assert.equal(result?.status, granted ? 'redirected' : 'review')
+    assert.deepEqual(visited, granted ? [item.url, canonical] : [item.url])
+    if (!granted) assert.equal(result?.errorCode, 'ungranted-redirect')
+  }
+})
+
+test('two real connection failures remain actionable when optional DNS is unavailable', async () => {
+  for (const errorCode of ['net::ERR_CONNECTION_CLOSED', 'net::ERR_CONNECTION_RESET', 'net::ERR_CONNECTION_REFUSED', 'net::ERR_NAME_NOT_RESOLVED', 'net::ERR_ADDRESS_UNREACHABLE']) {
+    let calls = 0
+    const result = await inspectAvailabilityWithEvidence(bookmark(), {
+      timeouts, ready: async () => true, resolveRedirect: async () => '',
+      navigate: async () => {
+        calls++
+        return { ...failure(errorCode), networkEvidence: { requestSent: true, requestedUrl: bookmark().url,
+          errorCode, redirects: [], timing: {} } }
+      },
+      probe: async () => { throw Error('the optional DNS API is not required for two actual navigation failures') }
+    })
+    assert.equal(calls, 2)
+    assert.equal(result?.status, 'failed')
+    assert.equal(result?.verifiedFailure, 'repeated-network')
+    assert.equal(requireRepeatedFailureEvidence(result!, false).status, 'failed')
+  }
+  const mixed = buildFailureClassification(bookmark(), [failure('net::ERR_CONNECTION_RESET'), failure('net::ERR_CONNECTION_CLOSED')], null, false)
+  assert.equal(mixed.status, 'review', 'uncorrelated failures without actual request evidence stay reviewable')
+  const timeoutsOnly = buildFailureClassification(bookmark(), [failure('timeout'), failure('timeout')], null, false)
+  assert.equal(timeoutsOnly.status, 'review')
+})
+
+test('a responding server redirect to an ungranted target is a redirect, not an availability fault', async () => {
+  const item = bookmark('moved', 'https://old.example.net/app?page=2')
+  const target = 'https://new.example.org/app?page=2'
+  const blocked: NavigationAttempt = {
+    ...failure('ungranted-redirect'), finalUrl: target,
+    networkEvidence: { requestSent: true, requestedUrl: item.url, statusUrl: item.url, finalUrl: target, statusCode: 301,
+      finalResponseObserved: false, redirects: [{ url: item.url, redirectUrl: target, statusCode: 301 }], timing: {} }
+  }
+  let navigations = 0
+  const result = await inspectAvailabilityWithEvidence(item, {
+    timeouts, ready: async () => true, navigate: async () => { navigations++; return blocked },
+    resolveRedirect: async () => '',
+    probe: async () => { throw Error('an observed redirect needs no anonymous probe') }
+  })
+  assert.equal(navigations, 1)
+  assert.equal(result?.status, 'redirected')
+  assert.equal(result?.finalUrl, target)
+  assert.equal(result?.errorCode, undefined)
+  assert.equal(buildAvailabilityDeletionRequest([result!]), null)
+  const scriptOnly = buildFailureClassification(item, [{ ...failure('ungranted-redirect'), finalUrl: target }], null, false)
+  assert.equal(scriptOnly.status, 'review', 'without an observed response, the source server is not verified')
+})
+
+test('a server redirect into a protected billing page proves the bookmark responds without requesting it', async () => {
+  const item = bookmark('console', 'https://console.example.net/settings/plans')
+  const moved = 'https://platform.example.org/settings/plans'
+  const billing = 'https://platform.example.org/settings/billing'
+  const result = await inspectAvailabilityWithEvidence(item, {
+    timeouts, ready: async () => true,
+    navigate: async url => url === item.url
+      ? { ...failure('ungranted-redirect'), finalUrl: moved, networkEvidence: { requestSent: true, requestedUrl: url, statusUrl: url,
+        finalUrl: moved, statusCode: 301, finalResponseObserved: false, redirects: [{ url, redirectUrl: moved, statusCode: 301 }], timing: {} } }
+      : { ...failure('sensitive-redirect'), finalUrl: url, networkEvidence: { requestSent: true, requestedUrl: url, statusUrl: url,
+        finalUrl: billing, statusCode: 307, finalResponseObserved: false, redirects: [{ url, redirectUrl: billing, statusCode: 307 }], timing: {} } },
+    resolveRedirect: async (url, attempt) => getSafeAvailabilityRedirectUrl(url, attempt),
+    probe: async () => { throw Error('the protected target must not be requested') }
+  })
+  assert.equal(result?.status, 'redirected')
+  assert.equal(result?.finalUrl, moved, 'only the verified safe hop is offered, never the billing target')
+  assert.equal(result?.errorCode, undefined)
+  const unobserved = buildFailureClassification(item, [{ ...failure('sensitive-redirect'), finalUrl: billing }], null, false)
+  assert.equal(unobserved.errorCode, 'sensitive-redirect', 'a protected target without a server response stays protected')
+})
+
+test('two unanswered navigations fail even when the optional DNS probe cannot run', async () => {
+  let calls = 0
+  const result = await inspectAvailabilityWithEvidence(bookmark(), {
+    timeouts, ready: async () => true, resolveRedirect: async () => '',
+    navigate: async () => {
+      calls++
+      const errorCode = calls === 1 ? 'timeout' : 'net::ERR_TIMED_OUT'
+      return { ...failure(errorCode), networkEvidence: { requestSent: true, requestedUrl: bookmark().url, errorCode, redirects: [], timing: {} } }
+    },
+    probe: async () => ({ kind: 'unknown', method: 'HEAD', label: '探测受限', detail: 'DNS API unavailable', errorCode: 'unsupported-dns-boundary' })
+  })
+  assert.equal(calls, 2)
+  assert.equal(result?.status, 'failed')
+  assert.equal(result?.badgeText, '连接超时')
+  assert.equal(result?.verifiedFailure, undefined, 'timeouts need a repeat in a later run before cleanup')
+  assert.equal(requireRepeatedFailureEvidence(result!, false).status, 'review')
+  assert.equal(requireRepeatedFailureEvidence(result!, true).status, 'failed')
+  const reachable = buildFailureClassification(bookmark(), [failure('timeout'), failure('timeout')].map(attempt => ({
+    ...attempt, networkEvidence: { requestSent: true, requestedUrl: bookmark().url, errorCode: 'timeout', redirects: [], timing: {} }
+  })), { kind: 'ok', method: 'HEAD', label: 'HTTP 200', detail: 'HTTP 200' }, true)
+  assert.equal(reachable.status, 'review', 'a successful independent probe keeps a slow page reviewable')
+})
+
+test('verified first-run failures survive per-bookmark evidence projection', async () => {
+  for (const statusCode of [404, 410]) {
+    const item = bookmark()
+    const result = await createAvailabilityEvidenceCache().inspect(item,
+      async () => buildFailureClassification(item, [navigation(statusCode)], null, false))
+    assert.equal(result?.verifiedFailure, 'http-missing')
+    assert.equal(requireRepeatedFailureEvidence(result!, false).status, 'failed')
+  }
+  const anonymous = buildFailureClassification(bookmark(), [failure('timeout')], {
+    kind: 'missing', method: 'HEAD', label: 'HTTP 404', detail: 'HTTP 404'
+  }, true)
+  assert.equal(anonymous.status, 'review')
+  assert.equal(anonymous.verifiedFailure, undefined)
+})
+
+test('review and failed bookmarks share direct deletion without changing classification', () => {
+  const review = { ...healthy(bookmark('review')), status: 'review' as const }
+  const failed = { ...healthy(bookmark('failed')), status: 'failed' as const }
+  const request = buildAvailabilityDeletionRequest([review, failed, review, healthy(bookmark('healthy'))])!
+  assert.equal(request.candidates.length, 2)
+  assert.match(request.copy, /1 条仍待确认/)
+  assert.deepEqual(request.candidates, [
+    { id: 'review', expectedUrl: review.url }, { id: 'failed', expectedUrl: failed.url }
+  ])
+  review.url = 'https://changed.example.net/'
+  assert.equal(request.candidates[0].expectedUrl, 'https://example.net/page', 'confirmation freezes exact URL identity')
+  assert.equal(review.status, 'review', 'deleting is not evidence for a status promotion')
+  assert.equal(buildAvailabilityDeletionRequest([healthy(bookmark())]), null)
+  assert.match(buildAvailabilityDeletionRequest([failed])!.title, /Bookmark failed/)
+})
+
+test('retest actions state the need for authorization without granting it implicitly', () => {
+  assert.equal(getAvailabilityRetestLabel([{ errorCode: 'ungranted-redirect' }]), '授权并重测')
+  assert.equal(getAvailabilityRetestLabel([{ errorCode: 'permission-missing' }]), '授权并重测')
+  assert.equal(getAvailabilityRetestLabel([{ errorCode: 'http-404' }]), '重新检测')
+  assert.equal(getAvailabilityRetestLabel([{ errorCode: 'ungranted-redirect' }], true), '重新检测中…')
 })
 
 test('status parsing never treats URL numbers or durations as HTTP evidence', () => {
@@ -329,6 +709,11 @@ test('client watchdog rejects stalled requests, sends cancellation and bounds ca
     const probeRejected = assert.rejects(probe, (error: any) => error.code === 'availability-runtime-timeout')
     fire(6000)
     await probeRejected
+    const engine = assertAvailabilityEngineReady()
+    const engineRejected = assert.rejects(engine, (error: any) => error.code === 'availability-engine-mismatch')
+    fire(3000)
+    await engineRejected
+    assert.equal(messages.filter(entry => entry.message.type === 'availability:engine').length, 1)
     assert.equal(timers.size, 0)
   } finally {
     globalThis.setTimeout = originalSetTimeout

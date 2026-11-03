@@ -16,7 +16,7 @@ const defaultOptionsModalsState: OptionsModalsState = {
   delete: {
     confirmDisabled: false,
     confirmLabel: '确认删除',
-    copy: '这些书签会从 Chrome 书签中移除，并先进入回收站；低置信异常结果会保留。',
+    copy: '将从浏览器书签中移除，可在回收站恢复。',
     open: false
   },
   move: {

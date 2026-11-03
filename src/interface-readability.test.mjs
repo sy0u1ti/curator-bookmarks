@@ -151,9 +151,12 @@ try {
   await page.waitForFunction(() => document.activeElement?.id === 'search-help-toggle', undefined, { timeout: 2000 })
   await trigger.press('ArrowDown')
   await help.waitFor({ state: 'visible' })
-  // Dismiss by clicking popup content below the panel.
-  const paneBox = await page.locator('.popup-main-pane').first().boundingBox()
-  await page.mouse.click(paneBox.x + 8, paneBox.y + paneBox.height - 8)
+  // Dismiss by clicking non-interactive popup content outside the panel. The
+  // list has no blank tail, so a point inside the pane would open a bookmark.
+  const brandBox = await page.locator('.hero-brand').boundingBox()
+  const helpBox = await help.boundingBox()
+  assert.ok(brandBox.x + brandBox.width < helpBox.x, 'the dismiss target must sit outside the help panel')
+  await page.mouse.click(brandBox.x + brandBox.width / 2, brandBox.y + brandBox.height / 2)
   await help.waitFor({ state: 'hidden' })
 
   const settings = page.locator('#open-settings')
@@ -196,15 +199,11 @@ try {
     await panel.waitFor({ state: 'visible' })
     await page.waitForTimeout(280)
     if (section === 'general') {
-      const helpButton = panel.getByRole('button', { name: '自动分析说明', exact: true })
-      await helpButton.click()
-      const explanation = page.getByRole('dialog', { name: '自动分析', exact: true })
-      await explanation.waitFor({ state: 'visible' })
-      await page.waitForFunction(() => [...document.querySelectorAll('[role=dialog]')].some(e => e.textContent.includes('自动分析') && getComputedStyle(e).opacity === '1'))
-      assert.equal(await explanation.evaluate(e => {const r=e.getBoundingClientRect();return e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))}), true)
-      await page.keyboard.press('Escape')
-      await explanation.waitFor({ state: 'hidden' })
-      assert.equal(await helpButton.evaluate(e => e === document.activeElement), true)
+      // The switch explains itself inline; a separate help popover would repeat it.
+      assert.equal(await panel.getByRole('button', { name: '自动分析说明', exact: true }).count(), 0)
+      const autoAnalyze = panel.getByRole('switch', { name: '自动分析', exact: true })
+      const description = await autoAnalyze.evaluate(e => document.getElementById(e.getAttribute('aria-describedby') || '')?.textContent || '')
+      assert.ok(description.trim(), 'the auto-analysis switch must reference its inline description')
     }
     const scroll = page.locator('#options-main')
     const metrics = await scroll.evaluate(e => ({ max: e.scrollHeight - e.clientHeight, height: e.clientHeight }))

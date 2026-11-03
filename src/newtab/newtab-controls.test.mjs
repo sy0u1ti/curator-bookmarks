@@ -18,7 +18,15 @@ const report = { timeZones: [], dates: [], engines: [] }
 try {
   const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker')
   await worker.evaluate(() => chrome.storage.local.set({ curatorBookmarkNewTabBackgroundSettings: { type: 'color', color: '#111111' } }))
-  await page.clock.setFixedTime(new Date('2026-10-06T15:24:35Z'))
+  // Playwright's clock also fakes requestIdleCallback, which the search index waits on.
+  // The clock display only needs wall time, so fix Date and leave the scheduler real.
+  await page.addInitScript(fixed => {
+    const RealDate = Date
+    globalThis.Date = class extends RealDate {
+      constructor(...args) { super(...(args.length ? args : [fixed])) }
+      static now() { return fixed }
+    }
+  }, Date.parse('2026-10-06T15:24:35Z'))
   await page.goto(`chrome-extension://${new URL(worker.url()).host}/src/newtab/newtab.html`)
   const select = async (name, value) => {
     await page.getByRole('combobox', { name, exact: true }).click()

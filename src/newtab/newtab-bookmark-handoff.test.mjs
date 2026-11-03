@@ -2,12 +2,17 @@ import assert from 'node:assert/strict'
 
 
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { chromium } from 'playwright'
 
 const browserChannel = process.env.CURATOR_BROWSER_CHANNEL || 'msedge'
+// The snapshot version is bumped whenever cached tile geometry changes; follow the source.
+const PREBOOT_VERSION = Number(
+  (await readFile(new URL('./newtab-bookmark-preboot.ts', import.meta.url), 'utf8'))
+    .match(/NEWTAB_BOOKMARK_PREBOOT_VERSION = (\d+)/)?.[1]
+)
 
 const TITLE_SETTLE_DELAY_MS = 1_600
 const EXPECTED_GLASS_BACKGROUND = 'rgba(0, 0, 0, 0.13)'
@@ -199,7 +204,7 @@ try {
       version: snapshot?.version ?? null
     }
   }, bookmarkId)
-  assert.equal(cachedTitleRect.version, 5)
+  assert.equal(cachedTitleRect.version, PREBOOT_VERSION)
   assert.ok(cachedTitleRect.titleRect, `Expected cached title geometry: ${JSON.stringify(cachedTitleRect)}`)
   const initialPerformance = await page.evaluate(() => ({
     firstBookmarksMs: performance.getEntriesByName('newtab.firstBookmarksMs', 'measure').at(-1)?.duration ?? null,
@@ -780,7 +785,9 @@ async function seedBookmarks(worker) {
         url: `https://example.com/curator-handoff-probe/${index + 1}`
       }))
     }
-    for (let index = 0; index < 3; index += 1) {
+    // Enough rows to overflow the 463px viewport regardless of tile padding tweaks,
+    // so the frozen-title scroll check always has room to scroll.
+    for (let index = 0; index < 12; index += 1) {
       bookmarks.push(await chrome.bookmarks.create({
         parentId: secondaryFolder.id,
         title: `Next section ${index + 1}`,

@@ -1,18 +1,19 @@
 import { getInboxWorkflowSettings, type InboxWorkflowMode } from '../../shared/inbox-workflow.js'
 import { saveInboxSettings } from '../../shared/inbox.js'
-import { aiNamingState, managerState } from '../shared-options/state.js'
+import { managerState } from '../shared-options/state.js'
 
 export async function saveInboxWorkflowMode(
   mode: InboxWorkflowMode,
   render: () => void
 ) {
-  if (aiNamingState.pendingFeatureSwitch) {
+  // Provider settings use a different storage record; only Inbox saves conflict.
+  if (managerState.inboxSettingsSaving) {
     render()
     return
   }
 
   try {
-    aiNamingState.pendingFeatureSwitch = 'inboxWorkflow'
+    managerState.inboxSettingsSaving = true
     managerState.inboxSettingsStatus = '正在保存 Inbox 设置…'
     render()
     managerState.inboxSettings = await saveInboxSettings(getInboxWorkflowSettings(mode))
@@ -22,9 +23,7 @@ export async function saveInboxWorkflowMode(
       ? error.message
       : 'Inbox 设置保存失败，请稍后重试。'
   } finally {
-    if (aiNamingState.pendingFeatureSwitch === 'inboxWorkflow') {
-      aiNamingState.pendingFeatureSwitch = ''
-    }
+    managerState.inboxSettingsSaving = false
     render()
   }
 }

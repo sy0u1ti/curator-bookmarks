@@ -925,6 +925,10 @@ let newTabMetadataRefreshTimer: ReturnType<typeof setTimeout> | undefined
 let newTabActivityWriteQueue = Promise.resolve()
 let featuredBackgroundDownloadInFlight = false
 const featuredBackgroundFavoriteWrites = new Set<string>()
+const featuredBackgroundStatuses = new Map<string, {
+  message: string
+  tone: 'info' | 'success' | 'warning' | 'error'
+}>()
 let newTabRefreshStorageChanges: Record<string, unknown> | null = null
 const newTabHydrationStorageKeys = new Set<string>([
   ...NEWTAB_SYNCED_SETTING_KEYS,
@@ -1383,6 +1387,8 @@ function handleNewtabWindowResize(): void {
       resizeLayoutFrame = 0
       applyIconSettingsLive()
       updateClockText()
+      // Search bounds depend on the viewport even when no bookmark grid is shown.
+      runBatchedAdaptiveLayoutUpdate()
     })
   }
 }
@@ -2058,7 +2064,7 @@ function commitBackgroundSettings(
   syncBackgroundSettingsControls()
   scheduleFeaturedBackgroundDailyRefresh()
   scheduleCurrentBackgroundStartupCache(nextSettings)
-  void applyBackgroundSettingsAfterCacheUpdate(shouldClearUrlCache)
+  runBackgroundTask(applyBackgroundSettingsAfterCacheUpdate(shouldClearUrlCache), '背景应用失败')
 }
 
 async function handleBackgroundUrlCommit(): Promise<void> {
@@ -2071,7 +2077,10 @@ async function handleBackgroundUrlCommit(): Promise<void> {
     return
   }
 
+  const session = newTabControllerGeneration
+  const version = backgroundSettingsMutationVersion
   const permissionGranted = await ensureBackgroundImageFetchPermission(imageUrl, { request: true })
+  if (!newTabControllerStarted || session !== newTabControllerGeneration || version !== backgroundSettingsMutationVersion) return
   if (!permissionGranted) {
     setBackgroundStatus('未授权该图片域名，首屏缓存可能无法准备。', 'warning')
     syncBackgroundSettingsControls()
@@ -2081,9 +2090,12 @@ async function handleBackgroundUrlCommit(): Promise<void> {
 }
 
 async function applyBackgroundSettingsAfterCacheUpdate(shouldClearUrlCache: boolean): Promise<void> {
+  const session = newTabControllerGeneration
+  const version = backgroundSettingsMutationVersion
   if (shouldClearUrlCache) {
     await clearBackgroundUrlCache()
   }
+  if (!newTabControllerStarted || session !== newTabControllerGeneration || version !== backgroundSettingsMutationVersion) return
   await applyBackgroundSettings()
 }
 
@@ -8307,6 +8319,9 @@ function cleanupNewTabController(): void {
   state.featuredBackgroundRefreshing = false
   featuredBackgroundDownloadInFlight = false
   featuredBackgroundFavoriteWrites.clear()
+  featuredBackgroundStatuses.clear()
+  state.featuredBackgroundStatus = ''
+  state.featuredBackgroundStatusTone = 'info'
   if (settingsPersistence.hasPending()) {
     // A just-edited layout may not have reached the measured preboot snapshot.
     // Do not replay its previous geometry while recovering the final settings.
@@ -9477,9 +9492,11 @@ function setBackgroundStatus(
 /** Fire-and-forget with a visible failure path: background work must never
  * fail silently, or the UI keeps showing the previous state with no reason. */
 function runBackgroundTask(task: Promise<unknown>, failureMessage: string): void {
+  const session = newTabControllerGeneration
+  const version = backgroundSettingsMutationVersion
   void task.catch((error) => {
     console.warn(failureMessage, error)
-    if (!newTabControllerStarted) return
+    if (!newTabControllerStarted || session !== newTabControllerGeneration || version !== backgroundSettingsMutationVersion) return
     const detail = error instanceof Error && error.message ? `：${error.message}` : ''
     setBackgroundStatus(`${failureMessage}${detail}`, 'error')
     render()
@@ -11259,7 +11276,7 @@ function handleModuleSettingToggle(key: NewTabModuleSettingKey, enabled: boolean
     [key]: enabled
   })
   void saveNewTabModuleSettings().catch((error) => {
-    setSettingsSaveStatus('error', error instanceof Error ? error.message : '模块设置保存失败')
+    console.warn('新标签页模块设置保存失败。', error)
   })
   syncNewTabModernSettingsControls()
   scheduleRender({ updateClock: true })
@@ -11515,12 +11532,14 @@ function resetIconSettingsToDefaults(): void {
 }
 
 async function saveSettingsWithFeedback(values: Record<string, unknown>): Promise<void> {
-  clearSettingsSaveStatus()
   try {
     await settingsPersistence.save(values)
-    clearSettingsSaveStatus()
+    // A successful write only resolves its own keys, not another section's failure.
+    if (!settingsPersistence.hasPending()) clearSettingsSaveStatus()
   } catch (error) {
-    setSettingsSaveStatus('error', '保存失败，已保留本次调整；再次修改或打开新标签页时会重试。')
+    if (settingsPersistence.hasPending()) {
+      setSettingsSaveStatus('error', '保存失败，已保留本次调整；再次修改或打开新标签页时会重试。')
+    }
     throw error
   }
 }
@@ -12232,6 +12251,8 @@ async function toggleFeaturedBackgroundFavorite(featuredId: string): Promise<voi
   const session = newTabControllerGeneration
   const favorite = !state.featuredBackgroundFavoriteIds.includes(id)
   featuredBackgroundFavoriteWrites.add(id)
+  setFeaturedBackgroundStatus(`favorite:${id}`, '')
+  syncFeaturedBackgroundModalControls()
   try {
     const favorites = await withLocalStorageTransaction(async transaction => {
       const stored = await getLocalStorage(STORAGE_KEYS.newTabFeaturedBackgroundFavorites)
@@ -12248,7 +12269,7 @@ async function toggleFeaturedBackgroundFavorite(featuredId: string): Promise<voi
     if (session === newTabControllerGeneration && isFeaturedBackgroundPickerOpen()) renderFeaturedBackgroundPicker(gallery)
   } catch (error) {
     if (session === newTabControllerGeneration && newTabControllerStarted) {
-      setFeaturedBackgroundStatus(error instanceof Error ? `收藏保存失败：${error.message}` : '收藏保存失败，请重试。', 'error')
+      setFeaturedBackgroundStatus(`favorite:${id}`, error instanceof Error ? `收藏保存失败：${error.message}` : '收藏保存失败，请重试。', 'error')
       syncFeaturedBackgroundModalControls()
     }
   } finally {
@@ -12262,12 +12283,14 @@ async function downloadFeaturedBackgroundFromPicker(featuredId: string): Promise
   const session = newTabControllerGeneration
   const isCurrent = () => session === newTabControllerGeneration && newTabControllerStarted
   featuredBackgroundDownloadInFlight = true
+  setFeaturedBackgroundStatus('download', '正在准备下载...', 'info')
+  syncFeaturedBackgroundModalControls()
   try {
     const item = await getFeaturedBackgroundDownloadItem(id)
     if (!isCurrent()) return
     const imageUrl = normalizeBackgroundImageUrl(String(item?.imageUrl || ''))
     if (!item || !imageUrl) {
-      setFeaturedBackgroundStatus('没有找到可下载的精选图。', 'warning')
+      setFeaturedBackgroundStatus('download', '没有找到可下载的精选图。', 'warning')
       syncFeaturedBackgroundModalControls()
       return
     }
@@ -12275,19 +12298,19 @@ async function downloadFeaturedBackgroundFromPicker(featuredId: string): Promise
     const permissionGranted = await ensureBackgroundImageFetchPermission(imageUrl, { request: true })
     if (!isCurrent()) return
     if (!permissionGranted) {
-      setFeaturedBackgroundStatus('未完成图片访问授权，暂时无法下载。', 'warning')
+      setFeaturedBackgroundStatus('download', '未完成图片访问授权，暂时无法下载。', 'warning')
       syncFeaturedBackgroundModalControls()
       return
     }
 
-    setFeaturedBackgroundStatus(`正在下载 ${item.title}...`, 'info')
+    setFeaturedBackgroundStatus('download', `正在下载 ${item.title}...`, 'info')
     syncFeaturedBackgroundModalControls()
     const blob = await fetchFeaturedBackgroundDownloadBlob(imageUrl)
     if (!isCurrent()) return
     downloadBlobFile(getFeaturedBackgroundDownloadFilename(item, blob), blob)
-    setFeaturedBackgroundStatus(`已开始下载 ${item.title}。`, 'success')
+    setFeaturedBackgroundStatus('download', `已开始下载 ${item.title}。`, 'success')
   } catch (error) {
-    if (isCurrent()) setFeaturedBackgroundStatus(getFeaturedBackgroundDownloadErrorMessage(error), 'error')
+    if (isCurrent()) setFeaturedBackgroundStatus('download', getFeaturedBackgroundDownloadErrorMessage(error), 'error')
   } finally {
     if (isCurrent()) {
       featuredBackgroundDownloadInFlight = false
@@ -12314,13 +12337,13 @@ async function refreshFeaturedBackgroundGallery(): Promise<void> {
   const session = newTabControllerGeneration
   const isCurrent = () => session === newTabControllerGeneration && newTabControllerStarted
   state.featuredBackgroundRefreshing = true
-  setFeaturedBackgroundStatus('正在从开放图库拉取高清图...', 'info')
+  setFeaturedBackgroundStatus('refresh', '正在从开放图库拉取高清图...', 'info')
   syncFeaturedBackgroundModalControls()
   try {
     const permissionGranted = await ensureFeaturedBackgroundPermissions()
     if (!isCurrent()) return
     if (!permissionGranted) {
-      setFeaturedBackgroundStatus('未完成图库访问授权，暂时无法刷新。', 'warning')
+      setFeaturedBackgroundStatus('refresh', '未完成图库访问授权，暂时无法刷新。', 'warning')
       return
     }
     const refreshModule = await loadBackgroundGalleryRefreshModule()
@@ -12332,7 +12355,7 @@ async function refreshFeaturedBackgroundGallery(): Promise<void> {
     })
     if (!isCurrent()) return
     if (!fetchedItems.length) {
-      setFeaturedBackgroundStatus('没有拉取到满足高清要求的新图片。', 'warning')
+      setFeaturedBackgroundStatus('refresh', '没有拉取到满足高清要求的新图片。', 'warning')
       return
     }
 
@@ -12351,6 +12374,7 @@ async function refreshFeaturedBackgroundGallery(): Promise<void> {
     const fetchedProviderCount = refreshModule.getFeaturedBackgroundRefreshProviderCount(fetchedItems)
     const providerText = fetchedProviderCount ? `，来自 ${fetchedProviderCount} 个渠道` : ''
     setFeaturedBackgroundStatus(
+      'refresh',
       `已拉取 ${fetchedItems.length} 张高分辨率图片${providerText}，收藏图片已保留。`,
       'success'
     )
@@ -12360,7 +12384,7 @@ async function refreshFeaturedBackgroundGallery(): Promise<void> {
       console.warn('精选图库预览缓存清除失败。', cacheError)
     })
   } catch (error) {
-    if (isCurrent()) setFeaturedBackgroundStatus(getFeaturedBackgroundRefreshErrorMessage(error), 'error')
+    if (isCurrent()) setFeaturedBackgroundStatus('refresh', getFeaturedBackgroundRefreshErrorMessage(error), 'error')
   } finally {
     if (isCurrent()) {
       state.featuredBackgroundRefreshing = false
@@ -12453,11 +12477,20 @@ function getRemoteImageSize(imageUrl: string): Promise<{ width: number; height: 
 }
 
 function setFeaturedBackgroundStatus(
+  operation: 'refresh' | 'download' | `favorite:${string}`,
   message: string,
   tone: 'info' | 'success' | 'warning' | 'error' = 'info'
 ): void {
-  state.featuredBackgroundStatus = message
-  state.featuredBackgroundStatusTone = tone
+  featuredBackgroundStatuses.delete(operation)
+  if (message) featuredBackgroundStatuses.set(operation, { message, tone })
+  // An unrelated completion cannot resolve another operation's failure or progress.
+  const priority = { error: 3, warning: 2, info: 1, success: 0 }
+  let current: { message: string; tone: typeof tone } | undefined
+  for (const status of featuredBackgroundStatuses.values()) {
+    if (!current || priority[status.tone] >= priority[current.tone]) current = status
+  }
+  state.featuredBackgroundStatus = current?.message || ''
+  state.featuredBackgroundStatusTone = current?.tone || 'info'
 }
 
 function getFeaturedBackgroundRefreshErrorMessage(error: unknown): string {

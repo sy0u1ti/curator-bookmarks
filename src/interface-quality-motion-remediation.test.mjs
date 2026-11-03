@@ -235,9 +235,11 @@ assert.ok(
     featureSettingsControls.includes('aria-busy={state.loading') &&
     contentSnapshotControls.includes("state.loading ? '正在读取本地设置…'") &&
     shortcutList.includes('SHORTCUT_LOADING_ROWS') &&
-    optionsController.includes('loading: availabilityState.storageLoading || !aiNamingState.permissionStateHydrated') &&
+    optionsController.includes('loading: availabilityState.storageLoading,') &&
+    optionsController.includes('permissionsLoading: !aiNamingState.permissionStateHydrated') &&
+    !optionsController.includes('loading: availabilityState.storageLoading || !aiNamingState.permissionStateHydrated') &&
     optionsCss.includes('.options-settings-ready-body'),
-  'General settings must reserve settled card geometry and hide temporary switch defaults during hydration.'
+  'General settings must hide temporary defaults during storage hydration without remounting unrelated controls during permission checks.'
 )
 
 assert.ok(

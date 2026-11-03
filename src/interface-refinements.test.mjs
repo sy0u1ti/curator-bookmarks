@@ -89,6 +89,8 @@ const input = {
   settings: { autoAnalyzeBookmarks: false, allowRemoteParsing: false },
   inboxSettings: {},
   inboxStatus: '',
+  inboxSaving: false,
+  permissionsLoading: false,
   loading: false,
   remoteParserGranted: false,
   locked: false,

@@ -48,10 +48,14 @@ test('selection and background notifications stay outside the result layout', ()
 
 test('compact selection actions retain safety and secondary operations', () => {
   const availability = source('../options/components/AvailabilitySelectionActions.tsx')
-  for (const action of ['promote-selection', 'demote-selection', 'ignore-bookmarks', 'ignore-domains', 'ignore-folders', 'delete-selected', 'retest-selection', 'move-selection']) {
+  for (const action of ['ignore-bookmarks', 'ignore-domains', 'ignore-folders', 'delete-selected', 'retest-selection', 'move-selection']) {
     assert.ok(availability.includes(action), `Missing ${action}`)
   }
   assert.match(availability, /OptionActionsMenu/)
+  assert.doesNotMatch(availability, /promote-selection|demote-selection/)
+  const row = source('../options/components/AvailabilityResults.tsx')
+  assert.match(row, /result\.selectable[\s\S]*action: 'delete'/)
+  assert.doesNotMatch(row, /promote-failed|demote-review/)
   const duplicates = source('../options/components/DuplicateGroups.tsx')
   assert.match(duplicates, /disabled=\{locked \|\| unsafe\}/)
   assert.match(duplicates, /isNewtabSource \? \(\s*<StatusMessage/)

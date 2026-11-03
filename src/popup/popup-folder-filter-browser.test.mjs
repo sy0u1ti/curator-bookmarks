@@ -82,8 +82,15 @@ try {
   // Ancestors of a match stay visible but recede.
   await filter.fill('AI')
   await page.waitForFunction(() => document.querySelectorAll('.popup-folder-tree [role="treeitem"]').length > 0)
+  // The filtered tree commits after input, then dimming fades in. Wait for the
+  // committed rows and read the settled opacity, not a frame of the transition.
+  await page.waitForFunction(() => {
+    const rows = [...document.querySelectorAll('.t-skel-content .popup-folder-tree [role="treeitem"]')]
+    return rows.some((row) => row.textContent.includes('AI API')) && rows.every((row) => !row.textContent.includes('卡网')) &&
+      rows.every((row) => row.getAnimations().every((animation) => animation.playState !== 'running'))
+  })
   const dimmed = await tree.locator('[role="treeitem"]').evaluateAll(
-    (rows) => rows.filter((row) => Number(getComputedStyle(row).opacity) < 1).length
+    (rows) => rows.filter((row) => Number(getComputedStyle(row).opacity) <= 0.6).length
   )
   assert.ok(dimmed >= 1, 'ancestors kept only for hierarchy must be dimmed')
   assert.equal(

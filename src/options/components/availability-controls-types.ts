@@ -31,6 +31,7 @@ export interface AvailabilityControlsState {
   settingsOpen: boolean
   settingsStatus: string
   settingsStatusTone: string
+  settingsError?: string
   stopBusy: boolean
   stopDisabled: boolean
   stopHidden: boolean

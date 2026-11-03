@@ -54,6 +54,15 @@ assert.ok(
     fullRunAction.indexOf('await runAvailabilityDetection'),
   'a full run must own the cross-document lock before network work starts'
 )
+assert.ok(
+  fullRunAction.indexOf('await ensureProbePermissionForRun') <
+    fullRunAction.indexOf('await assertAvailabilityEngineReady()') &&
+  fullRunAction.indexOf('await assertAvailabilityEngineReady()') <
+    fullRunAction.indexOf('await runAvailabilityDetection'),
+  'engine compatibility is checked without consuming the permission gesture or clearing the last result'
+)
+assert.match(fullRunAction, /collectAvailabilityPermissionOrigins\(availabilityState\.bookmarks, availabilityState\.reviewResults\)/,
+  'a full rescan includes observed safe redirect destinations rather than repeating the same permission failure')
 
 const retestAction = getFunctionSource(
   'async function retestSelectedAvailabilityResults',
@@ -79,6 +88,8 @@ assert.ok(
     retestAction.indexOf("transition(sessionId, 'running')"),
   'retest must own the cross-document lock before entering its running phase'
 )
+assert.ok(retestAction.indexOf('await assertAvailabilityEngineReady()') < retestAction.indexOf("transition(sessionId, 'running')"),
+  'retesting cannot overwrite results with evidence from a stale worker')
 assert.match(
   source,
   /function finishAvailabilityRunSession[\s\S]*availabilityGlobalRunLocks\.release\(sessionId\)/,
@@ -144,22 +155,22 @@ assert.match(
 assert.match(
   pipelineSource,
   /hop < 4[\s\S]*resolveRedirect[\s\S]*visited\.has[\s\S]*runNavigation/,
-  'same-origin redirects must use a bounded, loop-safe, exact follow-up navigation'
+  'authorized redirects must use a bounded, loop-safe, exact follow-up navigation'
 )
 assert.ok(
   pipelineSource.indexOf('await resolveRedirect') <
     pipelineSource.indexOf('if (shouldRetryNavigation(navigation))') &&
     pipelineSource.indexOf('await resolveRedirect') < pipelineSource.indexOf('probeResult = await'),
-  'authorized same-origin redirects must be followed before generic retry and header probing'
+  'authorized redirects must be followed before generic retry and header probing'
 )
-const authorizedSameOriginRedirect = getFunctionSource(
-  'async function getAuthorizedSameOriginRedirectUrl',
+const authorizedRedirect = getFunctionSource(
+  'async function getAuthorizedAvailabilityRedirectUrl',
   'async function notifyAvailabilityRunFinished'
 )
 assert.match(
-  authorizedSameOriginRedirect,
-  /getSafeSameOriginRedirectUrl\(sourceUrl, attempt\)[\s\S]*containsPermissions\(\{ origins: \[originPattern\] \}\)/,
-  'a redirect follow-up must pass both the safe same-origin check and the current host permission check'
+  authorizedRedirect,
+  /getSafeAvailabilityRedirectUrl\(sourceUrl, attempt\)[\s\S]*containsPermissions\(\{ origins: \[originPattern\] \}\)/,
+  'every redirect follow-up must pass both URL safety checks and its current host permission check'
 )
 const runNavigationAttempt = getFunctionSource(
   'async function runNavigationAttempt',

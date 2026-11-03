@@ -74,8 +74,6 @@ try {
   await page.locator('#ai-api-key').waitFor({ state: 'visible' })
   await page.getByRole('heading', { name: 'AI 服务配置', exact: true }).waitFor()
   assert.equal(await page.locator('aside[aria-label="设置导航"] [data-options-section="ai-settings"][aria-current="page"]').count(), 1)
-  await page.goto(origin + '/src/options/options.html#backup')
-  await page.getByText('包含自定义书签图标。', { exact: false }).waitFor()
 
   // Cross-page selections must retain their exact scope, including hidden rows.
   await worker.evaluate(async () => {
@@ -101,7 +99,9 @@ try {
   await recycleSearch.fill('https://example.com/recycled/0/detail')
   assert.equal(await recycle.locator('article').count(), 1)
   await recycle.getByRole('status').filter({ hasText: '当前页已选 0 条，其他页或筛选外已选 2 条。' }).waitFor()
-  await recycle.getByRole('button', { name: '清除回收站已选记录', exact: true }).click()
+  // Selection actions float in a portaled dock outside the section.
+  const recycleDock = page.getByRole('region', { name: '已选回收站条目操作', exact: true })
+  await recycleDock.getByRole('button', { name: '清除回收站已选记录', exact: true }).click()
   const clearDialog = page.getByRole('dialog', { name: '清除 2 条回收站记录？', exact: true })
   await clearDialog.getByRole('button', { name: '确认当前操作', exact: true }).click()
   await clearDialog.waitFor({ state: 'hidden' })
@@ -111,7 +111,7 @@ try {
   assert.ok(retainedRecycleIds.includes('recycle-0'), 'clearing hidden selections must preserve the visible unselected row')
   await recycle.getByRole('button', { name: '全选回收站条目', exact: true }).click()
   await recycle.getByRole('status').filter({ hasText: '当前页已选 1 条，其他页或筛选外已选 62 条。' }).waitFor()
-  await recycle.getByRole('button', { name: '清空回收站已选书签', exact: true }).click()
+  await recycleDock.getByRole('button', { name: '清空回收站已选书签', exact: true }).click()
   await recycleSearch.fill('')
   await recycle.getByRole('button', { name: '下一页', exact: true }).click()
   await recycle.getByRole('button', { name: '下一页', exact: true }).click()

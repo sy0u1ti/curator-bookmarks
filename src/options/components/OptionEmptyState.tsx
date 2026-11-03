@@ -25,7 +25,7 @@ export function OptionEmptyState({
 }: {
   actions?: OptionEmptyStateAction[]
   className?: string
-  description: string
+  description?: string
   title: string
 }) {
   const entered = useMotionEntrance()
@@ -39,9 +39,9 @@ export function OptionEmptyState({
       <strong className={`t-stagger-line t-stagger-line--1 ${OPTION_EMPTY_STATE_TITLE_CLASS}`}>
         {title}
       </strong>
-      <p className={`t-stagger-line t-stagger-line--2 ${OPTION_EMPTY_STATE_TEXT_CLASS}`}>
+      {description ? <p className={`t-stagger-line t-stagger-line--2 ${OPTION_EMPTY_STATE_TEXT_CLASS}`}>
         {description}
-      </p>
+      </p> : null}
       {actions.length ? (
         <div className={`t-stagger-line t-stagger-line--3 ${OPTION_EMPTY_STATE_ACTIONS_CLASS}`}>
           {actions.map((item) => (

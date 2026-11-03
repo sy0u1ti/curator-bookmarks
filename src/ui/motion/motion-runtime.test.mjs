@@ -178,8 +178,12 @@ try {
   await newtab.screenshot({ path: path.join(outputPath, 'settings-segmented-controls.png') })
 
   // Unmounting closed controls must not lose settings or break their keyboard input.
-  await newtab.locator('#icon-advanced-toggle').click()
   const widthSlider = newtab.getByRole('slider', { name: '书签卡片页面宽度', exact: true })
+  // The layout control measured above lives in this panel, so it is already
+  // open. Collapse it first, then reopen, so the slider starts from a fresh mount.
+  await newtab.locator('#icon-advanced-toggle').click()
+  await widthSlider.waitFor({ state: 'detached' })
+  await newtab.locator('#icon-advanced-toggle').click()
   await widthSlider.waitFor({ state: 'visible' })
   const originalWidth = Number(await widthSlider.getAttribute('aria-valuenow'))
   await widthSlider.focus()
@@ -192,8 +196,6 @@ try {
   assert.equal(Number(await widthSlider.getAttribute('aria-valuenow')), originalWidth + 1, 'Reopened controls must retain their current setting')
   await widthSlider.focus()
   await widthSlider.press('ArrowLeft')
-  await newtab.locator('#icon-advanced-toggle').click()
-  await widthSlider.waitFor({ state: 'detached' })
 
   await newtab.emulateMedia({ reducedMotion: 'reduce' })
   const reduced = await segment.evaluate((element) => ({
@@ -201,6 +203,8 @@ try {
     transform: getComputedStyle(element, '::before').transform
   }))
   assert.ok(reduced.duration.split(',').every((value) => Number.parseFloat(value) === 0), 'Reduced motion must snap the pill into its selected position')
+  await newtab.locator('#icon-advanced-toggle').click()
+  await widthSlider.waitFor({ state: 'detached' })
 
   const popup = await context.newPage()
   await popup.bringToFront()

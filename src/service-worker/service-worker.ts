@@ -1,6 +1,7 @@
 import { BOOKMARK_CLASSIFICATION_SCHEMA as AUTO_CLASSIFY_SCHEMA, validateAiClassificationResult, meetsAiConfidenceThreshold } from '../shared/ai-task-contracts.js'
-import { getNavigationHeaderOutcome, isHttpRedirectStatus, parseAvailabilityRetryAfter, readAvailabilityResponseHeaders } from '../shared/availability-evidence.js'
+import { getNavigationHeaderOutcome, hasVerifiedLoginRequirement, isHttpRedirectStatus, parseAvailabilityRetryAfter, readAvailabilityResponseHeaders, shouldWaitForNavigationChallenge } from '../shared/availability-evidence.js'
 import type {
+  AvailabilityEngineMessage,
   AvailabilityProbeMessage,
   AvailabilityProbeResult,
   BackupRestoreMessage,
@@ -15,6 +16,7 @@ import type {
   RuntimeNotificationMessage
 } from '../shared/messages.js'
 import {
+  AVAILABILITY_ENGINE_VERSION,
   AVAILABILITY_NAVIGATION_CONCURRENCY_LIMIT,
   AVAILABILITY_NAVIGATION_TIMEOUT_MAX_MS,
   AVAILABILITY_NAVIGATION_TIMEOUT_MIN_MS,
@@ -38,6 +40,8 @@ import { getLocalStorage, removeLocalStorage, setLocalStorage, withLocalStorageT
 import { extractDomain } from '../shared/text.js'
 import {
   assessSensitiveExternalUrl,
+  isAuthenticationEntryUrl,
+  isAuthenticationExitUrl,
   isPublicNetworkAddress,
   isVerifiedHttpsLoopbackProxyResponse
 } from '../shared/sensitive-url.js'
@@ -118,6 +122,7 @@ interface PendingCheckState {
   lastUrl: string
   lastAttemptedUrl: string
   navigationStarted: boolean
+  challengeSeen: boolean
   settled: boolean
   timeoutId: number
   networkEvidence: NavigationNetworkEvidence | null
@@ -323,6 +328,7 @@ const INBOX_CLASSIFIED_NOTIFICATION_PREFIX = 'curator-inbox-classified-'
 
 
 type RuntimeMessage =
+  | AvailabilityEngineMessage
   | AvailabilityProbeMessage
   | BackupRestoreMessage
   | BookmarkSaveMessage
@@ -480,6 +486,15 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
       })
 
     return true
+  }
+
+  if (message?.type === 'availability:engine') {
+    if (!isTrustedAvailabilityMessageSender(sender)) {
+      sendResponse({ ok: false, error: '无权查询可用性检测引擎。' })
+      return undefined
+    }
+    sendResponse({ ok: true, result: { version: AVAILABILITY_ENGINE_VERSION } })
+    return undefined
   }
 
   if (message?.type === 'availability:cancel') {
@@ -1149,6 +1164,7 @@ chrome.webNavigation.onCompleted.addListener((details) => {
   if (isAboutBlank(details.url)) {
     return
   }
+  if (shouldWaitForNavigationChallenge(state.networkEvidence, state.challengeSeen)) return
 
   state.lastAttemptedUrl = details.url
   if (finalizeSensitiveNavigationTarget(state, details.url)) {
@@ -1175,6 +1191,7 @@ chrome.webNavigation.onDOMContentLoaded.addListener((details) => {
   if (isAboutBlank(details.url)) {
     return
   }
+  if (shouldWaitForNavigationChallenge(state.networkEvidence, state.challengeSeen)) return
 
   state.lastAttemptedUrl = details.url
   if (finalizeSensitiveNavigationTarget(state, details.url)) {
@@ -1202,6 +1219,7 @@ chrome.webNavigation.onErrorOccurred.addListener((details) => {
     return
   }
 
+  if (state.challengeSeen && details.error === 'net::ERR_ABORTED' && !state.networkEvidence?.errorCode) return
   const failedUrl = getLatestAttemptedNavigationUrl(state, details.url)
   if (finalizeSensitiveNavigationTarget(state, failedUrl)) {
     return
@@ -3993,6 +4011,15 @@ async function performAvailabilityProbeRedirectChain({
       }
     }
 
+    if (isHttpRedirectStatus(captured.status) && (isAuthenticationEntryUrl(captured.redirectUrl) ||
+      isAuthenticationExitUrl(captured.redirectUrl, currentUrl))) {
+      return {
+        ok: true, status: captured.status, finalUrl: requestedUrl, redirected: false, requiresLogin: true,
+        detail: `网络探测(${method})已收到 HTTP ${captured.status} 登录跳转；网站正常响应，未进入登录流程。`,
+        errorCode: ''
+      }
+    }
+
     if (redirectCount === 8) {
       return {
         ok: false,
@@ -4507,6 +4534,7 @@ async function performNavigationCheck({
         lastUrl: url,
         lastAttemptedUrl: '',
         navigationStarted: false,
+        challengeSeen: false,
         settled: false,
         timeoutId: 0,
         networkEvidence: null,
@@ -4606,11 +4634,10 @@ function createWebRequestListeners(state: PendingCheckState): WebRequestListener
       }
 
       state.lastAttemptedUrl = details.url
+      // Preserve the responding document before a script-driven login redirect replaces its request.
+      if (finalizeSensitiveNavigationTarget(state, details.url)) return
       getOrCreateNetworkEvidence(state, details)
-      if (
-        finalizeSensitiveNavigationTarget(state, details.url) ||
-        finalizeUnauthorizedNavigationTarget(state, details.url)
-      ) {
+      if (finalizeUnauthorizedNavigationTarget(state, details.url)) {
         return
       }
 
@@ -4672,7 +4699,8 @@ function createWebRequestListeners(state: PendingCheckState): WebRequestListener
         evidence.timing.responseStartMs = details.timeStamp
       }
       evidence.timing.responseLatencyMs = getElapsedMs(evidence.timing.requestStartMs, evidence.timing.responseStartMs)
-      Object.assign(evidence, readAvailabilityResponseHeaders(details.responseHeaders))
+      Object.assign(evidence, readAvailabilityResponseHeaders(details.responseHeaders, Date.now(), statusCode))
+      state.challengeSeen ||= Boolean(evidence.challenge)
       const outcome = getNavigationHeaderOutcome(statusCode, evidence)
       if (outcome) finalizeNavigationCheck(state.tabId, { ...outcome, finalUrl: details.url })
       return undefined
@@ -4695,7 +4723,7 @@ function createWebRequestListeners(state: PendingCheckState): WebRequestListener
       evidence.fromCache = Boolean(details.fromCache)
       evidence.timing.completedMs = details.timeStamp
       evidence.timing.totalMs = getElapsedMs(evidence.timing.requestStartMs, evidence.timing.completedMs)
-      if (!evidence.errorCode && ((Number(evidence.statusCode) >= 200 && Number(evidence.statusCode) < 300) || evidence.statusCode === 304)) {
+      if (!evidence.errorCode && !evidence.challenge && ((Number(evidence.statusCode) >= 200 && Number(evidence.statusCode) < 300) || evidence.statusCode === 304)) {
         finalizeNavigationCheck(state.tabId, { status: 'available', finalUrl: details.url, errorCode: '', detail: '主文档已完整返回，已停止继续等待页面资源。' })
       }
     },
@@ -5252,8 +5280,22 @@ function finalizeSensitiveNavigationTarget(
   }
 
   const decision = assessSensitiveExternalUrl(normalizedTargetUrl)
-  if (!decision.sensitive && !containsCredentials) {
+  const loginTarget = isAuthenticationEntryUrl(normalizedTargetUrl)
+  if (!decision.sensitive && !containsCredentials &&
+    (!loginTarget || normalizeNavigationUrl(normalizedTargetUrl) === normalizeNavigationUrl(state.requestedUrl))) {
     return false
+  }
+
+  const result: NavigationCheckResult = {
+    status: 'available', finalUrl: state.requestedUrl, errorCode: '',
+    detail: '网站正常响应并要求登录，已停止检测，未进入登录流程。'
+  }
+  if ((loginTarget || isAuthenticationExitUrl(normalizedTargetUrl, state.requestedUrl)) && hasVerifiedLoginRequirement({
+    ...result, networkEvidence: state.networkEvidence || undefined
+  }, normalizedTargetUrl)) {
+    state.networkEvidence!.finalUrl = normalizedTargetUrl
+    finalizeNavigationCheck(state.tabId, result)
+    return true
   }
 
   const warning = containsCredentials
@@ -5383,6 +5425,14 @@ function normalizeNavigationResultWithNetworkEvidence(
 ): NavigationCheckResult {
   const statusCode = Number(evidence.statusCode) || 0
 
+  if (evidence.challenge) {
+    return { ...result, status: 'failed', errorCode: 'challenge-required',
+      detail: '站点验证尚未完成，未取得验证后的页面响应。' }
+  }
+  if (hasVerifiedLoginRequirement({ ...result, networkEvidence: evidence })) {
+    return { ...result, status: 'available', errorCode: '',
+      detail: `主请求已返回 HTTP ${statusCode}；网站正常响应，需要登录。` }
+  }
   if (statusCode >= 400) {
     return {
       ...result,
@@ -5475,8 +5525,24 @@ function normalizeTimeout(value: unknown): number {
   )
 }
 
+// Chrome rejects tab edits while the user drags any tab; the lock clears once the drag ends.
+const TAB_EDIT_LOCK_ERROR = /cannot be edited right now/i
+const TAB_EDIT_RETRY_DELAYS_MS = [100, 250, 500, 1000, 2000]
+
+async function retryTabEdit<T>(edit: () => Promise<T>): Promise<T> {
+  for (const delayMs of TAB_EDIT_RETRY_DELAYS_MS) {
+    try {
+      return await edit()
+    } catch (error) {
+      if (!(error instanceof Error) || !TAB_EDIT_LOCK_ERROR.test(error.message)) throw error
+      await new Promise(resolve => self.setTimeout(resolve, delayMs))
+    }
+  }
+  return edit()
+}
+
 function createTab(properties: chrome.tabs.CreateProperties): Promise<chrome.tabs.Tab> {
-  return new Promise((resolve, reject) => {
+  return retryTabEdit(() => new Promise((resolve, reject) => {
     chrome.tabs.create(properties, (tab) => {
       const error = chrome.runtime.lastError
       if (error) {
@@ -5486,14 +5552,14 @@ function createTab(properties: chrome.tabs.CreateProperties): Promise<chrome.tab
 
       resolve(tab)
     })
-  })
+  }))
 }
 
 function updateTab(
   tabId: number,
   properties: chrome.tabs.UpdateProperties
 ): Promise<chrome.tabs.Tab | undefined> {
-  return new Promise((resolve, reject) => {
+  return retryTabEdit(() => new Promise((resolve, reject) => {
     chrome.tabs.update(tabId, properties, (tab) => {
       const error = chrome.runtime.lastError
       if (error) {
@@ -5503,7 +5569,7 @@ function updateTab(
 
       resolve(tab)
     })
-  })
+  }))
 }
 
 function isTabAvailable(tabId: number): Promise<boolean> {

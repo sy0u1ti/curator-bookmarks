@@ -16,24 +16,32 @@ const httpFailure = (statusCode: number): NavigationAttempt => ({
   networkEvidence: { requestSent: true, requestedUrl: bookmark.url, statusCode, finalResponseObserved: true, redirects: [], timing: {} }
 })
 
-test('missing pages retain the login caveat from real classifier results', () => {
+test('missing pages describe the observed response without inventing a login requirement', () => {
   for (const status of [404, 410]) {
     const result = buildFailureClassification(bookmark, [httpFailure(status)], null, false)
     const summary = getAvailabilityResultSummary(result)
-    assert.equal(result.status, 'review')
+    assert.equal(result.status, 'failed')
     assert.ok(summary.includes(String(status)))
-    assert.match(summary, /可能.*登录/)
-    assert.doesNotMatch(summary, /已失效|已删除|直接删除/)
+    assert.match(summary, /当前未找到.*确认/)
+    assert.doesNotMatch(summary, /登录|已失效|已删除|直接删除/)
     assert.ok(summary.length < 65, 'scannable summary, with evidence retained in details')
   }
 })
 
+test('confirmed login requirements are normal pages, not pending verification', () => {
+  const result = buildFailureClassification(bookmark, [httpFailure(401)], null, false)
+  assert.equal(result.status, 'available')
+  assert.equal(getAvailabilityResultSummary(result), '网页正常，需要登录。')
+  assert.doesNotMatch(result.detail, /登录后.*重测|待确认|死链|失效/)
+})
+
 test('restrictions and transient HTTP errors recommend confirmation or retry', () => {
-  for (const [status, expected] of [[401, /登录/], [403, /验证/], [429, /稍后/], [451, /人工确认/], [500, /稍后重试/], [503, /稍后重试/], [599, /稍后重试/]] as const) {
+  for (const [status, expected] of [[403, /本次请求.*确认/], [429, /稍后/], [451, /人工确认/], [500, /稍后重试/], [503, /稍后重试/], [599, /稍后重试/]] as const) {
     const result = buildFailureClassification(bookmark, [httpFailure(status)], null, false)
     const summary = getAvailabilityResultSummary(result)
     assert.match(summary, expected)
     assert.doesNotMatch(summary, /已失效|直接删除/)
+    if (status === 403) assert.doesNotMatch(summary, /需要登录/)
   }
 })
 
@@ -46,6 +54,8 @@ test('browser limitations and network problems do not imply a dead bookmark', ()
     ['ungranted-redirect', /授权/],
     ['detection-budget-exhausted', /时限/],
     ['site-cooldown', /暂缓/],
+    ['challenge-required', /站点安全验证/],
+    ['login-required', /证据不足/],
     ['sensitive-url', /保护规则/]
   ] as const) {
     const summary = getAvailabilityResultSummary({ status: 'review', errorCode: code })

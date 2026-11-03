@@ -56,7 +56,7 @@ test('pinned-entry status is quiet at rest but preserves saving and failure feed
 test('inline settings disclosure retains automation consequences and third-party privacy', () => {
   const state = buildFeatureSettingsView({
     settings: { autoAnalyzeBookmarks: true, allowRemoteParsing: true },
-    inboxSettings: {}, inboxStatus: '', loading: false, remoteParserGranted: false,
+    inboxSettings: {}, inboxStatus: '', inboxSaving: false, loading: false, permissionsLoading: false, remoteParserGranted: false,
     locked: false, pending: '', testingConnection: false
   })
   assert.match(state.switches[0].description, /会改名、移动/)

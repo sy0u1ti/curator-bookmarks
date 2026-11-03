@@ -26,13 +26,9 @@ const defaultDecisionMetricsState: AvailabilityDecisionMetricsState = {
 const defaultFiltersState: AvailabilityFiltersState = {
   filters: [
     { active: true, count: 0, filter: 'all', label: '全部' },
-    { active: false, count: 0, filter: 'failed', label: '高置信' },
-    { active: false, count: 0, filter: 'review', label: '低置信 / 待确认' },
-    { active: false, count: 0, filter: 'redirected', label: '重定向' },
-    { active: false, count: 0, filter: 'new', label: '新增' },
-    { active: false, count: 0, filter: 'persistent', label: '持续' },
-    { active: false, count: 0, filter: 'recovered', label: '已恢复' },
-    { active: false, count: 0, filter: 'ignored', label: '已忽略过滤' }
+    { active: false, count: 0, filter: 'failed', label: '无法访问' },
+    { active: false, count: 0, filter: 'review', label: '待确认' },
+    { active: false, count: 0, filter: 'redirected', label: '重定向' }
   ]
 }
 
@@ -40,27 +36,25 @@ const defaultResultsHeaderState: AvailabilityResultsHeaderState = {
   visible: false,
   deleteFailedDisabled: true,
   deleteFailedLabel: '批量删除',
-  failedCount: '0 条异常',
+  failedCount: '0 条无法访问',
   failedLastRun: '尚未执行检测',
-  failedTitle: '高置信异常',
-  reviewCount: '0 条低置信异常',
-  reviewSubtitle: '证据不足的异常，建议人工确认',
-  reviewTitle: '低置信异常'
+  failedTitle: '无法访问',
+  reviewCount: '0 条待确认',
+  reviewSubtitle: '临时故障或暂未完成验证的链接。',
+  reviewTitle: '待确认'
 }
 
 const defaultSelectionActionsState: AvailabilitySelectionActionsState = {
   clearDisabled: true,
   countLabel: '0 条已选择',
   deleteDisabled: true,
-  demoteDisabled: true,
   hidden: true,
   ignoreBookmarkDisabled: true,
   ignoreDomainDisabled: true,
   ignoreFolderDisabled: true,
   moveDisabled: true,
-  promoteDisabled: true,
   retestDisabled: true,
-  retestLabel: '重新测试'
+  retestLabel: '重新检测'
 }
 
 interface AvailabilityOverviewStoreState {

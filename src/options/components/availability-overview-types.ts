@@ -29,13 +29,11 @@ export type AvailabilityPanelAction =
   | 'clear-selection'
   | 'delete-failed'
   | 'delete-selected'
-  | 'demote-selection'
   | 'filter-change'
   | 'ignore-bookmarks'
   | 'ignore-domains'
   | 'ignore-folders'
   | 'move-selection'
-  | 'promote-selection'
   | 'retest-selection'
   | 'select-failed'
   | 'select-review'
@@ -47,6 +45,10 @@ export interface AvailabilityPanelActionDetail {
 
 export interface AvailabilityResultsHeaderState {
   visible: boolean
+  reviewVisible?: boolean
+  failedVisible?: boolean
+  reviewSelectable?: boolean
+  failedSelectable?: boolean
   deleteFailedDisabled: boolean
   deleteFailedLabel: string
   failedCount: string
@@ -61,13 +63,11 @@ export interface AvailabilitySelectionActionsState {
   clearDisabled: boolean
   countLabel: string
   deleteDisabled: boolean
-  demoteDisabled: boolean
   hidden: boolean
   ignoreBookmarkDisabled: boolean
   ignoreDomainDisabled: boolean
   ignoreFolderDisabled: boolean
   moveDisabled: boolean
-  promoteDisabled: boolean
   retestDisabled: boolean
   retestLabel: string
 }

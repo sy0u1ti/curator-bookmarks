@@ -526,7 +526,7 @@ function inferDeleteBackupKind(source: string): DangerousOperationKind {
   if (/重复/.test(source)) {
     return 'duplicate-cleanup'
   }
-  if (/异常|坏链|高置信/.test(source)) {
+  if (/可用性检测|异常|坏链|高置信/.test(source)) {
     return 'availability-cleanup'
   }
   return 'batch-delete'

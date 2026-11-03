@@ -30,6 +30,9 @@ assert.match(
   /senderUrl\.origin === expectedUrl\.origin[\s\S]*senderUrl\.pathname === expectedUrl\.pathname/,
   'availability messages should be restricted to the extension options page'
 )
+assert.match(source,
+  /message\?\.type === 'availability:engine'[\s\S]*isTrustedAvailabilityMessageSender\(sender\)[\s\S]*version: AVAILABILITY_ENGINE_VERSION/,
+  'only the trusted options page may query the deployed evidence engine version')
 assert.match(
   source,
   /message\?\.type === 'backup:restore'[\s\S]*isTrustedAvailabilityMessageSender\(sender\)[\s\S]*parseBackupRestoreMessage\(message\)[\s\S]*performJournaledBackupRestore/,
@@ -71,8 +74,8 @@ for (const eventName of ['onCompleted', 'onDOMContentLoaded', 'onErrorOccurred']
 }
 assert.match(
   source,
-  /errorCode: 'sensitive-redirect'/,
-  'sensitive redirects should return a stable explicit error code'
+  /\(loginTarget \|\| isAuthenticationExitUrl\([\s\S]*hasVerifiedLoginRequirement\([\s\S]*finalizeNavigationCheck\(state\.tabId, result\)/,
+  'only observed authentication responses count as available, without following protected authentication targets'
 )
 assert.match(
   source,
@@ -219,3 +222,4 @@ assert.ok(
 )
 
 console.log('Service worker navigation boundary contract tests passed.')
+await import('./availability-navigation-events.test.mjs')

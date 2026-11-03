@@ -264,6 +264,7 @@ Curator 的核心原则是**数据属于用户，保护个人隐私**。
 npm run typecheck              # TypeScript 严格类型检查与模块边界验证
 npm test                       # 核心业务逻辑、搜索语法、数据恢复与状态流测试
 npm run smoke:extension        # 完整构建并运行扩展浏览器回归烟测
+npm run test:visual-browser    # 构建后按需运行玻璃材质、动效、可读性与外观视觉回归
 npm run test:workspace-browser # 针对原生侧栏、全键盘流、恢复点与 MHTML 的浏览器测试
 ```
 

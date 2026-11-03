@@ -108,31 +108,32 @@ function phase(name: string) {
     store('ai-analysis').setState(view)
   }
   if (surface === 'availability') {
+    const preparing = name === 'loading' || name === 'pending'
     store('availability-controls').setState({ ...initialControls,
-      actionDisabled: active, actionBusy: busy,
-      actionLabel: name === 'success' ? '重新检测全部书签' : '开始检测全部书签',
-      badgeText: error ? '未授权' : '多层校验', badgeTone: error ? 'warning' : 'muted',
-      permissionCopy: message || initialControls.permissionCopy,
+      actionDisabled: active || preparing, actionBusy: busy || preparing,
+      actionLabel: name === 'loading' ? '正在准备检测…' : name === 'pending' ? '正在请求站点授权…' : name === 'success' ? '重新检测全部书签' : '开始检测全部书签',
+      badgeText: name === 'loading' ? '读取中' : name === 'pending' ? '待授权' : error ? '未授权' : '多层校验', badgeTone: error ? 'warning' : 'muted',
+      permissionCopy: message || (name === 'loading' ? '正在读取书签和站点权限。' : name === 'pending' ? '等待确认站点授权。' : initialControls.permissionCopy),
       pauseHidden: !active, pauseDisabled: false, pauseLabel: name === 'paused' ? '继续检测' : '暂停检测',
       stopHidden: !active, stopDisabled: false, settingsDisabled: false
     })
     const view = structuredClone(initialAvailability)
-    view.resultsHeader = { ...view.resultsHeader, visible: true, reviewCount: '1 条低置信异常', failedCount: '0 条异常', failedLastRun: '上次检测已完成' }
+    view.resultsHeader = { ...view.resultsHeader, visible: true, reviewVisible: true, failedVisible: false, reviewCount: '1 条待确认', failedCount: '0 条无法访问', failedLastRun: '上次检测已完成' }
     view.selectionActions = { ...view.selectionActions, hidden: !selected, clearDisabled: false, countLabel: '1 条已选择',
-      deleteDisabled: false, demoteDisabled: false, ignoreBookmarkDisabled: false, ignoreDomainDisabled: false,
-      ignoreFolderDisabled: false, moveDisabled: false, promoteDisabled: false, retestDisabled: false
+      deleteDisabled: false, ignoreBookmarkDisabled: false, ignoreDomainDisabled: false,
+      ignoreFolderDisabled: false, moveDisabled: false, retestDisabled: false
     }
     store('availability-overview').setState(view)
     store('availability-results').setState({
       review: { emptyMessage: '', results: [{
-        actionButton: null, badgeText: '待确认', bookmarkId: 'reference', evidenceCopy: '站点响应超时',
+        badgeText: '待确认', bookmarkId: 'reference', evidenceCopy: '站点响应超时',
         finalUrl: '', metadataItems: [], openLabel: '打开排版与交互参考', path: item.path, quickActions: [],
-        recommendation: '建议在浏览器中确认', summary: '请求超时，尚不能确定书签是否失效。',
-        retestDisabled: false, selectable: true, selected, selectionDisabled: false,
+        summary: '请求超时，尚不能确定书签是否失效。',
+        retestDisabled: false, retestLabel: '重新检测', deleteDisabled: false, selectable: true, selected, selectionDisabled: false,
         selectionLabel: item.selectionLabel, showFinalUrl: false, statusLabel: '待确认', title: item.currentTitle,
         tone: 'warning', url: item.url
       }] },
-      failed: { emptyMessage: '没有高置信异常。', results: [] }
+      failed: { emptyMessage: '没有无法访问的书签。', results: [] }
     })
   }
   if (surface === 'duplicates') {

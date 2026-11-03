@@ -29,7 +29,8 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
 const origin = 'http://availability-fixture.example.net:' + server.address().port
 const manifestPath = path.join(extensionPath, 'manifest.json')
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-manifest.host_permissions = [...manifest.host_permissions, 'http://availability-fixture.example.net/*']
+// The runner also requests each HTTP bookmark's HTTPS upgrade.
+manifest.host_permissions = [...manifest.host_permissions, 'http://availability-fixture.example.net/*', 'https://availability-fixture.example.net/*']
 await writeFile(manifestPath, JSON.stringify(manifest))
 let context
 try {
@@ -106,7 +107,8 @@ try {
 
     missingEnabled = false
     rateLimitEnabled = false
-    await page.getByRole('button', { name: '全选低置信异常书签', exact: true }).click()
+    await page.getByRole('button', { name: '全选待确认书签', exact: true }).click()
+    await page.getByRole('button', { name: '全选无法访问的书签', exact: true }).click()
     await page.getByRole('button', { name: '重新测试可用性检测已选书签', exact: true }).click()
     await page.getByText('已重新测试 4 条已选书签。', { exact: true }).waitFor({ state: 'visible', timeout: 15000 })
     await page.screenshot({ path: path.join(output, 'retested-ui.png'), fullPage: true })

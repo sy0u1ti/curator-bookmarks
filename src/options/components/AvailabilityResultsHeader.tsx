@@ -25,16 +25,15 @@ export function AvailabilityResultsHeader({ kind }: { kind: 'failed' | 'review' 
           <strong className={AVAILABILITY_RESULTS_HEADER_TITLE_CLASS}>
             {state.failedTitle}
           </strong>
-          <p className={AVAILABILITY_RESULTS_SUBTITLE_CLASS}>{state.failedLastRun}</p>
         </div>
-        {failedCount > 0 ? (
+        {failedCount > 0 && state.failedSelectable !== false ? (
           <div className={AVAILABILITY_RESULTS_ACTIONS_CLASS}>
             <Button
               className={AVAILABILITY_RESULTS_ACTION_BUTTON_CLASS}
               size="sm"
               type="button"
               variant="secondary"
-              aria-label="全选高置信异常书签"
+              aria-label="全选无法访问的书签"
               onClick={() => handleAvailabilityPanelAction({ action: 'select-failed' })}
             >
               全选本区
@@ -44,7 +43,7 @@ export function AvailabilityResultsHeader({ kind }: { kind: 'failed' | 'review' 
               size="sm"
               type="button"
               variant="danger"
-              aria-label="批量删除高置信异常书签"
+              aria-label="删除本区无法访问的书签"
               disabled={state.deleteFailedDisabled}
               focusableWhenDisabled={state.deleteFailedDisabled}
               onClick={() => handleAvailabilityPanelAction({ action: 'delete-failed' })}
@@ -63,18 +62,18 @@ export function AvailabilityResultsHeader({ kind }: { kind: 'failed' | 'review' 
         <strong className={AVAILABILITY_RESULTS_HEADER_TITLE_CLASS}>
           {state.reviewTitle}
         </strong>
-        <p className={AVAILABILITY_RESULTS_SUBTITLE_CLASS}>
+        {state.reviewSubtitle ? <p className={AVAILABILITY_RESULTS_SUBTITLE_CLASS}>
           {state.reviewSubtitle}
-        </p>
+        </p> : null}
       </div>
-      {reviewCount > 0 ? (
+      {reviewCount > 0 && state.reviewSelectable !== false ? (
         <div className={AVAILABILITY_RESULTS_ACTIONS_CLASS}>
           <Button
             className={AVAILABILITY_RESULTS_ACTION_BUTTON_CLASS}
             size="sm"
             type="button"
             variant="secondary"
-            aria-label="全选低置信异常书签"
+            aria-label="全选待确认书签"
             onClick={() => handleAvailabilityPanelAction({ action: 'select-review' })}
           >
             全选本区

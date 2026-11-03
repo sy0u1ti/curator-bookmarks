@@ -19,6 +19,7 @@ export type FeatureSettingsChangeDetail = {
 export interface FeatureSwitchItemState {
   checked: boolean
   disabled: boolean
+  error?: string
   description?: string
   key: FeatureSettingKey
   label: string

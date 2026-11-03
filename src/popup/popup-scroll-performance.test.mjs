@@ -68,7 +68,9 @@ window.shrinkRows = () => { state = { ...state, mainRows: state.mainRows.slice(0
 const compiled = await build({
   stdin: { contents: fixture, resolveDir: path.resolve('src'), loader: 'tsx' },
   bundle: true, write: false, jsx: 'automatic', format: 'iife', platform: 'browser',
-  target: 'chrome140', define: { 'process.env.NODE_ENV': '"production"' }, logLevel: 'silent'
+  target: 'chrome140', define: { 'process.env.NODE_ENV': '"production"' }, logLevel: 'silent',
+  // Component stylesheets are already in the built popup CSS loaded below.
+  loader: { '.css': 'empty' }
 })
 // Popup and Side Panel now share a CSS chunk. Read the actual entry's styles
 // instead of depending on Vite's names or number of generated chunks.

@@ -2,9 +2,57 @@ import assert from 'node:assert/strict'
 import ipaddr from 'ipaddr.js'
 import {
   assessSensitiveExternalUrl,
+  isAuthenticationEntryUrl,
+  isAuthenticationExitUrl,
   isPublicNetworkAddress,
   isVerifiedHttpsLoopbackProxyResponse
 } from './sensitive-url.js'
+
+for (const url of [
+  'https://example.com/login',
+  'https://example.com/zh/signin',
+  'https://example.com/console/login/',
+  'https://example.com/login/login.htm',
+  'https://example.com/realms/prod/protocol/openid-connect/auth',
+  'https://example.com/oauth/authorize?SAMLRequest=fixture',
+  'https://auth.example.com/',
+  'https://example.com/#/login',
+  'https://session.example.org/v1/client/handshake?redirect_url=https%3A%2F%2Fapp.example.net%2Fkeys&__clerk_api_version=2026-05-12&__session=fixture'
+]) {
+  assert.equal(isAuthenticationEntryUrl(url), true, 'observed authentication entry should be recognizable')
+}
+for (const url of [
+  'https://example.com/account/settings',
+  'https://example.com/article?next=/login',
+  'https://example.com/login/reset-password',
+  'https://example.com/login?action=logout',
+  'https://auth.example.com/#cmd=delete',
+  'https://example.com/#/login?operation=unsubscribe',
+  'https://example.com/magic-login/fixture',
+  'https://session.example.org/v1/client/handshake',
+  'https://session.example.org/v1/client/handshake?redirect_url=https%3A%2F%2Fapp.example.net%2Fkeys',
+  'https://session.example.org/v1/client/handshake?redirect_url=http%3A%2F%2F127.0.0.1%2F&__clerk_api_version=2026-05-12',
+  'https://session.example.org/v1/client/handshake?redirect_url=https%3A%2F%2Fu%3Ap%40app.example.net%2F&__clerk_api_version=2026-05-12',
+  'https://session.example.org/v1/client/handshake?redirect_url=https%3A%2F%2Fapp.example.net%2F&__clerk_api_version=2026-05-12&action=logout',
+  'http://127.0.0.1/login',
+  'https://user:password@example.com/login',
+  'javascript:login()'
+]) {
+  assert.equal(isAuthenticationEntryUrl(url), false, 'non-authentication and protected action targets are not ordinary login entries')
+}
+assert.equal(assessSensitiveExternalUrl('https://example.com/oauth/authorize?SAMLRequest=fixture').reason, 'capability-action',
+  'recognizing an observed login redirect never allows requesting its protected token URL')
+assert.equal(assessSensitiveExternalUrl('https://session.example.org/v1/client/handshake?redirect_url=https%3A%2F%2Fapp.example.net%2Fkeys&__clerk_api_version=2026-05-12&__session=fixture').reason, 'capability-action',
+  'session refresh remains protected even when it proves that the original site responded')
+assert.equal(isAuthenticationExitUrl('https://example.com/logout', 'https://example.com/orders'), true)
+assert.equal(isAuthenticationExitUrl('https://example.com/logout.php', 'https://example.com/orders'), true)
+assert.equal(assessSensitiveExternalUrl('https://example.com/logout').reason, 'capability-action',
+  'recognizing session expiry must never authorize a logout request')
+for (const target of [
+  'https://other.example.com/logout', 'https://example.com/logout?token=fixture',
+  'https://example.com/reset-password', 'http://example.com/logout', 'https://example.com/logout/delete',
+  'https://example.com/delete/logout'
+]) assert.equal(isAuthenticationExitUrl(target, 'https://example.com/orders'), false)
 
 for (const url of [
   'http://[::ffff:127.0.0.1]/',
@@ -28,6 +76,9 @@ for (const url of [
 }
 
 for (const url of [
+  'https://example.com/logout.php',
+  'https://example.com/reset-password.html',
+  'https://example.com/confirm.aspx',
   'https://example.com/unsubscribe?user=1',
   'https://example.com/reset-password?user=1',
   'https://example.com/password_reset/SECRET',
@@ -41,6 +92,11 @@ for (const url of [
   'https://example.com/callback?id_token=secret',
   'https://example.com/callback?auth-token=secret',
   'https://example.com/callback?session_token=secret',
+  'https://example.com/callback?__session=secret',
+  'https://example.com/callback?__session_token=secret',
+  'https://example.com/callback?SAMLRequest=secret',
+  'https://example.com/callback?SAMLResponse=secret',
+  'https://example.com/callback?SAMLart=secret',
   'https://example.com/verify?oobCode=secret',
   'https://example.com/#access_token=secret',
   'https://example.com/#refresh-token=secret',

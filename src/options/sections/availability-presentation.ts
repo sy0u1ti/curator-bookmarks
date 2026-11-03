@@ -1,13 +1,15 @@
 import { extractAvailabilityHttpStatus } from '../../shared/availability-evidence.js'
 
 /** A concise explanation for scanning. Full detection evidence remains available separately. */
-export function getAvailabilityResultSummary(result: { status?: unknown; errorCode?: unknown; detail?: unknown; badgeText?: unknown }): string {
+export function getAvailabilityResultSummary(result: { status?: unknown; errorCode?: unknown; detail?: unknown; badgeText?: unknown; requiresLogin?: boolean }): string {
+  if ((result.status === 'recovered' || result.status === 'available') && result.requiresLogin) return '网页正常，需要登录。'
   if (result.status === 'recovered' || result.status === 'available') return '本轮已确认可以访问。'
-  if (result.status === 'redirected') return '链接已跳转到新地址，确认后可更新书签。'
+  if (result.status === 'redirected') return '网站已跳转到新地址，请打开确认后再更新书签。'
   if (result.status === 'ignored') return '命中忽略规则，本轮已跳过。'
   const code = String(result.errorCode || '')
   const detail = String(result.detail || '').replace(/\s+/g, ' ').trim()
   const status = extractAvailabilityHttpStatus(code) || extractAvailabilityHttpStatus(detail)
+  if (code === 'challenge-required') return '站点安全验证尚未完成，可打开验证后重测；不是死链结论。'
   if (code === 'site-cooldown') return '站点正在限流，本条已暂缓，可稍后重新检测。'
   if (code === 'detection-budget-exhausted' || /timeout|TIMED_OUT/.test(code)) return '本次未能在时限内完成验证，可稍后重新检测。'
   if (code === 'redirect-loop' || code === 'too-many-redirects') return '跳转未能到达稳定页面，建议打开链接确认。'
@@ -16,8 +18,8 @@ export function getAvailabilityResultSummary(result: { status?: unknown; errorCo
   if (/unsupported|unverified-network/.test(code)) return '未能完成独立验证，建议打开网页确认。'
   if (/ERR_(?:CERT_|SSL_)/.test(code)) return '证书或安全连接异常，请检查网络后重试。'
   if (/ERR_(?:INTERNET_DISCONNECTED|NETWORK_CHANGED|PROXY_|TUNNEL_|MANDATORY_PROXY_)/.test(code)) return '当前网络或代理影响了检测，恢复连接后可重试。'
-  if (status === 404 || status === 410) return '网页返回 ' + status + '，可能已移除或需要登录。'
-  if (status === 401 || status === 403 || status === 407) return '访问受限，可能需要登录或通过站点验证。'
+  if (status === 404 || status === 410) return '网页返回 ' + status + '，当前未找到此页面，可打开确认。'
+  if (status === 403 || status === 407) return '网站限制了本次请求，可打开确认或重新检测。'
   if (status === 429) return '站点请求过多，请稍后重新检测。'
   if (status === 451) return '站点限制了此内容的访问，需要人工确认。'
   if (status >= 500) return '站点暂时出错（HTTP ' + status + '），建议稍后重试。'

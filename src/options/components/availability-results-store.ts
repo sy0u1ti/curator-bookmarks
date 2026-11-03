@@ -16,8 +16,8 @@ function getEmptyState(kind: AvailabilityResultPanelKind): AvailabilityResultsSt
   }
   const state: AvailabilityResultsState = {
     emptyMessage: kind === 'review'
-      ? '开始检测后，这里会展示低置信异常书签。'
-      : '开始检测后，这里会展示高置信失效的书签。',
+      ? '检测后，需要进一步验证的书签会显示在这里。'
+      : '检测后，已确认无法访问的书签会显示在这里。',
     results: []
   }
   emptyStates.set(kind, state)

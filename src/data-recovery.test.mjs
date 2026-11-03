@@ -117,7 +117,16 @@ try {
   const collapse = ui.getByRole('button', { name: '收起文件夹列表', exact: true })
   await collapse.waitFor()
   const pane = ui.locator('.t-skel-content .popup-main-pane')
+  // The folder row is sized to its content and animates into place; measure it settled.
+  const settledRows = () => ui.waitForFunction(() => {
+    const workspace = document.querySelector('.t-skel-content .popup-workspace')
+    return workspace && !workspace.getAnimations().some(animation => animation.playState === 'running') &&
+      getComputedStyle(workspace.closest('.t-skel-content')).opacity === '1'
+  })
+  await settledRows()
   const before = (await pane.boundingBox()).height
+  const folderRow = await ui.locator('.t-skel-content .popup-workspace > aside').evaluate(element => element.getBoundingClientRect().height)
+  assert.ok(folderRow > 42, 'the expanded folder row must be taller than its collapsed header')
   await collapse.click()
   await ui.locator('#sidepanel-folder-tree').waitFor({ state: 'hidden' })
   await ui.waitForFunction(() => {
@@ -125,8 +134,9 @@ try {
     const skeleton = document.querySelector('.popup-workspace-reveal > .t-skel-skeleton')
     return content && skeleton && getComputedStyle(content).opacity === '1' && getComputedStyle(skeleton).opacity === '0'
   })
+  await settledRows()
   const after = (await pane.boundingBox()).height
-  assert.ok(after > before + 30, `Collapsing should return space to results: ${before} -> ${after}`)
+  assert.ok(Math.abs(after - (before + folderRow - 42)) <= 1, `Collapsing should return the folder space to results: ${before} -> ${after}`)
   await ui.screenshot({ path: path.join(output, 'sidepanel-collapsed.png') })
   await ui.getByRole('button', { name: '展开文件夹列表', exact: true }).click()
   await ui.locator('#sidepanel-folder-tree').waitFor({ state: 'visible' })

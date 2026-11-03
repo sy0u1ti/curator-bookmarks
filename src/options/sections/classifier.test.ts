@@ -10,7 +10,7 @@ import {
   classifyAvailabilityProbeResult,
   classifyProbeError,
   classifyProbeResponseAndDiscardBody,
-  getSafeSameOriginRedirectUrl,
+  getSafeAvailabilityRedirectUrl,
   isRedirectedNavigation,
   isUnverifiedAvailabilityErrorCode,
   requireRepeatedFailureEvidence,
@@ -380,7 +380,7 @@ const bybitLocaleRedirect: NavigationAttempt = {
   }
 }
 assert.equal(
-  getSafeSameOriginRedirectUrl(
+  getSafeAvailabilityRedirectUrl(
     'https://www.bybit.com/trade/usdt/BTCUSDT',
     bybitLocaleRedirect
   ),
@@ -388,18 +388,18 @@ assert.equal(
   'an already-authorized same-origin locale route should be eligible for one exact follow-up navigation'
 )
 assert.equal(
-  getSafeSameOriginRedirectUrl(
+  getSafeAvailabilityRedirectUrl(
     'https://www.bybit.com/trade/usdt/BTCUSDT',
     {
       ...bybitLocaleRedirect,
       finalUrl: 'https://bybit.com/en/trade/usdt/BTCUSDT'
     }
   ),
-  '',
-  'a different origin must not be treated as an authorized same-origin redirect'
+  'https://bybit.com/en/trade/usdt/BTCUSDT',
+  'a safe canonical host is eligible, but the controller must still check its current permission'
 )
 assert.equal(
-  getSafeSameOriginRedirectUrl(
+  getSafeAvailabilityRedirectUrl(
     'https://www.bybit.com/trade/usdt/BTCUSDT',
     {
       ...bybitLocaleRedirect,
@@ -410,26 +410,62 @@ assert.equal(
   'a same-origin capability action must remain protected'
 )
 assert.equal(
-  getSafeSameOriginRedirectUrl(
+  getSafeAvailabilityRedirectUrl(
     bybitLocaleRedirect.finalUrl,
     bybitLocaleRedirect
   ),
   '',
   'a redirect target equal to the active URL must not create a navigation loop'
 )
+for (const finalUrl of [
+  'http://www.bybit.com/public',
+  'https://user:secret@example.com/',
+  'http://127.0.0.1/',
+  'https://example.com/?__session=credential',
+  'https://example.com/?SAMLResponse=credential',
+  'https://example.com/login',
+  'file:///C:/private.html'
+]) {
+  assert.equal(getSafeAvailabilityRedirectUrl('https://www.bybit.com/trade/usdt/BTCUSDT', {
+    ...bybitLocaleRedirect, finalUrl
+  }), '', 'redirect safety remains independent of origin permission: ' + finalUrl)
+}
+assert.equal(getSafeAvailabilityRedirectUrl('http://example.net/', {
+  ...bybitLocaleRedirect, finalUrl: 'https://example.net/'
+}), 'https://example.net/', 'HTTP to HTTPS is a safe candidate for an authorized exact navigation')
+assert.equal(getSafeAvailabilityRedirectUrl('https://example.net/page?b=2&a=1', {
+  ...bybitLocaleRedirect, finalUrl: 'https://example.net/page?a=1&b=2'
+}), 'https://example.net/page?a=1&b=2', 'query reordering is a distinct request under the exact-URL firewall and must be followed')
+assert.equal(getSafeAvailabilityRedirectUrl('https://example.net/page?a=1#old', {
+  ...bybitLocaleRedirect, finalUrl: 'https://example.net/page?a=1#new'
+}), '', 'fragment-only changes cannot require another main-document request')
+const respondingRedirect = buildFailureClassification(
+  bookmark,
+  [{
+    ...completedCrossOriginAttempt,
+    status: 'failed',
+    errorCode: 'ungranted-redirect'
+  }],
+  null,
+  true
+)
+assert.equal(respondingRedirect.status, 'redirected', 'an observed HTTP redirect proves the bookmarked server responded')
+assert.equal(respondingRedirect.finalUrl, 'https://canonical.example/path?a=1&b=2')
+assert.equal(respondingRedirect.errorCode, undefined)
 assert.equal(
   buildFailureClassification(
     bookmark,
     [{
       ...completedCrossOriginAttempt,
       status: 'failed',
-      errorCode: 'ungranted-redirect'
+      errorCode: 'ungranted-redirect',
+      finalUrl: 'https://example.com/logout'
     }],
     null,
     true
   ).badgeText,
   '待授权重定向',
-  'a blocked next hop should be presented as an unverified redirect rather than a generic failure'
+  'an unsafe redirect target is never offered as a bookmark migration'
 )
 assert.equal(
   buildFailureClassification(

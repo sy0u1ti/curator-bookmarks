@@ -283,6 +283,11 @@ async function closeDrawer(page, method = 'escape', expectFocusReturn = true) {
 
 async function verifyDrawerCloseDuringEntrance(page) {
   await waitForDrawerClosed(page)
+  // The previous close used Escape, which leaves keyboard motion mode on.
+  // Move the pointer onto the trigger, as a user would before clicking, so the
+  // in-page synthetic click below opens with pointer-driven interpolation.
+  await page.mouse.move(4, 4)
+  await page.locator('#newtab-settings-trigger').hover()
   // Observe and interrupt within one browser frame. A protocol round-trip can
   // outlast the entrance on a busy machine and accidentally test a settled panel.
   // CSS reversals shorten their duration by the current entrance progress.
@@ -387,7 +392,10 @@ async function probeDrawerOpening(page) {
     })
   })
 
-  await page.locator('#newtab-settings-trigger').evaluate((element) => element.click())
+  // Open with a real pointer click. A synthetic element.click() fires no
+  // pointerdown, so after an Escape close the page would stay in keyboard
+  // motion mode, where the drawer intentionally commits without interpolation.
+  await page.locator('#newtab-settings-trigger').click()
   const probe = await probePromise
   const finalFrame = probe.frames.at(-1)
   await page.waitForTimeout(420)
@@ -601,7 +609,9 @@ async function verifyDesktopDrawer(page) {
       })
     }, 720)
   }))
-  await page.keyboard.press('Escape')
+  // Interrupt a pointer close. Escape switches to keyboard motion mode, where
+  // the exit commits instantly by design and there is nothing to reverse.
+  await page.locator('#newtab-settings-close').click()
   await page.waitForTimeout(45)
   await page.locator('#newtab-settings-trigger').evaluate((element) => element.click())
   const interruption = await interruptionProbe

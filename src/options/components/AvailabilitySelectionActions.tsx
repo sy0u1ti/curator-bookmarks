@@ -11,8 +11,6 @@ export function AvailabilitySelectionActions() {
   const moveSelectionRef = useOptionsFocusTargetRef<HTMLButtonElement>('availability-selection-move')
   const entered = !state.hidden
   const moreActions = [
-    { id: 'promote-selection', label: '移入高置信异常', disabled: state.promoteDisabled },
-    { id: 'demote-selection', label: '移入低置信异常', disabled: state.demoteDisabled },
     { id: 'ignore-bookmarks', label: '忽略所选书签', disabled: state.ignoreBookmarkDisabled },
     { id: 'ignore-domains', label: '忽略所选域名', disabled: state.ignoreDomainDisabled },
     { id: 'ignore-folders', label: '忽略所选文件夹', disabled: state.ignoreFolderDisabled }
@@ -45,7 +43,7 @@ export function AvailabilitySelectionActions() {
             focusableWhenDisabled={state.retestDisabled}
             onClick={() => handleAvailabilityPanelAction({ action: 'retest-selection' })}
           >
-            <StableLabel text={state.retestLabel} reserve={['重新测试', '正在测试…']} />
+            <StableLabel text={state.retestLabel} reserve={['重新检测', '重新检测中…', '授权并重测']} />
           </Button>
           <Button
             ref={moveSelectionRef}

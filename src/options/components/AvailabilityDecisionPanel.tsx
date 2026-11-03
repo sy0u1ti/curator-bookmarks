@@ -18,8 +18,6 @@ const AVAILABILITY_DECISION_HEADER_CLASS =
 const AVAILABILITY_DECISION_HEADER_COPY_CLASS = 'min-w-0'
 const AVAILABILITY_DECISION_TITLE_CLASS =
   'block [overflow-wrap:anywhere] text-[15px] font-[650] leading-normal tracking-[0] text-ds-text-primary'
-const AVAILABILITY_DECISION_SUBTITLE_CLASS =
-  'mt-[5px] mb-0 text-[13px] leading-[1.5] text-ds-text-secondary'
 const AVAILABILITY_LABEL_CLASS =
   'block text-xs font-medium leading-4 text-ds-text-secondary'
 const AVAILABILITY_PROGRESS_TRACK_CLASS = `mt-[14px] ${SHEEN_PROGRESS_TRACK_CLASS}`
@@ -44,7 +42,6 @@ export function AvailabilityDecisionPanel({ children }: { children: ReactNode })
       <div className={AVAILABILITY_DECISION_HEADER_CLASS}>
         <div className={AVAILABILITY_DECISION_HEADER_COPY_CLASS}>
           <strong className={AVAILABILITY_DECISION_TITLE_CLASS}>检测概览</strong>
-          <p className={AVAILABILITY_DECISION_SUBTITLE_CLASS}>确认失效后再移动、删除或忽略。</p>
         </div>
         <span className={OPTION_VALUE_CLASS}>{state.durationLabel}</span>
       </div>

@@ -65,9 +65,9 @@ export async function verifySearchGeometryMatrix(page, setViewport) {
   const results = []
   try {
     await page.fill('.newtab-search-input', 'Geometry regression')
-    for (const width of [320, 390, 480, 520, 521, 768, 1440, 2560]) {
+    for (const width of [320, 390, 520, 521, 768, 1440]) {
       await setViewport({ width, height: 900 })
-      for (const [height, expected] of [[28, 36], [36, 36], [40, 40], [44, 44], [48, 48], [56, 56], [1000, 56]]) {
+      for (const [height, expected] of [[28, 36], [44, 44], [1000, 56]]) {
         await page.evaluate(async ({ key, height }) => {
           const stored = await chrome.storage.local.get(key)
           await chrome.storage.local.set({

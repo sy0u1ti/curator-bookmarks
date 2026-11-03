@@ -58,6 +58,7 @@ export interface AiProviderSettingsState {
   reasoningEffortSupported: boolean
   revealApiKey: boolean
   saveDisabled: boolean
+  saveError?: string
   saveStatusText: string
   showSaveSettingsButton: boolean
   testButtonSecondary: boolean
