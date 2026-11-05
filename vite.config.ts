@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
 import { crx } from '@crxjs/vite-plugin'
 import { build as buildEsbuild } from 'esbuild'
+import { readFile } from 'node:fs/promises'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import manifest from './src/manifest.json' with { type: 'json' }
@@ -76,6 +77,11 @@ function instantWallpaperBootPlugin(minify: boolean): Plugin {
       })
     },
     async generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'licenses/react-bits-GlassSurface.txt',
+        source: await readFile(new URL('./src/vendor/react-bits/LICENSE.md', import.meta.url), 'utf8')
+      })
       const source = await buildInstantWallpaperBootScript(minify)
       this.emitFile({
         type: 'asset',

@@ -183,11 +183,9 @@
         white-space: nowrap;
       }
 
-      @supports (corner-shape: superellipse(1.25)) {
-        .popup-preboot-search,
-        .popup-preboot-semantic {
-          corner-shape: var(--ds-corner-shape, superellipse(1.25));
-        }
+      .popup-preboot-search,
+      .popup-preboot-semantic {
+        corner-shape: var(--ds-corner-shape, round);
       }
 
       @media (prefers-reduced-transparency: reduce) {

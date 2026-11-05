@@ -310,3 +310,6 @@ npm run test:workspace-browser # 针对原生侧栏、全键盘流、恢复点�
 问题和建议请提交到 [GitHub Issues](https://github.com/sy0u1ti/curator-bookmarks/issues)，附复现步骤、Chrome 版本及错误信息；无需附上真实书签库或私密密钥。
 
 [MIT](LICENSE)
+
+新标签页的 GlassSurface 材质衍生自 React Bits，适用随附的
+[MIT + Commons Clause 许可证](src/vendor/react-bits/LICENSE.md)；构建产物也包含该声明。

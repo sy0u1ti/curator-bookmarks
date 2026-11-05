@@ -1,27 +1,22 @@
 export interface NewtabGlassSettings {
   tint: number
-  bevel: number
-  thickness: number
   blur: number
-  dispersion: number
-  rim: number
-  light: number
-  smooth: number
+  saturation: number
+  brightness: number
+  highlight: number
 }
 export type NewtabGlassSettingKey = keyof NewtabGlassSettings
 export const GLASS_SETTINGS_CACHE_KEY = 'curator-newtab-glass-v1'
 
-// Keep the playground's seven controls. Geometry controls are normalized per
-// surface, with defaults matching its ~28px bevel / 19px slab on a 30px corner.
-// Blur deliberately starts at the requested maximum.
+// GlassSurface's Frosted path is controlled entirely by CSS.
 export const DEFAULT_GLASS_SETTINGS: Readonly<NewtabGlassSettings> = {
-  tint: 13, bevel: 44, thickness: 28, blur: 12, dispersion: 0.11, rim: 0.3, light: -25, smooth: 0.75
+  tint: 13, blur: 12, saturation: 140, brightness: 104, highlight: 100
 }
 
 export const GLASS_PRESETS = [
-  { id: 'balanced', label: '均衡', description: '保留当前默认材质', settings: DEFAULT_GLASS_SETTINGS },
-  { id: 'clear', label: '清透', description: '更清晰地透出背景', settings: { ...DEFAULT_GLASS_SETTINGS, tint: 6, blur: 3, thickness: 16, dispersion: 0.04 } },
-  { id: 'soft', label: '柔和', description: '弱化背景与边缘折射', settings: { ...DEFAULT_GLASS_SETTINGS, tint: 24, blur: 12, thickness: 8, dispersion: 0, rim: 0.15 } }
+  { id: 'balanced', label: '均衡', description: '均衡的磨砂与边缘高光', settings: DEFAULT_GLASS_SETTINGS },
+  { id: 'clear', label: '清透', description: '更清晰地透出背景', settings: { ...DEFAULT_GLASS_SETTINGS, tint: 6, blur: 3, saturation: 110, highlight: 65 } },
+  { id: 'soft', label: '柔和', description: '柔和磨砂与低高光', settings: { ...DEFAULT_GLASS_SETTINGS, tint: 24, saturation: 100, brightness: 100, highlight: 50 } }
 ] as const
 
 export function getGlassPresetId(settings: NewtabGlassSettings): string {
@@ -30,12 +25,19 @@ export function getGlassPresetId(settings: NewtabGlassSettings): string {
 }
 export const GLASS_SETTING_LIMITS: Record<NewtabGlassSettingKey, readonly [number, number, number]> = {
   tint: [0, 60, 1],
-  bevel: [4, 48, 1], thickness: [2, 40, 1], blur: [0, 12, 0.5],
-  dispersion: [0, 0.16, 0.01], rim: [0, 1.6, 0.05], light: [-180, 180, 5], smooth: [0, 3, 0.25]
+  blur: [0, 12, 0.5], saturation: [0, 200, 1],
+  brightness: [80, 120, 1], highlight: [0, 150, 1]
 }
 
 export function normalizeGlassSettings(raw: unknown): NewtabGlassSettings {
-  const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {}
+  const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? { ...raw as Record<string, unknown> } : {}
+  // Keep tint/blur and map the old rim intensity to Frosted's highlight.
+  // Retired optical parameters never reach the new material.
+  if (source.highlight === undefined &&
+    (typeof source.rim === 'number' || (typeof source.rim === 'string' && source.rim.trim() !== '')) &&
+    Number.isFinite(Number(source.rim))) {
+    source.highlight = Number(source.rim) / 0.3 * 100
+  }
   const settings = { ...DEFAULT_GLASS_SETTINGS }
   for (const key of Object.keys(GLASS_SETTING_LIMITS) as NewtabGlassSettingKey[]) {
     const value = source[key]
@@ -53,53 +55,12 @@ export function readGlassSettingsCache(): NewtabGlassSettings {
   catch { return { ...DEFAULT_GLASS_SETTINGS } }
 }
 
-export function getGlassRefractionOptions(
-  settings: NewtabGlassSettings,
-  width: number,
-  height: number,
-  radii: readonly number[]
-): Omit<NewtabGlassSettings, 'tint'> {
-  const maxBevel = Math.max(1, Math.min(Math.max(1, ...radii), Math.floor(Math.min(width, height) / 2) - 1))
-  const bevel = 1 + (maxBevel - 1) * (settings.bevel - 4) / 44
-  // The unmodified Hyalite no-fold constraint saturates when a slab is much
-  // thicker than its bevel. Map the control to the useful interval instead of
-  // feeding a 40px slab to a 6px corner and making half the slider a no-op.
-  const thickness = bevel * (0.05 + 0.95 * (settings.thickness - 2) / 38)
-  return {
-    bevel, thickness, blur: settings.blur, dispersion: settings.dispersion,
-    rim: settings.rim, light: settings.light, smooth: settings.smooth
-  }
-}
-
 export function applyGlassSettingsCss(settings: NewtabGlassSettings, root: HTMLElement = document.documentElement): void {
   root.style.setProperty('--newtab-glass-bg-fill', `rgba(0, 0, 0, ${settings.tint / 100})`)
+  root.style.setProperty('--newtab-glass-tint', String(settings.tint / 100))
   root.style.setProperty('--newtab-glass-background-blur', settings.blur + 'px')
-  root.style.setProperty('--newtab-glass-backdrop-filter', 'blur(' + settings.blur + 'px)')
-  root.style.setProperty('--newtab-glass-rim-opacity', String(Math.min(0.5, settings.rim * 0.25)))
-  const light = settings.light * Math.PI / 180
-  root.style.setProperty('--newtab-glass-light-x', (Math.sin(light) * 1.5).toFixed(2) + 'px')
-  root.style.setProperty('--newtab-glass-light-y', (-Math.cos(light) * 1.5).toFixed(2) + 'px')
-}
-
-/* Light text on a fixed 13% tint vanishes over bright wallpapers. Above the
-   luminance where the tint stops carrying the text, the backdrop itself
-   deepens the fill up to a bounded maximum, so dark wallpapers keep the exact
-   material the user chose while bright ones stay readable. */
-export const GLASS_ADAPTIVE_TINT = { start: 0.42, end: 0.95, max: 0.58 } as const
-
-export function getAdaptiveGlassTint(baseAlpha: number, luminance: number | null | undefined): number {
-  const base = Math.min(1, Math.max(0, baseAlpha))
-  if (typeof luminance !== 'number' || !Number.isFinite(luminance)) return base
-  const span = GLASS_ADAPTIVE_TINT.end - GLASS_ADAPTIVE_TINT.start
-  const progress = Math.min(1, Math.max(0, (luminance - GLASS_ADAPTIVE_TINT.start) / span))
-  const ceiling = Math.max(base, GLASS_ADAPTIVE_TINT.max)
-  return Math.round((base + (ceiling - base) * progress) * 1000) / 1000
-}
-
-export function applyGlassSurfaceTint(element: HTMLElement, tint: number, luminance: number | null): void {
-  if (luminance === null) {
-    element.style.removeProperty('--newtab-glass-surface-fill')
-    return
-  }
-  element.style.setProperty('--newtab-glass-surface-fill', `rgba(0, 0, 0, ${getAdaptiveGlassTint(tint / 100, luminance)})`)
+  root.style.setProperty('--newtab-glass-backdrop-filter', `blur(${settings.blur}px) saturate(${settings.saturation / 100}) brightness(${settings.brightness / 100})`)
+  root.style.setProperty('--newtab-glass-saturation', String(settings.saturation / 100))
+  root.style.setProperty('--newtab-glass-brightness', String(settings.brightness / 100))
+  root.style.setProperty('--newtab-glass-highlight', String(settings.highlight / 100))
 }

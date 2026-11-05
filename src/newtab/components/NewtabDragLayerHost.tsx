@@ -1,3 +1,4 @@
+import { NewtabGlassSurface } from './NewtabGlassSurface'
 import type { CSSProperties } from 'react'
 import {
   useNewtabDragLayerView,
@@ -47,7 +48,7 @@ function SpeedDialDragGhost({ view }: { view: SpeedDialDragGhostView }) {
   } as CSSProperties
 
   return (
-    <div className={getSpeedDialCardClass({ ghost: true })} style={style} aria-hidden="true">
+    <NewtabGlassSurface as="div" className={getSpeedDialCardClass({ ghost: true })} style={style} aria-hidden="true">
       <BookmarkIconShell
         className={SPEED_DIAL_MARK_CLASS}
         customIcon={view.customIcon}
@@ -58,7 +59,7 @@ function SpeedDialDragGhost({ view }: { view: SpeedDialDragGhostView }) {
         <strong className={SPEED_DIAL_COPY_TITLE_CLASS}>{view.title}</strong>
         <span className={SPEED_DIAL_COPY_DETAIL_CLASS}>{view.detail}</span>
       </span>
-    </div>
+    </NewtabGlassSurface>
   )
 }
 
@@ -72,14 +73,14 @@ function BookmarkDragGhost({ view }: { view: BookmarkDragGhostView }) {
   } as CSSProperties
 
   return (
-    <div className={getBookmarkTileClass({ ghost: true, showTitles: view.showTitles })} style={style} aria-hidden="true">
+    <NewtabGlassSurface as="div" className={getBookmarkTileClass({ ghost: true, showTitles: view.showTitles })} style={style} aria-hidden="true">
       <BookmarkIconShell
         customIcon={view.customIcon}
         fallbackLabel={view.fallbackLabel}
         favicon={view.favicon}
       />
       <span className={getBookmarkTitleClass()} hidden={!view.showTitles}>{view.title}</span>
-    </div>
+    </NewtabGlassSurface>
   )
 }
 
@@ -95,7 +96,7 @@ function FolderDragGhost({ view }: { view: FolderDragGhostView }) {
   } as CSSProperties
 
   return (
-    <div
+    <NewtabGlassSurface as="div"
       className={`${getBookmarkTileClass({ ghost: true, showTitles: true })} ${BOOKMARK_FOLDER_CARD_GRID_CLASS} folder-drag-ghost`}
       style={style}
       aria-hidden="true"
@@ -107,6 +108,6 @@ function FolderDragGhost({ view }: { view: FolderDragGhostView }) {
       <span className={BOOKMARK_FOLDER_CARD_COUNT_CLASS} aria-hidden="true">
         <NumberPop text={view.bookmarkCount} />
       </span>
-    </div>
+    </NewtabGlassSurface>
   )
 }

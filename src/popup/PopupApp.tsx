@@ -18,6 +18,7 @@ import { PopupAutoAnalyzeStatus } from './components/PopupAutoAnalyzeStatus'
 import { PopupChromeHost } from './components/PopupChromeHost'
 import { PopupContentHost } from './components/PopupContentHost'
 import { PopupSmartClassifierHost } from './components/PopupSmartClassifierHost'
+import { InputCaretHost } from '../ui/input-caret/InputCaretHost'
 
 const PopupToasts = lazy(() => import('./components/PopupToasts').then(module => ({ default: module.PopupToasts })))
 
@@ -51,6 +52,7 @@ export function PopupApp({ portalContainer }: { portalContainer?: HTMLElement | 
 
   return (
     <ThemeProvider>
+      <InputCaretHost />
       <PopupShell portalContainer={portalContainer} />
     </ThemeProvider>
   )

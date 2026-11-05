@@ -3,6 +3,8 @@ import { Button } from '../ui/base/Button'
 import { cx } from '../ui/base/utils'
 import { Icon } from '../ui/icons/Icon'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
+import { SurfaceMaterialProvider } from '../ui/base/SurfaceMaterial'
+import { NewtabFloatingSurface, NewtabGlassSurface } from './components/NewtabGlassSurface'
 import { runIdle } from '../shared/idle'
 import { NewtabBackgroundLayer } from './components/NewtabBackgroundLayer'
 import { useNewtabAppChromeAttributes } from './components/NewtabBodyClassesHost'
@@ -38,6 +40,7 @@ import {
   useNewtabSettingsDrawerRequested
 } from './newtab-settings-drawer-store'
 import { useSettingsDrawerModalMode } from './settings-drawer-mode'
+import { InputCaretHost } from '../ui/input-caret/InputCaretHost'
 import {
   useNewtabPaperShaderActive,
   useNewtabBackgroundSettingsView,
@@ -173,7 +176,10 @@ function subscribeToNewtabBookmarkEvents(): () => void {
 export function NewtabApp({ onOpenSettings }: { onOpenSettings: () => void }) {
   return (
     <ThemeProvider>
-      <NewtabShell onOpenSettings={onOpenSettings} />
+      <InputCaretHost />
+      <SurfaceMaterialProvider component={NewtabFloatingSurface}>
+        <NewtabShell onOpenSettings={onOpenSettings} />
+      </SurfaceMaterialProvider>
     </ThemeProvider>
   )
 }
@@ -306,7 +312,7 @@ function NewtabShell({ onOpenSettings }: { onOpenSettings: () => void }) {
           autoHideSettingsTrigger ? SETTINGS_TRIGGER_ZONE_AUTO_HIDE_CLASS : SETTINGS_TRIGGER_ZONE_VISIBLE_CLASS
         )}
       >
-        <Button
+        <NewtabGlassSurface as={Button}
           id="newtab-settings-trigger"
           className={getSettingsTriggerButtonClass(autoHideSettingsTrigger)}
           ref={settingsTriggerRef}
@@ -324,7 +330,7 @@ function NewtabShell({ onOpenSettings }: { onOpenSettings: () => void }) {
           unstyled
         >
           <Icon name="Settings" size={18} aria-hidden="true" />
-        </Button>
+        </NewtabGlassSurface>
       </div>
 
       <Button

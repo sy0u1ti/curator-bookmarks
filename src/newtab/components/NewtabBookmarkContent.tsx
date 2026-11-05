@@ -1,3 +1,4 @@
+import { NewtabGlassSurface } from './NewtabGlassSurface'
 import {
   memo,
   useCallback,
@@ -647,7 +648,7 @@ const BookmarkTile = memo(function BookmarkTile({
   }, [state.id])
 
   return (
-    <a
+    <NewtabGlassSurface as="a"
       className={getBookmarkTileClass({
         dragActive,
         dragging: state.dragging,
@@ -708,7 +709,7 @@ const BookmarkTile = memo(function BookmarkTile({
       >
         <Icon name="Move" size={15} aria-hidden="true" />
       </span>
-    </a>
+    </NewtabGlassSurface>
   )
 })
 
@@ -798,7 +799,7 @@ function BookmarkBreadcrumbItem({
 }) {
   return (
     <>
-      <Button
+      <NewtabGlassSurface as={Button} tone="chip"
         className={getBookmarkBreadcrumbButtonClass(isLast)}
         type="button"
         aria-current={isLast ? 'page' : undefined}
@@ -807,7 +808,7 @@ function BookmarkBreadcrumbItem({
       >
         {crumb.folderId ? null : <Icon name="Bookmark" size={13} aria-hidden="true" />}
         <span className={BOOKMARK_BREADCRUMB_LABEL_CLASS}>{crumb.title}</span>
-      </Button>
+      </NewtabGlassSurface>
       {isLast ? null : <span className={BOOKMARK_BREADCRUMB_SEP_CLASS} aria-hidden="true">/</span>}
     </>
   )
@@ -821,7 +822,7 @@ function BookmarkFolderCard({
   showTitles: boolean
 }) {
   return (
-    <button
+    <NewtabGlassSurface as="button"
       className={showTitles
         ? `${getBookmarkTileClass({ showTitles })} ${BOOKMARK_FOLDER_CARD_GRID_CLASS}`
         : getBookmarkTileClass({ showTitles })}
@@ -838,17 +839,17 @@ function BookmarkFolderCard({
       <span className={BOOKMARK_FOLDER_CARD_COUNT_CLASS} aria-hidden="true">
         <NumberPop text={folder.bookmarkCount} />
       </span>
-    </button>
+    </NewtabGlassSurface>
   )
 }
 
 function PortalPanel({ state }: { state: PortalPanelState }) {
   return (
-    <section className={PORTAL_PANEL_CLASS} aria-label="Curator 常用和新近添加书签">
+    <NewtabGlassSurface as="section" className={PORTAL_PANEL_CLASS} aria-label="Curator 常用和新近添加书签">
       <section className={QUICK_ACCESS_CLASS} aria-label="Curator 常用和新近添加书签">
         <QuickAccessPanel state={state.quickAccess} />
       </section>
-    </section>
+    </NewtabGlassSurface>
   )
 }
 
@@ -860,7 +861,7 @@ function QuickAccessPanel({ state }: { state: QuickAccessPanelState }) {
           <div className={QUICK_HEADING_CLASS}>{group.label}</div>
           <div className={QUICK_LIST_CLASS}>
             {group.items.map((item) => (
-              <a
+              <NewtabGlassSurface as="a" tone="chip"
                 className={QUICK_LINK_CLASS}
                 href={item.url}
                 title={`${item.title} · ${item.detail}`}
@@ -876,7 +877,7 @@ function QuickAccessPanel({ state }: { state: QuickAccessPanelState }) {
                   <strong className={QUICK_COPY_TITLE_CLASS}>{item.title}</strong>
                   <span className={QUICK_COPY_DETAIL_CLASS}>{item.detail}</span>
                 </span>
-              </a>
+              </NewtabGlassSurface>
             ))}
           </div>
         </section>
@@ -943,7 +944,7 @@ function FolderSectionHeader({ pending, state }: { pending: boolean; state: Fold
 
   return (
     <>
-      <Button
+      <NewtabGlassSurface as={Button} tone="chip"
         className={getFolderSectionHeaderClass({ dragging: state.dragging, pending })}
         type="button"
         data-folder-drag-handle={state.folderId}
@@ -960,8 +961,8 @@ function FolderSectionHeader({ pending, state }: { pending: boolean; state: Fold
         <span className={FOLDER_SECTION_COUNT_CLASS}>
           <NumberPop text={state.bookmarkCount} />
         </span>
-      </Button>
-      <Button
+      </NewtabGlassSurface>
+      <NewtabGlassSurface as={Button} tone="chip"
         className={FOLDER_SECTION_ADD_CLASS}
         type="button"
         data-add-bookmark-folder-id={state.folderId}
@@ -978,7 +979,7 @@ function FolderSectionHeader({ pending, state }: { pending: boolean; state: Fold
         unstyled
       >
         <Icon name="Plus" size={12} strokeWidth={2} aria-hidden="true" />
-      </Button>
+      </NewtabGlassSurface>
     </>
   )
 }
@@ -992,10 +993,10 @@ function SourceNavigation({
 }) {
   return (
     <>
-      <span className={SOURCE_NAVIGATION_LABEL_CLASS}>来源</span>
+      <NewtabGlassSurface as="span" tone="chip" className={SOURCE_NAVIGATION_LABEL_CLASS}>来源</NewtabGlassSurface>
       <div className={SOURCE_NAVIGATION_LIST_CLASS}>
         {state.items.map((item) => (
-          <Button
+          <NewtabGlassSurface as={Button} tone="chip"
             className={SOURCE_NAVIGATION_LINK_CLASS}
             data-source-navigation-target={item.anchorId}
             title={item.path}
@@ -1012,7 +1013,7 @@ function SourceNavigation({
             <span className={SOURCE_NAVIGATION_COUNT_CLASS}>
               <NumberPop text={item.bookmarkCount} />
             </span>
-          </Button>
+          </NewtabGlassSurface>
         ))}
       </div>
     </>

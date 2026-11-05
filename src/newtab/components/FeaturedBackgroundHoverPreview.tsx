@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { NewtabGlassSurface } from './NewtabGlassSurface'
 import {
   useNewtabFeaturedBackgroundHoverPreviewView,
   type NewtabFeaturedBackgroundHoverPreviewView
@@ -14,13 +15,9 @@ function FeaturedBackgroundHoverPreview({ preview }: { preview: NewtabFeaturedBa
   if (!preview.src || state === 'error') return null
   const visible = preview.visible && state === 'ready'
   return (
-    <img
+    <NewtabGlassSurface tone="panel"
       className={visible ? 'featured-wallpaper-hover-preview is-visible' : 'featured-wallpaper-hover-preview'}
-      src={preview.src || undefined}
       aria-hidden={!visible}
-      alt={visible ? preview.ariaLabel : ''}
-      onLoad={() => setState('ready')}
-      onError={() => setState('error')}
       style={{
         visibility: state === 'ready' ? 'visible' : 'hidden',
         height: `${preview.height}px`,
@@ -28,6 +25,14 @@ function FeaturedBackgroundHoverPreview({ preview }: { preview: NewtabFeaturedBa
         top: `${preview.top}px`,
         width: `${preview.width}px`
       }}
-    />
+    >
+      <img
+        className="featured-wallpaper-hover-preview-image"
+        src={preview.src}
+        alt={visible ? preview.ariaLabel : ''}
+        onLoad={() => setState('ready')}
+        onError={() => setState('error')}
+      />
+    </NewtabGlassSurface>
   )
 }

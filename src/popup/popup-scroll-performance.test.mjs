@@ -11,14 +11,12 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { PopupContentHost } from './popup/components/PopupContentHost'
 import { dispatchPopupContentChange, registerPopupActionHandlers } from './popup/popup-controller-store'
-import { initSquircleEngine } from './shared/squircle-engine'
 
 let folderReads = 0
 let bookmarkReads = 0
 let lastAction = null
 let state
 registerPopupActionHandlers({ content: action => { lastAction = action } })
-initSquircleEngine()
 createRoot(document.getElementById('popup-app-shell')).render(<PopupContentHost />)
 const menu = id => ({ items: ['edit', 'copy-url', 'open-current-tab', 'move', 'delete'].map(action => ({ action, ariaLabel: action + ' ' + id, bookmarkId: id, danger: action === 'delete', disabled: false, label: action })) })
 const bookmark = (index, active = false, title = 'Bookmark ' + index) => ({

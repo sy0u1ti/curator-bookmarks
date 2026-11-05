@@ -126,6 +126,7 @@ import {
 } from './popup-hydration.js'
 import { registerPopupBrowserEventActions } from './popup-browser-events-store.js'
 import { getPopupSearchFocusPlan } from './popup-search-focus.js'
+import { normalizePopupPreferences } from '../shared/popup-preferences.js'
 import {
   collectFolderFilterVisibility,
   folderFilterMatchesTarget,
@@ -185,9 +186,6 @@ const SMART_RECOMMENDATION_LIMIT = 3
 const POPUP_DEFAULT_WORKSPACE_STORAGE = {
   activeWorkspaceId: DEFAULT_NEW_TAB_WORKSPACE_ID,
   workspaces: []
-}
-const DEFAULT_POPUP_PREFERENCES = {
-  naturalSearchEnabled: false
 }
 let popupDialogReturnFocusElement: HTMLElement | null = null
 let popupDialogReturnFocusBookmarkId: string | null = null
@@ -403,19 +401,16 @@ async function hydratePopupPreferences() {
     void savePopupPreferences().catch(() => {})
   }
 }
-function normalizePopupPreferences(value) {
-  if (!value || typeof value !== 'object') {
-    return { ...DEFAULT_POPUP_PREFERENCES }
-  }
-  return {
-    naturalSearchEnabled: value.naturalSearchEnabled === true
-  }
-}
 async function savePopupPreferences() {
-  await setLocalStorage({
-    [STORAGE_KEYS.popupPreferences]: {
-      naturalSearchEnabled: state.naturalSearchEnabled
-    }
+  await withLocalStorageTransaction(async (transaction) => {
+    const stored = await getLocalStorage([STORAGE_KEYS.popupPreferences])
+    const preferences = normalizePopupPreferences(stored[STORAGE_KEYS.popupPreferences])
+    await setLocalStorage({
+      [STORAGE_KEYS.popupPreferences]: {
+        ...preferences,
+        naturalSearchEnabled: state.naturalSearchEnabled
+      }
+    }, { transaction })
   })
 }
 async function refreshNaturalSearchAiConfiguredState(): Promise<boolean> {

@@ -16,7 +16,7 @@ const bookmarkContent = readFileSync('src/newtab/components/NewtabBookmarkConten
 const searchWidget = readFileSync('src/newtab/components/NewtabSearchWidget.tsx', 'utf8')
 const searchWidgetClasses = readFileSync('src/newtab/components/searchWidgetClasses.ts', 'utf8')
 const clockClasses = readFileSync('src/newtab/components/clockClasses.ts', 'utf8')
-const glassCss = readFileSync('src/newtab/hyalite-glass.css', 'utf8')
+const glassCss = readFileSync('src/newtab/glass-surface.css', 'utf8')
 const glassSettings = readFileSync('src/newtab/glass-settings.ts', 'utf8')
 const speedDial = readFileSync('src/newtab/components/NewtabSpeedDialPanel.tsx', 'utf8')
 const bookmarkIconShell = readFileSync('src/newtab/components/BookmarkIconShell.tsx', 'utf8')
@@ -548,22 +548,19 @@ assert.ok(
 )
 
 assert.ok(
-  bookmarkPreboot.includes('collectNewtabBookmarkPrebootClipPaths') &&
-    bookmarkPreboot.includes('content.clipPaths.iconShell') &&
-    bookmarkPreboot.includes('content.clipPaths.favicon') &&
-    bookmarkPreboot.includes('content.clipPaths.fallback') &&
-    bookmarkPreboot.includes('areNewtabBookmarkIconClipsAligned(prebootTile, liveTile)'),
-  'The bookmark preboot snapshot must replay the squircle clip-paths on first paint and hold the handoff until the live icon outline matches.'
+  bookmarkPreboot.includes('areNewtabBookmarkIconCornersAligned(prebootTile, liveTile)') &&
+    bookmarkPreboot.includes('prebootStyle.borderRadius === liveStyle.borderRadius') &&
+    bookmarkPreboot.includes("prebootStyle.getPropertyValue('corner-shape') === liveStyle.getPropertyValue('corner-shape')") &&
+    !bookmarkPreboot.includes('content.clipPaths'),
+  'The bookmark snapshot and live icon must share native corners before the handoff, without cached clipping paths.'
 )
 
-const squircleEngine = readFileSync('src/shared/squircle-engine.ts', 'utf8')
 assert.ok(
-  squircleEngine.includes('export function applySquircleClipBeforePaint') &&
-    squircleEngine.includes("el.dataset.sq !== 'on') return") &&
-    squircleEngine.includes("dataset.squircleSubtree === 'off'") &&
-    bookmarkPreboot.includes("root.dataset.squircleSubtree = 'off'") &&
-    bookmarkIconShell.includes('applySquircleClipBeforePaint'),
-  'Live bookmark icons must receive their squircle clip-path before first paint, while the disposable preboot tree stays outside the global measurement scan.'
+  !bookmarkIconShell.includes('squircle-engine') &&
+    !bookmarkIconShell.includes('applySquircleClipBeforePaint') &&
+    !bookmarkIconShell.includes('ResizeObserver') &&
+    !bookmarkPreboot.includes('.style.clipPath'),
+  'Icon corners must paint immediately in CSS without measuring or scheduling a second contour.'
 )
 
 const cachedAutoOffsetWrites = [...controller.matchAll(/writeCachedAutoSearchOffsetY\(/g)].length

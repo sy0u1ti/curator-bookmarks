@@ -2,6 +2,7 @@ import { Drawer as BaseDrawer } from '@base-ui/react/drawer'
 import type { ComponentPropsWithoutRef, Ref } from 'react'
 import { MotionPanel } from '../motion/MotionPanel'
 import { cx } from './utils'
+import { SurfaceMaterial } from './SurfaceMaterial'
 
 type BaseDrawerPopupProps = ComponentPropsWithoutRef<typeof BaseDrawer.Popup>
 
@@ -26,7 +27,7 @@ export function DrawerPanel({
 
   if (unanimated) {
     return (
-      <BaseDrawer.Popup ref={ref} className={className} {...popupProps}>
+      <BaseDrawer.Popup ref={ref} render={<SurfaceMaterial />} className={className} {...popupProps}>
         {content}
       </BaseDrawer.Popup>
     )

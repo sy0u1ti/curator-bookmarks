@@ -9,6 +9,7 @@ import { Icon } from '../ui/icons/Icon'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { downloadBlobFile } from '../shared/download'
 import { capturePageArchive, getArchiveSourceTab, getPageArchiveFilename, parseArchiveTabId, requestPageCapturePermission } from './page-archive'
+import { InputCaretHost } from '../ui/input-caret/InputCaretHost'
 
 const tabId = parseArchiveTabId(new URLSearchParams(location.search).get('tabId'))
 const archivePrivacyNote = '存档内容保存在下载文件中。该操作不使用 AI，也不上传到 Curator 服务。'
@@ -78,6 +79,7 @@ function ArchivePage() {
   }
 
   return <ThemeProvider>
+    <InputCaretHost />
     <main className="mx-auto grid w-full min-w-0 max-w-3xl gap-6 px-6 py-12 text-ds-text-primary [overflow-wrap:anywhere]">
       <div className="flex items-center gap-3 text-sm text-ds-text-secondary"><Icon name="ArchiveRestore" size={22} />Curator</div>
       <h1 className="text-2xl font-semibold">网页离线存档</h1>

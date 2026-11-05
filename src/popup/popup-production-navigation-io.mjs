@@ -26,6 +26,10 @@ const bar = { id: '1', parentId: '0', title: 'Bookmarks', folderType: 'bookmarks
 const tree = [{ id: '0', title: '', children: [bar, { id: '2', parentId: '0', title: 'Other bookmarks', children: [] }] }]
 for (const node of [...entries, ...folders, bar, tree[0], tree[0].children[1]]) nodes.set(node.id, node)
 const values = {
+  curatorBookmarkPopupPreferences: {
+    animatedCaret: params.get('caret') !== 'off',
+    naturalSearchEnabled: false
+  },
   curatorBookmarkContentSnapshotSettings: {
     version: 1, enabled: false, autoCaptureOnBookmarkCreate: false,
     saveFullText: false, fullTextSearchEnabled: false, localOnlyNoAiUpload: true

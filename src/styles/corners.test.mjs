@@ -2,8 +2,6 @@ import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { test } from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { build } from 'esbuild'
 
 const read = file => readFile(path.resolve(file), 'utf8')
 const tokens = await read('src/styles/tokens.css')
@@ -31,15 +29,11 @@ test('radii and border-box insets form one progressive 4px scale', () => {
   }
 })
 
-test('native curves are scoped, progressively enhanced and leave round shapes alone', async () => {
-  assert.match(corners, /@supports \(corner-shape: superellipse\(1\.25\)\)/)
+test('every surface shares native arcs, including when corner-shape is unsupported', async () => {
+  assert.equal(values.get('--ds-corner-shape'), 'round')
+  assert.match(corners, /corner-shape: var\(--ds-corner-shape, round\)/)
   assert.match(corners, /:where\(html\[data-curator-surface\]\) :where\(\*\)/)
-  assert.doesNotMatch(corners, /clip-path:|mask-image:|overflow:\s*hidden/)
-  for (const selector of [
-    '.rounded-full', '.rounded-ds-full', '[data-corner-shape="round"]',
-    '.options-switch-control', '.options-switch-thumb', '.newtab-search-chip',
-    '.bookmark-folder-card-count', '.featured-wallpaper-card-action', '[data-hyalite-surface]'
-  ]) assert.ok(corners.includes(selector), `${selector} needs its native round contour`)
+  assert.doesNotMatch(corners, /clip-path:|mask-image:|overflow:\s*hidden|superellipse\(|@supports/)
   for (const surface of ['popup', 'sidepanel', 'newtab', 'options', 'archive']) {
     assert.match(await read(`src/${surface}/${surface}.html`), new RegExp(`<html\\b[^>]*data-curator-surface="${surface}"`))
   }
@@ -56,42 +50,28 @@ test('nested controls subtract the painted border from their inset', async () =>
   assert.match(await read('src/ui/base/InlineMenuItems.tsx'), /SUBMENU_INSET_PX = 4/)
 })
 
-test('native-capable documents never start the legacy DOM scanner or eager clipping', async () => {
-  const bundle = await build({
-    stdin: {
-      contents: `import { initSquircleEngine, applySquircleClipBeforePaint } from './src/shared/squircle-engine';
-        window.init = initSquircleEngine; window.eager = applySquircleClipBeforePaint;`,
-      resolveDir: process.cwd(),
-      loader: 'ts'
-    },
-    bundle: true, write: false, format: 'iife', platform: 'browser'
-  })
-  const forbidden = () => { throw new Error('Native corners must not measure, observe or schedule the DOM') }
-  const environment = {
-    window: {},
-    document: { documentElement: { hasAttribute: name => name === 'data-curator-surface' } },
-    CSS: { supports: (property, value) => property === 'corner-shape' && value === 'superellipse(1.25)' },
-    ResizeObserver: forbidden, MutationObserver: forbidden, getComputedStyle: forbidden,
-    requestAnimationFrame: forbidden, queueMicrotask: forbidden
+test('corners require no JS library, startup scanner or per-icon clipping', async () => {
+  const manifest = JSON.parse(await read('package.json'))
+  assert.equal(manifest.dependencies['@lisse/core'], undefined)
+  for (const file of [
+    'src/popup/main.tsx', 'src/newtab/main.tsx',
+    'src/newtab/components/BookmarkIconShell.tsx', 'src/newtab/newtab-bookmark-preboot.ts'
+  ]) {
+    assert.doesNotMatch(await read(file), /squircle-engine|applySquircleClipBeforePaint|initSquircleEngine|\.style\.clipPath\s*=/,
+      `${file} must let native CSS paint the first frame`)
   }
-  runInNewContext(bundle.outputFiles[0].text, environment)
-  environment.window.init()
-  environment.window.init()
-  environment.window.eager({})
-  assert.equal(environment.window.__curatorSquircleEngine, undefined)
 })
 
 test('first-paint shells share the live radii and discard obsolete clipped snapshots', async () => {
   const popup = await read('src/popup/popup.html')
   assert.match(popup, /border-radius: var\(--popup-radius-surface, 12px\)/)
-  assert.match(popup, /corner-shape: var\(--ds-corner-shape, superellipse\(1\.25\)\)/)
+  assert.match(popup, /corner-shape: var\(--ds-corner-shape, round\)/)
   const preboot = await read('src/newtab/newtab-bookmark-preboot.ts')
-  assert.match(preboot, /NEWTAB_BOOKMARK_PREBOOT_VERSION = 6/)
+  assert.match(preboot, /NEWTAB_BOOKMARK_PREBOOT_VERSION = 8/)
   assert.match(preboot, /border-radius: var\(--ds-radius-lg, 16px\)/)
   assert.match(preboot, /border-radius: var\(--ds-radius-xs, 4px\)/)
-  for (const part of ['iconShell', 'favicon', 'fallback']) {
-    assert.ok(preboot.includes(`if (!nativeCorners && content.clipPaths.${part})`))
-  }
+  assert.doesNotMatch(preboot, /clipPaths|superellipse\(/)
+  assert.match(preboot, /corner-shape: var\(--ds-corner-shape, round\)/)
 })
 
 test('Popup sibling surfaces and their placeholders share one radius role', async () => {

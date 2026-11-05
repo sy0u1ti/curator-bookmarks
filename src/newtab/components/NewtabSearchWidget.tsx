@@ -15,6 +15,7 @@ import { Icon } from '../../ui/icons/Icon'
 import { Collapsible as BaseCollapsible } from '@base-ui/react/collapsible'
 import { Button } from '../../ui/base/Button'
 import { Input } from '../../ui/base/Input'
+import { NewtabGlassSurface } from './NewtabGlassSurface'
 import { normalizeSearchHeight, SEARCH_WIDTH_MIN_PX } from '../search-layout'
 import {
   setNewtabSearchWidgetNodes,
@@ -158,7 +159,7 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
         }}
         onContextMenu={handleSearchContextMenu}
       >
-        <div className="newtab-search-surface" aria-hidden="true" />
+        <NewtabGlassSurface className="newtab-search-surface" aria-hidden="true" />
         <form
           className={[
             SEARCH_FORM_CLASS,
@@ -272,7 +273,7 @@ function SearchWidgetNaturalButton({ view }: { view: NewtabSearchWidgetView }) {
   const { natural } = view.buttons
 
   return (
-    <Button
+    <NewtabGlassSurface as={Button} tone="chip"
       className={getSearchNaturalButtonClass(natural)}
       type="button"
       aria-pressed={natural.active}
@@ -283,7 +284,7 @@ function SearchWidgetNaturalButton({ view }: { view: NewtabSearchWidgetView }) {
     >
       {natural.pending ? <span className={SEARCH_NATURAL_PENDING_DOT_CLASS} aria-hidden="true" /> : null}
       {natural.label}
-    </Button>
+    </NewtabGlassSurface>
   )
 }
 
@@ -299,7 +300,7 @@ function SearchWidgetEngineButtonFallback({
   const { engine } = view.buttons
 
   return (
-    <Button
+    <NewtabGlassSurface as={Button} tone="chip"
       className={SEARCH_ENGINE_BUTTON_CLASS}
       type="button"
       aria-label={engine.ariaLabel}
@@ -324,7 +325,7 @@ function SearchWidgetEngineButtonFallback({
     >
       {engine.label}
       <Icon name="ChevronDown" className={SEARCH_ENGINE_CARET_CLASS} size={12} aria-hidden="true" />
-    </Button>
+    </NewtabGlassSurface>
   )
 }
 

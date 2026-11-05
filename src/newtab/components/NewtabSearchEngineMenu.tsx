@@ -1,3 +1,4 @@
+import { NewtabGlassSurface } from './NewtabGlassSurface'
 import { Menu as BaseMenu } from '@base-ui/react/menu'
 import type { Ref, RefObject } from 'react'
 import { Icon } from '../../ui/icons/Icon'
@@ -65,7 +66,7 @@ function SearchWidgetEngineButton({
   const { engine } = view.buttons
 
   return (
-    <BaseMenu.Trigger
+    <NewtabGlassSurface as={BaseMenu.Trigger} tone="chip"
       className={SEARCH_ENGINE_BUTTON_CLASS}
       type="button"
       aria-label={engine.ariaLabel}
@@ -75,7 +76,7 @@ function SearchWidgetEngineButton({
     >
       {engine.label}
       <Icon name="ChevronDown" className={SEARCH_ENGINE_CARET_CLASS} size={12} aria-hidden="true" />
-    </BaseMenu.Trigger>
+    </NewtabGlassSurface>
   )
 }
 

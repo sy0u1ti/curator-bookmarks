@@ -42,16 +42,16 @@ for (const density of [1, 1.25]) {
     }, wallpaper)
     await page.goto(`chrome-extension://${id}/src/newtab/newtab.html`)
     await page.locator('.folder-section-count').first().waitFor()
-    await page.waitForFunction(() => document.querySelector('.newtab-search-surface')?.dataset.glassMode === 'refraction')
+    await page.waitForFunction(() => document.querySelector('.newtab-search-surface')?.dataset.glassRenderer === 'react-bits')
     await page.evaluate(() => document.fonts.ready)
     await page.waitForFunction(() => performance.getEntriesByName('newtab.searchReady', 'mark').length > 0)
     await page.mouse.move(10, 890)
     await page.locator('.newtab-search-input').evaluate(element => element.blur())
     await page.locator('.newtab-search-shell').evaluate(element => Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {}))))
     await page.waitForFunction(() => !document.querySelector('.newtab-search-shell').matches(':focus-within,:hover'))
-    // Wait for the shell to settle at its resting transform; read the actual lift value from the CSS token.
+    // Measure the visible lift independently of how the shell is positioned.
     const expectedLift = await page.locator('.newtab-search-shell').evaluate(element => Number.parseFloat(getComputedStyle(element).getPropertyValue('--ds-hover-lift')))
-    await page.waitForFunction(() => new DOMMatrixReadOnly(getComputedStyle(document.querySelector('.newtab-search-shell')).transform).f === 0)
+    await page.waitForFunction(() => document.querySelector('.newtab-search-shell').getBoundingClientRect().top === document.querySelector('.newtab-search-slot').getBoundingClientRect().top)
     const counters = await page.locator('.folder-section-header').evaluateAll(headers => headers.map(header => {
       const count = header.querySelector('.folder-section-count')
       const digits = count.querySelector('.t-number-value')
@@ -70,7 +70,7 @@ for (const density of [1, 1.25]) {
       await writeFile(path.join(output, `geometry-${density}.json`), JSON.stringify(geometry, null, 2))
       await page.mouse.move(10, 890)
       await page.locator('.newtab-search-input').evaluate(element => element.blur())
-      await page.waitForFunction(() => new DOMMatrixReadOnly(getComputedStyle(document.querySelector('.newtab-search-shell')).transform).f === 0)
+      await page.waitForFunction(() => document.querySelector('.newtab-search-shell').getBoundingClientRect().top === document.querySelector('.newtab-search-slot').getBoundingClientRect().top)
     }
     const capture = () => page.evaluate(() => new Promise(resolve => {
       const selectors = ['.newtab-search-input', '.newtab-search-icon', '.newtab-search-natural', '.newtab-search-engine', '.newtab-search-submit']
@@ -79,12 +79,13 @@ for (const density of [1, 1.25]) {
       const frame = () => {
         const shell = document.querySelector('.newtab-search-shell')
         const matrix = new DOMMatrixReadOnly(getComputedStyle(shell).transform)
+        const y = shell.getBoundingClientRect().top - document.querySelector('.newtab-search-slot').getBoundingClientRect().top
         const controls = selectors.map(selector => {
           const element = document.querySelector(selector)
           const rect = element.getBoundingClientRect()
           return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
         })
-        frames.push({ time: performance.now() - started, scaleX: matrix.a, scaleY: matrix.d, y: matrix.f, controls })
+        frames.push({ time: performance.now() - started, scaleX: matrix.a, scaleY: matrix.d, y, controls })
         if (performance.now() - started < 950) requestAnimationFrame(frame)
         else resolve(frames)
       }

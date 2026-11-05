@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 
-const isRound = shape => /^(?:round|superellipse\(1\))$/.test(shape.curve)
+const isRound = shape => /^(?:round|superellipse\(1\))?$/.test(shape.curve)
 
 const settled = page => page.evaluate(async () => {
   await document.fonts.ready
@@ -11,7 +12,7 @@ const settled = page => page.evaluate(async () => {
 
 export async function runCornerGeometryChecks(page, origin, directory) {
   const report = []
-  for (const deviceScaleFactor of [1, 1.25, 2]) {
+  for (const deviceScaleFactor of [1, 1.25, 1.5, 2]) {
     await page.cdp('Emulation.setDeviceMetricsOverride', { width: 800, height: 1100, deviceScaleFactor, mobile: false })
     await page.goto(origin)
     await page.waitForSelector('#corner-card')
@@ -36,7 +37,7 @@ export async function runCornerGeometryChecks(page, origin, directory) {
       const composedStyle = getComputedStyle(composed)
       const composedRect = composed.getBoundingClientRect()
       return {
-        native: CSS.supports('corner-shape', 'superellipse(1.25)'),
+        native: CSS.supports('border-radius', '16px'),
         scannerStarted: Boolean(window.__curatorSquircleEngine),
         pairs: [
           pair('#corner-card', '#corner-input'), pair('#corner-nested', '#corner-inner'),
@@ -59,25 +60,54 @@ export async function runCornerGeometryChecks(page, origin, directory) {
         }
       }
     })
-    assert.equal(metrics.native, true, 'Run the native contour suite on a corner-shape capable browser')
-    assert.equal(metrics.scannerStarted, false, 'Native curves need no legacy DOM scanner')
+    assert.equal(metrics.native, true)
+    assert.equal(metrics.scannerStarted, false, 'Native curves never need a DOM scanner')
     for (const pair of metrics.pairs) {
       assert.equal(pair.outer.radius - pair.inset, pair.inner.radius, 'Nested radii must include the actual border-box inset')
-      assert.match(pair.outer.curve, /superellipse\(1\.25\)/)
-      assert.match(pair.inner.curve, /superellipse\(1\.25\)/)
+      assert.ok(isRound(pair.outer))
+      assert.ok(isRound(pair.inner))
       assert.equal(pair.outer.clip, 'none')
       assert.equal(pair.inner.clip, 'none')
     }
     assert.equal(metrics.indicator.radius, 8)
     assert.equal(metrics.indicator.inset, 4)
     assert.ok(Math.abs(metrics.indicator.width - metrics.indicator.buttonWidth) < 0.1)
-    assert.match(metrics.indicator.curve, /superellipse\(1\.25\)/)
+    assert.ok(isRound(metrics.indicator))
     assert.ok(metrics.round.every(isRound), 'Pills and circles retain circular-arc contours')
     assert.equal(metrics.checkbox.radius, 4)
     assert.equal(metrics.icon.radius, 4)
     assert.equal(metrics.icon.clip, 'none', 'Native icons must not keep a second clipped contour')
     assert.deepEqual(metrics.composed, { padding: '0px', gap: '0px', radius: 16, headerInset: 16, inputInset: 16 },
       'Composed cards must honor caller geometry and keep headings aligned with form content')
+    // Compare actual rasterized edges against the browser's plain border-radius,
+    // including fractional layout. Computed radii alone cannot detect cut pixels.
+    await page.evaluate(() => {
+      const stage = document.createElement('div')
+      stage.id = 'corner-raster-reference'
+      stage.style.cssText = 'position:fixed;left:0;top:0;width:352px;height:88px;z-index:99999;background:#111'
+      for (const [index, reference] of [false, true].entries()) {
+        const frame = document.createElement('div')
+        frame.className = 'rounded-ds-lg'
+        frame.style.cssText = `position:absolute;left:${16.375 + index * 160}px;top:16.375px;width:144.5px;height:48.5px;border:1px solid #777;background:#252525`
+        if (reference) {
+          frame.style.borderRadius = '16px'
+          frame.style.cornerShape = 'round'
+        }
+        stage.append(frame)
+      }
+      document.body.append(stage)
+    })
+    try {
+      const images = []
+      for (const [index, name] of ['actual', 'native'].entries()) {
+        const file = `${directory}/border-${deviceScaleFactor}-${name}.png`
+        await page.screenshot({ path: file, raw: true, clip: { x: 14 + index * 160, y: 14, width: 150, height: 54 } })
+        images.push(await readFile(file))
+      }
+      assert.deepEqual(images[0], images[1], `${deviceScaleFactor}x: fractional edges must match native rounded borders pixel for pixel`)
+    } finally {
+      await page.evaluate(() => document.getElementById('corner-raster-reference').remove())
+    }
     report.push({ deviceScaleFactor, ...metrics })
   }
 
@@ -98,7 +128,7 @@ export async function runCornerGeometryChecks(page, origin, directory) {
     }
   })
   assert.equal(select.outer - select.inset, select.inner)
-  assert.match(select.curve, /superellipse\(1\.25\)/)
+  assert.ok(isRound(select))
   assert.equal(select.clip, 'none')
   await page.keyboard.press('End')
   await page.keyboard.press('Enter')
@@ -122,7 +152,7 @@ export async function runCornerGeometryChecks(page, origin, directory) {
   })
   assert.equal(submenu.radius - submenu.inset, submenu.itemRadius)
   assert.equal(submenu.clip, 'none', 'Portaled submenus must not be clipped by their parent')
-  assert.match(submenu.curve, /superellipse\(1\.25\)/)
+  assert.ok(isRound(submenu))
   await page.keyboard.press('Escape')
   await page.keyboard.press('Escape')
 
@@ -149,8 +179,8 @@ export async function runCornerGeometryChecks(page, origin, directory) {
   await page.click('#corner-dialog-close')
   await page.waitForFunction(() => document.activeElement?.id === 'corner-dialog-trigger')
 
-  // Removing the opt-in has the same CSS cascade as a browser skipping the
-  // @supports block. This tests the baseline; it is not a second browser engine.
+  // The browser default must match the scoped contour. Removing the scope tests
+  // the baseline CSS cascade; it is not a second browser engine.
   const fallback = await page.evaluate(() => {
     document.documentElement.removeAttribute('data-curator-surface')
     return ['#corner-card', '#corner-input', '#corner-inner', '#corner-segments'].map(selector => {

@@ -32,9 +32,10 @@ import {
   getNewtabUtilityStackClass
 } from './newtabLayoutClasses'
 import { getNewtabButtonClass } from './newtabButtonClass'
+import { NewtabGlassSurface } from './NewtabGlassSurface'
 
-// The empty/missing states sit on their own glass panel (see the surface list
-// in hyalite-glass.css): bare white text on a bright wallpaper was unreadable.
+// Empty/missing states use the same GlassSurface material as the rest of the
+// page, with the panel tone keeping copy readable over bright wallpapers.
 const STATE_BASE_CLASS = 'newtab-state grid justify-items-center gap-4 rounded-ds-dialog px-6 py-7 text-center'
 const STATE_HAS_SEARCH_CLASS = 'mt-2.5'
 const STATE_DEFAULT_WIDTH_CLASS = 'w-[min(520px,100%)]'
@@ -286,7 +287,7 @@ function ClockModule() {
 
   const settings = state.settings
   return (
-    <section
+    <NewtabGlassSurface as="section"
       className={getClockClass(settings)}
       style={{ '--clock-scale': String(settings.clockSize / 100) } as CSSProperties}
       data-clock-display-mode={settings.displayMode}
@@ -296,13 +297,13 @@ function ClockModule() {
       aria-label={state.ariaLabel}
     >
       <ClockWidgetContent state={state} />
-    </section>
+    </NewtabGlassSurface>
   )
 }
 
 function OnboardingStrip({ module }: { module: NewTabOnboardingModule }) {
   return (
-    <section className={ONBOARDING_STRIP_CLASS} aria-label="Curator 首次使用引导">
+    <NewtabGlassSurface as="section" tone="panel" className={ONBOARDING_STRIP_CLASS} aria-label="Curator 首次使用引导">
       <div className={ONBOARDING_COPY_CLASS}>
         <strong className={ONBOARDING_TITLE_CLASS}>Curator 已将新标签页设为书签搜索和快捷入口</strong>
         <span className={ONBOARDING_TEXT_CLASS}>核心书签功能默认本地；网页搜索、精选远程背景、AI/Jina 和链接检测可关闭或跳过。</span>
@@ -315,7 +316,7 @@ function OnboardingStrip({ module }: { module: NewTabOnboardingModule }) {
           我知道了
         </Button>
       </div>
-    </section>
+    </NewtabGlassSurface>
   )
 }
 
@@ -330,7 +331,7 @@ function LoadingState({ hasSearch, label }: { hasSearch: boolean; label: string 
 
 function MissingFolderState({ hasSearch, module }: { hasSearch: boolean; module: NewTabMissingFolderModule }) {
   return (
-    <section className={cx(STATE_BASE_CLASS, STATE_MISSING_CLASS, hasSearch && STATE_HAS_SEARCH_CLASS)} aria-labelledby="newtab-missing-folder-title">
+    <NewtabGlassSurface as="section" tone="panel" className={cx(STATE_BASE_CLASS, STATE_MISSING_CLASS, hasSearch && STATE_HAS_SEARCH_CLASS)} aria-labelledby="newtab-missing-folder-title">
       <h1 id="newtab-missing-folder-title" className={STATE_TITLE_CLASS}>
         {module.reason === 'selected-unavailable' ? '已选书签来源不可用' : '当前没有显示来源'}
       </h1>
@@ -353,7 +354,7 @@ function MissingFolderState({ hasSearch, module }: { hasSearch: boolean; module:
           {module.creatingFolder ? '正在创建' : '新建专用文件夹'}
         </Button>
       </div>
-    </section>
+    </NewtabGlassSurface>
   )
 }
 
@@ -367,13 +368,13 @@ function GenericState({
   message: string
 }) {
   return (
-    <section className={cx(STATE_BASE_CLASS, STATE_DEFAULT_WIDTH_CLASS)}>
+    <NewtabGlassSurface as="section" tone="panel" className={cx(STATE_BASE_CLASS, STATE_DEFAULT_WIDTH_CLASS)}>
       <p className={STATE_COPY_CLASS}>{message}</p>
       {actionLabel && action ? (
         <Button className={getNewtabButtonClass('secondary')} type="button" onClick={action} unstyled>
           {actionLabel}
         </Button>
       ) : null}
-    </section>
+    </NewtabGlassSurface>
   )
 }

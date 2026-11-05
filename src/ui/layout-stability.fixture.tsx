@@ -1,10 +1,10 @@
 import { createRoot } from 'react-dom/client'
 import { observeMotionPreferences } from '../shared/motion-preferences'
 import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store'
-import { initSquircleEngine } from '../shared/squircle-engine'
 import { FeatureSettingsControls } from '../options/components/FeatureSettingsControls'
 import { FEATURE_SWITCH_CONTENT } from '../options/components/feature-settings-types'
 import { ContentSnapshotControls } from '../options/components/ContentSnapshotControls'
+import { InputCaretSettings } from '../options/components/InputCaretSettings'
 import { ShortcutControls } from '../options/components/ShortcutControls'
 import { AiAnalysisPanel } from '../options/components/AiAnalysisPanel'
 import { AvailabilityPanel } from '../options/components/AvailabilityPanel'
@@ -17,6 +17,8 @@ import { BackupControls } from '../options/components/BackupControls'
 import { PopupApp } from '../popup/PopupApp'
 import { registerPopupActionHandlers } from '../popup/popup-controller-store'
 import { SettingsDrawerHost } from '../newtab/components/SettingsDrawer'
+import { SurfaceMaterialProvider } from './base/SurfaceMaterial'
+import { NewtabFloatingSurface } from '../newtab/components/NewtabGlassSurface'
 import { BookmarkMenusHost } from '../newtab/components/BookmarkMenusHost'
 import { registerNewtabSettingsDrawerActions } from '../newtab/newtab-settings-drawer-store'
 import { Button } from './base/Button'
@@ -29,7 +31,6 @@ const scope = surface.startsWith('newtab') ? 'newtab' : surface.startsWith('popu
 document.documentElement.dataset.curatorSurface = surface === 'sidepanel' ? 'sidepanel' : scope
 document.documentElement.dataset.fixtureSurface = surface
 if (surface === 'sidepanel') document.documentElement.classList.add('side-panel')
-initSquircleEngine()
 
 const state = createUiViewStoreSlice('options', 'stability-fixture', { phase: 'idle' })
 const store = (key: string, area: 'options' | 'popup' | 'newtab' = 'options') =>
@@ -239,14 +240,15 @@ phase('idle')
 function Fixture() {
   const { phase: current } = useUiViewStoreSlice(state)
   if (scope === 'popup') return <PopupApp />
-  if (surface === 'newtab-settings') return <SettingsDrawerHost />
-  if (surface === 'newtab-menu' || surface === 'newtab-add') return <BookmarkMenusHost />
+  if (surface === 'newtab-settings') return <SurfaceMaterialProvider component={NewtabFloatingSurface}><SettingsDrawerHost /></SurfaceMaterialProvider>
+  if (surface === 'newtab-menu' || surface === 'newtab-add') return <SurfaceMaterialProvider component={NewtabFloatingSurface}><BookmarkMenusHost /></SurfaceMaterialProvider>
   return (
     <main id="options-main" className="options-main-scroll" style={{ height: '100dvh', overflowY: 'auto', paddingInline: 24, paddingTop: 24 }}>
       <div style={{ maxWidth: 1080, margin: '0 auto' }}>
         {surface === 'general' ? <>
           <h1 className="text-xl mb-6">通用设置</h1>
           <div id="fixture-features"><FeatureSettingsControls /></div>
+          <div id="fixture-appearance"><InputCaretSettings /></div>
           <div id="fixture-snapshot"><ContentSnapshotControls /></div>
           <div id="fixture-shortcuts"><ShortcutControls /></div>
         </> : null}

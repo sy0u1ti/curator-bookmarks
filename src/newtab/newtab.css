@@ -1,7 +1,7 @@
 :root {
   color-scheme: dark;
   --newtab-font-sans: "Geist", "Geist Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
-  /* A light neutral tint lets Hyalite refract the wallpaper through the surface.
+  /* A light neutral tint lets the wallpaper show through the frosted surface.
      Tint and blur are shared by every module and restored before first paint. */
   --newtab-glass-bg-fill: rgba(0, 0, 0, 0.13);
   --newtab-glass-slider-fill: rgba(255, 255, 255, 0.16);
@@ -161,13 +161,7 @@ body {
 }
 
 #newtab-settings-drawer .settings-drawer-panel {
-  background: transparent;
-  border-color: var(--newtab-glass-stroke);
   border-width: var(--newtab-glass-stroke-width);
-  box-shadow: var(--newtab-glass-drop-shadow);
-  filter: none;
-  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
-  backdrop-filter: var(--newtab-glass-backdrop-filter);
   will-change: auto;
 }
 
@@ -175,16 +169,6 @@ body {
 #newtab-settings-drawer .settings-drawer-panel[data-ending-style],
 #newtab-settings-drawer .settings-drawer-panel[data-swiping] {
   will-change: transform;
-}
-
-#newtab-settings-drawer .settings-drawer-panel::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: var(--newtab-glass-bg-fill);
-  pointer-events: none;
 }
 
 #newtab-settings-drawer .settings-drawer-scroll {
@@ -922,7 +906,7 @@ body {
   --newtab-bookmark-current-shadow: var(--newtab-bookmark-shadow);
   border-color: var(--newtab-glass-border);
   background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-card));
-  box-shadow: var(--newtab-bookmark-current-shadow), var(--newtab-glass-edge-shadow);
+  box-shadow: var(--newtab-bookmark-current-shadow);
   filter: none;
   -webkit-backdrop-filter: var(--newtab-glass-filter);
   backdrop-filter: var(--newtab-glass-filter);
@@ -941,10 +925,14 @@ body {
 .bookmark-tile:not(.bookmark-drag-ghost)::before {
   content: "";
   position: absolute;
-  inset: 0;
+  /* Share the host's border box; the transparent border lets native background
+     clipping derive the inner radius instead of reusing the outer radius. */
+  inset: calc(0px - var(--newtab-glass-stroke-width));
   z-index: 0;
   border-radius: inherit;
+  border: var(--newtab-glass-stroke-width) solid transparent;
   background: var(--newtab-bookmark-hover-overlay);
+  background-clip: padding-box;
   box-shadow: var(--newtab-bookmark-hover-inset);
   opacity: 0;
   pointer-events: none;
@@ -1326,16 +1314,17 @@ body {
   pointer-events: none;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
   border-radius: var(--search-radius, var(--ds-radius-lg));
-  transform-origin: 50% 0;
-  /* Lift the field as one unit. Scaling its live text and native controls
-     changes glyph rasterization and makes them snap as the layer settles. */
-  transform: translateY(0);
-  transition: transform var(--ds-motion-control) var(--ds-ease-standard);
+  /* Repaint this one-pixel lift at its native position. A transform resamples
+     the glass rim at fractional offsets, leaving a blurred contour on return.
+     Relative top moves the field and glass together inside the fixed slot;
+     it does not change the layout of the modules below it. */
+  top: 0;
+  transition: top var(--ds-motion-control) var(--ds-ease-standard);
 }
 .newtab-search-shell:focus-within,
 .newtab-search-shell[data-focus-within="true"],
 .newtab-search-shell[data-engine-open="true"] {
-  transform: translateY(var(--ds-hover-lift));
+  top: var(--ds-hover-lift);
 }
 .newtab-search-surface {
   position: absolute;
@@ -1406,7 +1395,7 @@ body {
 }
 @media (hover: hover) and (pointer: fine) {
   .newtab-search-shell:hover:not(:focus-within):not([data-focus-within="true"]):not([data-engine-open="true"]) {
-    transform: translateY(-1px);
+    top: -1px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1415,7 +1404,7 @@ body {
   .newtab-search-shell[data-focus-within="true"],
   .newtab-search-shell[data-engine-open="true"],
   .newtab-search-shell:hover:not(:focus-within):not([data-focus-within="true"]):not([data-engine-open="true"]) {
-    transform: none;
+    top: 0;
     transition: none;
   }
   .newtab-search-suggestions-panel {
@@ -1936,6 +1925,14 @@ body {
   transition:
     opacity var(--duration-quick) var(--dropdown-ease),
     transform var(--dropdown-open-dur) var(--dropdown-open-ease);
+}
+
+.featured-wallpaper-hover-preview-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
 }
 
 @media (prefers-reduced-motion: reduce) {

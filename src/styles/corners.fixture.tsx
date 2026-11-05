@@ -1,6 +1,5 @@
 import { useState, type CSSProperties } from 'react'
 import { createRoot } from 'react-dom/client'
-import { initSquircleEngine } from '../shared/squircle-engine'
 import { AiProviderCard } from '../ui/ai/AiProviderCard'
 import { Badge } from '../ui/base/Badge'
 import { Button } from '../ui/base/Button'
@@ -17,7 +16,6 @@ import { getBookmarkTileClass } from '../newtab/components/bookmarkTileClasses'
 import { BookmarkIconShell } from '../newtab/components/BookmarkIconShell'
 
 document.documentElement.dataset.curatorSurface = 'geometry-fixture'
-initSquircleEngine()
 
 function Fixture() {
   const [dialog, setDialog] = useState(false)

@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { MotionPanel } from '../motion/MotionPanel'
 import { cx, cxState } from './utils'
+import { SurfaceMaterial } from './SurfaceMaterial'
 import './dialog-layout.css'
 
 export interface DialogProps {
@@ -91,7 +92,7 @@ export function DialogPanel({
   ...props
 }: DialogPanelProps) {
   if (unanimated) {
-    return <BaseDialog.Popup ref={ref} className={cx(layout === 'workspace' && 'curator-dialog-workspace', className)} {...props} />
+    return <BaseDialog.Popup ref={ref} render={<SurfaceMaterial />} className={cx(layout === 'workspace' && 'curator-dialog-workspace', className)} {...props} />
   }
 
   return (

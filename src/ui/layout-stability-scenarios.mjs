@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 
 const cases = {
   feedback: { selectors: ['#fixture-status', '#fixture-stable-button', '#fixture-tail'], phases: ['saving', 'long-error', 'success', 'idle'] },
-  general: { selectors: ['#fixture-features', '#fixture-snapshot', '#fixture-shortcuts', '#fixture-tail'], phases: ['loading', 'idle', 'saving', 'error', 'long-error', 'success', 'idle'] },
+  general: { selectors: ['#fixture-features', '#fixture-appearance', '#fixture-snapshot', '#fixture-shortcuts', '#fixture-tail'], phases: ['loading', 'idle', 'saving', 'error', 'long-error', 'success', 'idle'] },
   ai: { selectors: ['#ai > div:first-of-type', '#ai-title', '#fixture-tail'], phases: ['running', 'paused', 'error', 'long-error', 'success', 'idle', 'selected', 'idle'] },
   availability: { selectors: ['#availability > div:first-of-type', '#availability-title', '#fixture-tail'], phases: ['loading', 'pending', 'idle', 'running', 'paused', 'error', 'long-error', 'success', 'idle', 'selected', 'idle'] },
   duplicates: { selectors: ['[data-duplicate-group]', '[data-bookmark-id="copy"]', '#fixture-tail'], phases: ['selected', 'all-selected', 'idle'] },
@@ -173,6 +173,34 @@ export async function runLayoutStabilityChecks(page, origin, directory, options 
             await page.press('loc=role:switch[name="自动分析"]', 'Space')
             await page.waitForFunction(() => document.querySelector('[role="status"]')?.textContent?.includes('保存中'))
             await stop(`${label}/keyboard-save`)
+
+            const caretSwitch = 'loc=role:switch[name="动态输入光标"]'
+            await page.waitForSelector(caretSwitch, { state: 'visible' })
+            const caretBefore = await page.evaluate(() => {
+              const control = [...document.querySelectorAll('[role="switch"]')]
+                .find((node) => node.getAttribute('aria-label') === '动态输入光标')
+              return control?.getAttribute('aria-checked') || ''
+            })
+            await start(selectors)
+            await page.click(caretSwitch)
+            await page.waitForFunction(({ before }) => {
+              const control = [...document.querySelectorAll('[role="switch"]')]
+                .find((node) => node.getAttribute('aria-label') === '动态输入光标')
+              return Boolean(control) &&
+                control.getAttribute('aria-checked') !== before &&
+                control.getAttribute('aria-disabled') !== 'true'
+            }, { before: caretBefore })
+            const caretPreference = await page.evaluate(() => new Promise((resolve) => {
+              chrome.storage.local.get(['curatorBookmarkPopupPreferences'], (stored) => {
+                resolve(stored.curatorBookmarkPopupPreferences)
+              })
+            }))
+            assert.equal(
+              caretPreference?.animatedCaret,
+              caretBefore !== 'true',
+              'the popup caret switch must persist the shared popup preference'
+            )
+            await stop(`${label}/caret-toggle`)
           }
           if (surface === 'ai' || surface === 'availability') {
             if (surface === 'availability') {

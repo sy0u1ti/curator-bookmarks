@@ -25,6 +25,7 @@ import { Select } from '../../ui/base/Select'
 import { SliderControl } from '../../ui/base/Slider'
 import { DEFAULT_GLASS_SETTINGS, GLASS_PRESETS, getGlassPresetId, GLASS_SETTING_LIMITS, type NewtabGlassSettingKey } from '../glass-settings'
 import { applyNewtabGlassPreset, beginNewtabGlassEditSession, undoNewtabGlassEditSession, changeNewtabGlassSetting, resetNewtabGlassSettings, useNewtabGlassSettings } from '../newtab-glass-settings-store'
+import { NewtabGlassSurface } from './NewtabGlassSurface'
 import { Surface } from '../../ui/base/Surface'
 import { SwitchControl } from '../../ui/base/Switch'
 import { TabsIndicator, TabsList, TabsPanel, TabsRoot, TabsTab } from '../../ui/base/Tabs'
@@ -1239,12 +1240,9 @@ const IconSettingSwitchRow = memo(SwitchRow)
 const GLASS_CONTROLS: Array<{ key: NewtabGlassSettingKey; label: string; description: string; unit?: string }> = [
   { key: 'blur', label: '玻璃模糊', description: '背景模糊半径；数值越小越透光，数值越大磨砂感越强。', unit: 'px' },
   { key: 'tint', label: '底色深浅', description: '卡片底色浓度；浅色壁纸调高可提升对比度，深色壁纸调低透出背景。', unit: '%' },
-  { key: 'bevel', label: '边缘范围', description: '玻璃斜切边宽度；拉高后边缘折射更宽阔厚实。' },
-  { key: 'thickness', label: '折射强度', description: '背景透视扭曲度；数值越大，穿透玻璃的壁纸弯曲形变越明显。' },
-  { key: 'dispersion', label: '色散', description: '棱镜分光强度；在卡片高光边缘产生微妙的彩虹色色散。' },
-  { key: 'rim', label: '边缘高光', description: '卡片边缘轮廓光的亮度，突出悬浮晶莹感。' },
-  { key: 'light', label: '光照方向', description: '模拟光源照射的角度（0°~360°），改变亮边与阴影方位。', unit: '°' },
-  { key: 'smooth', label: '边缘柔化', description: '倒角过渡平滑度；让高光边缘与镜面衔接更细腻自然。', unit: 'px' }
+  { key: 'saturation', label: '背景饱和度', description: '', unit: '%' },
+  { key: 'brightness', label: '背景亮度', description: '', unit: '%' },
+  { key: 'highlight', label: '边缘高光', description: '', unit: '%' }
 ]
 
 const GlassSettingsSection = memo(function GlassSettingsSection({
@@ -1290,9 +1288,9 @@ const GlassSettingsSection = memo(function GlassSettingsSection({
         </CollapsibleTrigger>
         <CollapsiblePanel className="grid gap-2.5">
           <div className="newtab-glass-preview-scene" aria-label="玻璃效果实时预览">
-            <div className="newtab-glass-preview">
+            <NewtabGlassSurface className="newtab-glass-preview">
               <strong className="block text-sm font-semibold">实时预览</strong>
-            </div>
+            </NewtabGlassSurface>
           </div>
           {GLASS_CONTROLS.map(control => {
             const [min, max, step] = GLASS_SETTING_LIMITS[control.key]
@@ -1463,14 +1461,14 @@ const IconSettingsSection = memo(function IconSettingsSection({
                 style={{ minWidth: tileWidth, gridTemplateColumns: 'repeat(auto-fit, var(--preview-tile-width))' }}
               >
                 {iconPreview.tiles.map((item) => (
-                  <span className={getBookmarkTileClass({ showTitles: iconPreview.showTitles, preview: true })} key={item.id}>
+                  <NewtabGlassSurface as="span" className={getBookmarkTileClass({ showTitles: iconPreview.showTitles, preview: true })} key={item.id}>
                     <BookmarkIconShell
                       customIcon={false}
                       fallbackLabel={item.mark}
                       favicon={{ src: item.iconSource, pageUrl: '', fetchpriority: 'low', loading: 'eager' }}
                     />
                     {iconPreview.showTitles ? <span className={getBookmarkTitleClass()} title={item.title}>{item.title}</span> : null}
-                  </span>
+                  </NewtabGlassSurface>
                 ))}
               </div>
             </figure>

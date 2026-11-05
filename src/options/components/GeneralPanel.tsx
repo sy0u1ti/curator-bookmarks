@@ -1,5 +1,6 @@
 import { ContentSnapshotControls } from './ContentSnapshotControls.js'
 import { FeatureSettingsControls } from './FeatureSettingsControls.js'
+import { InputCaretSettings } from './InputCaretSettings.js'
 import { OPTION_PANEL_CLASS } from './option-layout-classes.js'
 import { OptionPanelHeader } from './OptionPanelHeader.js'
 import { ShortcutControls } from './ShortcutControls.js'
@@ -19,6 +20,8 @@ export function GeneralPanel({
       />
 
       <FeatureSettingsControls />
+
+      <InputCaretSettings />
 
       <ContentSnapshotControls />
 

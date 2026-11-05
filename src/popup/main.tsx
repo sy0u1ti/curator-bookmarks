@@ -1,7 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import '../styles/compact-globals.css'
 import './popup.css'
-import { initSquircleEngine } from '../shared/squircle-engine'
 import { PopupApp } from './PopupApp'
 import { startPopupController } from './popup-controller'
 import { preparePopupShellPaint } from './popup-hydration'
@@ -16,7 +15,6 @@ if (!root) {
 // processing the prefetched catalog and search index.
 preparePopupShellPaint(root)
 startPopupController()
-initSquircleEngine()
 createRoot(root).render(<PopupApp portalContainer={root} />)
 
 installPopupCloseSurfaceGuard(root)

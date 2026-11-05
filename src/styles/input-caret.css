@@ -1,0 +1,117 @@
+:root {
+  --curator-input-caret-color: #ffffff;
+}
+
+:where(input, textarea) {
+  caret-color: var(--curator-input-caret-color);
+}
+
+input[data-curator-input-caret="true"],
+textarea[data-curator-input-caret="true"] {
+  caret-color: transparent;
+}
+
+.curator-input-caret-layer {
+  position: fixed;
+  z-index: 2147483646;
+  display: none;
+  overflow: hidden;
+  pointer-events: none;
+  contain: layout paint;
+}
+
+.curator-input-caret-layer[data-visible="true"] {
+  display: block;
+}
+
+.curator-input-caret,
+.curator-input-caret-trail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.curator-input-caret {
+  z-index: 1;
+  width: 2.5px;
+  height: 19px;
+  border-radius: 1px;
+  background: var(--curator-input-caret-color);
+  box-shadow: 0 0 4px color-mix(in oklab, var(--curator-input-caret-color) 35%, transparent);
+  animation: curator-input-caret-blink 1.2s ease-in-out infinite;
+  transition: transform var(--ds-motion-feedback) var(--ease-smooth-out);
+  will-change: transform, opacity;
+}
+
+.curator-input-caret[data-visible="false"] {
+  visibility: hidden;
+  animation: none;
+}
+
+.curator-input-caret[data-resting="true"] {
+  animation: none;
+}
+
+.curator-input-caret-trail {
+  z-index: 0;
+  border-radius: 1px;
+  opacity: 0;
+  contain: paint;
+  will-change: transform, opacity;
+}
+
+.curator-input-caret-trail[data-direction="right"] {
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    color-mix(in oklab, var(--curator-input-caret-color) 68%, transparent) 100%
+  );
+  transform-origin: 100% 50%;
+}
+
+.curator-input-caret-trail[data-direction="left"] {
+  background: linear-gradient(
+    to left,
+    transparent 0%,
+    color-mix(in oklab, var(--curator-input-caret-color) 68%, transparent) 100%
+  );
+  transform-origin: 0 50%;
+}
+
+@keyframes curator-input-caret-blink {
+  0%,
+  40%,
+  100% {
+    opacity: 1;
+  }
+
+  50%,
+  90% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .curator-input-caret {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .curator-input-caret-trail {
+    display: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  input[data-curator-input-caret="true"],
+  textarea[data-curator-input-caret="true"] {
+    caret-color: auto;
+  }
+
+  .curator-input-caret-layer,
+  .curator-input-caret,
+  .curator-input-caret-trail {
+    display: none !important;
+  }
+}

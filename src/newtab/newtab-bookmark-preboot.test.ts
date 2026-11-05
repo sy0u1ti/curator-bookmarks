@@ -20,7 +20,7 @@ function run(): void {
   testSnapshotKeepsVisibleCardsAndExactCardRect()
   testSnapshotPreservesEachLiveCardOffset()
   testSnapshotSkipsInlineCustomIconPayloads()
-  testSnapshotCapturesSquircleClipPaths()
+  testSnapshotOmitsLegacyClipPaths()
   testSnapshotDropsUntrustedClipPaths()
   testSnapshotWritesToStorage()
   testSnapshotClearsStorageWhenWriteFails()
@@ -29,7 +29,7 @@ function run(): void {
   testSnapshotAllowsMissingTitleGeometryWhenTitlesAreHidden()
   testSnapshotRejectsMismatchedViewport()
   testPrebootHandoffIsAtomic()
-  testPrebootHandoffGuardsIconClip()
+  testPrebootHandoffGuardsIconCorners()
   testFaviconReadinessHandoff()
   testPrebootFaviconLoadingPriorities()
 }
@@ -68,10 +68,13 @@ function testPrebootHandoffIsAtomic(): void {
   assert(!source.includes('window.setTimeout(() => {\n    root.remove()'))
   assert(source.includes('transition: none;'))
   assert(
-    source.includes('--preboot-card-bg: var(--newtab-glass-bg-fill, rgba(0, 0, 0, 0.13));') &&
-      source.includes('--preboot-card-filter: blur(var(--newtab-glass-background-blur, 12px));') &&
-      source.includes('-webkit-backdrop-filter: var(--preboot-card-filter);') &&
-      source.includes('backdrop-filter: var(--preboot-card-filter);'),
+    source.includes('newtab-glass glass-surface glass-surface--fallback') &&
+      source.includes('background-image: var(--glass-sheen);') &&
+      source.includes('background-origin: border-box;') &&
+      source.includes('background: var(--glass-fill);') &&
+      source.includes('box-shadow: var(--glass-material-shadow);') &&
+      source.includes('-webkit-backdrop-filter: var(--glass-filter);') &&
+      source.includes('backdrop-filter: var(--glass-filter);'),
     'The synchronous snapshot must paint the final bookmark glass material on its first frame.'
   )
   assert(
@@ -89,21 +92,21 @@ function testPrebootHandoffIsAtomic(): void {
   )
 }
 
-function testPrebootHandoffGuardsIconClip(): void {
+function testPrebootHandoffGuardsIconCorners(): void {
   const source = readFileSync('src/newtab/newtab-bookmark-preboot.ts', 'utf8')
   assert(
-    source.includes('areNewtabBookmarkIconClipsAligned(prebootTile, liveTile)'),
-    'Handoff alignment must compare icon shell clip-path so the squircle outline is settled before the snapshot is removed.'
+    source.includes('areNewtabBookmarkIconCornersAligned(prebootTile, liveTile)') &&
+      source.includes('prebootStyle.borderRadius === liveStyle.borderRadius') &&
+      source.includes("prebootStyle.getPropertyValue('corner-shape') === liveStyle.getPropertyValue('corner-shape')"),
+    'Handoff must wait for the live CSS radius and curve to match the snapshot.'
   )
   assert(
-    source.includes('content.clipPaths.iconShell') &&
-      source.includes('content.clipPaths.favicon') &&
-      source.includes('content.clipPaths.fallback'),
-    'Preboot tiles must replay the captured squircle clip-paths synchronously on first paint.'
+    !source.includes('.style.clipPath') && !source.includes('glass-surface__rim'),
+    'Preboot must not replay clipped icons or independently masked glass edges.'
   )
 }
 
-function testSnapshotCapturesSquircleClipPaths(): void {
+function testSnapshotOmitsLegacyClipPaths(): void {
   const clipPaths = {
     fallback: 'path("M 7.4 0 L 16.9 0 c 2 0 3 0 3.7 0.4 Z")',
     favicon: 'path("M 6.5 0 L 15.2 0 c 1.9 0 2.9 0 3.6 0.38 Z")',
@@ -122,7 +125,7 @@ function testSnapshotCapturesSquircleClipPaths(): void {
   })
 
   assert(snapshot)
-  assert.deepEqual(snapshot.content.clipPaths, clipPaths)
+  assert.equal('clipPaths' in snapshot.content, false)
 }
 
 function testSnapshotDropsUntrustedClipPaths(): void {
@@ -143,7 +146,7 @@ function testSnapshotDropsUntrustedClipPaths(): void {
   })
 
   assert(snapshot)
-  assert.deepEqual(snapshot.content.clipPaths, { fallback: '', favicon: '', iconShell: '' })
+  assert.equal('clipPaths' in snapshot.content, false)
 }
 
 function testSnapshotKeepsVisibleCardsAndExactCardRect(): void {
@@ -263,7 +266,7 @@ function testSnapshotWritesToStorage(): void {
   assert(rawSnapshot)
   const storedSnapshot = JSON.parse(rawSnapshot)
   assert.equal(storedSnapshot.updatedAt, 789)
-  assert.equal(storedSnapshot.version, 6)
+  assert.equal(storedSnapshot.version, 8)
   assert.deepEqual(
     storedSnapshot.sections[0].items[0].titleRect,
     { height: 15, left: 52, top: 16.5, width: 376 }
@@ -370,7 +373,7 @@ function testSnapshotRejectsMismatchedViewport(): void {
     get() { throw new Error('preboot paint requested') }
   })
   const viewport = { innerHeight: 900, innerWidth: 1280 } as Window
-  for (const version of [4, 5]) {
+  for (const version of [4, 5, 6, 7]) {
     storage.setItem(NEWTAB_BOOKMARK_PREBOOT_STORAGE_KEY, JSON.stringify({ ...snapshot, version }))
     assert.doesNotThrow(() => installNewtabBookmarkPreboot(documentRef, viewport, storage),
       'Snapshots with clipped borders or the old corner geometry must be rejected before any DOM paint')

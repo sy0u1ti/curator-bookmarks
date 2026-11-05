@@ -1,58 +1,14 @@
-/* Extension documents only, including body portals but not embedded pages.
-   Native contours paint the border, focus ring and background together;
-   unsupported browsers keep the same border-radius without a CSS clip. */
-@supports (corner-shape: superellipse(1.25)) {
-  :where(html[data-curator-surface]) :where(*) {
-    corner-shape: var(--ds-corner-shape, superellipse(1.25));
-  }
+/* Extension documents and their portals share the browser's native rounded
+   contour. Older engines ignore corner-shape and paint the same border-radius.
+   No measured paths, masks or extra clipping are needed, including on icons. */
+:where(html[data-curator-surface]) :where(*) {
+  corner-shape: var(--ds-corner-shape, round);
+}
 
-  :where(html[data-curator-surface]) :where(*)::before,
-  :where(html[data-curator-surface]) :where(*)::after {
-    corner-shape: inherit;
-  }
-
-  :where(html[data-curator-surface]) :where(
-    .rounded-full,
-    .rounded-ds-full,
-    [data-corner-shape="round"],
-    .t-tabs:not(.grid),
-    .t-tabs:not(.grid) .t-tab,
-    .t-tabs:not(.grid) .t-tabs-pill,
-    .options-switch-control,
-    .options-switch-thumb,
-    .settings-drawer-scrollbar-thumb,
-    .newtab-search-chip,
-    .bookmark-add-menu-trigger-icon,
-    .bookmark-folder-card-count,
-    .featured-wallpaper-resolution,
-    .featured-wallpaper-card-action
-  ) {
-    corner-shape: round;
-  }
-
-  :where(html[data-curator-surface]) :where([class~="before:rounded-full"])::before,
-  :where(html[data-curator-surface]) :where([class~="after:rounded-full"])::after,
-  :where(html[data-curator-surface]) :where([class~="focus-visible:after:rounded-full"]):focus-visible::after,
-  :where(html[data-curator-surface]) :where(*)::-webkit-scrollbar-thumb {
-    corner-shape: round;
-  }
-
-  :where(html[data-curator-surface]) :where(.rounded-\[inherit\]) {
-    corner-shape: inherit;
-  }
-
-  /* The refraction renderer uses circular-arc distance fields. Keep its few
-     lens contours round so the cached optical rim and native edge coincide.
-     Frosted cards, menus and drawers have no such restriction. */
-  :where(html[data-curator-surface]) :where(
-    .newtab-search-shell,
-    .newtab-search-surface,
-    .newtab-clock,
-    .newtab-glass-preview,
-    [data-hyalite-surface]
-  ) {
-    corner-shape: round;
-  }
+:where(html[data-curator-surface]) :where(*)::before,
+:where(html[data-curator-surface]) :where(*)::after,
+:where(html[data-curator-surface]) :where(.rounded-\[inherit\]) {
+  corner-shape: inherit;
 }
 
 /* The settings tabs are rectangles, not the pill-shaped tabs used elsewhere. */

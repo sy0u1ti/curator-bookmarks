@@ -14,6 +14,7 @@ import { Icon } from '../icons/Icon'
 import { cx } from './utils'
 import { assignRef, findPropertyDescriptor, restorePropertyDescriptor } from './input-sync'
 import { InputStateCommit } from './InputStateCommit'
+import { SurfaceMaterial } from './SurfaceMaterial'
 
 export interface SelectOption {
   value: string
@@ -216,6 +217,7 @@ export function Select({
       <BaseSelect.Portal container={portalContainer}>
         <BaseSelect.Positioner className={positionerClassName} sideOffset={6} alignItemWithTrigger={false}>
           <BaseSelect.Popup
+            render={<SurfaceMaterial />}
             {...popupAttributes}
             className={unstyled ? cx('base-select-popup t-dropdown overflow-y-auto overscroll-contain', popupClassName) : cx(
             'base-select-popup t-dropdown z-50 max-h-64 min-w-[var(--anchor-width)] overflow-y-auto overscroll-contain rounded-ds-menu border border-ds-border bg-ds-surface-2 ds-inset-menu text-ds-text-primary [filter:var(--ds-filter-popover)] outline-none',

@@ -1,6 +1,7 @@
 import { Toast as BaseToast } from '@base-ui/react/toast'
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import { Button } from './Button'
+import { SurfaceMaterial } from './SurfaceMaterial'
 import { cx } from './utils'
 
 export interface ToastItem {
@@ -128,6 +129,7 @@ function ToastListViewport({
 
         return (
           <BaseToast.Root
+            render={<SurfaceMaterial />}
             key={toast.id}
             toast={toast}
             className={unstyled ? rootClassName : cx(

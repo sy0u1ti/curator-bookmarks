@@ -73,6 +73,7 @@ import {
 } from './components/options-chrome-classes'
 import { useOptionsSectionChrome } from './useOptionsSectionChrome'
 import { attachSidebarMotion } from './options-sidebar-motion'
+import { InputCaretHost } from '../ui/input-caret/InputCaretHost'
 
 const AvailabilityPanel = lazy(() => import('./components/AvailabilityPanel').then((module) => ({ default: module.AvailabilityPanel })))
 const AiAnalysisPanel = lazy(() => import('./components/AiAnalysisPanel').then((module) => ({ default: module.AiAnalysisPanel })))
@@ -613,6 +614,7 @@ export function OptionsApp() {
 
   return (
     <ThemeProvider>
+      <InputCaretHost />
       <div className={optionsShellClassBase} ref={optionsShellRef}>
         <a className={optionsSkipLinkClass} href="#options-main">跳到主要内容</a>
         <div className={optionsSidebarDividerClass} aria-hidden="true"></div>

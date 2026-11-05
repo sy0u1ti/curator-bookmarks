@@ -1,6 +1,5 @@
 import { useCallback, useState, type Ref } from 'react'
 import { cx } from '../../ui/base/utils'
-import { applySquircleClipBeforePaint } from '../../shared/squircle-engine'
 import {
   clearActiveFaviconSource,
   isChromeFaviconSource,
@@ -71,27 +70,9 @@ export function BookmarkIconShell({
     const value = readFaviconContrast(image, source)
     setContrast(current => current?.source === source && current.value === value ? current : { source, value })
   }, [customIcon, source])
-  // Native corner-shape paints immediately. Older engines prepare artwork
-  // clips before paint so the first frame cannot pop to a different contour.
-  const setShellRef = useCallback((element: HTMLSpanElement | null) => {
-    if (element) {
-      applySquircleClipBeforePaint(element)
-    }
-    if (typeof ref === 'function') {
-      ref(element)
-    } else if (ref) {
-      ref.current = element
-    }
-  }, [ref])
-  const setInnerRef = useCallback((element: HTMLElement | null) => {
-    if (element) {
-      applySquircleClipBeforePaint(element)
-    }
-  }, [])
   const setFaviconRef = useCallback((image: HTMLImageElement | null) => {
-    setInnerRef(image)
     if (image?.complete && image.naturalWidth) updateContrast(image)
-  }, [setInnerRef, updateContrast])
+  }, [updateContrast])
   const markSourceReady = useCallback((nextSource: string) => {
     markNewtabFaviconReady(nextSource)
     setLoadedSources((current) => addSourceToSet(current, nextSource))
@@ -115,7 +96,7 @@ export function BookmarkIconShell({
       className={cx(BOOKMARK_ICON_SHELL_CLASS, className, missing && 'favicon-missing')}
       data-icon-contrast={iconContrast}
       aria-hidden="true"
-      ref={setShellRef}
+      ref={ref}
     >
       <img
         className={cx(
@@ -162,7 +143,6 @@ export function BookmarkIconShell({
       <span
         className={BOOKMARK_FALLBACK_CLASS}
         data-favicon-ready={loaded && !missing ? 'true' : undefined}
-        ref={setInnerRef}
       >
         {fallbackLabel}
       </span>

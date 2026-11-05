@@ -8,6 +8,7 @@ import { Input } from '../../ui/base/Input'
 import { InlineMenuList, type InlineMenuAction } from '../../ui/base/Menu'
 import { Select } from '../../ui/base/Select'
 import { cx } from '../../ui/base/utils'
+import { NewtabGlassSurface } from './NewtabGlassSurface'
 import {
   useNewtabBookmarkMenusView,
   type NewtabBookmarkAddMenuView,
@@ -80,7 +81,7 @@ function BookmarkEditMenuHost({ view }: { view: NewtabBookmarkEditMenuView }) {
   })
 
   return (
-    <section
+    <NewtabGlassSurface as="section" tone="panel"
       className={cx(
         'bookmark-edit-menu',
         MENU_SURFACE_CLASS,
@@ -100,7 +101,7 @@ function BookmarkEditMenuHost({ view }: { view: NewtabBookmarkEditMenuView }) {
       ref={ref}
     >
       <BookmarkEditMenu actionRefs={actionRefs} active={!view.closing} firstInputRef={firstInputRef} menu={view.menu} />
-    </section>
+    </NewtabGlassSurface>
   )
 }
 
@@ -126,7 +127,7 @@ function BookmarkAddMenuHost({ view }: { view: NewtabBookmarkAddMenuView }) {
   })
 
   return (
-    <section
+    <NewtabGlassSurface as="section" tone="panel"
       className={className}
       data-expanded={view.menu.expanded ? 'true' : 'false'}
       data-newtab-bookmark-menu-surface=""
@@ -142,7 +143,7 @@ function BookmarkAddMenuHost({ view }: { view: NewtabBookmarkAddMenuView }) {
       ref={ref}
     >
       <BookmarkAddMenu actionRefs={actionRefs} firstInputRef={firstInputRef} menu={view.menu} />
-    </section>
+    </NewtabGlassSurface>
   )
 }
 

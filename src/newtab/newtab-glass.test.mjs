@@ -1,353 +1,113 @@
 import assert from 'node:assert/strict'
-
-
-
-import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import test from 'node:test'
+import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
-import { chromium } from 'playwright'
 
-const browserChannel = process.env.CURATOR_BROWSER_CHANNEL || 'msedge'
-import '../vendor/hyalite/hyalite.js'
-import { installGlassWallpaperFixture } from './glass-test-fixture.mjs'
-
-const { outputFiles } = await build({ entryPoints: ['src/newtab/glass-settings.ts'], bundle: true, write: false, format: 'esm', platform: 'node' })
-const { DEFAULT_GLASS_SETTINGS, normalizeGlassSettings, getGlassRefractionOptions } = await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`)
-const hash = value => createHash('sha256').update(value).digest('hex')
-assert.equal(DEFAULT_GLASS_SETTINGS.blur, 12)
-assert.deepEqual(normalizeGlassSettings(null), DEFAULT_GLASS_SETTINGS)
-assert.equal(normalizeGlassSettings({ tint: 0, blur: ' ' }).tint, 0)
-assert.equal(normalizeGlassSettings({ blur: ' ' }).blur, 12)
-assert.equal(normalizeGlassSettings({ blur: 50, tint: -1 }).blur, 12)
-assert.equal(normalizeGlassSettings({ tint: -1 }).tint, 0)
-
-// Different levels must produce different pixels even on a 6px bookmark corner.
-// This catches the physical clamping that made the original pixel sliders inert.
-for (const radius of [6, 12, 30]) {
-  for (const [key, values] of [['bevel', [4, 26, 48]], ['thickness', [2, 19, 40]]]) {
-    const maps = values.map(value => {
-      const options = getGlassRefractionOptions({ ...DEFAULT_GLASS_SETTINGS, [key]: value }, 380, 160, [radius, radius, radius, radius])
-      const input = globalThis.Hyalite.mapInput(380, 160, [radius, radius, radius, radius], options)
-      const pixels = globalThis.Hyalite.buildMapPixels(input.width, input.height, input.radii, input.options)
-      return hash(pixels.outer) + ':' + pixels.maxd
-    })
-    assert.equal(new Set(maps).size, values.length, `${key} must remain effective on ${radius}px corners`)
-  }
-}
-
-const output = path.resolve('output/playwright/hyalite-refinement')
-const profileRoot = path.resolve('.tmp-test')
-await mkdir(output, { recursive: true })
-await mkdir(profileRoot, { recursive: true })
-const profile = await mkdtemp(path.join(profileRoot, 'glass-regression-'))
-const errors = []
-const report = { parameters: [], errors }
-let context
-
-async function waitForLens(page, selector = '.newtab-glass-preview') {
-  await page.waitForFunction(selector => {
-    const element = document.querySelector(selector)
-    const settings = JSON.parse(localStorage.getItem('curator-newtab-glass-v1') || '{}')
-    const optics = { bevel: settings.bevel, thickness: settings.thickness, blur: settings.blur, dispersion: settings.dispersion, rim: settings.rim, light: settings.light, smooth: settings.smooth }
-    return element?.dataset.glassMode === 'refraction' && element.dataset.glassOptics === JSON.stringify(optics)
-  }, selector)
-}
-
-async function readLens(page, selector = '.newtab-glass-preview') {
-  return page.locator(selector).evaluate(element => {
-    const id = element.style.getPropertyValue('--hyalite').match(/#([^\s)"']+)/)?.[1]
-    const filter = id && document.getElementById(id)
-    const raster = element.dataset.glassRenderer === 'raster'
-    return {
-      id: raster ? element.style.getPropertyValue('--newtab-glass-texture') : id,
-      background: getComputedStyle(element).backgroundColor,
-      blur: raster ? Number(element.dataset.glassBlur) : Number(filter?.querySelector('feGaussianBlur[in="SourceGraphic"]')?.getAttribute('stdDeviation')),
-      primitives: filter?.innerHTML,
-      map: filter?.querySelector('feImage')?.getAttribute('href')
-    }
-  })
-}
-
-async function resetGlass(page) {
-  await page.getByRole('button', { name: '恢复玻璃默认值', exact: true }).click()
-  await waitForLens(page)
-}
-
-async function installWallpaper(page) {
-  await page.waitForFunction(() => document.querySelector('.newtab-app')?.dataset.backgroundMedia === 'true')
-}
-
-async function readCardEdge(tile) {
-  return tile.evaluate(element => {
-    const style = getComputedStyle(element)
-    const rect = element.getBoundingClientRect()
-    const clippedBy = []
-    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
-      if (!['hidden', 'clip', 'scroll', 'auto'].includes(getComputedStyle(parent).overflowX)) continue
-      const bounds = parent.getBoundingClientRect()
-      if (rect.left < bounds.left - 1 || rect.right > bounds.right + 1) clippedBy.push(parent.className)
-    }
-    return {
-      borders: [style.borderLeft, style.borderRight, style.borderTop, style.borderBottom],
-      borderOpacity: Number(style.borderLeftColor.match(/,\s*([\d.]+)\)$/)?.[1] ?? 1),
-      rim: style.boxShadow.split(/,(?![^(]*\))/).filter(shadow => shadow.includes('inset')).map(shadow => shadow.trim()),
-      clip: style.clipPath, mask: style.maskImage, clippedBy,
-      texture: element.style.getPropertyValue('--newtab-glass-texture')
-    }
-  })
-}
-
-try {
-  context = await chromium.launchPersistentContext(profile, {
-    channel: browserChannel, headless: true, reducedMotion: 'no-preference', viewport: { width: 1440, height: 1280 },
-    args: [`--disable-extensions-except=${path.resolve('dist')}`, `--load-extension=${path.resolve('dist')}`]
-  })
-  const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker')
-  const extensionId = new URL(worker.url()).host
-  const url = `chrome-extension://${extensionId}/src/newtab/newtab.html`
-  const page = await context.newPage()
-  const wallpaperUrl = await installGlassWallpaperFixture(context, page)
-  await worker.evaluate(async () => {
-    const folders = []
-    const bookmarks = []
-    for (const title of ['开发工具', '设计资料', '阅读清单']) {
-      const folder = await chrome.bookmarks.create({ parentId: '1', title })
-      folders.push(folder.id)
-      for (const name of ['GitHub', 'TypeScript', 'React', 'Vite', 'Figma', 'MDN']) {
-        bookmarks.push((await chrome.bookmarks.create({ parentId: folder.id, title: name, url: `https://example.com/${folder.id}/${name}` })).id)
+const output = path.resolve('.tmp-test/newtab-glass/material.mjs')
+await mkdir(path.dirname(output), { recursive: true })
+await build({
+  stdin: {
+    contents: `
+      export * from './src/newtab/glass-settings';
+      import { createElement } from 'react';
+      import { renderToStaticMarkup } from 'react-dom/server';
+      import { NewtabGlassSurface, NewtabFloatingSurface } from './src/newtab/components/NewtabGlassSurface';
+      import { SurfaceMaterial, SurfaceMaterialProvider } from './src/ui/base/SurfaceMaterial';
+      import { MotionPanel } from './src/ui/motion/MotionPanel';
+      export function renderSurface(as, props) {
+        return renderToStaticMarkup(createElement(NewtabGlassSurface, { as, ...props }, 'Curator'));
       }
-    }
-    await chrome.storage.local.set({
-      curatorBookmarkNewTabFolderSettings: { selectedFolderIds: folders, hideFolderNames: false },
-      curatorBookmarkNewTabWorkspaceSettings: { activeWorkspaceId: 'default', workspaces: [{ id: 'default', name: '常用入口', pinnedIds: bookmarks.slice(0, 4), createdAt: Date.now(), updatedAt: Date.now() }] }
-    })
-  })
-  await worker.evaluate(async wallpaperUrl => {
-    await chrome.storage.local.set({ curatorBookmarkNewTabBackgroundSettings: { type: 'urls', color: '#101013', url: wallpaperUrl, maskEnabled: false } })
-  }, wallpaperUrl)
-  page.on('pageerror', error => errors.push(error.message))
-  await page.goto(url)
-  await page.locator('.bookmark-tile').first().waitFor()
-  const dismiss = page.getByRole('button', { name: '我知道了', exact: true })
-  if (await dismiss.isVisible()) await dismiss.click()
-  await installWallpaper(page)
-  await waitForLens(page, '.newtab-search-surface')
-  await page.evaluate(() => document.fonts.ready)
-  assert.equal((await readLens(page, '.newtab-search-surface')).blur, 12)
-  assert.equal((await readLens(page, '.newtab-search-surface')).background, 'rgba(0, 0, 0, 0.13)')
-  assert.ok(await page.evaluate(() => Number(document.documentElement.dataset.hyaliteSurfaces) <= 48))
-  // Bookmark cards are frost-tier: native blur only, never a swapped lens.
-  assert.ok(await page.evaluate(() => [...document.querySelectorAll('.bookmark-tile, .bookmark-menu-surface, .settings-drawer-panel, .folder-section-header')].every(element => !element.dataset.glassMode)))
-  assert.ok(await page.evaluate(() => Number(document.documentElement.dataset.hyaliteSurfaces) <= 8))
-  const stableMaterials = await page.locator('.bookmark-tile, .newtab-clock').evaluateAll(elements => elements.map(element => {
-    const style = getComputedStyle(element)
-    return [element.style.getPropertyValue('--hyalite'), element.style.getPropertyValue('--newtab-glass-texture'), style.backdropFilter, style.borderColor, style.boxShadow]
-  }))
-  await page.mouse.click(20, 1100)
-  assert.deepEqual(await page.locator('.bookmark-tile, .newtab-clock').evaluateAll(elements => elements.map(element => {
-    const style = getComputedStyle(element)
-    return [element.style.getPropertyValue('--hyalite'), element.style.getPropertyValue('--newtab-glass-texture'), style.backdropFilter, style.borderColor, style.boxShadow]
-  })), stableMaterials, 'Clicking blank space must never switch unrelated glass filters or highlights')
-  report.stableMaterialsOnClick = true
+      export function renderPopup(skin) {
+        const popup = createElement(SurfaceMaterial, { id: 'popup', role: 'dialog', tabIndex: -1 }, 'Content');
+        return renderToStaticMarkup(skin ? createElement(SurfaceMaterialProvider, { component: NewtabFloatingSurface }, popup) : popup);
+      }
+      export function renderInlineMenu() {
+        return renderToStaticMarkup(createElement(SurfaceMaterialProvider, { component: NewtabFloatingSurface },
+          createElement(MotionPanel, { material: false, variant: 'menu', role: 'menu' }, 'Actions')));
+      }
+    `,
+    resolveDir: process.cwd(), loader: 'tsx'
+  },
+  bundle: true, packages: 'external', format: 'esm', platform: 'node',
+  jsx: 'automatic', outfile: output
+})
+const api = await import(pathToFileURL(output).href)
 
-  // A single native stroke must remain complete in every interaction state.
-  const tile = page.locator('.bookmark-tile').first()
-  const settleCard = () => tile.evaluate(element => Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {}))))
-  const restingEdge = await readCardEdge(tile)
-  const edges = { rest: restingEdge }
-  await tile.screenshot({ path: path.join(output, 'card-edge-rest.png') })
-  await tile.hover()
-  await settleCard()
-  edges.hover = await readCardEdge(tile)
-  await tile.screenshot({ path: path.join(output, 'card-edge-hover.png') })
-  await tile.evaluate(element => element.addEventListener('click', event => { event.preventDefault(); event.stopImmediatePropagation() }, { capture: true, once: true }))
-  await page.mouse.down()
-  await settleCard()
-  edges.active = await readCardEdge(tile)
-  await tile.screenshot({ path: path.join(output, 'card-edge-active.png') })
-  await page.mouse.up()
-  await page.mouse.move(20, 1100)
-  await page.keyboard.press('Tab')
-  await tile.focus()
-  await settleCard()
-  edges.focus = await readCardEdge(tile)
-  assert.equal(await tile.evaluate(element => element.matches(':focus-visible')), true)
-  await tile.screenshot({ path: path.join(output, 'card-edge-focus.png') })
-  for (const [state, edge] of Object.entries(edges)) {
-    assert.equal(new Set(edge.borders).size, 1, `${state}: every side must have the same continuous stroke`)
-    assert.ok(edge.borderOpacity >= 0.18, `${state}: the resting side stroke must remain visible`)
-    assert.equal(edge.clip, 'none')
-    assert.equal(edge.mask, 'none')
-    assert.deepEqual(edge.clippedBy, [], `${state}: no ancestor may cut off the side edges`)
-    assert.match(edge.borders[0], /^1px solid /, `${state}: use one native pixel for the edge`)
-    assert.deepEqual(edge.rim, [], `${state}: no inset rim may double the native border`)
-    assert.equal(edge.texture, restingEdge.texture, `${state}: interaction must preserve the cached edge`)
+test('migrates old glass preferences without losing tint or blur', () => {
+  const legacy = Object.freeze({ tint: 17, blur: 7.5, rim: 0.15, bevel: 44, thickness: 28, dispersion: 0.11, light: -25, smooth: 0.75 })
+  const migrated = api.normalizeGlassSettings(legacy)
+  assert.deepEqual(migrated, { tint: 17, blur: 7.5, saturation: 140, brightness: 104, highlight: 50 })
+  assert.deepEqual(api.normalizeGlassSettings(migrated), migrated)
+  assert.equal(api.normalizeGlassSettings({ rim: 1.6, highlight: 37 }).highlight, 37)
+  assert.equal(api.normalizeGlassSettings({ rim: ' ' }).highlight, 100)
+})
+
+test('invalid and boundary preferences stay finite and preserve explicit zero', () => {
+  assert.deepEqual(api.normalizeGlassSettings(null), api.DEFAULT_GLASS_SETTINGS)
+  assert.deepEqual(api.normalizeGlassSettings({
+    tint: 0, blur: 0, saturation: Infinity, brightness: -20, highlight: ' '
+  }), { tint: 0, blur: 0, saturation: 140, brightness: 80, highlight: 100 })
+  assert.equal(api.normalizeGlassSettings({ blur: 50 }).blur, 12)
+  for (const preset of api.GLASS_PRESETS) {
+    assert.deepEqual(api.normalizeGlassSettings(preset.settings), preset.settings)
+    assert.equal(api.getGlassPresetId(preset.settings), preset.id)
   }
-  await page.mouse.click(20, 1100)
-  await settleCard()
-  assert.deepEqual(await readCardEdge(tile), restingEdge, 'Returning to rest must restore the same complete edge')
-  report.cardEdges = { states: Object.keys(edges), continuousStroke: true, singleBorder: true, noClipping: true }
+})
 
-  await page.getByRole('button', { name: '打开设置', exact: true }).click()
-  await page.getByRole('tab', { name: '玻璃', exact: true }).click()
-  if (await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).click()
-  await waitForLens(page)
-  assert.equal(await page.locator('#newtab-settings-trigger').evaluate(element => getComputedStyle(element).visibility), 'hidden')
-  const panel = page.locator('#settings-panel-glass')
-  assert.equal(await panel.getByRole('slider').count(), 8)
-  await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).click()
-  await panel.getByRole('slider').first().waitFor({ state: 'hidden' })
-  assert.equal(await panel.getByRole('slider').count(), 0, 'Every glass control must collapse together')
-  await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).click()
-  await waitForLens(page)
-
-  // One control per renderer path: blur filter, lens-map rebuild, and lens-map reuse.
-  // The per-parameter physics is covered above without a browser.
-  for (const [key, name, low, high] of [
-    ['blur', '玻璃模糊', 0, 12], ['bevel', '边缘范围', 4, 48], ['rim', '边缘高光', 0, 1.6]
-  ]) {
-    const slider = page.getByRole('slider', { name, exact: true })
-    await slider.press('Home')
-    await waitForLens(page)
-    await waitForLens(page, '.newtab-search-surface')
-    const before = await readLens(page)
-    const beforeImage = await page.locator('.newtab-glass-preview').screenshot()
-    const beforeCachedImage = await page.locator('.newtab-search-surface').screenshot()
-    if (key === 'light') for (let step = 0; step < 36; step++) await slider.press('ArrowRight')
-    else await slider.press('End')
-    await waitForLens(page)
-    await waitForLens(page, '.newtab-search-surface')
-    const after = await readLens(page)
-    const afterImage = await page.locator('.newtab-glass-preview').screenshot()
-    assert.notEqual(after.primitives, before.primitives, `${name} must update its live SVG primitives`)
-    assert.notEqual(hash(afterImage), hash(beforeImage), `${name} must change actual painted pixels`)
-    assert.notEqual(hash(await page.locator('.newtab-search-surface').screenshot()), hash(beforeCachedImage), `${name} must also change the cached wallpaper refraction`)
-    if (key === 'bevel') assert.notEqual(after.map, before.map, `${name} must rebuild its lens map`)
-    else assert.equal(after.map, before.map, `${name} must reuse the map when geometry does not change`)
-    report.parameters.push({ key, low, high, svgChanged: true, pixelsChanged: true, cachedPixelsChanged: true })
-    await resetGlass(page)
-  }
-
-  const beforeTint = await readLens(page)
-  await page.getByRole('slider', { name: '底色深浅', exact: true }).press('End')
-  const afterTint = await readLens(page)
-  assert.equal(afterTint.background, 'rgba(0, 0, 0, 0.6)')
-  assert.equal(afterTint.id, beforeTint.id, 'Tint is CSS-only and must not rebuild filters')
-  await resetGlass(page)
-  report.parameters.push({ key: 'tint', cssOnly: true })
-
-  // Real storage survives a reload, including values set by keyboard on the slider.
-  const blur = page.getByRole('slider', { name: '玻璃模糊', exact: true })
-  await blur.press('Home')
-  for (let step = 0; step < 8; step++) await blur.press('ArrowRight')
-  // Saving is silent and debounced. waitForFunction does not await an async
-  // predicate (a Promise is truthy), so poll storage inside the page instead.
-  const savedBlur = await page.evaluate(async () => {
-    for (const deadline = Date.now() + 15000; Date.now() < deadline;) {
-      const { curatorBookmarkNewTabGlassSettings: stored } = await chrome.storage.local.get('curatorBookmarkNewTabGlassSettings')
-      if (stored?.blur === 4) return 4
-      await new Promise(resolve => setTimeout(resolve, 50))
-    }
-    return (await chrome.storage.local.get('curatorBookmarkNewTabGlassSettings')).curatorBookmarkNewTabGlassSettings?.blur
+test('every material control reaches CSS without asynchronous rendering', () => {
+  const values = new Map()
+  api.applyGlassSettingsCss({ tint: 0, blur: 3, saturation: 125, brightness: 108, highlight: 40 }, {
+    style: { setProperty: (name, value) => values.set(name, value) }
   })
-  assert.equal(savedBlur, 4, 'Keyboard slider input must persist to Chrome storage')
-  report.beforeReload = await page.evaluate(async () => ({ cache: localStorage.getItem('curator-newtab-glass-v1'), stored: await chrome.storage.local.get('curatorBookmarkNewTabGlassSettings'), css: document.documentElement.style.getPropertyValue('--newtab-glass-background-blur') }))
-  await page.reload()
-  await waitForLens(page, '.newtab-search-surface')
-  report.afterReload = await page.evaluate(async () => ({ cache: localStorage.getItem('curator-newtab-glass-v1'), stored: await chrome.storage.local.get('curatorBookmarkNewTabGlassSettings'), css: document.documentElement.style.getPropertyValue('--newtab-glass-background-blur') }))
-  await writeFile(path.join(output, 'verification.json'), JSON.stringify(report, null, 2))
-  assert.equal((await readLens(page, '.newtab-search-surface')).blur, 4)
-  await page.getByRole('button', { name: '打开设置', exact: true }).click()
-  await page.getByRole('tab', { name: '玻璃', exact: true }).click()
-  if (await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).click()
-  const quickBlur = page.getByRole('slider', { name: '玻璃模糊', exact: true })
-  await quickBlur.press('Home')
-  for (let step = 0; step < 4; step++) await quickBlur.press('ArrowRight')
-  await page.reload()
-  await waitForLens(page, '.newtab-search-surface')
-  assert.equal((await readLens(page, '.newtab-search-surface')).blur, 2, 'Reloading before the save debounce must preserve the last input')
-  report.persistence = true
-  await installWallpaper(page)
-  await page.getByRole('button', { name: '打开设置', exact: true }).click()
-  await page.getByRole('tab', { name: '玻璃', exact: true }).click()
-  if (await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).click()
-  await resetGlass(page)
-  await page.getByRole('button', { name: '关闭设置', exact: true }).click()
-  await page.locator('.settings-drawer-panel').waitFor({ state: 'hidden' })
+  assert.equal(values.get('--newtab-glass-bg-fill'), 'rgba(0, 0, 0, 0)')
+  assert.equal(values.get('--newtab-glass-background-blur'), '3px')
+  assert.equal(values.get('--newtab-glass-saturation'), '1.25')
+  assert.equal(values.get('--newtab-glass-brightness'), '1.08')
+  assert.equal(values.get('--newtab-glass-highlight'), '0.4')
+})
 
-  const input = page.locator('.newtab-search-input')
-  await input.fill('Git')
-  await page.waitForFunction(() => document.querySelectorAll('#newtab-search-suggestions .newtab-search-suggestion').length >= 3)
-  await page.waitForFunction(() => document.querySelector('.newtab-search-shell')?.getAttribute('data-panel-open') === 'true')
-  await page.waitForFunction(() => document.querySelector('.newtab-search-shell')?.getAnimations({ subtree: true }).every(animation => animation.playState !== 'running'))
-  await waitForLens(page, '.newtab-search-surface')
-  const searchLens = await readLens(page, '.newtab-search-surface')
-  await input.pressSequentially('Hub', { delay: 25 })
-  await page.waitForTimeout(220)
-  assert.equal((await readLens(page, '.newtab-search-surface')).id, searchLens.id, 'Typing must retain a stable lens')
-  assert.equal(await input.evaluate(element => document.activeElement === element), true)
-  assert.equal(await page.locator('.newtab-search-surface').evaluate(element => getComputedStyle(element).outlineStyle), 'none')
-  assert.equal(await page.locator('.newtab-search').evaluate(element => getComputedStyle(element).borderTopWidth), '0px')
-  assert.equal(await page.locator('.newtab-search-surface').evaluate(element => getComputedStyle(element).borderTopColor), 'rgba(255, 255, 255, 0.46)')
-  const focusedTransform = await page.locator('.newtab-search-shell').evaluate(element => {
-    const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform)
-    return { x: matrix.a, y: matrix.d, lift: matrix.f }
-  })
-  const hoverLift = await page.locator('.newtab-search-shell').evaluate(element => Number.parseFloat(getComputedStyle(element).getPropertyValue('--ds-hover-lift')))
-  assert.deepEqual(focusedTransform, { x: 1, y: 1, lift: hoverLift }, 'Focus should lift the joined search field by the shared hover lift without resizing its text or controls')
-  const joinedSearch = await page.evaluate(() => {
-    const surface = document.querySelector('.newtab-search-surface')
-    const panel = document.querySelector('.newtab-search-suggestions-panel')
-    return { surfaceCount: document.querySelectorAll('.newtab-search-surface').length, bottomGap: Math.abs(surface.getBoundingClientRect().bottom - panel.getBoundingClientRect().bottom), panelBackdrop: getComputedStyle(panel).backdropFilter }
-  })
-  assert.equal(joinedSearch.surfaceCount, 1)
-  assert.ok(joinedSearch.bottomGap <= 1)
-  assert.equal(joinedSearch.panelBackdrop, 'none')
-  await page.screenshot({ path: path.join(output, 'search-suggestions-verified.png') })
-  await input.press('ArrowDown')
-  assert.ok(await input.getAttribute('aria-activedescendant'))
-  report.search = { stableLensWhileTyping: true, singleFocusBorder: true, joinedSuggestions: true, keyboardNavigation: true }
-  await page.getByRole('button', { name: '清空搜索', exact: true }).click()
-  const closingSuggestions = await page.locator('#newtab-search-suggestions-panel').evaluate(element => ({ inert: element.inert, rows: element.querySelectorAll('.newtab-search-suggestion').length }))
-  assert.equal(closingSuggestions.inert, true)
-  assert.ok(closingSuggestions.rows >= 3, 'Outgoing recommendations should remain painted through their exit')
-  await page.locator('#newtab-search-suggestions-panel').waitFor({ state: 'hidden' })
-  await input.press('Escape')
+test('GlassSurface keeps host semantics and paints Frosted in server markup', () => {
+  const anchor = api.renderSurface('a', { href: '/bookmark', 'aria-label': 'Bookmark', className: 'bookmark-tile' })
+  assert.match(anchor, /^<a /)
+  assert.match(anchor, /href="\/bookmark"/)
+  assert.match(anchor, /aria-label="Bookmark"/)
+  assert.match(anchor, /data-glass-renderer="react-bits"/)
+  assert.match(anchor, /glass-surface--fallback/)
+  assert.equal((anchor.match(/aria-hidden="true"/g) || []).length, 0)
+  assert.doesNotMatch(anchor, /<canvas|<svg|hyalite|glass-surface__/)
+  assert.match(api.renderSurface('button', { disabled: true, type: 'button', tone: 'chip' }), /^<button [^>]*disabled=""/)
+})
 
-  await page.getByRole('button', { name: '打开设置', exact: true }).click()
-  await page.getByRole('tab', { name: '玻璃', exact: true }).click()
-  if (await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).click()
-  await resetGlass(page)
-  await page.screenshot({ path: path.join(output, 'glass-settings-verified.png') })
-  await page.getByRole('button', { name: '关闭设置', exact: true }).click()
-  await page.locator('.settings-drawer-panel').waitFor({ state: 'hidden' })
-  await page.screenshot({ path: path.join(output, 'newtab-verified.png') })
+test('shared popup roots acquire glass only within the New Tab provider', () => {
+  assert.equal(api.renderPopup(false), '<div id="popup" role="dialog" tabindex="-1">Content</div>')
+  const glass = api.renderPopup(true)
+  assert.match(glass, /^<div id="popup" role="dialog" tabindex="-1"/)
+  assert.match(glass, /data-glass-tone="panel"/)
+  assert.equal((glass.match(/<div/g) || []).length, 1)
+  const inline = api.renderInlineMenu()
+  assert.match(inline, /role="menu"/)
+  assert.doesNotMatch(inline, /glass-surface/, 'Inline content must not paint a second glass pane inside its host')
+})
 
-  await page.evaluate(() => { window.Hyalite.force(false); document.dispatchEvent(new Event('visibilitychange')) })
-  await page.waitForFunction(() => document.querySelector('.newtab-search-surface')?.dataset.glassMode === 'frosted')
-  const fallback = await page.locator('.newtab-search-surface').evaluate(element => ({ backdrop: getComputedStyle(element).backdropFilter, background: getComputedStyle(element).backgroundColor }))
-  assert.deepEqual(fallback, { backdrop: 'blur(12px)', background: 'rgba(0, 0, 0, 0.13)' })
-  report.fallback = fallback
-  await page.evaluate(() => { window.Hyalite.force(null); document.dispatchEvent(new Event('visibilitychange')) })
-  await waitForLens(page, '.newtab-search-surface')
-  await page.setViewportSize({ width: 390, height: 844 })
-  await page.getByRole('button', { name: '打开设置', exact: true }).click()
-  await page.getByRole('tab', { name: '玻璃', exact: true }).click()
-  if (await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).click()
-  await page.getByRole('slider', { name: '玻璃模糊', exact: true }).waitFor()
-  await page.screenshot({ path: path.join(output, 'glass-settings-narrow.png') })
-  assert.equal(await page.locator('.settings-drawer-panel').evaluate(element => element.scrollWidth <= element.clientWidth), true)
-  await page.keyboard.press('Escape')
-  await page.locator('.settings-drawer-panel').waitFor({ state: 'hidden' })
-  report.narrow = true
-  assert.deepEqual(errors, [])
-  await writeFile(path.join(output, 'verification.json'), JSON.stringify(report, null, 2))
-  console.log('Hyalite glass: all seven optical controls change live pixels; tint, persistence, typing, fallback, and narrow layout passed.')
-} finally {
-  await context?.close()
-  assert.equal(path.dirname(profile), profileRoot)
-  assert.ok(path.basename(profile).startsWith('glass-regression-'))
-  await rm(profile, { recursive: true, force: true })
-}
+test('startup and renderer source cannot restore the retired texture pipeline', async () => {
+  const [main, html, vendor, preboot] = await Promise.all([
+    'src/newtab/main.tsx', 'src/newtab/newtab.html',
+    'src/vendor/react-bits/GlassSurface.tsx', 'src/newtab/newtab-bookmark-preboot.ts'
+  ].map(file => readFile(file, 'utf8')))
+  assert.doesNotMatch(main + html, /newtab-glass-startup|newtab-glass-runtime|hyalite/)
+  assert.doesNotMatch(vendor, /new Worker|createObjectURL|ResizeObserver|useEffect|requestAnimationFrame/)
+  assert.match(preboot, /glass-surface glass-surface--fallback/)
+  assert.match(preboot, /NEWTAB_BOOKMARK_PREBOOT_VERSION = 8/)
+})
 
+test('Frosted paints its sheen on the host without independent masked contours', async () => {
+  const css = await readFile('src/vendor/react-bits/GlassSurface.css', 'utf8')
+  assert.match(css, /background-image: var\(--glass-sheen\)/)
+  assert.match(css, /background-origin: border-box/)
+  assert.doesNotMatch(css, /(?:^|\n)\s*(?:-webkit-)?(?:mask(?:-[\w-]+)?|clip-path)\s*:/)
+  const preboot = await readFile('src/newtab/newtab-bookmark-preboot.ts', 'utf8')
+  assert.match(preboot, /background-image: var\(--glass-sheen\)/)
+  assert.doesNotMatch(preboot, /glass-surface__/)
+})

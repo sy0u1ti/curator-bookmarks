@@ -12,7 +12,6 @@ interface GlassSettingsView {
 const store = createUiViewStoreSlice<GlassSettingsView>('newtab', 'glass-settings', {
   settings: { ...DEFAULT_GLASS_SETTINGS }, ready: false, saveState: 'idle', canUndo: false
 })
-const listeners = new Set<(settings: NewtabGlassSettings) => void>()
 let started = false
 let generation = 0
 let saveTimer: ReturnType<typeof setTimeout> | undefined
@@ -36,7 +35,6 @@ function publish(settings: NewtabGlassSettings, saveState: GlassSettingsView['sa
   store.setState({ settings, ready, saveState, canUndo: Boolean(editBaseline && JSON.stringify(editBaseline) !== JSON.stringify(settings)) })
   applyGlassSettingsCss(settings)
   try { localStorage.setItem(GLASS_SETTINGS_CACHE_KEY, JSON.stringify(settings)) } catch { /* Chrome storage remains authoritative. */ }
-  listeners.forEach(listener => listener(settings))
 }
 
 export function initializeNewtabGlassSettings(): void {
@@ -66,11 +64,6 @@ export function initializeNewtabGlassSettings(): void {
   window.addEventListener('pageshow', () => { closing = false })
 }
 
-export function subscribeNewtabGlassSettings(listener: (settings: NewtabGlassSettings) => void): () => void {
-  listeners.add(listener)
-  return () => { listeners.delete(listener) }
-}
-export function getNewtabGlassSettings(): NewtabGlassSettings { return store.getState().settings }
 export function useNewtabGlassSettings(): GlassSettingsView { return useUiViewStoreSlice(store) }
 
 function persist(): void {

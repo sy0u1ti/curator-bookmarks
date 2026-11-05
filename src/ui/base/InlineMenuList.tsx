@@ -39,7 +39,7 @@ export function InlineMenuList({ actions, active = true, className, label, subme
         >
           <BaseMenu.Popup
             aria-label={label}
-            render={<MotionPanel variant="menu" className={className} />}
+            render={<MotionPanel variant="menu" material={false} className={className} />}
           >
             <InlineMenuItems
               actions={actions}

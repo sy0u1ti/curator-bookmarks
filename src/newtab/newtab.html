@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN" data-curator-surface="newtab" class="loading-wallpaper newtab-booting" data-newtab-glass-startup="pending">
+<html lang="zh-CN" data-curator-surface="newtab" class="loading-wallpaper newtab-booting">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -49,9 +49,8 @@
         transform: translateZ(0);
       }
 
-      /* Content is never hidden while glass refraction is prepared. The cached
-         bookmark snapshot and the live shell paint with the compatible material
-         from the first frame; refraction settles inside the startup window. */
+      /* Cached bookmarks and the live shell use the same GlassSurface material
+         from their first frame; there is no asynchronous glass renderer. */
     </style>
     <style id="newtab-startup-background-mask-style">
       #newtab-background-mask {

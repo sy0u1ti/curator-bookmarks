@@ -292,7 +292,13 @@ assert.ok(
 
 const layoutMotionSources = [
   globals,
-  read('src/newtab/newtab.css'),
+  // The search's bounded relative lift repaints the glass contour instead of
+  // resampling a transformed bitmap. Its browser regression compares the rim
+  // with native paint and verifies the slot and surrounding modules stay fixed.
+  read('src/newtab/newtab.css').replace(
+    /(\.newtab-search-shell\s*\{[^}]*?)transition:\s*top var\(--ds-motion-control\) var\(--ds-ease-standard\);/,
+    '$1'
+  ),
   read('src/options/components/AvailabilityDecisionPanel.tsx')
 ].join('\n')
 assert.ok(

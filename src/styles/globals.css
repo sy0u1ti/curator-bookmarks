@@ -1,5 +1,6 @@
 @import "./tokens.css";
 @import "../shared/ui-refresh.css";
+@import "./input-caret.css";
 @import "./tailwind.css";
 @import "./corners.css";
 @import "./controls-motion.css";

@@ -7,6 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent
 } from 'react'
 import { Icon } from '../../ui/icons/Icon'
+import { NewtabGlassSurface } from './NewtabGlassSurface'
 import {
   setNewtabSpeedDialCardIconNode,
   setNewtabSpeedDialCardNode,
@@ -70,14 +71,14 @@ export function SpeedDialPanelHost() {
   }
 
   return (
-    <section
+    <NewtabGlassSurface as="section"
       className={SPEED_DIAL_PANEL_CLASS}
       data-content-type={state.content.type}
       aria-label="固定入口"
       aria-busy={state.ariaBusy}
     >
       <SpeedDialPanel dragUi={dragUi} state={state} />
-    </section>
+    </NewtabGlassSurface>
   )
 }
 
@@ -158,7 +159,7 @@ function SpeedDialCard({ dragUi, item }: { dragUi: NewtabDragUiView; item: Speed
   }, [item.id])
 
   return (
-    <a
+    <NewtabGlassSurface as="a"
       className={getSpeedDialCardClass({
         dragActive: dragUi.speedDialDragging,
         dragging: item.dragging,
@@ -210,6 +211,6 @@ function SpeedDialCard({ dragUi, item }: { dragUi: NewtabDragUiView; item: Speed
       >
         <Icon name="Move" size={15} aria-hidden="true" />
       </span>
-    </a>
+    </NewtabGlassSurface>
   )
 }
