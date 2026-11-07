@@ -178,12 +178,11 @@ function run(): void {
     assert(!viewportBreakpoint.test(source), `${file} must use @max-[N]/popup container variants instead of viewport breakpoints`)
   }
 
-  // The scroll tail only exists so the last row can clear a visible feedback
-  // layer; a permanent tail leaves blank space at the end of both lists.
+  // Feedback now lives in the current-page card, so lists need no overlay tail.
   assert(
-    !/(?:^|\})\s*\.popup-main-list[^{]*\{[^}]*padding-bottom:\s*80px/.test(popupCss) &&
-      /:has\(>\s*\.popup-feedback-layer:not\(\[hidden\]\)\)\s*:is\(\.popup-main-list,\s*\.popup-folder-tree\)\s*\{[^}]*padding-bottom:\s*80px/.test(popupCss),
-    'list scroll tail must apply only while a feedback layer is shown'
+    !popupCss.includes('popup-feedback-layer') && !popupCss.includes('padding-bottom: 80px') &&
+      popupCss.includes('block-size: var(--popup-activity-size)'),
+    'activity feedback must retain its footprint without padding either list'
   )
   assert(
     popupController.includes('recycleBin.restoreBookmarkFromRecycleEntry(') &&

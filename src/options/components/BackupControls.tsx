@@ -53,7 +53,7 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
 
   return (
     <>
-      <div className={BACKUP_CARD_CLASS}>
+      <div id="settings-tag-data" className={BACKUP_CARD_CLASS}>
         <div className={BACKUP_HEAD_CLASS}>
           <div className={BACKUP_COPY_COLUMN_CLASS}>
             <strong className={BACKUP_TITLE_CLASS}>标签数据</strong>
@@ -121,7 +121,7 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
         </div>
       </div>
 
-      <div className={BACKUP_CARD_CLASS}>
+      <div id="settings-full-backup" className={BACKUP_CARD_CLASS}>
         <div className={BACKUP_HEAD_CLASS}>
           <div className={BACKUP_COPY_COLUMN_CLASS}>
             <strong className={BACKUP_TITLE_CLASS}>完整备份</strong>

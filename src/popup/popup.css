@@ -25,11 +25,6 @@
   padding-inline-start: calc(var(--ds-inset-panel) + var(--popup-row-label-inset));
 }
 
-.popup-feedback-layer {
-  inset-inline: 14px;
-  bottom: 14px;
-}
-
 /* Both surfaces size their responsive layout from this root, not from the
    viewport. Chrome's action-popup autosizing shrinks the viewport on every
    layout pass; viewport media queries flip there and force a full style
@@ -38,18 +33,202 @@
   container: popup / inline-size;
 }
 
-/* Background status is a notification layer; it never shrinks either pane.
-   Only while it is shown does a scroll tail let the last row clear it. */
-#popup-app-shell:has(> .popup-feedback-layer:not([hidden])) :is(.popup-main-list, .popup-folder-tree) {
-  padding-bottom: 80px;
-  scroll-padding-bottom: 80px;
+/* The current page and feedback share one bounded surface. Its footprint is
+   sized from the popup container, including in the long-lived side panel. */
+.popup-activity-slot {
+  --popup-activity-size: 48px;
+  position: relative;
+  block-size: var(--popup-activity-size);
+  min-block-size: var(--popup-activity-size);
+  overflow: clip;
+  background: var(--ds-surface-1);
+  outline: none;
+}
+
+.popup-activity-transition,
+.popup-activity-slot .popup-page-reveal,
+.popup-activity-slot .popup-page-content,
+.popup-activity-slot .popup-page-skeleton {
+  block-size: 100%;
+  min-block-size: 100%;
+}
+
+.popup-activity-transition {
+  position: relative;
+  border-radius: inherit;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity var(--duration-micro) var(--ds-ease-standard),
+    transform var(--duration-micro) var(--ds-ease-standard);
+}
+
+.popup-activity-transition[data-phase="out"] {
+  opacity: 0;
+  transform: translateY(calc(-1 * var(--distance-micro)));
+}
+
+.popup-activity-transition[data-phase="in"] {
+  opacity: 0;
+  transform: translateY(var(--distance-micro));
+  transition: none;
+}
+
+.popup-activity-card {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  block-size: 100%;
+  padding: 6px 6px 6px 10px;
+  border-radius: inherit;
+  background: var(--ds-surface-1);
+}
+
+.popup-activity-icon,
+.popup-activity-dot {
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--ds-surface-2);
+  color: var(--ds-text-secondary);
+}
+.popup-activity-icon { inline-size: 26px; block-size: 26px; }
+
+.popup-activity-card[data-tone="error"] .popup-activity-icon,
+.popup-activity-dot[data-tone="error"] { color: var(--ds-danger-text); }
+.popup-activity-card[data-tone="success"] .popup-activity-icon,
+.popup-activity-dot[data-tone="success"] { color: var(--ds-success-text); }
+
+/* Other operations wait beside the badge as satellites; choosing one swaps
+   it with the message in front. */
+.popup-activity-dots {
+  --popup-activity-dot: 22px;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+}
+.popup-activity-card .popup-activity-dots { margin-inline-end: 4px; }
+.popup-page-content .popup-activity-dots { --popup-activity-dot: 18px; }
+.popup-activity-dot {
+  min-inline-size: var(--popup-activity-dot);
+  block-size: var(--popup-activity-dot);
+  padding: 0;
+  border: 0;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    color var(--ds-motion-fast) var(--ds-ease-standard);
+}
+.popup-activity-dot-more { padding-inline: 6px; }
+.popup-activity-copy { min-width: 0; }
+.popup-activity-title {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+.popup-activity-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ds-text-secondary);
+}
+.popup-activity-meta:empty { display: none; }
+.popup-activity-actions { display: flex; align-items: center; gap: 4px; }
+
+.popup-activity-action,
+.popup-activity-dismiss,
+.popup-activity-detail-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  font: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  cursor: pointer;
+}
+.popup-activity-action {
+  min-width: 54px;
+  min-height: 26px;
+  padding: 4px 8px;
+  background: var(--ds-text-primary);
+  color: var(--ds-text-inverse);
+  font-weight: 600;
+}
+.popup-activity-action[aria-disabled="true"],
+.popup-activity-action:disabled { opacity: 0.65; cursor: default; }
+.popup-activity-dismiss {
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  color: var(--ds-text-secondary);
+}
+.popup-activity-detail-trigger {
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ds-text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.popup-activity-slot :is(button, a):focus-visible,
+.popup-activity-detail button:focus-visible {
+  outline: 2px solid var(--ds-accent);
+  outline-offset: 2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .popup-activity-dismiss:hover { background: var(--ds-hover); color: var(--ds-text-primary); }
+  .popup-activity-detail-trigger:hover { color: var(--ds-text-primary); }
+  .popup-activity-dot:hover { background: var(--ds-surface-3); color: var(--ds-text-primary); }
+}
+
+.popup-activity-detail {
+  border-radius: var(--popup-radius-surface);
+  width: min(360px, var(--available-width));
+  max-width: var(--available-width);
+}
+.popup-activity-detail-text {
+  margin: 0;
+  max-height: min(260px, calc(var(--available-height) - 60px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+  color: var(--ds-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
 }
 
 @container popup (width < 520px) {
-  .popup-feedback-layer {
-    inset-inline: 10px;
-    bottom: 10px;
+  .popup-activity-slot { --popup-activity-size: 88px; }
+  .popup-activity-card {
+    grid-template-columns: 26px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 28px;
+    row-gap: 6px;
+    padding: 10px;
   }
+  .popup-activity-actions { grid-column: 1 / -1; justify-content: flex-end; }
+  .popup-activity-card .popup-activity-dots { margin-inline-end: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popup-activity-transition,
+  .popup-activity-transition[data-phase] { transition: none; transform: none; }
+  :is(.popup-activity-icon, .popup-activity-dot) .animate-spin { animation: none; }
 }
 
 /* The one inline acknowledgement must not collapse to zero beside a long

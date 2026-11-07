@@ -28,8 +28,7 @@ const bookmarkContent = read('src/newtab/components/NewtabBookmarkContent.tsx')
 const speedDial = read('src/newtab/components/NewtabSpeedDialPanel.tsx')
 const newtabController = read('src/newtab/newtab-controller.ts')
 const popupChips = read('src/popup/components/PopupSearchChips.tsx')
-const popupStatus = read('src/popup/components/PopupAutoAnalyzeStatus.tsx')
-const popupToasts = read('src/popup/components/PopupToasts.tsx')
+const popupActivity = read('src/popup/components/PopupActivityHost.tsx')
 const popupModals = read('src/popup/components/PopupModalsHost.tsx')
 const popupCss = read('src/popup/popup.css')
 const optionsChrome = read('src/options/components/options-chrome-classes.ts')
@@ -81,8 +80,8 @@ assert.ok(
 )
 
 assert.ok(
-  popupToasts.includes("'t-toast pointer-events-auto") &&
-    !popupToasts.includes('will-change-transform') &&
+  popupActivity.includes('PopupActivityTransition') &&
+    !popupActivity.includes('will-change-transform') &&
     popupModals.includes('CollapsibleRoot') &&
     popupModals.includes('CollapsiblePanel') &&
     popupModals.includes('t-acc-chevron') &&
@@ -171,7 +170,8 @@ assert.ok(
   !reasoningEffortSelector.includes('<canvas') &&
     !reasoningEffortSelector.includes('sparkle') &&
     !reasoningEffortSelector.includes('confetti') &&
-    reasoningEffortSelector.includes('startSpring(targetIndex, velocity)'),
+    reasoningEffortSelector.includes('startSpring(targetIndex)') &&
+    reasoningEffortSelector.includes('damping: 1'),
   'Reasoning effort should keep direct slider motion without looping or celebratory particle decoration.'
 )
 
@@ -179,7 +179,7 @@ assert.ok(
   !bookmarkIconShell.includes('filter:blur') &&
     bookmarkIconShell.includes('var(--icon-swap-dur)') &&
     !newtabCss.includes('filter var(--ui-motion-fast)') &&
-    /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\.newtab-wallpaper-filter,[\s\S]*?\.newtab-paper-shader/.test(newtabCss),
+    !newtabCss.includes('.newtab-wallpaper-filter'),
   'Routine icon and wallpaper reveals must avoid filter animation and explicitly honor reduced motion.'
 )
 
@@ -285,7 +285,7 @@ assert.ok(
   !popupChips.includes('purple') &&
     !popupChips.includes('amber') &&
     !popupChips.includes('green') &&
-    popupStatus.includes('bg-ds-surface') &&
+    popupCss.includes('background: var(--ds-surface-1)') &&
     !optionsChrome.includes('before:content-["-"]'),
   'Routine filters, statuses, and navigation must avoid arbitrary semantic color and terminal decoration.'
 )

@@ -7,9 +7,9 @@ export type CloseButtonProps = Omit<ComponentPropsWithRef<typeof Button>, 'child
   iconSize?: number
 }
 
-export function CloseButton({ label, iconSize = 18, ref, ...props }: CloseButtonProps) {
+export function CloseButton({ label, iconSize = 18, size = 'icon', ref, ...props }: CloseButtonProps) {
   return (
-    <Button ref={ref} aria-label={label} title={props.title || label} {...props}>
+    <Button ref={ref} size={size} aria-label={label} title={props.title || label} {...props}>
       <Icon name="X" size={iconSize} aria-hidden="true" />
     </Button>
   )

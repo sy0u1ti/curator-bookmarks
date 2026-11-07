@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ComponentType,
   type MouseEvent
 } from 'react'
 import { Button } from '../ui/base/Button'
@@ -24,6 +25,7 @@ import { Icon } from '../ui/icons/Icon'
 import type { IconName } from '../ui/icons/icon-map'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { getMotionAwareScrollBehavior } from '../shared/motion'
+import { runIdle } from '../shared/idle'
 import { GeneralPanel } from './components/GeneralPanel'
 import { AiSettingsPanel } from './components/AiSettingsPanel'
 import { InboxPanel } from './components/InboxPanel'
@@ -74,13 +76,49 @@ import {
 import { useOptionsSectionChrome } from './useOptionsSectionChrome'
 import { attachSidebarMotion } from './options-sidebar-motion'
 import { InputCaretHost } from '../ui/input-caret/InputCaretHost'
+import { SettingsSearch } from './components/SettingsSearch'
+import { useSettingsSearchTarget } from './useSettingsSearchTarget'
+import { useOptionsReadingPosition } from './useOptionsReadingPosition'
 
-const AvailabilityPanel = lazy(() => import('./components/AvailabilityPanel').then((module) => ({ default: module.AvailabilityPanel })))
-const AiAnalysisPanel = lazy(() => import('./components/AiAnalysisPanel').then((module) => ({ default: module.AiAnalysisPanel })))
-const BookmarkHistoryPanel = lazy(() => import('./components/BookmarkHistoryPanel').then((module) => ({ default: module.BookmarkHistoryPanel })))
+// A native promise suspends once even after it has settled, and React holds the
+// retried commit back for its 300ms fallback throttle, landing it mid-slide. A
+// loaded chunk therefore resolves synchronously, which renders without suspending.
+function preloadablePanel<T extends ComponentType<any>>(load: () => Promise<T>) {
+  let loaded: { default: T } | null = null
+  let pending: Promise<{ default: T }> | null = null
+  const preload = () => {
+    pending ||= load().then(
+      (component) => (loaded = { default: component }),
+      (error) => {
+        pending = null
+        throw error
+      }
+    )
+    return pending
+  }
+  const Panel = lazy<T>(() => loaded
+    ? { then: (resolve: (module: { default: T }) => void) => resolve(loaded!) } as unknown as Promise<{ default: T }>
+    : preload())
+  return { Panel, preload }
+}
+
+const availabilityPanel = preloadablePanel(() => import('./components/AvailabilityPanel').then((module) => module.AvailabilityPanel))
+const aiAnalysisPanel = preloadablePanel(() => import('./components/AiAnalysisPanel').then((module) => module.AiAnalysisPanel))
+const bookmarkHistoryPanel = preloadablePanel(() => import('./components/BookmarkHistoryPanel').then((module) => module.BookmarkHistoryPanel))
 // These panels share one chunk. Reuse its resolved lazy boundary so moving to
 // another task panel does not suspend again after that chunk has loaded.
-const TaskPanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.TaskPanel })))
+const taskPanel = preloadablePanel(() => import('./components/TaskPanels').then((module) => module.TaskPanel))
+const AvailabilityPanel = availabilityPanel.Panel
+const AiAnalysisPanel = aiAnalysisPanel.Panel
+const BookmarkHistoryPanel = bookmarkHistoryPanel.Panel
+const TaskPanel = taskPanel.Panel
+
+function preloadOptionsPanels() {
+  for (const panel of [availabilityPanel, aiAnalysisPanel, bookmarkHistoryPanel, taskPanel]) {
+    // A failed preload stays retryable: navigating loads it again and reports the error.
+    void panel.preload().catch(() => undefined)
+  }
+}
 
 type OptionsModalsComponent = (typeof import('./components/OptionsModals'))['OptionsModals']
 
@@ -218,12 +256,14 @@ function OptionsHeader({
   activeSectionKey,
   mobileNavigationOpen,
   onMobileNavigationOpenChange,
-  onNavigate
+  onNavigate,
+  onSearchNavigate
 }: {
   activeSectionKey: OptionsSectionKey
   mobileNavigationOpen: boolean
   onMobileNavigationOpenChange: (open: boolean) => void
   onNavigate: SectionLinkClickHandler
+  onSearchNavigate: (hash: string) => void
 }) {
   const active = activeSectionKey === 'general'
 
@@ -245,8 +285,10 @@ function OptionsHeader({
           </strong>
         </span>
       </a>
+      <SettingsSearch onNavigate={onSearchNavigate} />
       <Button
         id="options-mobile-nav-trigger"
+        size="icon-lg"
         className={optionsMobileNavTriggerClass}
         type="button"
         variant="ghost"
@@ -434,6 +476,7 @@ function OptionsMobileNavigation({
                 className={optionsMobileNavCloseClass}
                 type="button"
                 label="关闭设置导航"
+                size="icon-lg"
                 variant="ghost"
               />
             }
@@ -485,6 +528,8 @@ export function OptionsApp() {
   const aiProviderAnchorRef = useRef<HTMLDivElement | null>(null)
   const [aiProviderAttentionRequestId, setAiProviderAttentionRequestId] = useState(0)
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
+  useOptionsReadingPosition(sectionKey, sectionAnchor, optionsMainRef, optionsShellRef)
+  useSettingsSearchTarget(sectionKey, sectionAnchor, sectionRevision, optionsMainRef)
   useEffect(() => {
     if (!('scrollRestoration' in window.history)) {
       return
@@ -502,6 +547,10 @@ export function OptionsApp() {
   }, [])
 
   useEffect(subscribeToOptionsStorageEvents, [])
+
+  useEffect(() => {
+    runIdle(preloadOptionsPanels, { timeout: 2000 })
+  }, [])
 
   useEffect(() => {
     const desktopQuery = window.matchMedia('(min-width: 921px)')
@@ -581,16 +630,6 @@ export function OptionsApp() {
     aiProviderAnchorRef.current = node
   }, [])
 
-  useLayoutEffect(() => {
-    if (sectionAnchor) {
-      return
-    }
-    // A navigation resets once, before paint. Re-selecting the same section or
-    // publishing fresh data is not a new reading position.
-    optionsMainRef.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' })
-    optionsShellRef.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' })
-  }, [sectionAnchor, sectionKey])
-
   const handleSectionNavigationClick = (event: MouseEvent<HTMLAnchorElement>) => {
     if (
       event.defaultPrevented ||
@@ -623,6 +662,7 @@ export function OptionsApp() {
           mobileNavigationOpen={mobileNavigationOpen}
           onMobileNavigationOpenChange={setMobileNavigationOpen}
           onNavigate={handleSectionNavigationClick}
+          onSearchNavigate={navigateToSectionHash}
         />
         <div className={optionsLayoutClass}>
           <OptionsSidebar activeSectionKey={sectionKey} onNavigate={handleSectionNavigationClick} />

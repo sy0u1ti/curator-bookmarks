@@ -33,6 +33,8 @@ export async function getStorageUsage() {
   }
 }
 
+export type StorageUsage = Awaited<ReturnType<typeof getStorageUsage>>
+
 export type StorageCleanupCategory = 'icons' | 'missing-icons' | 'full-text' | 'previews'
 
 export async function cleanStorageCategory(category: StorageCleanupCategory): Promise<string> {

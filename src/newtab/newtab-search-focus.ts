@@ -21,6 +21,20 @@ export function getNewtabBlankPointerAction(searchFocused: boolean): NewtabBlank
   return searchFocused ? 'blur' : 'focus'
 }
 
+export function shouldKeepNewtabSearchOpen({
+  focusWithin,
+  engineMenuOpen,
+  settingsOpen,
+  composing
+}: {
+  focusWithin: boolean
+  engineMenuOpen: boolean
+  settingsOpen: boolean
+  composing: boolean
+}): boolean {
+  return focusWithin || engineMenuOpen || settingsOpen || composing
+}
+
 export interface NewtabSearchFocusContext {
   draggingBookmark: boolean
   draggingFolder: boolean

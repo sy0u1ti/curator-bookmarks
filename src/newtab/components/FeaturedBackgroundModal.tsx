@@ -137,6 +137,7 @@ function FeaturedBackgroundModal({
                   className={`featured-wallpaper-close ${FEATURED_WALLPAPER_CONTROL_CLASS}`}
                   type="button"
                   label="关闭精选图库"
+                  size="icon-lg"
                   variant="ghost"
                 />
               }

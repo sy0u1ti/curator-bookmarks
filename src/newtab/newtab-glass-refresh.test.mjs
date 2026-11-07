@@ -47,14 +47,18 @@ await writeFile(path.join(directory, 'server.json'), JSON.stringify({ origin, di
 console.log(JSON.stringify({ origin, directory }))
 
 if (!process.argv.includes('--serve-only')) {
+  const scenario = argument('--scenario') || 'glass'
+  if (!['glass', 'wallpaper'].includes(scenario)) throw new Error('Invalid --scenario')
+  const scenarioFile = scenario === 'wallpaper' ? 'wallpaper-mask-scenarios.mjs' : 'glass-surface-scenarios.mjs'
+  const scenarioFunction = scenario === 'wallpaper' ? 'runWallpaperMaskChecks' : 'runGlassSurfaceChecks'
   const space = argument('--space') === null ? null : Number(argument('--space'))
   if (space !== null && (!Number.isSafeInteger(space) || space < 1)) throw new Error('Invalid --space')
   const scriptPath = path.join(directory, `round-${Date.now()}.mjs`)
   await writeFile(scriptPath, `
-    const { runGlassSurfaceChecks } = await import(${JSON.stringify(pathToFileURL(path.resolve('src/newtab/glass-surface-scenarios.mjs')).href)});
-    const task = await taskSpace(${space ?? JSON.stringify(`Curator GlassSurface checks ${Date.now()}`)});
+    const { ${scenarioFunction}: runChecks } = await import(${JSON.stringify(pathToFileURL(path.resolve('src/newtab', scenarioFile)).href)});
+    const task = await taskSpace(${space ?? JSON.stringify(`Curator ${scenario === 'wallpaper' ? 'wallpaper mask' : 'GlassSurface'} checks ${Date.now()}`)});
     console.log({ spaceId: task.spaceId });
-    const report = await runGlassSurfaceChecks(task.page("p1"), ${JSON.stringify(origin)}, ${JSON.stringify(directory.replaceAll('\\', '/'))});
+    const report = await runChecks(task.page("p1"), ${JSON.stringify(origin)}, ${JSON.stringify(directory.replaceAll('\\', '/'))});
     console.log(report);
     ${space ? '' : 'await task.finish({ keep: [] });'}
   `, 'utf8')

@@ -1,11 +1,10 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { cx } from '../ui/base/utils'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import {
   dispatchPopupModalAction,
   usePopupModalsView,
-  usePopupSmartClassifierView,
-  usePopupToasts
+  usePopupSmartClassifierView
 } from './popup-controller-store'
 import {
   dispatchPopupDocumentKeyDown,
@@ -14,13 +13,10 @@ import {
 } from './popup-browser-events-store'
 import { cancelPendingSearchActivation, refreshPopupBookmarks, usePopupController } from './popup-controller'
 import { subscribeToSidePanelContext } from '../sidepanel/sidepanel-context'
-import { PopupAutoAnalyzeStatus } from './components/PopupAutoAnalyzeStatus'
 import { PopupChromeHost } from './components/PopupChromeHost'
 import { PopupContentHost } from './components/PopupContentHost'
 import { PopupSmartClassifierHost } from './components/PopupSmartClassifierHost'
 import { InputCaretHost } from '../ui/input-caret/InputCaretHost'
-
-const PopupToasts = lazy(() => import('./components/PopupToasts').then(module => ({ default: module.PopupToasts })))
 
 const appShellBaseClass = [
   'group relative flex h-full flex-col overflow-hidden border border-ds-border bg-ds-app text-ds-text-primary',
@@ -137,7 +133,6 @@ function PopupShell({ portalContainer }: { portalContainer?: HTMLElement | null 
           <PopupContentHost />
         </section>
 
-        <PopupAutoAnalyzeStatus smartActive={smartActive} />
       </main>
 
       <DeferredPopupModalLayer
@@ -145,23 +140,8 @@ function PopupShell({ portalContainer }: { portalContainer?: HTMLElement | null 
         portalContainer={portalContainer ?? undefined}
       />
 
-      <DeferredPopupToasts />
     </>
   )
-}
-
-function DeferredPopupToasts() {
-  const toasts = usePopupToasts()
-  const [requested, setRequested] = useState(false)
-
-  useEffect(() => {
-    if (toasts.length) setRequested(true)
-  }, [toasts.length])
-
-  // Keep the host after its first use so toast exit motion can finish.
-  return requested || toasts.length ? (
-    <Suspense fallback={null}><PopupToasts /></Suspense>
-  ) : null
 }
 
 function DeferredPopupModalLayer({

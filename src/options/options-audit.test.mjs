@@ -21,11 +21,19 @@ try {
   const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker')
   await worker.evaluate(() => chrome.storage.local.set({ curatorBookmarkAiNamingSettings: { autoAnalyzeBookmarks: false }, curatorBookmarkContentSnapshotSettings: { enabled: false }, curatorBookmarkInboxSettings: { autoAnalyzeEnabled: false } }))
   await page.addInitScript(() => {
-    window.audit = { failUsage: false, failTree: false, treeReads: 0 }
+    window.audit = { failUsage: false, failTree: false, treeReads: 0, fullStorageReads: 0 }
     const get = chrome.storage.local.get.bind(chrome.storage.local)
     chrome.storage.local.get = (keys, ...args) => {
-      if (keys === null && window.audit.failUsage) throw new Error('测试用量读取失败')
+      if (keys === null) window.audit.fullStorageReads++
       return get(keys, ...args)
+    }
+    const send = chrome.runtime.sendMessage.bind(chrome.runtime)
+    chrome.runtime.sendMessage = (message, ...args) => {
+      if (message?.type === 'storage:usage' && window.audit.failUsage) {
+        args.at(-1)({ ok: false, error: '测试用量读取失败' })
+        return undefined
+      }
+      return send(message, ...args)
     }
     const tree = chrome.bookmarks.getTree.bind(chrome.bookmarks)
     chrome.bookmarks.getTree = (...args) => {
@@ -48,7 +56,16 @@ try {
   report.navigation = { followsActiveSection: true, historyReopens: true }
 
   await page.evaluate(() => { window.audit.failUsage = true })
+  await page.evaluate(() => new Promise(resolve => requestIdleCallback(() => setTimeout(resolve, 300), { timeout: 2500 })))
+  await page.evaluate(() => {
+    window.audit.panelFallbacks = 0
+    new MutationObserver(() => {
+      if (document.querySelector('#options-main > output')) window.audit.panelFallbacks++
+    }).observe(document.getElementById('options-main'), { childList: true })
+  })
   await sidebar.getByRole('link', { name: '数据与备份', exact: true }).click()
+  await page.locator('#backup').waitFor()
+  assert.equal(await page.evaluate(() => window.audit.panelFallbacks), 0, 'a preloaded panel must replace the last one without a late, throttled commit')
   // Assert the recovery behavior, not the surrounding copy.
   const storage = page.locator('section[aria-labelledby="storage-management-title"]')
   const refreshUsage = storage.getByRole('button', { name: '刷新用量', exact: true })
@@ -59,7 +76,8 @@ try {
   await refreshUsage.click()
   await storage.getByRole('button', { name: '清理闲置图标', exact: true }).waitFor()
   assert.equal(await storage.getByText(/测试用量读取失败/).count(), 0, 'a successful retry must clear the failure')
-  report.storage = { errorState: true, retry: true }
+  assert.equal(await page.evaluate(() => window.audit.fullStorageReads), 0, 'opening the panel must not deserialize all of storage on the UI thread')
+  report.storage = { errorState: true, retry: true, offMainThread: true }
 
   await page.evaluate(() => { window.audit.failTree = true })
   await sidebar.locator('[data-options-section="inbox"]').click()

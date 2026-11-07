@@ -125,26 +125,58 @@
   }
 }
 
-/* Thumb position remains direct during dragging. Only its grip size changes. */
 .base-slider-thumb {
   scale: 1;
+  box-shadow: var(--slider-grip-shadow);
+  border-color: var(--slider-grip-border);
   transition:
-    scale var(--ds-motion-control) var(--ds-ease-standard),
+    scale var(--slider-grip-settle) var(--ds-ease-standard),
     background-color var(--ds-motion-fast) var(--ds-ease-standard),
     border-color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 .base-slider:not([data-disabled]):is([data-dragging], :focus-within) .base-slider-thumb {
-  scale: 1.12;
+  scale: var(--slider-grip-hover-scale);
+}
+
+.base-slider:not([data-disabled])[data-weighted-drag] .base-slider-thumb {
+  scale: var(--slider-grip-press-scale);
+  box-shadow: var(--slider-grip-pressed-shadow);
+}
+
+.base-slider-reference {
+  position: absolute;
+  top: -1px;
+  width: 2px;
+  height: 8px;
+  border-radius: 1px;
+  background-color: var(--ds-text-muted);
+  opacity: 0.42;
+  pointer-events: none;
+  z-index: 1;
+  translate: -50% 0;
+}
+
+.base-slider[data-orientation="vertical"] .base-slider-reference {
+  top: auto;
+  left: -1px;
+  width: 8px;
+  height: 2px;
+  translate: 0 50%;
+}
+
+.base-slider[data-detent] .base-slider-reference {
+  background-color: var(--ds-accent);
+  opacity: 1;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .base-slider:not([data-disabled]):hover .base-slider-thumb {
-    scale: 1.08;
+    scale: var(--slider-grip-hover-scale);
   }
 
   .base-slider:not([data-disabled])[data-dragging]:hover .base-slider-thumb {
-    scale: 1.12;
+    scale: var(--slider-grip-press-scale);
   }
 }
 
@@ -209,4 +241,13 @@
   .newtab-search-clear {
     transition: opacity 80ms linear, display 80ms allow-discrete !important;
   }
+}
+
+.curator-icon-button {
+  width: var(--control-icon-size, var(--ds-control-icon));
+  height: var(--control-icon-size, var(--ds-control-icon));
+  min-width: var(--control-icon-size, var(--ds-control-icon));
+  min-height: var(--control-icon-size, var(--ds-control-icon));
+  flex: none;
+  padding: 0;
 }

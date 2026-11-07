@@ -3,12 +3,13 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '../../ui/base/Button.js'
 import { StatusMessage } from '../../ui/base/StatusMessage.js'
 import { STORAGE_KEYS } from '../../shared/constants.js'
-import { cleanStorageCategory, getStorageUsage, type StorageCleanupCategory } from '../../shared/storage-maintenance.js'
+import { requestStorageUsage } from '../../shared/messages.js'
+import { cleanStorageCategory, type StorageCleanupCategory, type StorageUsage } from '../../shared/storage-maintenance.js'
 
 const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
 
 export function StorageManagement() {
-  const [usage, setUsage] = useState<Awaited<ReturnType<typeof getStorageUsage>> | null>(null)
+  const [usage, setUsage] = useState<StorageUsage | null>(null)
   const [busy, setBusy] = useState(true)
   const [status, setStatus] = useState('')
   const [storageIssue, setStorageIssue] = useState('')
@@ -23,7 +24,7 @@ export function StorageManagement() {
     let message = ''
     try {
       message = category ? await cleanStorageCategory(category) : ''
-      const next = await getStorageUsage()
+      const next = await requestStorageUsage()
       if (request !== generation.current) return
       setUsage(next)
       setStatus(message)
@@ -46,7 +47,7 @@ export function StorageManagement() {
   }, [run])
   const refresh = () => run()
   const clean = (category: StorageCleanupCategory) => run(category)
-  return <section aria-labelledby="storage-management-title" className={`mt-7 ${OPTION_SURFACE_CLASS} p-5`}>
+  return <section id="settings-storage" aria-labelledby="storage-management-title" className={`mt-7 ${OPTION_SURFACE_CLASS} p-5`}>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h3 id="storage-management-title" className="m-0 text-[15px] font-semibold">本地存储空间</h3>
       <Button size="sm" variant="secondary" disabled={busy} onClick={() => void refresh()}>刷新用量</Button>

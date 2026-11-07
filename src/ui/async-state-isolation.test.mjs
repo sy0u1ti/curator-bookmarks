@@ -289,12 +289,12 @@ for (const stale of ['selection', 'session', 'none']) {
     const work = deferred()
     let message = ''
     const context = await handler(newtabFile, 'runBackgroundTask', {
-      newTabControllerStarted: true, newTabControllerGeneration: 1, backgroundSettingsMutationVersion: 1,
+      newTabControllerStarted: true, newTabControllerGeneration: 1, backgroundMediaMutationVersion: 1,
       setBackgroundStatus: text => { message = text }, render: noop,
       console: { warn: noop }
     })
     context.subject(work.promise, 'Background failed')
-    if (stale === 'selection') context.backgroundSettingsMutationVersion++
+    if (stale === 'selection') context.backgroundMediaMutationVersion++
     if (stale === 'session') context.newTabControllerGeneration++
     work.reject(new Error('Old media failed'))
     await new Promise(resolve => setImmediate(resolve))
@@ -306,15 +306,59 @@ test('an old cache-clear completion cannot reapply a replacement wallpaper', asy
   const cache = deferred()
   let applies = 0
   const context = await handler(newtabFile, 'applyBackgroundSettingsAfterCacheUpdate', {
-    newTabControllerStarted: true, newTabControllerGeneration: 1, backgroundSettingsMutationVersion: 1,
+    newTabControllerStarted: true, newTabControllerGeneration: 1, backgroundMediaMutationVersion: 1,
     clearBackgroundUrlCache: () => cache.promise, applyBackgroundSettings: async () => { applies++ }
+  })
+  const running = context.subject(true)
+  context.backgroundMediaMutationVersion++
+  cache.resolve()
+  await running
+  assert.equal(applies, 0)
+  await context.subject(false)
+  assert.equal(applies, 1)
+})
+
+test('mask adjustments preserve pending wallpaper work and skip the source pipeline', async () => {
+  const previous = { type: 'image', wallpaperDim: 20 }
+  const next = { ...previous, wallpaperDim: 60 }
+  let snapshot
+  let saved
+  const context = await handler(newtabFile, 'commitBackgroundSettings', {
+    state: { backgroundSettings: previous },
+    backgroundSettingsHydrated: true,
+    backgroundSettingsMutationVersion: 1,
+    backgroundMediaMutationVersion: 7,
+    preloadedBackgroundSettings: previous,
+    shouldClearBackgroundUrlCache: () => false,
+    haveSameWallpaperSource: () => true,
+    getEffectiveWallpaperAdjustments: value => value,
+    saveWallpaperAdjustmentsSnapshot: value => { snapshot = value },
+    dispatchNewtabBackgroundSettingsView: noop,
+    createBackgroundSettingsView: () => ({}),
+    STORAGE_KEYS: { newTabBackgroundSettings: 'background' },
+    saveSettingsWithFeedback: async value => { saved = value },
+    console: { warn: noop }
+  })
+  context.subject(previous, next)
+  assert.equal(context.backgroundSettingsMutationVersion, 2)
+  assert.equal(context.backgroundMediaMutationVersion, 7)
+  assert.equal(snapshot, next)
+  assert.equal(saved.background, next)
+})
+
+test('mask adjustments do not cancel an in-flight wallpaper cache clear', async () => {
+  const cache = deferred()
+  let applies = 0
+  const context = await handler(newtabFile, 'applyBackgroundSettingsAfterCacheUpdate', {
+    newTabControllerStarted: true, newTabControllerGeneration: 1,
+    backgroundSettingsMutationVersion: 1, backgroundMediaMutationVersion: 7,
+    clearBackgroundUrlCache: () => cache.promise,
+    applyBackgroundSettings: async () => { applies++ }
   })
   const running = context.subject(true)
   context.backgroundSettingsMutationVersion++
   cache.resolve()
   await running
-  assert.equal(applies, 0)
-  await context.subject(false)
   assert.equal(applies, 1)
 })
 
@@ -324,13 +368,15 @@ for (const stale of [false, true]) {
     let message = ''
     const context = await handler(newtabFile, 'handleBackgroundUrlCommit', {
       state: { backgroundSettings: { type: 'urls' } },
-      newTabControllerStarted: true, newTabControllerGeneration: 1, backgroundSettingsMutationVersion: 1,
+      newTabControllerStarted: true, newTabControllerGeneration: 1,
+      backgroundSettingsMutationVersion: 1, backgroundMediaMutationVersion: 1,
       getRemoteBackgroundImageUrl: () => 'https://fixture.invalid/wallpaper.png',
       ensureBackgroundImageFetchPermission: () => permission.promise,
       setBackgroundStatus: text => { message = text }, syncBackgroundSettingsControls: noop
     })
     const running = context.subject()
-    if (stale) context.backgroundSettingsMutationVersion++
+    context.backgroundSettingsMutationVersion++
+    if (stale) context.backgroundMediaMutationVersion++
     permission.resolve(false)
     await running
     assert.equal(Boolean(message), !stale)

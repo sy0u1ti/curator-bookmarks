@@ -2,16 +2,13 @@ import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-s
 import type { FeaturedBackgroundPreferences } from './featured-gallery-preferences.js'
 import { DEFAULT_TEXTURE_SETTINGS, normalizeTextureSettings, type TextureSettings } from './texture-settings.js'
 import {
-  doesBackgroundMaskFilterSupportGeometry,
-  doesBackgroundMaskFilterSupportHover,
-  isBackgroundMaskFilterStyle,
-  isPaperShaderMaskStyle,
-  isLegacyBackgroundMaskStyle,
-  isWallpaperFilterMaskStyle,
-  type BackgroundMaskStyle
-} from './background-mask-settings.js'
+  DEFAULT_WALLPAPER_ADJUSTMENTS,
+  doesBackgroundTypeTakeWallpaperAdjustments,
+  toWallpaperAdjustmentFields,
+  type WallpaperAdjustmentFields
+} from './wallpaper-adjustments.js'
 
-export interface NewtabBackgroundSettingsView extends TextureSettings {
+export interface NewtabBackgroundSettingsView extends TextureSettings, WallpaperAdjustmentFields {
   ready: boolean
   backgroundStatus: string
   backgroundStatusTone: 'info' | 'success' | 'warning' | 'error'
@@ -32,20 +29,7 @@ export interface NewtabBackgroundSettingsView extends TextureSettings {
   featuredPickerSelected: boolean
   imageName: string
   imageRowHidden: boolean
-  maskBlur: number
-  maskBlurHidden: boolean
-  maskEnabled: boolean
-  maskFilterHover: boolean
-  maskFilterHoverHidden: boolean
-  maskFilterSize: number
-  maskFilterSizeHidden: boolean
-  maskFilterSpacing: number
-  maskFilterSpacingHidden: boolean
-  maskFilterStrength: number
-  maskFilterStrengthHidden: boolean
-  maskOverlay: number
-  maskStyle: BackgroundMaskStyle
-  maskStyleHidden: boolean
+  wallpaperAdjustmentsHidden: boolean
   positionX: number
   positionXMax: number
   positionXMin: number
@@ -59,18 +43,10 @@ export interface NewtabBackgroundSettingsView extends TextureSettings {
   videoRowHidden: boolean
 }
 
-export interface NewtabBackgroundSettingsSource extends Partial<TextureSettings> {
+export interface NewtabBackgroundSettingsSource extends Partial<TextureSettings>, WallpaperAdjustmentFields {
   color: string
   featuredId: string
   imageName: string
-  maskEnabled: boolean
-  maskFilterHover: boolean
-  maskBlur: number
-  maskFilterSize: number
-  maskFilterSpacing: number
-  maskFilterStrength: number
-  maskOverlay: number
-  maskStyle: BackgroundMaskStyle
   type: string
   url: string
   videoName: string
@@ -80,12 +56,10 @@ export type NewtabBackgroundSettingsFieldKey =
   | 'color'
   | 'displaySize'
   | 'featuredId'
-  | 'maskBlur'
-  | 'maskFilterSize'
-  | 'maskFilterSpacing'
-  | 'maskFilterStrength'
-  | 'maskOverlay'
-  | 'maskStyle'
+  | 'wallpaperEnabled'
+  | 'wallpaperStyle'
+  | 'wallpaperBlur'
+  | 'wallpaperDim'
   | 'positionX'
   | 'positionY'
   | 'texturePreset'
@@ -97,8 +71,6 @@ export type NewtabBackgroundSettingsFieldKey =
 export interface NewtabBackgroundSettingsActions {
   onFileSelect: (mediaType: 'image' | 'video', file: File) => void
   onFieldChange: (key: NewtabBackgroundSettingsFieldKey, value: number | string | boolean) => void
-  onMaskToggle: (enabled: boolean) => void
-  onFilterHoverToggle: (enabled: boolean) => void
   onUrlCommit: () => void
 }
 
@@ -124,20 +96,8 @@ const EMPTY_VIEW: NewtabBackgroundSettingsView = {
   featuredPickerSelected: false,
   imageName: '',
   imageRowHidden: true,
-  maskBlur: 12,
-  maskBlurHidden: true,
-  maskEnabled: false,
-  maskFilterHover: true,
-  maskFilterHoverHidden: true,
-  maskFilterSize: 50,
-  maskFilterSizeHidden: true,
-  maskFilterSpacing: 50,
-  maskFilterSpacingHidden: true,
-  maskFilterStrength: 50,
-  maskFilterStrengthHidden: true,
-  maskOverlay: 50,
-  maskStyle: 'dark',
-  maskStyleHidden: true,
+  wallpaperAdjustmentsHidden: true,
+  ...toWallpaperAdjustmentFields(DEFAULT_WALLPAPER_ADJUSTMENTS),
   positionX: 50,
   positionXMax: 100,
   positionXMin: 0,
@@ -154,8 +114,6 @@ const EMPTY_VIEW: NewtabBackgroundSettingsView = {
 const EMPTY_ACTIONS: NewtabBackgroundSettingsActions = {
   onFileSelect: () => {},
   onFieldChange: () => {},
-  onMaskToggle: () => {},
-  onFilterHoverToggle: () => {},
   onUrlCommit: () => {}
 }
 
@@ -188,11 +146,6 @@ export function createNewtabBackgroundSettingsView(
   >> = {}
 ): NewtabBackgroundSettingsView {
   const featuredPickerSelected = ui.featuredPickerSelected ?? Boolean(settings.featuredId)
-  const maskEnabled = settings.type !== 'texture' && settings.maskEnabled
-  const maskControlsHidden = !maskEnabled
-  const maskFilterSelected = isBackgroundMaskFilterStyle(settings.maskStyle)
-  const maskFilterGeometrySupported = doesBackgroundMaskFilterSupportGeometry(settings.maskStyle)
-  const maskFilterHoverSupported = doesBackgroundMaskFilterSupportHover(settings.maskStyle)
 
   return {
     ...normalizeTextureSettings(settings),
@@ -216,20 +169,11 @@ export function createNewtabBackgroundSettingsView(
     featuredPickerSelected,
     imageName: settings.imageName,
     imageRowHidden: settings.type !== 'image',
-    maskBlur: settings.maskBlur,
-    maskBlurHidden: maskControlsHidden || !isLegacyBackgroundMaskStyle(settings.maskStyle),
-    maskEnabled,
-    maskFilterHover: settings.maskFilterHover,
-    maskFilterHoverHidden: maskControlsHidden || !maskFilterHoverSupported,
-    maskFilterSize: settings.maskFilterSize,
-    maskFilterSizeHidden: maskControlsHidden || !maskFilterGeometrySupported,
-    maskFilterSpacing: settings.maskFilterSpacing,
-    maskFilterSpacingHidden: maskControlsHidden || !maskFilterGeometrySupported,
-    maskFilterStrength: settings.maskFilterStrength,
-    maskFilterStrengthHidden: maskControlsHidden || !maskFilterSelected,
-    maskOverlay: settings.maskOverlay,
-    maskStyle: settings.maskStyle,
-    maskStyleHidden: maskControlsHidden,
+    wallpaperAdjustmentsHidden: !doesBackgroundTypeTakeWallpaperAdjustments(settings.type),
+    wallpaperEnabled: settings.wallpaperEnabled,
+    wallpaperStyle: settings.wallpaperStyle,
+    wallpaperBlur: settings.wallpaperBlur,
+    wallpaperDim: settings.wallpaperDim,
     positionX: preferences.positionX,
     positionXMax: limits.positionX.max,
     positionXMin: limits.positionX.min,
@@ -261,28 +205,6 @@ export function dispatchNewtabBackgroundSettingsView(view: NewtabBackgroundSetti
 
 export function useNewtabBackgroundSettingsView(): NewtabBackgroundSettingsView {
   return useUiViewStoreSlice(backgroundSettingsStore)
-}
-
-export function useNewtabWallpaperFilterActive(): boolean {
-  return useUiViewStoreSlice(
-    backgroundSettingsStore,
-    (view) => view.maskEnabled && isWallpaperFilterMaskStyle(view.maskStyle)
-  )
-}
-
-export function useNewtabPaperShaderActive(): boolean {
-  return useUiViewStoreSlice(
-    backgroundSettingsStore,
-    (view) => view.maskEnabled && isPaperShaderMaskStyle(view.maskStyle)
-  )
-}
-
-export function dispatchNewtabBackgroundMaskToggle(enabled: boolean): void {
-  backgroundSettingsActions.onMaskToggle(enabled)
-}
-
-export function dispatchNewtabBackgroundFilterHoverToggle(enabled: boolean): void {
-  backgroundSettingsActions.onFilterHoverToggle(enabled)
 }
 
 export function dispatchNewtabBackgroundSettingFieldChange(

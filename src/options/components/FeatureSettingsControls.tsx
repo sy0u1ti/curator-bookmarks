@@ -25,10 +25,11 @@ import {
 } from './ai-settings-card-classes.js'
 import { handleFeatureSettingsChange } from '../options-controller'
 import { useFeatureSettingsControlsState } from './feature-settings-store.js'
-import { FEATURE_SWITCH_CONTENT, type FeatureSwitchItemState, type FeatureSettingsControlsState } from './feature-settings-types.js'
+import { FEATURE_SWITCH_CONTENT, INBOX_WORKFLOW_STATUS_COPY, type FeatureSwitchItemState, type FeatureSettingsControlsState } from './feature-settings-types.js'
 
 const FEATURE_SETTINGS_LOADING_ROWS = FEATURE_SWITCH_CONTENT
 const FEATURE_STATUS_LABELS = ['保存中…', '待授权'] as const
+const INBOX_STATUS_RESERVE = Object.values(INBOX_WORKFLOW_STATUS_COPY)
 
 export function FeatureSettingsControls() {
   const state = useFeatureSettingsControlsState()
@@ -75,7 +76,7 @@ export function FeatureSettingsControls() {
 
 function InboxWorkflowControl({ state }: { state: FeatureSettingsControlsState['inboxWorkflow'] }) {
   return (
-    <div className="grid gap-3 px-4 py-4" aria-hidden={!state || undefined}>
+    <div id="settings-inbox-workflow" className="grid gap-3 px-4 py-4" aria-hidden={!state || undefined}>
       <div>
         <h3 className={AI_SETTINGS_ROW_TITLE_CLASS}>待整理 · 快捷键收藏后</h3>
       </div>
@@ -95,8 +96,8 @@ function InboxWorkflowControl({ state }: { state: FeatureSettingsControlsState['
           }}
         />
       ) : <span className="block h-9 rounded-ds-sm bg-ds-surface-2" />}
-      <StatusMessage className="m-0 text-xs leading-relaxed text-ds-text-secondary">
-        {state?.status || 'AI 配置可用时执行；分析失败或置信度不足时保留在 Inbox。'}
+      <StatusMessage className="m-0 text-xs leading-relaxed text-ds-text-secondary" reserve={INBOX_STATUS_RESERVE}>
+        {state?.status || INBOX_WORKFLOW_STATUS_COPY.analyze}
       </StatusMessage>
     </div>
   )
@@ -124,7 +125,7 @@ function FeatureSwitchLoadingRow({
 
 function FeatureSwitchRow({ item }: { item: FeatureSwitchItemState }) {
   return (
-    <div className={AI_SETTINGS_ROW_CLASS}>
+    <div id={`settings-${item.key}`} className={AI_SETTINGS_ROW_CLASS}>
       <div className={AI_SETTINGS_COPY_CLASS}>
         <div className={AI_SETTINGS_TITLE_ROW_CLASS}>
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>

@@ -62,14 +62,9 @@ try {
         videoName: '',
         url: wallpaperUrl,
         featuredId: '',
-        maskEnabled: false,
-        maskStyle: 'dark',
-        maskBlur: 0,
-        maskOverlay: 0,
-        maskFilterHover: true,
-        maskFilterStrength: 50,
-        maskFilterSize: 50,
-        maskFilterSpacing: 50
+        wallpaperDim: 0,
+        wallpaperBlur: 0,
+        wallpaperGrain: 0
       }
     })
   }, { wallpaperUrl: CAPTURE_WALLPAPER_URL })
@@ -107,10 +102,6 @@ try {
         backgroundSize: '32px 32px',
         backgroundPosition: '0 0',
         placeholderColor: '#101013',
-        maskEnabled: false,
-        maskStyle: 'dark',
-        maskOverlay: 0,
-        maskBlur: 0,
         cacheRequired: true,
         cacheReady: true,
         updatedAt: Date.now()
@@ -275,7 +266,7 @@ try {
       const prebootRoot = document.getElementById('newtab-bookmark-preboot')
       const persistentNodes = window.__curatorPersistentBackgroundNodes ||= {}
       persistentNodes.dynamicStage ||= document.getElementById('newtab-dynamic-background-stage')
-      persistentNodes.mask ||= document.getElementById('newtab-background-mask')
+      persistentNodes.mask ||= document.getElementById('newtab-wallpaper-dim')
       persistentNodes.video ||= document.querySelector('.newtab-background-video')
       persistentNodes.wallpaper ||= document.getElementById('newtab-wallpaper-stage')
       const titleGuard = prebootRoot?.dataset.titleGuard === 'true'
@@ -327,7 +318,7 @@ try {
           dynamicStageConnected: persistentNodes.dynamicStage?.isConnected === true,
           dynamicStageStable: document.getElementById('newtab-dynamic-background-stage') === persistentNodes.dynamicStage,
           maskConnected: persistentNodes.mask?.isConnected === true,
-          maskStable: document.getElementById('newtab-background-mask') === persistentNodes.mask,
+          maskStable: document.getElementById('newtab-wallpaper-dim') === persistentNodes.mask,
           startupStyle: Boolean(document.getElementById('instant-wallpaper-startup-style')),
           videoConnected: persistentNodes.video?.isConnected === true,
           videoStable: document.querySelector('.newtab-background-video') === persistentNodes.video,

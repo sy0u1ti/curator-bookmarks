@@ -37,8 +37,6 @@ function loadPopupSearchHelpPopover(): Promise<PopupSearchHelpPopoverComponent> 
   })
   return popupSearchHelpPopoverPromise
 }
-const errorBannerClass =
-  'popup-surface popup-feedback-layer absolute z-[21] max-h-24 overflow-auto border border-ds-danger/40 bg-ds-surface-2 px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-ds-danger-text shadow-none'
 const heroBaseClass =
   'hero relative z-[5] -mx-3.5 flex h-[37px] min-h-[37px] flex-[0_0_37px] items-center overflow-visible border-0 bg-transparent px-3.5 @max-[520px]/popup:-mx-2.5 @max-[520px]/popup:px-2.5'
 const heroBrandClass =
@@ -351,9 +349,6 @@ export function PopupChromeHost({
         {children}
       </section>
 
-      {state.loadError ? (
-        <section id="error-banner" className={errorBannerClass} role="alert">{state.loadError}</section>
-      ) : null}
     </>
   )
 }

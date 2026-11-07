@@ -144,7 +144,7 @@ function RecycleEntryCard({
               })}
               unstyled
             />
-            <span>选择</span>
+            <span aria-hidden="true">选择</span>
           </label>
         </div>
         <div className={RECYCLE_CARD_ACTIONS_CLASS}>

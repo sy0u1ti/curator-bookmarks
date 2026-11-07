@@ -52,29 +52,32 @@
       /* Cached bookmarks and the live shell use the same GlassSurface material
          from their first frame; there is no asynchronous glass renderer. */
     </style>
-    <style id="newtab-startup-background-mask-style">
-      #newtab-background-mask {
+    <style id="newtab-startup-wallpaper-adjustments-style">
+      #newtab-wallpaper-stage,
+      .newtab-background-video {
+        inset: calc(0px - var(--wallpaper-overscan, 0px));
+        filter: var(--wallpaper-filter, none);
+      }
+
+      .newtab-background-video {
+        width: calc(100% + var(--wallpaper-overscan, 0px) * 2);
+        height: calc(100% + var(--wallpaper-overscan, 0px) * 2);
+        max-width: none;
+      }
+
+      #newtab-wallpaper-dim {
         position: fixed;
         inset: 0;
         z-index: 0;
         contain: strict;
-        background-color: var(--instant-wallpaper-mask-color, transparent);
-        background-image: var(--instant-wallpaper-mask-image, none);
-        -webkit-backdrop-filter: var(--instant-wallpaper-mask-filter, none);
-        backdrop-filter: var(--instant-wallpaper-mask-filter, none);
-        opacity: 1;
         pointer-events: none;
-        transform: translateZ(0);
       }
 
-      html[data-instant-wallpaper-mask="false"] #newtab-background-mask {
-        -webkit-backdrop-filter: none;
-        backdrop-filter: none;
-        opacity: 0;
+      #newtab-wallpaper-dim {
+        background-image: var(--wallpaper-dim-image, none);
+        opacity: var(--wallpaper-dim, 0);
       }
 
-      /* Wallpaper blur is an explicit readability setting, independent of
-         the operating system's preference for opaque interface surfaces. */
     </style>
     <style id="newtab-texture-startup-style">
       #newtab-texture-stage {
@@ -116,7 +119,7 @@
   <body>
     <div id="newtab-wallpaper-stage" class="newtab-background-image" data-state="visible" aria-hidden="true"></div>
     <div id="newtab-texture-stage" aria-hidden="true"></div>
-    <div id="newtab-background-mask" class="newtab-background-mask" aria-hidden="true"></div>
+    <div id="newtab-wallpaper-dim" aria-hidden="true"></div>
     <div id="newtab-react-root"></div>
     <script type="module" src="./main.tsx"></script>
   </body>

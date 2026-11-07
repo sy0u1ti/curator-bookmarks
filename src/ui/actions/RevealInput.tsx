@@ -47,7 +47,7 @@ export function RevealInput({ revealed, onRevealChange, className, disabled, id,
         className="curator-reveal-input-toggle"
         type="button"
         variant="ghost"
-        size="sm"
+        size="icon-sm"
         disabled={disabled}
         aria-label="显示 API Key"
         aria-pressed={revealed}

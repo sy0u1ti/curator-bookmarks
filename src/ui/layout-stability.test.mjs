@@ -15,6 +15,29 @@ test('feedback keeps its footprint without discarding long error text or keyboar
   assert.doesNotMatch(component, /line-clamp|\.slice\(/)
 })
 
+test('resting settings copy reserves its own measured height, not blank fixed lines', () => {
+  assert.match(source('./base/status-message.css'), /\[data-reserve="true"\][\s\S]*block-size:\s*auto/)
+  for (const name of ['ContentSnapshotControls', 'ShortcutControls', 'FeatureSettingsControls']) {
+    assert.match(source(`../options/components/${name}.tsx`), /<StatusMessage[^>]*reserve=\{/)
+  }
+})
+
+test('the shortcut card shares the settings card header, dividers and insets', () => {
+  const card = source('../options/components/ShortcutControls.tsx')
+  assert.match(card, /<AiProviderCard/)
+  assert.match(card, /headerClassName=\{AI_SETTINGS_HEADER_CLASS\}/)
+  assert.match(card, /AI_SETTINGS_BODY_CLASS/)
+  assert.doesNotMatch(source('../options/components/ShortcutList.tsx'), /border-t/)
+})
+
+test('visible checkbox captions do not replace the row-specific accessible name', () => {
+  // Base UI labels a wrapped control by its <label>, which outranks aria-label,
+  // so a caption would be appended to every per-row name.
+  for (const name of ['RecycleBin', 'RedirectResults', 'AiAnalysisResults']) {
+    assert.match(source(`../options/components/${name}.tsx`), /unstyled\s*\/>\s*<span aria-hidden="true">/)
+  }
+})
+
 test('the drawer header updates a bounded status instead of inserting a new row', () => {
   const component = source('../newtab/components/SettingsDrawer.tsx')
   const header = component.slice(component.indexOf('function SettingsDrawerHeader'), component.indexOf('function SettingsDrawerTabs'))
@@ -42,8 +65,12 @@ test('selection and background notifications stay outside the result layout', ()
   for (const name of ['AiAnalysisSelectionActions', 'AvailabilitySelectionActions', 'RecycleControls', 'RedirectControls', 'DuplicateGroups']) {
     assert.match(source(`../options/components/${name}.tsx`), /<SelectionDock/)
   }
-  assert.match(source('../popup/components/PopupAutoAnalyzeStatus.tsx'), /popup-feedback-layer absolute/)
-  assert.match(source('../popup/components/PopupChromeHost.tsx'), /popup-feedback-layer absolute/)
+  const popup = source('../popup/components/PopupActivityHost.tsx')
+  assert.match(popup, /popup-activity-slot/)
+  assert.match(popup, /usePopupAutoAnalyzeStatusView/)
+  assert.match(source('../popup/popup.css'), /block-size: var\(--popup-activity-size\)/)
+  assert.doesNotMatch(source('../popup/popup.css'), /popup-feedback-layer|padding-bottom: 80px/)
+  assert.doesNotMatch(source('../popup/components/PopupChromeHost.tsx'), /id="error-banner"/)
 })
 
 test('compact selection actions retain safety and secondary operations', () => {

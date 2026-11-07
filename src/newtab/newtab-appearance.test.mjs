@@ -2,16 +2,13 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { chromium } from 'playwright'
-import { build } from 'esbuild'
 
-const { outputFiles } = await build({ entryPoints: ['src/newtab/background-mask-settings.ts'], bundle: true, write: false, format: 'esm', platform: 'node' })
-const { BACKGROUND_MASK_META } = await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`)
 const output = path.resolve('output/playwright/appearance')
 await mkdir(output, { recursive: true })
 await mkdir('.tmp-test', { recursive: true })
 const profile = await mkdtemp(path.resolve('.tmp-test/appearance-'))
 const errors = []
-const report = { styles: [], blur: [], errors }
+const report = { adjustments: [], blur: [], errors }
 const context = await chromium.launchPersistentContext(profile, {
   channel: 'chromium', headless: true, viewport: { width: 1440, height: 1000 },
   args: [`--disable-extensions-except=${path.resolve('dist')}`, `--load-extension=${path.resolve('dist')}`]
@@ -77,7 +74,7 @@ try {
     for (const name of ['阅读资料与灵感收藏', '工作台', '邮箱', '文档']) await chrome.bookmarks.create({ parentId: folder.id, title: name, url: `https://example.com/${encodeURIComponent(name)}` })
     await chrome.storage.local.set({
       curatorBookmarkNewTabFolderSettings: { selectedFolderIds: [folder.id] },
-      curatorBookmarkNewTabBackgroundSettings: { type: 'urls', color: '#101013', url, maskEnabled: true, maskStyle: 'dark', maskBlur: 0, maskOverlay: 0, maskFilterStrength: 50, maskFilterSize: 50, maskFilterSpacing: 50, maskFilterHover: false }
+      curatorBookmarkNewTabBackgroundSettings: { type: 'urls', color: '#101013', url, wallpaperDim: 0, wallpaperBlur: 0 }
     })
   }, wallpaperUrl)
   page.on('pageerror', error => errors.push(error.message))
@@ -94,68 +91,45 @@ try {
   for (const preference of ['no-preference', 'reduce']) {
     await client.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: preference }] })
     for (const value of [0, 32]) {
-      await slider(page, 'background-mask-blur', value)
-      assert.equal(await page.locator('#newtab-background-mask').evaluate(el => getComputedStyle(el).backdropFilter), value ? `blur(${value}px)` : 'none')
+      await slider(page, 'wallpaper-blur', value)
+      assert.equal(await page.locator('#newtab-wallpaper-stage').evaluate(el => getComputedStyle(el).filter), value ? `blur(${value}px)` : 'none')
+      assert.equal(await page.locator('#newtab-wallpaper-dim').evaluate(el => getComputedStyle(el).backdropFilter), 'none')
       const image = await pixels(page)
       const delta = await difference(page, original, image)
       assert.ok(value === 0 ? delta < 0.1 : delta > 3, `${preference}: ${value}px must change painted wallpaper: ${delta}`)
       report.blur.push({ preference, value, delta })
     }
   }
-  // Reload proves the prepaint snapshot and hydrated mask agree on the exact blur.
+  // Reload proves the prepaint snapshot and hydrated settings agree on the exact blur.
   await page.reload()
+  assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue('--wallpaper-filter')), 'blur(32px)')
   await page.getByRole('button', { name: '打开设置', exact: true }).click()
   await page.getByRole('tab', { name: '外观', exact: true }).click()
-  assert.equal(await page.locator('#background-mask-blur-value').textContent(), '32px')
-  await slider(page, 'background-mask-blur', 0)
+  assert.equal(await page.locator('#wallpaper-blur-value').textContent(), '32px')
+  await slider(page, 'wallpaper-blur', 0)
 
   // Controlled sliders previously snapped ArrowRight back to 0 or 50 forever.
-  const overlay = page.locator('#background-mask-overlay-root').getByRole('slider')
+  const dim = page.locator('#wallpaper-dim-root').getByRole('slider')
   for (const value of [0, 50]) {
-    await slider(page, 'background-mask-overlay', value)
-    await overlay.focus(); await overlay.press('ArrowRight')
-    await page.waitForFunction(expected => document.getElementById('background-mask-overlay-value')?.textContent === `${expected}%`, value + 1)
+    await slider(page, 'wallpaper-dim', value)
+    await dim.focus(); await dim.press('ArrowRight')
+    await page.waitForFunction(expected => document.getElementById('wallpaper-dim-value')?.textContent === `${expected}%`, value + 1)
   }
-  await slider(page, 'background-mask-overlay', 0)
+  await slider(page, 'wallpaper-dim', 0)
 
-  // One style per render path: CSS overlay, canvas wallpaper filter, WebGL shader.
-  for (const style of ['dark', 'grain', 'ascii', 'image-dithering']) {
-    const meta = BACKGROUND_MASK_META[style]
-    await select(page, '背景蒙版样式', meta.label)
-    if (['dark', 'frosted', 'noise', 'light'].includes(style)) {
-      await slider(page, 'background-mask-overlay', 50)
-    } else {
-      await slider(page, 'background-mask-filter-strength', 0)
-      assert.ok(await difference(page, original, await pixels(page)) < 0.1, `${style}: strength zero must preserve the original`)
-      await slider(page, 'background-mask-filter-strength', 100)
-      await page.waitForFunction(style => document.querySelector('.newtab-paper-shader')?.getAttribute('data-effect') === style || document.querySelector('#newtab-wallpaper-filter')?.getAttribute('data-effect') === style, style)
-      await page.waitForTimeout(450)
-    }
+  // Each amount is independent: it paints alone, and zero restores the original pixels.
+  for (const [id, max] of [['wallpaper-dim', 100], ['wallpaper-blur', 32]]) {
+    await slider(page, id, max)
     const delta = await difference(page, original, await pixels(page))
-    assert.ok(delta > 0.2, `${style} must produce a visible effect: ${delta}`)
-    report.styles.push({ style, delta })
-    if (meta.sizeLabel) {
-      for (const field of ['size', 'spacing']) {
-        await slider(page, `background-mask-filter-${field}`, 0)
-        const low = await pixels(page)
-        await slider(page, `background-mask-filter-${field}`, 100)
-        const high = await pixels(page)
-        const geometryDelta = await difference(page, low, high)
-        assert.ok(geometryDelta > 0.1, `${style} ${field} must change pixels: ${geometryDelta}`)
-        report.styles.at(-1)[field] = geometryDelta
-        await slider(page, `background-mask-filter-${field}`, 50)
-      }
-    }
-    await slider(page, 'background-mask-overlay', 0)
+    assert.ok(delta > 0.2, `${id} must produce a visible effect: ${delta}`)
+    report.adjustments.push({ id, delta })
+    await slider(page, id, 0)
+    assert.ok(await difference(page, original, await pixels(page)) < 0.1, `${id}: zero must preserve the original`)
   }
+  assert.equal(await page.getByRole('combobox', { name: '背景蒙版样式', exact: true }).count(), 1)
+  assert.equal(await page.getByRole('switch', { name: '背景蒙版', exact: true }).count(), 1)
 
   await select(page, '背景类型', '视频')
-  await page.locator('#background-filter-status').waitFor()
-  assert.ok((await page.locator('#background-filter-status').textContent()).includes('静态图片'))
-  assert.equal(await page.locator('#background-mask-filter-size-row').isVisible(), false)
-  await page.getByRole('combobox', { name: '背景蒙版样式', exact: true }).click()
-  assert.equal(await page.getByRole('option', { name: '图像抖动', exact: true }).getAttribute('aria-disabled'), 'true')
-  await page.keyboard.press('Escape')
   const video = await page.evaluate(async data => {
     const image = new Image()
     image.src = `data:image/png;base64,${data}`
@@ -186,21 +160,25 @@ try {
   }, wallpaper)
   await page.locator('#background-video-file').setInputFiles({ name: 'appearance.webm', mimeType: 'video/webm', buffer: Buffer.from(video, 'base64') })
   await page.waitForFunction(() => document.querySelector('.newtab-background-video')?.videoWidth > 0)
-  await select(page, '背景蒙版样式', '深色渐变')
-  await slider(page, 'background-mask-blur', 0)
+  await slider(page, 'wallpaper-blur', 0)
   const videoOriginal = await pixels(page)
-  await slider(page, 'background-mask-blur', 32)
+  await slider(page, 'wallpaper-blur', 32)
+  const videoCoverage = await page.locator('.newtab-background-video').evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: innerWidth, height: innerHeight }
+  })
+  assert.ok(
+    videoCoverage.left < 0 && videoCoverage.top < 0 && videoCoverage.right > videoCoverage.width && videoCoverage.bottom > videoCoverage.height,
+    'Blurred videos must cover beyond every viewport edge, including after the responsive media reset.'
+  )
   assert.ok(await difference(page, videoOriginal, await pixels(page)) > 3, 'Video blur must affect the playing video')
-  await slider(page, 'background-mask-blur', 0)
-  for (const [style, name] of [['ascii', 'ASCII 字符']]) {
-    await select(page, '背景蒙版样式', name)
-    await page.waitForFunction(style => document.querySelector('#newtab-wallpaper-filter')?.dataset.effect === style, style)
-    assert.ok(await difference(page, videoOriginal, await pixels(page)) > 0.2, `${style} must render on video`)
-  }
+  await slider(page, 'wallpaper-blur', 0)
+  await slider(page, 'wallpaper-dim', 50)
+  assert.ok(await difference(page, videoOriginal, await pixels(page)) > 0.2, 'Dim must render on video')
+  await slider(page, 'wallpaper-dim', 0)
   report.video = true
   await select(page, '背景类型', '图片链接')
-  await select(page, '背景蒙版样式', '深色渐变')
-  await slider(page, 'background-mask-overlay', 35)
+  await slider(page, 'wallpaper-dim', 35)
 
   // One density choice updates cards and all spacing together.
   await page.locator('#icon-advanced-toggle').click()
@@ -267,62 +245,16 @@ try {
   report.time = { densityHeights, fontSize: true, displayMode: true }
 
   await select(page, '背景类型', '纯色')
-  assert.equal(await page.locator('#background-mask-blur-root').getByRole('slider').isDisabled(), true)
+  assert.equal(await page.locator('#wallpaper-dim-row').isVisible(), false, 'A solid color has nothing to dim')
+  assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue('--wallpaper-dim')), '0')
   await select(page, '背景类型', '图片链接')
-
-  // Simulate a tainted pixel source: a failed filter must not cover the wallpaper.
-  await slider(page, 'background-mask-overlay', 0)
-  const beforeFailure = await pixels(page)
-  await page.evaluate(() => {
-    const getImageData = CanvasRenderingContext2D.prototype.getImageData
-    const toDataURL = HTMLCanvasElement.prototype.toDataURL
-    CanvasRenderingContext2D.prototype.getImageData = function(...args) {
-      if (window.rejectFilterSampling) throw new DOMException('Fixture: unreadable pixels', 'SecurityError')
-      return getImageData.apply(this, args)
-    }
-    HTMLCanvasElement.prototype.toDataURL = function(...args) {
-      if (window.rejectFilterSampling) throw new DOMException('Fixture: unreadable pixels', 'SecurityError')
-      return toDataURL.apply(this, args)
-    }
-  })
-  for (const style of ['ASCII 字符', '图像抖动']) {
-    await page.evaluate(() => { window.rejectFilterSampling = true })
-    await select(page, '背景蒙版样式', style)
-    await page.locator('#background-filter-status').filter({ hasText: '原背景' }).waitFor()
-    await page.evaluate(() => { window.rejectFilterSampling = false })
-    assert.ok(await difference(page, beforeFailure, await pixels(page)) < 0.1, `${style}: unreadable image must preserve original pixels`)
-    await select(page, '背景蒙版样式', '深色渐变')
-  }
-  report.unreadableImage = true
-
-  await select(page, '背景蒙版样式', '图像抖动')
-  await page.waitForFunction(() => document.querySelector('.newtab-paper-shader canvas'))
-  await page.locator('.newtab-paper-shader canvas').evaluate(canvas => canvas.getContext('webgl2').getExtension('WEBGL_lose_context').loseContext())
-  await page.locator('#background-filter-status').filter({ hasText: '上下文已中断' }).waitFor()
-  assert.ok(await difference(page, beforeFailure, await pixels(page)) < 0.1, 'Lost GPU context must preserve original pixels')
-  report.contextLoss = true
+  assert.equal(await page.locator('#wallpaper-dim-value').textContent(), '35%', 'Stored amounts return with the photo')
+  assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue('--wallpaper-dim')), '1')
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.locator('#settings-tab-appearance').click()
   assert.equal(await page.locator('.settings-drawer-scroll').evaluate(el => el.scrollWidth <= el.clientWidth + 1), true)
   await page.screenshot({ path: path.join(output, 'narrow.png') })
-
-  const noGpu = await context.newPage()
-  await noGpu.addInitScript(() => {
-    const getContext = HTMLCanvasElement.prototype.getContext
-    HTMLCanvasElement.prototype.getContext = function(type, ...args) {
-      return type === 'webgl2' ? null : getContext.call(this, type, ...args)
-    }
-  })
-  await noGpu.goto(url)
-  await noGpu.getByRole('button', { name: '打开设置', exact: true }).click()
-  await noGpu.getByRole('tab', { name: '外观', exact: true }).click()
-  await noGpu.locator('#background-filter-status').filter({ hasText: 'WebGL 2' }).waitFor()
-  assert.equal(await noGpu.locator('.newtab-paper-shader').count(), 0)
-  await noGpu.getByRole('combobox', { name: '背景蒙版样式', exact: true }).click()
-  assert.equal(await noGpu.getByRole('option', { name: '图像抖动', exact: true }).getAttribute('aria-disabled'), 'true')
-  await noGpu.close()
-  report.unavailableGpu = true
   assert.deepEqual(errors, [])
   await writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2))
   console.log(JSON.stringify(report, null, 2))

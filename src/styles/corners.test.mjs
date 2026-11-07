@@ -79,22 +79,21 @@ test('Popup sibling surfaces and their placeholders share one radius role', asyn
   assert.match(css, /--popup-radius-surface: var\(--ds-radius-md\);/)
   assert.match(css, /\.popup-surface\s*\{\s*border-radius: var\(--popup-radius-surface\);\s*\}/)
   const sources = new Map(await Promise.all(
-    ['PopupChromeHost', 'PopupSmartClassifier', 'PopupContent', 'PopupAutoAnalyzeStatus']
+    ['PopupChromeHost', 'PopupSmartClassifier', 'PopupContent', 'PopupActivityHost']
       .map(async name => [name, await read(`src/popup/components/${name}.tsx`)])
   ))
   for (const [file, constant] of [
     ['PopupChromeHost', 'searchShellClass'],
-    ['PopupChromeHost', 'errorBannerClass'],
     ['PopupSmartClassifier', 'pageCardClass'],
     ['PopupSmartClassifier', 'SMART_ERROR_BANNER_CLASS'],
-    ['PopupContent', 'paneClass'],
-    ['PopupAutoAnalyzeStatus', 'STATUS_BASE_CLASS']
+    ['PopupContent', 'paneClass']
   ]) {
     const declaration = sources.get(file).match(new RegExp(`const ${constant} =\\s*(?:\\[\\s*)?'([^']+)'`))?.[1]
     assert.ok(declaration?.split(' ').includes('popup-surface'), `${file}.${constant} must use the sibling surface role`)
     assert.doesNotMatch(declaration, /\brounded(?:-|\b)/, `${file}.${constant} must not add a competing radius`)
   }
   assert.match(sources.get('PopupSmartClassifier'), /cx\(pageCardClass, pageSkeletonLayerClass\)/)
+  assert.match(sources.get('PopupActivityHost'), /popup-activity-slot popup-surface/)
   assert.match(sources.get('PopupContent'), /<aside className=\{paneClass\} aria-label="文件夹树加载占位"/)
   assert.equal(resolveToken('--ds-radius-md'), 12)
 })

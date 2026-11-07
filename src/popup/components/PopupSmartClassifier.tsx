@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { AiThinkingOrb } from '../../ui/ai/AiThinkingOrb'
 import { Button } from '../../ui/base/Button'
 import { StatusMessage } from '../../ui/base/StatusMessage'
@@ -190,17 +190,19 @@ export interface PopupSmartClassifierActionHandlers {
 
 export function PopupSmartClassifier({
   handlers,
-  state
+  state,
+  pageStatusAccessory
 }: {
   handlers?: PopupSmartClassifierActionHandlers
   state: PopupSmartClassifierViewModel
+  pageStatusAccessory?: ReactNode
 }) {
   if (state.status === 'hidden') {
     return null
   }
 
   if (state.status === 'page-loading') {
-    return <PopupSmartPageRevealCard handlers={handlers} page={state.page} loading />
+    return <PopupSmartPageRevealCard handlers={handlers} page={state.page} loading accessory={pageStatusAccessory} />
   }
 
   if (state.status === 'loading') {
@@ -257,7 +259,7 @@ export function PopupSmartClassifier({
     return <PopupSmartPermission handlers={handlers} state={state} />
   }
 
-  return <PopupSmartPageRevealCard handlers={handlers} page={state.page} loading={false} />
+  return <PopupSmartPageRevealCard handlers={handlers} page={state.page} loading={false} accessory={pageStatusAccessory} />
 }
 
 function PopupSmartPageCard({
@@ -277,11 +279,13 @@ function PopupSmartPageCard({
 function PopupSmartPageRevealCard({
   handlers,
   loading,
-  page
+  page,
+  accessory
 }: {
   handlers?: PopupSmartClassifierActionHandlers
   loading: boolean
   page: PopupSmartPageViewModel | null
+  accessory?: ReactNode
 }) {
   return (
     <div
@@ -289,13 +293,12 @@ function PopupSmartPageRevealCard({
       data-state={loading ? 'loading' : 'ready'}
       aria-busy={loading ? 'true' : 'false'}
       role={loading ? 'status' : undefined}
-      aria-live="polite"
     >
       <div className={cx(pageCardClass, pageSkeletonLayerClass)} aria-hidden="true">
         <PopupSmartPageSkeletonContent />
       </div>
       <article className={cx(getPopupSmartPageCardClassName(page), pageContentLayerClass, loading ? 'pointer-events-none' : '')}>
-        <PopupSmartPageCardContent handlers={handlers} page={page} />
+        <PopupSmartPageCardContent handlers={handlers} page={page} accessory={accessory} />
       </article>
     </div>
   )
@@ -307,13 +310,15 @@ function getPopupSmartPageCardClassName(page: PopupSmartPageViewModel | null) {
 
 function PopupSmartPageCardContent({
   handlers,
-  page
+  page,
+  accessory
 }: {
   handlers?: PopupSmartClassifierActionHandlers
   page: PopupSmartPageViewModel | null
+  accessory?: ReactNode
 }) {
   if (!page) {
-    return <PopupSmartPagePlaceholderContent />
+    return <PopupSmartPagePlaceholderContent accessory={accessory} />
   }
 
   return (
@@ -324,7 +329,10 @@ function PopupSmartPageCardContent({
         </span>
         <div className={pageCopyClass}>
           <p className={pageTitleClass} title={page.title}>{page.title}</p>
-          <p className={pageStatusClass} title={page.statusTitle}>{page.status}</p>
+          <div className={cx(pageStatusClass, 'flex items-center gap-2')}>
+            <span className="truncate" title={page.statusTitle}>{page.status}</span>
+            {accessory}
+          </div>
         </div>
       </div>
       {page.bookmarked ? (
@@ -404,7 +412,7 @@ function PopupSmartPageSkeletonContent() {
   )
 }
 
-function PopupSmartPagePlaceholderContent() {
+function PopupSmartPagePlaceholderContent({ accessory }: { accessory?: ReactNode }) {
   const hint = isSidePanelSurface() ? '点击工具栏图标，启用当前页操作' : '打开网页后可快速保存或智能分类'
   const hintTitle = isSidePanelSurface() ? '切换普通网页后，点击浏览器工具栏中的 Curator 图标，启用该网页的保存与分类操作。' : hint
   return (
@@ -415,9 +423,10 @@ function PopupSmartPagePlaceholderContent() {
         </span>
         <div className={pageCopyClass}>
           <p className={cx(pageTitleClass, placeholderTitleClass)}>当前标签页</p>
-          <p className={cx(pageStatusClass, placeholderStatusClass)} title={hintTitle}>
-            {hint}
-          </p>
+          <div className={cx(pageStatusClass, placeholderStatusClass, 'flex items-center gap-2')}>
+            <span className="truncate" title={hintTitle}>{hint}</span>
+            {accessory}
+          </div>
         </div>
       </div>
       <Toolbar className={cx(currentPageActionsClass, 'pointer-events-none')} aria-label="当前页快捷操作" unstyled>

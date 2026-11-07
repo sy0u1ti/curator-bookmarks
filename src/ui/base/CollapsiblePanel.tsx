@@ -1,6 +1,7 @@
 import { Collapsible as BaseCollapsible } from '@base-ui/react/collapsible'
-import { forwardRef, type ComponentPropsWithoutRef, type ReactNode } from 'react'
+import { forwardRef, useContext, type ComponentPropsWithoutRef, type ReactNode } from 'react'
 import { cx } from './utils'
+import { CollapsibleMotionContext } from './CollapsibleRoot'
 
 export type CollapsiblePanelProps = Omit<
   ComponentPropsWithoutRef<typeof BaseCollapsible.Panel>,
@@ -11,8 +12,9 @@ export type CollapsiblePanelProps = Omit<
 
 export const CollapsiblePanel = forwardRef<HTMLDivElement, CollapsiblePanelProps & { children?: ReactNode }>(
   function CollapsiblePanel({ children, className, keepMounted = true, ...props }, ref) {
+    const changed = useContext(CollapsibleMotionContext)
     return (
-      <BaseCollapsible.Panel ref={ref} keepMounted={keepMounted} className="t-acc-panel" {...props}>
+      <BaseCollapsible.Panel ref={ref} keepMounted={keepMounted} className="t-acc-panel" data-motion-initial={!changed || undefined} {...props}>
         <div className="t-acc-panel-inner">
           <div className={cx('t-acc-panel-content pt-2', className)}>
             {children}

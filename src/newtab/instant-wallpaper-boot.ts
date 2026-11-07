@@ -1,11 +1,10 @@
-import {
-  getBackgroundMaskBaseColor,
-  getBackgroundMaskBackdropFilter,
-  getBackgroundMaskOverlayGradient,
-  normalizeBackgroundMaskStyle
-} from './background-mask-settings.js'
 import { prefetchNewtabStartupData } from './newtab-startup-data.js'
 import { applyTextureBackground, readTextureBackgroundSnapshot } from './texture-background.js'
+import {
+  applyWallpaperAdjustments,
+  NO_WALLPAPER_ADJUSTMENTS,
+  resolveStartupWallpaperAdjustments
+} from './wallpaper-adjustments.js'
 
 prefetchNewtabStartupData()
 
@@ -17,10 +16,6 @@ interface InstantWallpaperTargetRecord {
   backgroundSize?: string
   backgroundPosition?: string
   placeholderColor?: string
-  maskEnabled?: boolean
-  maskStyle?: unknown
-  maskOverlay?: unknown
-  maskBlur?: unknown
   updatedAt?: number
 }
 
@@ -31,13 +26,6 @@ interface InstantWallpaperRecord {
   imageDataUrl?: string
   imageDataUrlRef?: string
   ready?: boolean
-}
-
-interface BackgroundMaskSnapshotRecord {
-  maskEnabled?: boolean
-  maskStyle?: unknown
-  maskOverlay?: unknown
-  maskBlur?: unknown
 }
 
 interface StartupWallpaperView {
@@ -60,7 +48,8 @@ const thumbnailKey = 'curatorNewTabInstantWallpaper'
 const thumbnailDataUrlKey = 'curatorNewTabInstantWallpaperDataUrl'
 const imageDataUrlKey = 'curatorNewTabInstantWallpaperImageDataUrl'
 const targetKey = 'curatorNewTabInstantWallpaperTarget'
-const maskSnapshotKey = 'curatorNewTabBackgroundMaskSnapshot'
+const adjustmentsSnapshotKey = 'curatorNewTabWallpaperAdjustments'
+const legacyMaskSnapshotKey = 'curatorNewTabBackgroundMaskSnapshot'
 const fallbackColor = '#101013'
 const bootGlobal = globalThis as Record<string, unknown>
 const startupView = createStartupView()
@@ -71,9 +60,8 @@ try {
   const texture = readTextureBackgroundSnapshot()
   applyTextureBackground(texture)
   const targetRecord = texture ? null : readRecord<InstantWallpaperTargetRecord>(targetKey)
-  const maskSnapshot = texture ? { maskEnabled: false } : readRecord<BackgroundMaskSnapshotRecord>(maskSnapshotKey)
   cacheBootRecord('__CURATOR_INSTANT_WALLPAPER_BOOT_TARGET__', targetRecord)
-  applyStartupMask(targetRecord, maskSnapshot)
+  applyStartupAdjustments(texture ? null : targetRecord, Boolean(texture))
   if (!targetRecord?.signature) {
     applyStartupBackground('', '', '', fallbackColor, 'cover', 'center')
     revealWallpaper(false)
@@ -108,7 +96,7 @@ try {
     revealWallpaper(Boolean(startupImageUrl || startupPreviewUrl))
   }
 } catch {
-  applyStartupMask(null, null)
+  applyWallpaperAdjustments(document.documentElement, NO_WALLPAPER_ADJUSTMENTS)
   applyStartupBackground('', '', '', fallbackColor, 'cover', 'center')
   revealWallpaper(false)
 }
@@ -207,34 +195,14 @@ function createBootRecord(
   }
 }
 
-function applyStartupMask(
-  targetRecord: InstantWallpaperTargetRecord | null,
-  maskSnapshot: BackgroundMaskSnapshotRecord | null
-): void {
-  const root = document.documentElement
-  // Prefer the dedicated mask snapshot: it is written for every background type
-  // (including solid colors, which never produce a wallpaper target), so the mask
-  // is painted on the first frame instead of appearing later with React.
-  const maskSource: BackgroundMaskSnapshotRecord | InstantWallpaperTargetRecord | null =
-    maskSnapshot && typeof maskSnapshot.maskEnabled === 'boolean'
-      ? maskSnapshot
-      : targetRecord
-  const hasExplicitMaskSnapshot = typeof maskSource?.maskEnabled === 'boolean'
-  // Targets written before mask snapshots existed should fail dark, not flash a full-bright wallpaper.
-  const enabled = hasExplicitMaskSnapshot
-    ? maskSource?.maskEnabled === true
-    : Boolean(targetRecord?.signature)
-  root.dataset.instantWallpaperMask = enabled ? 'true' : 'false'
-  if (enabled) {
-    const maskStyle = normalizeBackgroundMaskStyle(maskSource?.maskStyle)
-    root.style.setProperty('--instant-wallpaper-mask-color', getBackgroundMaskBaseColor(maskStyle, maskSource?.maskOverlay))
-    root.style.setProperty('--instant-wallpaper-mask-filter', getBackgroundMaskBackdropFilter(maskStyle, maskSource?.maskBlur))
-    root.style.setProperty('--instant-wallpaper-mask-image', getBackgroundMaskOverlayGradient(maskSource?.maskOverlay, maskStyle))
-  } else {
-    root.style.removeProperty('--instant-wallpaper-mask-color')
-    root.style.removeProperty('--instant-wallpaper-mask-filter')
-    root.style.removeProperty('--instant-wallpaper-mask-image')
-  }
+function applyStartupAdjustments(targetRecord: InstantWallpaperTargetRecord | null, texture: boolean): void {
+  const adjustments = resolveStartupWallpaperAdjustments(
+    readRecord<Record<string, unknown>>(adjustmentsSnapshotKey),
+    readRecord<Record<string, unknown>>(legacyMaskSnapshotKey),
+    targetRecord,
+    texture
+  )
+  applyWallpaperAdjustments(document.documentElement, adjustments)
 }
 
 function applyStartupBackground(

@@ -136,7 +136,7 @@ export function AvailabilityControls() {
       </div>
 
       <div className={AVAILABILITY_CONTROLS_ACTIONS_CLASS}>
-        <div className={SETTINGS_ANCHOR_CLASS}>
+        <div id="settings-availability" className={SETTINGS_ANCHOR_CLASS}>
           <Popover
             id="availability-settings-popover"
             align="end"

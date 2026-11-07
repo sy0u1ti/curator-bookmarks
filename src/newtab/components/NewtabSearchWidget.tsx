@@ -377,10 +377,13 @@ function DeferredSearchEngineMenu({
 function SearchWidgetSuggestionsPanel({ view }: { view: NewtabSearchWidgetView }) {
   const { panel } = view
 
+  // This disclosure is explicitly animated even when typing opens it.
+  // Keep the exception on the panel so rows, selection and input stay direct.
   return (
     <BaseCollapsible.Panel
       id="newtab-search-suggestions-panel"
       className={SEARCH_PANEL_CLASS}
+      data-motion-keyboard="preserve"
       inert={!panel.panelVisible}
       aria-hidden={!panel.panelVisible}
     >

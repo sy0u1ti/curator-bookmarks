@@ -1,15 +1,11 @@
-import {
-  normalizeBackgroundMaskBlur,
-  normalizeBackgroundMaskPercentage,
-  normalizeBackgroundMaskStyle,
-  type BackgroundMaskStyle
-} from './background-mask-settings.js'
+import { toWallpaperAdjustmentFields, type WallpaperAdjustments } from './wallpaper-adjustments.js'
 
 const INSTANT_WALLPAPER_KEY = 'curatorNewTabInstantWallpaper'
 const INSTANT_WALLPAPER_DATA_URL_KEY = 'curatorNewTabInstantWallpaperDataUrl'
 const INSTANT_WALLPAPER_IMAGE_DATA_URL_KEY = 'curatorNewTabInstantWallpaperImageDataUrl'
 const INSTANT_WALLPAPER_TARGET_KEY = 'curatorNewTabInstantWallpaperTarget'
-const BACKGROUND_MASK_SNAPSHOT_KEY = 'curatorNewTabBackgroundMaskSnapshot'
+const WALLPAPER_ADJUSTMENTS_SNAPSHOT_KEY = 'curatorNewTabWallpaperAdjustments'
+const LEGACY_BACKGROUND_MASK_SNAPSHOT_KEY = 'curatorNewTabBackgroundMaskSnapshot'
 const INSTANT_WALLPAPER_MAX_DIMENSION = 960
 const INSTANT_WALLPAPER_QUALITY = 0.68
 const INSTANT_WALLPAPER_IMAGE_DATA_URL_MAX_LENGTH = 2_400_000
@@ -52,20 +48,9 @@ export interface InstantWallpaperTargetRecord {
   backgroundSize: string
   backgroundPosition: string
   placeholderColor: string
-  maskEnabled: boolean
-  maskStyle: BackgroundMaskStyle
-  maskOverlay: number
-  maskBlur: number
   cacheRequired: boolean
   cacheReady: boolean
   updatedAt: number
-}
-
-export interface BackgroundMaskSnapshot {
-  maskEnabled: boolean
-  maskStyle: BackgroundMaskStyle
-  maskOverlay: number
-  maskBlur: number
 }
 
 export interface InstantWallpaperDataUrlOptions {
@@ -250,10 +235,6 @@ export function saveInstantWallpaperTarget(record: InstantWallpaperTargetRecord)
     ...record,
     imageDataUrlRef: String(record.imageDataUrlRef || '').trim(),
     placeholderColor: normalizeInstantWallpaperColor(record.placeholderColor),
-    maskEnabled: record.maskEnabled === true,
-    maskStyle: normalizeBackgroundMaskStyle(record.maskStyle),
-    maskOverlay: normalizeBackgroundMaskPercentage(record.maskOverlay),
-    maskBlur: normalizeBackgroundMaskBlur(record.maskBlur),
     cacheRequired: record.cacheRequired === true,
     cacheReady: record.cacheReady === true
   }
@@ -275,41 +256,14 @@ export function clearInstantWallpaperTarget(): void {
   }
 }
 
-export function saveBackgroundMaskSnapshot(snapshot: BackgroundMaskSnapshot): void {
-  // Mirror the mask independently of any wallpaper cache so the synchronous boot
-  // script can paint the readability mask on the very first frame for every
-  // background type — including solid colors, which never write a wallpaper target.
-  const normalized: BackgroundMaskSnapshot = {
-    maskEnabled: snapshot.maskEnabled === true,
-    maskStyle: normalizeBackgroundMaskStyle(snapshot.maskStyle),
-    maskOverlay: normalizeBackgroundMaskPercentage(snapshot.maskOverlay),
-    maskBlur: normalizeBackgroundMaskBlur(snapshot.maskBlur)
-  }
+export function saveWallpaperAdjustmentsSnapshot(adjustments: WallpaperAdjustments): void {
   try {
-    localStorage.setItem(BACKGROUND_MASK_SNAPSHOT_KEY, JSON.stringify(normalized))
+    localStorage.setItem(
+      WALLPAPER_ADJUSTMENTS_SNAPSHOT_KEY,
+      JSON.stringify(toWallpaperAdjustmentFields(adjustments))
+    )
+    localStorage.removeItem(LEGACY_BACKGROUND_MASK_SNAPSHOT_KEY)
   } catch {
-    // Startup mask mirror is best-effort; chrome.storage remains the durable source.
-  }
-}
-
-export function readBackgroundMaskSnapshot(): BackgroundMaskSnapshot | null {
-  try {
-    const raw = localStorage.getItem(BACKGROUND_MASK_SNAPSHOT_KEY)
-    if (!raw) {
-      return null
-    }
-    const parsed = JSON.parse(raw) as Partial<BackgroundMaskSnapshot>
-    if (!parsed || typeof parsed !== 'object') {
-      return null
-    }
-    return {
-      maskEnabled: parsed.maskEnabled === true,
-      maskStyle: normalizeBackgroundMaskStyle(parsed.maskStyle),
-      maskOverlay: normalizeBackgroundMaskPercentage(parsed.maskOverlay),
-      maskBlur: normalizeBackgroundMaskBlur(parsed.maskBlur)
-    }
-  } catch {
-    return null
   }
 }
 
@@ -379,10 +333,6 @@ function normalizeInstantWallpaperTarget(rawValue: unknown): InstantWallpaperTar
     backgroundSize: normalizeInstantWallpaperBackgroundSize(record.backgroundSize),
     backgroundPosition: String(record.backgroundPosition || 'center'),
     placeholderColor: normalizeInstantWallpaperColor(record.placeholderColor),
-    maskEnabled: record.maskEnabled === true,
-    maskStyle: normalizeBackgroundMaskStyle(record.maskStyle),
-    maskOverlay: normalizeBackgroundMaskPercentage(record.maskOverlay),
-    maskBlur: normalizeBackgroundMaskBlur(record.maskBlur),
     cacheRequired: record.cacheRequired === true,
     cacheReady: record.cacheReady === true,
     updatedAt: Number(record.updatedAt) || 0

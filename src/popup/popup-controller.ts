@@ -8,8 +8,7 @@ import {
   BOOKMARKS_BAR_ID,
   POPUP_COMMAND_INTENT_TTL_MS,
   ROOT_ID,
-  STORAGE_KEYS,
-  UNDO_WINDOW_MS
+  STORAGE_KEYS
 } from '../shared/constants.js'
 import {
   extractBookmarkData,
@@ -73,6 +72,8 @@ import {
 } from './search-index.js'
 import { requiresPinyinTokens } from '../shared/search/pinyin-query.js'
 import { state } from './state.js'
+import { popupActivities } from './popup-activity-store.js'
+import type { PopupActivity } from './popup-activity.js'
 import {
   type PopupActionMenuViewModel,
   type PopupContentBookmarkRowViewModel,
@@ -95,7 +96,6 @@ import {
   dispatchPopupModalsChange,
   dispatchPopupSearchChipsChange,
   dispatchPopupSmartClassifierChange,
-  dispatchPopupToastsChange,
   registerPopupActionHandlers,
   rememberBookmarksBarTitle,
   resetPopupViewStore,
@@ -111,7 +111,7 @@ import {
   type PopupSearchChipView,
   type PopupSmartClassifierActionDetail,
   type PopupSmartClassifierTitleChangeDetail,
-  type PopupToastActionDetail
+  type PopupActivityActionDetail
 } from './popup-controller-store.js'
 import { getPopupSmartClassifierRenderStatus } from './popup-smart-classifier-status.js'
 import {
@@ -179,7 +179,6 @@ import {
 import { cleanSmartText, cleanSmartTitle, getLastPathSegment, normalizeSmartConfidence, normalizeSmartError, normalizeSmartFolderPath, normalizeSmartTextList } from './smart-text.js'
 const NATURAL_SEARCH_DEBOUNCE_MS = 520
 const VIEW_NOTICE_MS = 1800
-const MAX_VISIBLE_TOASTS = 2
 const KEYBOARD_NAVIGATION_SETTLE_MS = 120
 const POPUP_PINYIN_BATCH_SIZE = 250
 const SMART_RECOMMENDATION_LIMIT = 3
@@ -362,7 +361,7 @@ function bindEvents() {
     modal: handleModalAction,
     smartClassifier: handleSmartClassifierAction,
     smartClassifierTitleChange: handleSmartClassifierTitleChange,
-    toast: handleToastAction
+    activity: handleActivityAction
   })
   unregisterPopupBrowserEventActions?.()
   unregisterPopupBrowserEventActions = registerPopupBrowserEventActions({
@@ -445,7 +444,7 @@ async function openSettingsPage(target: Event | 'general' | 'ai-provider' = 'gen
     })
     closeTransientPopup()
   } catch (error) {
-    showToast({
+    showActivity({
       type: 'error',
       message: error instanceof Error ? error.message : '设置页打开失败，请稍后重试。'
     })
@@ -458,7 +457,7 @@ async function openBookmarkHistoryPage() {
     })
     closeTransientPopup()
   } catch (error) {
-    showToast({
+    showActivity({
       type: 'error',
       message: error instanceof Error ? error.message : '添加历史打开失败，请稍后重试。'
     })
@@ -491,7 +490,7 @@ async function dismissAutoAnalyzeStatus() {
       await clearActionBadge()
     })
   } catch (error) {
-    showToast({ type: 'error', message: error instanceof Error ? error.message : '提示关闭失败，请重试。' })
+    showActivity({ type: 'error', message: error instanceof Error ? error.message : '提示关闭失败，请重试。' })
   }
 }
 async function acknowledgeAutoAnalyzeBadge(status = state.autoAnalyzeStatus) {
@@ -538,6 +537,15 @@ function handlePopupStorageChanged(
 ) {
   if (areaName !== 'local') {
     return
+  }
+  if (changes[STORAGE_KEYS.recycleBin]) {
+    const entries = changes[STORAGE_KEYS.recycleBin].newValue
+    const validIds = new Set((Array.isArray(entries) ? entries : []).map(entry => String(entry.recycleId)))
+    for (const activity of popupActivities.snapshot().items) {
+      if (activity.recycleId && activity.type !== 'pending' && !validIds.has(activity.recycleId)) {
+        popupActivities.remove(activity.id)
+      }
+    }
   }
   if ([STORAGE_KEYS.bookmarkTagIndex, STORAGE_KEYS.contentSnapshotIndex, STORAGE_KEYS.contentSnapshotSettings]
     .some(key => changes[key])) {
@@ -663,6 +671,8 @@ function getAutoAnalyzeStatusViewModel(): PopupAutoAnalyzeStatusView {
 
   const view = getAutoAnalyzeStatusView(status)
   return {
+    id: `${status.bookmarkId}:${status.createdAt}`,
+    subject: status.title,
     collapsed: state.autoAnalyzeCollapsed,
     detail: view.detail,
     showHistory: status.status === 'completed',
@@ -792,7 +802,7 @@ function normalizePopupCommandIntent(rawIntent) {
 function showCommandFeedbackIntent(intent) {
   const message = intent.message || '快捷键操作已完成。'
   showViewNotice(message)
-  showToast({
+  showActivity({
     type: intent.tone === 'success' ? 'success' : 'error',
     message
   })
@@ -817,7 +827,7 @@ async function runSmartClassifierFromCommand(intent) {
   }
   const currentUrl = String(state.currentTab?.url || '').trim()
   if (!isSmartClassifiableUrl(currentUrl)) {
-    showToast({
+    showActivity({
       type: 'error',
       message: '当前页面无法进行智能分类。'
     })
@@ -1256,11 +1266,8 @@ function cleanupPopupController() {
   state.searchTimer = null
   clearViewNotice()
   clearEditDiscardGuard()
-  for (const timeoutId of state.toastTimers.values()) {
-    clearTimeout(timeoutId)
-  }
-  state.toastTimers.clear()
-  state.toasts = []
+  popupActivities.reset()
+  state.modalError = ''
   state.contentRenderedViewModel = null
   clearPopupContentRowCaches()
   folderFilterPinyinCache.clear()
@@ -1473,7 +1480,7 @@ async function toggleNaturalLanguageSearch(returnFocusElement: HTMLElement | nul
     const naturalSearchAiConfigured = await refreshNaturalSearchAiConfiguredState()
     if (version !== popupPreferencesVersion) return
     if (!state.naturalSearchAiConfigChecked) {
-      showToast({ type: 'error', message: 'AI 配置读取失败，请重试。' })
+      showActivity({ type: 'error', message: 'AI 配置读取失败，请重试。' })
       return
     }
     if (!naturalSearchAiConfigured) {
@@ -1848,7 +1855,6 @@ function render() {
   renderSmartClassifier()
   renderMainContent()
   renderModals()
-  renderToasts()
   flushPendingSearchActivation()
 }
 
@@ -2025,13 +2031,7 @@ function showViewNotice(message, { durationMs = VIEW_NOTICE_MS } = {}) {
   }, durationMs)
 }
 function showMutationNotice(message: string): void {
-  // The inline status is absent behind the smart workflow or an open dialog.
-  // Pick one visible channel rather than either duplicating or losing feedback.
-  if (isSmartOverlayActive() || hasOpenModal()) {
-    showToast({ type: 'success', message })
-  } else {
-    showViewNotice(message)
-  }
+  showActivity({ type: 'success', message })
 }
 
 function clearViewNotice() {
@@ -2948,11 +2948,13 @@ function buildActionMenuViewModel(bookmarkId): PopupActionMenuViewModel {
 }
 function renderModals() {
   const viewModel = getPopupModalsViewModel()
+  popupActivities.pause('modal', viewModel.open)
   dispatchPopupModalsChange(viewModel)
 }
 
 function getPopupModalsViewModel(): PopupModalsView {
   return {
+    error: state.modalError,
     active: getActivePopupModal(),
     aiProvider: getAiProviderPromptModalView(),
     delete: getDeleteModalView(),
@@ -3145,7 +3147,7 @@ function shouldBlockDirtyEditClose() {
     return false
   }
   state.editDiscardArmed = true
-  showToast({
+  showActivity({
     type: 'info',
     message: '编辑尚未保存，再次取消将放弃修改。'
   })
@@ -3365,9 +3367,6 @@ function buildEditFolderNodeViewModels(node, depth, query, bookmark): PopupFolde
     ...(isExpanded ? childOptions : [])
   ]
 }
-function renderToasts() {
-  dispatchPopupToastsChange(state.toasts)
-}
 function handleSmartClassifierAction(detail: PopupSmartClassifierActionDetail) {
   if (detail.action === 'current-page') {
     handleCurrentPageQuickAction(detail.currentPageAction || '', detail.returnFocusElement || null)
@@ -3418,7 +3417,7 @@ function handleCurrentPageQuickAction(action, returnFocusElement: HTMLElement | 
     return
   }
   if (!bookmarkId) {
-    showToast({ type: 'error', message: '当前页面尚未收藏。' })
+    showActivity({ type: 'error', message: '当前页面尚未收藏。' })
     return
   }
   if (action === 'edit') {
@@ -3619,6 +3618,7 @@ function handleFolderPickerAction(detail: PopupFolderPickerActionDetail) {
 function handleModalAction(detail: PopupModalActionDetail) {
   const action = String(detail.action || '')
   const value = String(detail.value || '')
+  if (action.endsWith('-change') || action.startsWith('save-') || action === 'confirm-delete') state.modalError = ''
 
   if (action === 'close') {
     closeDialogs()
@@ -3996,17 +3996,28 @@ function handlePopupNavigationKey(key: string, modifiers: { altKey?: boolean; ct
 
   return false
 }
-function handleToastAction(detail: PopupToastActionDetail) {
-  const toastId = String(detail?.toastId || '')
+function handleActivityAction(detail: PopupActivityActionDetail) {
+  const activityId = String(detail?.activityId || '')
   const action = String(detail?.action || '')
-  const toast = state.toasts.find(item => item.id === toastId)
-  dismissToast(toastId)
-  if (action === 'undo-delete' && toast?.recycleId) {
-    void undoDelete(toast.recycleId)
+  const activity = popupActivities.get(activityId)
+  if (!activity || activity.type === 'pending') return
+  if (action === 'undo-delete' && activity.recycleId) {
+    void undoDelete(activity)
     return
   }
   if (action === 'open-bookmark-history') {
     void openBookmarkHistoryPage()
+  } else if (action === 'open-ai-settings') {
+    void openSettingsPage('ai-provider')
+  } else if (action === 'retry-load') {
+    const session = popupSessionId
+    popupActivities.publish({ ...activity, type: 'pending', message: '正在重新读取…' })
+    void refreshData({ preserveSearch: true }).finally(() => {
+      if (session !== popupSessionId) return
+      const error = state.searchPreparationError || state.loadError
+      if (error) popupActivities.publish({ ...activity, type: 'error', detail: error })
+      else popupActivities.publish({ id: activityId, type: 'success', message: '已重新读取', duration: 1500 })
+    })
   }
 }
 function toggleFolder(folderId) {
@@ -4058,6 +4069,7 @@ function toggleEditFolder(folderId) {
   }
 }
 function openMoveDialog(bookmarkId, returnFocusElement = null) {
+  state.modalError = ''
   if (hasBlockingPopupActionPending()) {
     return
   }
@@ -4072,6 +4084,7 @@ function openMoveDialog(bookmarkId, returnFocusElement = null) {
   render()
 }
 function openEditDialog(bookmarkId, returnFocusElement = null) {
+  state.modalError = ''
   if (hasBlockingPopupActionPending()) {
     return
   }
@@ -4093,6 +4106,7 @@ function openEditDialog(bookmarkId, returnFocusElement = null) {
   render()
 }
 function openDeleteDialog(bookmarkId, returnFocusElement = null) {
+  state.modalError = ''
   if (hasBlockingPopupActionPending()) {
     return
   }
@@ -4115,6 +4129,7 @@ function closeDialogs(options: { force?: boolean } | Event = {}) {
   }
   state.moveTargetBookmarkId = null
   state.moveSearchQuery = ''
+  state.modalError = ''
   clearSmartFolderDraft()
   state.aiProviderPromptOpen = false
   state.editTargetBookmarkId = null
@@ -4238,7 +4253,7 @@ async function reorderBookmarkWithinCurrentFolder(bookmarkId: string, requestedI
       state.bookmarkReorderOrderIds = currentIds
       state.bookmarkReorderAnnouncement = `${bookmarkTitle} 顺序保存失败，已恢复原位置`
     }
-    showToast({
+    showActivity({
       type: 'error',
       message: error instanceof Error ? `顺序保存失败：${error.message}` : '顺序保存失败，已恢复原位置'
     })
@@ -4421,7 +4436,7 @@ function openSmartFolderDialog(returnFocusElement: HTMLElement | null = null) {
     return
   }
   if (!isPopupWebPageUrl(state.currentTab?.url)) {
-    showToast({ type: 'error', message: '当前页面无法保存为普通网页书签。' })
+    showActivity({ type: 'error', message: '当前页面无法保存为普通网页书签。' })
     return
   }
   rememberDialogReturnFocus(returnFocusElement)
@@ -4473,6 +4488,7 @@ function openAiProviderPromptDialog(returnFocusElement: HTMLElement | null = nul
   render()
 }
 function rememberDialogReturnFocus(preferredElement: HTMLElement | null = null) {
+  state.modalError = ''
   popupDialogReturnFocusElement = preferredElement instanceof HTMLElement
     ? preferredElement
     : null
@@ -4535,7 +4551,7 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
   }
   const currentUrl = String(state.currentTab?.url || '').trim()
   if (!isSmartClassifiableUrl(currentUrl)) {
-    showToast({ type: 'error', message: '当前页面无法进行智能分类。' })
+    showActivity({ type: 'error', message: '当前页面无法进行智能分类。' })
     return
   }
   abortSmartClassificationRequest()
@@ -4773,7 +4789,7 @@ async function saveCurrentPageViaWorker(
     })
     if (session !== popupSessionId) return
     if (!isSourceCurrent()) {
-      showToast({ type: 'success', message: getSmartSaveSuccessMessage(savedBookmark, { parentId, folderPath }) })
+      showActivity({ type: 'success', message: getSmartSaveSuccessMessage(savedBookmark, { parentId, folderPath }) })
       await refreshData({ preserveSearch: true })
       savedWithoutRefresh = true
       return
@@ -4794,7 +4810,7 @@ async function saveCurrentPageViaWorker(
         state.smartFolderError = error instanceof Error ? `保存失败：${error.message}` : '保存失败，请稍后重试。'
       }
     }
-    showToast({
+    showActivity({
       type: 'error',
       message: error instanceof Error ? `保存失败：${error.message}` : '保存失败，请稍后重试。'
     })
@@ -4839,7 +4855,7 @@ async function pinCurrentPageToNewTab(bookmarkId) {
     }).catch(() => {})
   } catch (error) {
     if (session !== popupSessionId) return
-    showToast({
+    showActivity({
       type: 'error',
       message: error instanceof Error ? `固定失败：${error.message}` : '固定到 newtab 失败，请稍后重试。'
     })
@@ -4875,7 +4891,7 @@ async function finishSmartSave({ message, closeModal = true, isCurrent = () => t
     clearSmartFolderDraft()
   }
   renderSmartSaveSurfaces()
-  showToast({ type: 'success', message })
+  showActivity({ type: 'success', message })
   await refreshData({ preserveSearch: true })
   if (!isCurrent()) return
   if (state.loadError) showViewNotice('已保存，书签列表刷新失败，请重新读取')
@@ -4919,7 +4935,7 @@ async function moveBookmarkToFolder(folderId) {
     if (session === popupSessionId) showMutationNotice(`已移动：${movedTitle}`)
   } catch (error) {
     if (session !== popupSessionId) return
-    showToast({
+    showActivity({
       type: 'error',
       message: error instanceof Error ? `移动失败：${error.message}` : '移动失败，请稍后重试。'
     })
@@ -4951,7 +4967,7 @@ async function saveEditedBookmark() {
     return
   }
   if (!nextUrl) {
-    showToast({
+    showActivity({
       type: 'error',
       message: '网址不能为空'
     })
@@ -4960,7 +4976,7 @@ async function saveEditedBookmark() {
   try {
     new URL(nextUrl)
   } catch (error) {
-    showToast({
+    showActivity({
       type: 'error',
       message: '请输入有效的网址'
     })
@@ -4987,7 +5003,7 @@ async function saveEditedBookmark() {
     if (session === popupSessionId) showMutationNotice(`已更新：${nextTitle}`)
   } catch (error) {
     if (session !== popupSessionId) return
-    showToast({
+    showActivity({
       type: 'error',
       message: detailsSaved
         ? `名称和网址已保存，但移动失败：${error instanceof Error ? error.message : '请重新选择目录后保存。'}`
@@ -5031,9 +5047,11 @@ async function confirmDeleteBookmark() {
       throw new Error('书签地址已变化，已取消删除。')
     }
     if (session !== popupSessionId) return
-    showToast({
+    showActivity({
+      id: recycleId,
       type: 'success',
-      message: '删除成功',
+      message: `已删除 ${bookmark.title}`,
+      subject: bookmark.title,
       action: 'undo-delete',
       actionLabel: '撤销',
       recycleId
@@ -5042,7 +5060,7 @@ async function confirmDeleteBookmark() {
     await refreshData({ preserveSearch: true })
   } catch (error) {
     if (session !== popupSessionId) return
-    showToast({
+    showActivity({
       type: 'error',
       message: error instanceof Error ? `删除失败：${error.message}` : '删除失败，请稍后重试。'
     })
@@ -5053,29 +5071,41 @@ async function confirmDeleteBookmark() {
     }
   }
 }
-async function undoDelete(recycleId: string) {
+async function undoDelete(activity: PopupActivity) {
+  const recycleId = activity.recycleId!
   if (isPopupActionPending('undo-delete', recycleId)) {
     return
   }
   const session = popupSessionId
   setPopupActionPending('undo-delete', recycleId, true)
+  popupActivities.publish({
+    ...activity, type: 'pending', message: `正在恢复 ${activity.subject || '书签'}`
+  })
   try {
     const recycleBin = await loadRecycleBinModule()
     await recycleBin.restoreBookmarkFromRecycleEntry(recycleId)
     if (session !== popupSessionId) return
-    showToast({
-      type: 'success',
-      message: '已撤销删除'
-    })
     await refreshData({ preserveSearch: true })
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      id: activity.id, type: 'success', message: `已恢复 ${activity.subject || '书签'}`,
+      duration: 1500
+    })
   } catch (error) {
     if (session !== popupSessionId) return
-    showToast({
+    const recoverable = await loadRecycleBinModule()
+      .then(module => module.loadRecycleBinEntries())
+      .then(entries => entries.some(entry => entry.recycleId === recycleId))
+      .catch(() => true)
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      ...activity,
       type: 'error',
-      message: error instanceof Error ? `撤销失败：${error.message}` : '撤销失败，请稍后重试。',
-      action: 'undo-delete',
-      actionLabel: '重试',
-      recycleId
+      message: `恢复失败：${activity.subject || '书签'}`,
+      detail: error instanceof Error ? error.message : '请稍后重试。',
+      action: recoverable ? 'undo-delete' : '',
+      actionLabel: recoverable ? '重试' : '',
+      recycleId: recoverable ? recycleId : undefined
     })
   } finally {
     if (session === popupSessionId) setPopupActionPending('undo-delete', recycleId, false)
@@ -5093,10 +5123,10 @@ async function openBookmark(bookmarkId, background = false) {
   }
   try {
     await createTab({ url: bookmark.url, active: !background })
-    if (background) showToast({ type: 'success', message: '已在后台打开' })
+    if (background) showActivity({ type: 'success', message: '已在后台打开' })
     else closeTransientPopup()
   } catch (error) {
-    showToast({
+    showActivity({
       type: 'error',
       message: error instanceof Error ? `打开失败：${error.message}` : '打开失败，请稍后重试。'
     })
@@ -5113,7 +5143,7 @@ async function openBookmarkInCurrentTab(bookmarkId) {
     await updateCurrentTabUrl(bookmark.url)
     closeTransientPopup()
   } catch (error) {
-    showToast({
+    showActivity({
       type: 'error',
       message: error instanceof Error ? `打开失败：${error.message}` : '打开失败，请稍后重试。'
     })
@@ -5148,7 +5178,7 @@ async function copyBookmarkUrl(bookmarkId) {
     popupCopyFeedback.set(String(bookmarkId), actionFeedback('error'))
     popupActionStateVersion += 1
     renderMainContent({ preserveScroll: true })
-    showToast({
+    showActivity({
       type: 'error',
       message: '复制失败：书签链接不存在。'
     })
@@ -5165,7 +5195,7 @@ async function copyBookmarkUrl(bookmarkId) {
   } catch (error) {
     if (session !== popupSessionId) return
     popupCopyFeedback.set(String(bookmarkId), actionFeedback('error'))
-    showToast({
+    showActivity({
       type: 'error',
       message: error instanceof Error ? `复制失败：${error.message}` : '复制失败，请手动复制链接。'
     })
@@ -5721,73 +5751,20 @@ function describeFolder(folder) {
   }
   return parts.join(' · ') || '空文件夹'
 }
-function showToast({ type = 'success', message, action = '', actionLabel = '', recycleId = '' }) {
-  const id = `toast-${Date.now()}-${Math.random().toString(16).slice(2)}`
-  const toast = {
-    id,
-    type,
-    message,
-    action,
-    actionLabel,
-    recycleId
-  }
-  const nextToasts = [...state.toasts, toast]
-  const overflowCount = Math.max(0, nextToasts.length - MAX_VISIBLE_TOASTS)
-  if (overflowCount) {
-    const removedToastIds = getOverflowToastIds(nextToasts, overflowCount)
-    removedToastIds.forEach(clearToastTimer)
-    state.toasts = nextToasts.filter((nextToast) => {
-      return !removedToastIds.has(String(nextToast.id || ''))
-    })
-  } else {
-    state.toasts = nextToasts
-  }
-  renderToasts()
-  if (!state.toasts.some((visibleToast) => visibleToast.id === id)) {
+function showActivity(input: Omit<PopupActivity, 'id' | 'type'> & { id?: string; type?: PopupActivity['type'] }) {
+  // A form's own failure must remain inside its focus trap.
+  if (input.type === 'error' && hasOpenModal()) {
+    state.modalError = input.detail || input.message
+    renderModals()
     return
   }
-  const timeoutId = window.setTimeout(() => {
-    dismissToast(id)
-  }, action === 'undo-delete' ? UNDO_WINDOW_MS : 3200)
-  state.toastTimers.set(id, timeoutId)
-}
-function getOverflowToastIds(toasts, overflowCount) {
-  const removedToastIds = new Set()
-  for (const toast of toasts) {
-    if (removedToastIds.size >= overflowCount) {
-      break
-    }
-    if (toast.action) {
-      continue
-    }
-    removedToastIds.add(String(toast.id || ''))
-  }
-  for (const toast of toasts) {
-    if (removedToastIds.size >= overflowCount) {
-      break
-    }
-    const toastId = String(toast.id || '')
-    if (removedToastIds.has(toastId)) {
-      continue
-    }
-    removedToastIds.add(toastId)
-  }
-  return removedToastIds
-}
-function dismissToast(toastId) {
-  if (!toastId) {
-    return
-  }
-
-  clearToastTimer(toastId)
-
-  state.toasts = state.toasts.filter((toast) => toast.id !== toastId)
-  renderToasts()
-}
-function clearToastTimer(toastId) {
-  const timeoutId = state.toastTimers.get(String(toastId))
-  if (timeoutId) {
-    clearTimeout(timeoutId)
-    state.toastTimers.delete(String(toastId))
-  }
+  popupActivities.publish({
+    ...input,
+    id: input.id || `activity-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    type: input.type || 'success',
+    ...(input.type === 'error' && !input.detail ? {
+      message: input.message.includes('：') ? input.message.split('：')[0] : '操作未完成',
+      detail: input.message
+    } : {})
+  })
 }

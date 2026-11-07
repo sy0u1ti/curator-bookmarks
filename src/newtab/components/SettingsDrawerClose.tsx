@@ -18,6 +18,7 @@ export function SettingsDrawerClose({
           className={cx('size-10 min-h-10 min-w-10 rounded-ds-sm p-0 pointer-events-auto', className)}
           type="button"
           label="关闭设置"
+          size="icon-lg"
           iconSize={20}
           variant="ghost"
           ref={buttonRef}

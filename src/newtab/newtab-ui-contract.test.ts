@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import './newtab-settings-policy.test.js'
 import {
   NEWTAB_BACKGROUND_TYPE_OPTIONS,
@@ -30,10 +30,7 @@ const controller = readFileSync('src/newtab/newtab-controller.ts', 'utf8')
 const settingsDrawer = readFileSync('src/newtab/components/SettingsDrawer.tsx', 'utf8')
 const settingsDrawerStore = readFileSync('src/newtab/newtab-settings-drawer-store.ts', 'utf8')
 const newtabBodyClasses = readFileSync('src/newtab/components/NewtabBodyClassesHost.tsx', 'utf8')
-const wallpaperFilter = readFileSync('src/newtab/components/NewtabWallpaperFilterLayer.tsx', 'utf8')
-const paperShaderFilter = readFileSync('src/newtab/components/NewtabPaperShaderLayer.tsx', 'utf8')
-const backgroundMaskSettings = readFileSync('src/newtab/background-mask-settings.ts', 'utf8')
-const backgroundFilterRuntime = readFileSync('src/newtab/background-filter-runtime.ts', 'utf8')
+const wallpaperAdjustments = readFileSync('src/newtab/wallpaper-adjustments.ts', 'utf8')
 const viteConfig = readFileSync('vite.config.ts', 'utf8')
 const selectSource = readFileSync('src/ui/base/Select.tsx', 'utf8')
 const instantWallpaperBoot = readFileSync('src/newtab/instant-wallpaper-boot.ts', 'utf8')
@@ -91,10 +88,10 @@ assert.equal(
 
 const stableNewtabFontStack = '"Geist", "Geist Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif'
 const reducedTransparencyMaskRule = newtabCss.match(
-  /@media \(prefers-reduced-transparency: reduce\)[\s\S]*?#newtab-background-mask\s*\{([^}]*)\}/
+  /@media \(prefers-reduced-transparency: reduce\)[\s\S]*?#newtab-wallpaper-dim\s*\{([^}]*)\}/
 )?.[1] || ''
 const startupReducedTransparencyMaskRule = newtabHtml.match(
-  /@media \(prefers-reduced-transparency: reduce\)[\s\S]*?#newtab-background-mask\s*\{([^}]*)\}/
+  /@media \(prefers-reduced-transparency: reduce\)[\s\S]*?#newtab-wallpaper-dim\s*\{([^}]*)\}/
 )?.[1] || ''
 const searchSurfaceRule = newtabCss.match(/\.newtab-search\s*\{([^}]*)\}/s)?.[1] || ''
 const bookmarkTileRule = newtabCss.match(/\.bookmark-tile(?:,\s*\.bookmark-tile-preview)?\s*\{([^}]*)\}/s)?.[1] || ''
@@ -132,6 +129,11 @@ assert.ok(
 )
 
 assert.ok(
+  /\.newtab-background-video\s*\{[^{}]*max-width:\s*none;/s.test(newtabHtml),
+  'Overscanned background videos must not be clamped to the viewport by the responsive media reset.'
+)
+
+assert.ok(
   newtabCss.includes('@media (prefers-reduced-motion: reduce)') &&
     newtabCss.includes('@media (prefers-contrast: more)') &&
     newtabCss.includes('#newtab-settings-drawer button') &&
@@ -150,7 +152,7 @@ assert.ok(
     !reducedTransparencyMaskRule.includes('background-image') &&
     !startupReducedTransparencyMaskRule.includes('background-color') &&
     !startupReducedTransparencyMaskRule.includes('background-image') &&
-    !/@media \(prefers-contrast: more\)[\s\S]*?#newtab-startup-background-mask/.test(newtabHtml),
+    !/@media \(prefers-contrast: more\)[\s\S]*?#newtab-startup-wallpaper-adjustments/.test(newtabHtml),
   'Explicit wallpaper blur and overlay strength must survive OS transparency preferences from startup through hydration.'
 )
 
@@ -161,43 +163,37 @@ assert.ok(
 )
 
 assert.ok(
-  instantWallpaper.includes('maskEnabled: boolean') &&
-    instantWallpaper.includes('maskStyle: BackgroundMaskStyle') &&
-    instantWallpaper.includes('maskOverlay: number') &&
-    instantWallpaper.includes('maskBlur: number') &&
-    instantWallpaperBoot.includes('applyStartupMask(targetRecord, maskSnapshot)') &&
-    instantWallpaperBoot.includes('Targets written before mask snapshots existed should fail dark') &&
-    newtabHtml.includes('id="newtab-startup-background-mask-style"') &&
-    instantWallpaperBoot.includes("--instant-wallpaper-mask-image") &&
-    newtabHtml.includes('id="newtab-background-mask"') &&
-    newtabHtml.includes('background-color: var(--instant-wallpaper-mask-color, transparent)') &&
-    newtabHtml.includes('background-image: var(--instant-wallpaper-mask-image, none)') &&
-    newtabHtml.includes('backdrop-filter: var(--instant-wallpaper-mask-filter, none)') &&
+  instantWallpaperBoot.includes('applyStartupAdjustments(texture ? null : targetRecord, Boolean(texture))') &&
+    instantWallpaperBoot.includes('applyWallpaperAdjustments(document.documentElement, adjustments)') &&
+    newtabHtml.includes('id="newtab-startup-wallpaper-adjustments-style"') &&
+    newtabHtml.includes('id="newtab-wallpaper-dim"') &&
+    !newtabHtml.includes('id="newtab-wallpaper-grain"') &&
+    newtabHtml.includes('opacity: var(--wallpaper-dim, 0)') &&
+    newtabHtml.includes('filter: var(--wallpaper-filter, none)') &&
+    !newtabHtml.includes('backdrop-filter: var(--wallpaper') &&
     controller.includes('let backgroundSettingsHydrated = false') &&
     controller.includes('ready: backgroundSettingsHydrated') &&
     controller.includes('const shouldSyncBackgroundUi = backgroundSettingsHydrated && !backgroundUiAlreadyApplied') &&
     newtabApp.includes('if (!backgroundSettings.ready) return') &&
-    newtabApp.includes("getElementById('newtab-background-mask')") &&
-    newtabApp.includes('mask.className = getBackgroundMaskClass(backgroundSettings)') &&
-    !newtabApp.includes('removeStartupBackgroundMask()'),
-  'The saved background mask must remain the same DOM node from synchronous startup through React settings hydration.'
+    newtabApp.includes("getElementById('newtab-wallpaper-dim')") &&
+    newtabApp.includes('applyWallpaperAdjustments(document.documentElement, getEffectiveWallpaperAdjustments(backgroundSettings))'),
+  'Wallpaper adjustments must keep the same DOM layers from synchronous startup through React settings hydration.'
 )
 
 assert.ok(
-  instantWallpaper.includes('export function saveBackgroundMaskSnapshot') &&
-    instantWallpaper.includes('export function readBackgroundMaskSnapshot') &&
-    instantWallpaper.includes("BACKGROUND_MASK_SNAPSHOT_KEY = 'curatorNewTabBackgroundMaskSnapshot'") &&
-    controller.includes('saveBackgroundMaskSnapshot({') &&
-    instantWallpaperBoot.includes('readRecord<BackgroundMaskSnapshotRecord>(maskSnapshotKey)'),
-  'A dedicated mask snapshot must be persisted for every background type so the boot script paints the mask on the first frame, even for solid colors that write no wallpaper target.'
+  instantWallpaper.includes('export function saveWallpaperAdjustmentsSnapshot') &&
+    instantWallpaper.includes("WALLPAPER_ADJUSTMENTS_SNAPSHOT_KEY = 'curatorNewTabWallpaperAdjustments'") &&
+    controller.includes('saveWallpaperAdjustmentsSnapshot(getEffectiveWallpaperAdjustments(settings))') &&
+    instantWallpaperBoot.includes('readRecord<Record<string, unknown>>(adjustmentsSnapshotKey)') &&
+    instantWallpaperBoot.includes('readRecord<Record<string, unknown>>(legacyMaskSnapshotKey)'),
+  'A dedicated adjustments snapshot must be persisted for every background type so the boot script paints it on the first frame, migrating legacy mask snapshots.'
 )
 
 assert.ok(
-  newtabHtml.includes('<div id="newtab-background-mask"') &&
-    !newtabApp.includes('id="newtab-background-mask"') &&
-    !newtabApp.includes("removeAttribute('data-mask-initial')") &&
-    !/newtab-background-mask[^']*transition:/.test(newtabApp),
-  'The background mask must be a persistent non-animated HTML layer, not a startup node replaced by React.'
+  newtabHtml.includes('<div id="newtab-wallpaper-dim"') &&
+    !newtabApp.includes('id="newtab-wallpaper-dim"') &&
+    !/newtab-wallpaper-dim[^']*transition:/.test(newtabApp),
+  'Wallpaper adjustment layers must be persistent non-animated HTML layers, not startup nodes replaced by React.'
 )
 
 assert.ok(
@@ -231,54 +227,17 @@ assert.ok(
 )
 
 assert.ok(
-  [
-    'dark', 'frosted', 'noise', 'light', 'grain', 'halftone', 'ascii',
-    'paper-texture', 'fluted-glass', 'water', 'image-dithering', 'halftone-dots', 'halftone-cmyk'
-  ].every((style) =>
-    backgroundMaskSettings.includes(`'${style}'`)
-  ) &&
-    [
-      '深色渐变', '磨砂玻璃', '胶片噪点', '柔光渐变', '胶片颗粒', '单色网点',
-      'ASCII 字符', '纸张纹理', '条纹玻璃', '水面折射', '图像抖动', '彩色网点', 'CMYK 网点'
-    ].every((label) => backgroundMaskSettings.includes(`label: '${label}'`)) &&
-    !settingsDrawer.includes("label: 'Paper ·") &&
-    !settingsDrawer.includes("label: '颗粒滤镜'") &&
-    !settingsDrawer.includes("label: '网点滤镜'") &&
-    !settingsDrawer.includes("label: 'ASCII 滤镜'") &&
-    settingsDrawer.includes('遮罩效果') &&
-    settingsDrawer.includes('悬停效果') &&
-    settingsDrawer.includes("ticks={['透明', '50%', '覆盖']}"),
-  'The background mask selector should retain every style with concise, consistently structured labels.'
-)
-
-assert.ok(
-  paperShaderFilter.includes("import('@paper-design/shaders-react')") &&
-    paperShaderFilter.includes('<PaperTexture') &&
-    paperShaderFilter.includes('<FlutedGlass') &&
-    paperShaderFilter.includes('<Water') &&
-    paperShaderFilter.includes('<ImageDithering') &&
-    paperShaderFilter.includes('<HalftoneDots') &&
-    paperShaderFilter.includes('<HalftoneCmyk') &&
-    backgroundFilterRuntime.includes("getContext('webgl2')") &&
-    paperShaderFilter.includes('useShaderImageSource') &&
-    paperShaderFilter.includes("media.kind === 'video'") &&
-    paperShaderFilter.includes('originX:') &&
-    newtabApp.indexOf('<NewtabPaperShaderLayer />') < newtabApp.indexOf('id="newtab-background-mask-host"') &&
-    newtabApp.includes('host.append(mask)'),
-  'Paper image shaders should render in the wallpaper filter stack below the readability mask.'
-)
-
-assert.ok(
-  wallpaperFilter.includes("ASCII_CHARS = '  .,:;irsXA253hMHGS#9B&@'") &&
-    wallpaperFilter.includes('drawGrain') &&
-    wallpaperFilter.includes('drawHalftone') &&
-  wallpaperFilter.includes('drawAscii') &&
-    wallpaperFilter.includes("FILTER_BACKGROUND_COLOR = '#101013'") &&
-    wallpaperFilter.includes('getHoverInfluence') &&
-    wallpaperFilter.includes('hoverRenderFrame = window.requestAnimationFrame') &&
-    wallpaperFilter.includes('asciiGlyphMetricsCache') &&
-    newtabApp.indexOf('<NewtabWallpaperFilterLayer />') < newtabApp.indexOf('id="newtab-background-mask-host"'),
-  'Wallpaper filters should use the sampled Canvas renderer below the existing mask layer.'
+  ['wallpaperDim', 'wallpaperBlur'].every((field) => wallpaperAdjustments.includes(field)) &&
+    !existsSync('src/newtab/background-mask-settings.ts') &&
+    !existsSync('src/newtab/components/NewtabWallpaperFilterLayer.tsx') &&
+    !existsSync('src/newtab/components/NewtabPaperShaderLayer.tsx') &&
+    ['id="wallpaper-dim"', 'id="wallpaper-blur"'].every((id) => settingsDrawer.includes(id)) &&
+    !settingsDrawer.includes('id="wallpaper-grain"') &&
+    settingsDrawer.includes('背景蒙版') &&
+    settingsDrawer.includes('蒙版样式') &&
+    settingsDrawer.includes('WALLPAPER_MASK_STYLES.map') &&
+    !newtabApp.includes('WallpaperFilterLayer'),
+  'Readability presets must share the same wallpaper adjustment controls and CSS renderer.'
 )
 
 const focusRingDeclaration = newtabCss.match(/--newtab-focus-ring:[^;]+;/)?.[0] || ''
@@ -645,11 +604,12 @@ assert.ok(
   'The bookmark controller must prefer cached active site icons and refresh them with the icon refresh action.'
 )
 
-const backgroundMaskTransition = newtabApp.match(/const BACKGROUND_MASK_BASE_CLASS = '([^']+)'/)?.[1] || ''
+const backgroundMaskStyles = newtabHtml.match(/<style id="newtab-startup-wallpaper-adjustments-style">([\s\S]*?)<\/style>/)?.[1] || ''
 assert.ok(
-  !backgroundMaskTransition.includes('transition:') &&
-    !backgroundMaskTransition.includes('backdrop-filter_var'),
-  'The persistent background mask must not animate or rebuild its compositor layer during startup.'
+  backgroundMaskStyles &&
+    !/\b(?:transition|animation)\s*:/.test(backgroundMaskStyles) &&
+    !backgroundMaskStyles.includes('backdrop-filter:'),
+  'Persistent wallpaper adjustments must not animate or rebuild its compositor layer during startup.'
 )
 
 assert.ok(

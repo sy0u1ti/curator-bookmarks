@@ -40,6 +40,11 @@ assert.match(
 )
 assert.match(
   source,
+  /message\?\.type === 'storage:usage'[\s\S]*isTrustedAvailabilityMessageSender\(sender\)[\s\S]*getStorageUsage\(\)/,
+  'storage inventory runs in the worker and answers only the options page'
+)
+assert.match(
+  source,
   /executeJournaledCuratorBackupRestore\([\s\S]*withMutationLock: withAvailabilityRestoreMutationLock[\s\S]*beforeApply:[\s\S]*createAutoBackupBeforeDangerousOperation/,
   'journaled restore must acquire the availability mutation lock before its one-time automatic backup and mutations'
 )

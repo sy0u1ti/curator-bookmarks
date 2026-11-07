@@ -92,7 +92,7 @@ function RedirectResultCard({
               })}
               unstyled
             />
-            <span>选择</span>
+            <span aria-hidden="true">选择</span>
           </label>
           <span className={REDIRECT_STATUS_BADGE_CLASS}>已跳转</span>
         </div>

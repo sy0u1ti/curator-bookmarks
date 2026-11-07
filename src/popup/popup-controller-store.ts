@@ -2,7 +2,6 @@ import {
   createUiViewStoreSlice,
   useUiViewStoreSlice
 } from '../shared/ui-view-store.js'
-import type { PopupToast } from './state'
 import type {
   PopupContentViewModel,
   PopupFolderPickerState,
@@ -10,6 +9,8 @@ import type {
 } from './components/PopupViewModels'
 
 export interface PopupAutoAnalyzeStatusView {
+  id?: string
+  subject?: string
   collapsed: boolean
   detail: string
   showHistory: boolean
@@ -96,6 +97,7 @@ export interface PopupSearchFocusRequestDetail {
 }
 
 export interface PopupModalsView {
+  error?: string
   active: 'move' | 'smart-folder' | 'ai-provider' | 'edit' | 'delete' | null
   aiProvider: {
     open: boolean
@@ -150,9 +152,9 @@ export interface PopupModalActionDetail {
   value?: string
 }
 
-export interface PopupToastActionDetail {
+export interface PopupActivityActionDetail {
   action: string
-  toastId: string
+  activityId: string
 }
 
 export const EMPTY_POPUP_AUTO_ANALYZE_STATUS: PopupAutoAnalyzeStatusView = {
@@ -283,8 +285,6 @@ export const EMPTY_POPUP_SMART_CLASSIFIER: PopupSmartClassifierViewModel = {
   suggestedTitle: ''
 }
 
-export const EMPTY_POPUP_TOASTS: PopupToast[] = []
-
 export function getEmptyPopupFolderPickerState(mode: PopupFolderPickerState['mode']): PopupFolderPickerState {
   return {
     empty: null,
@@ -307,7 +307,6 @@ interface PopupViewStoreSnapshot {
   searchChips: PopupSearchChipView[]
   searchFocusRequest: PopupSearchFocusRequestState
   smartClassifier: PopupSmartClassifierViewModel
-  toasts: PopupToast[]
 }
 
 interface PopupActionHandlers {
@@ -319,7 +318,7 @@ interface PopupActionHandlers {
   modal?: (detail: PopupModalActionDetail) => void
   smartClassifier?: (detail: PopupSmartClassifierActionDetail) => void
   smartClassifierTitleChange?: (detail: PopupSmartClassifierTitleChangeDetail) => void
-  toast?: (detail: PopupToastActionDetail) => void
+  activity?: (detail: PopupActivityActionDetail) => void
 }
 
 const popupContentChangeListeners = new Set<(detail: PopupContentChangeDetail) => void>()
@@ -355,8 +354,7 @@ function createInitialPopupViewStoreSnapshot(): PopupViewStoreSnapshot {
       ...EMPTY_POPUP_SMART_CLASSIFIER,
       permissionOrigins: [],
       recommendations: []
-    },
-    toasts: [...EMPTY_POPUP_TOASTS]
+    }
   }
 }
 
@@ -430,10 +428,6 @@ export function usePopupSearchFocusRequest(): PopupSearchFocusRequestState {
 
 export function usePopupSmartClassifierView(): PopupSmartClassifierViewModel {
   return useUiViewStoreSlice(popupViewStore, (snapshot) => snapshot.smartClassifier)
-}
-
-export function usePopupToasts(): PopupToast[] {
-  return useUiViewStoreSlice(popupViewStore, (snapshot) => snapshot.toasts)
 }
 
 export function dispatchPopupAutoAnalyzeStatusChange(state: PopupAutoAnalyzeStatusView): void {
@@ -532,10 +526,6 @@ export function dispatchPopupModalAction(action: string, value?: string): void {
   popupActionHandlers.modal?.({ action, value })
 }
 
-export function dispatchPopupToastsChange(toasts: PopupToast[]): void {
-  updatePopupViewStore({ toasts: toasts.map((toast) => ({ ...toast })) })
-}
-
-export function dispatchPopupToastAction(toastId: string, action: string): void {
-  popupActionHandlers.toast?.({ action, toastId })
+export function dispatchPopupActivityAction(activityId: string, action: string): void {
+  popupActionHandlers.activity?.({ action, activityId })
 }

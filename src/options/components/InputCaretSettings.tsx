@@ -128,7 +128,7 @@ export function InputCaretSettings() {
       bodyClassName={`${AI_SETTINGS_BODY_CLASS} ${state.loading ? '' : AI_SETTINGS_READY_BODY_CLASS}`}
       aria-busy={state.loading ? 'true' : undefined}
     >
-      <div className={AI_SETTINGS_ROW_CLASS}>
+      <div id="settings-input-caret" className={AI_SETTINGS_ROW_CLASS}>
         <span className={AI_SETTINGS_COPY_CLASS}>
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>动态输入光标</strong>
           <span id={descriptionId} className={AI_SETTINGS_SECONDARY_CLASS}>

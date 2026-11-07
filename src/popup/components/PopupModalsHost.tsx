@@ -183,6 +183,13 @@ export function PopupModalsHost() {
   )
 }
 
+function PopupModalFeedback({ id = 'popup-modal-error', message = '', className = '' }: {
+  id?: string; message?: string; className?: string
+}) {
+  const { error } = usePopupModalsView()
+  return <StatusMessage id={id} tone="error" className={cx('m-0 shrink-0 text-xs leading-normal', className)}>{message || error}</StatusMessage>
+}
+
 function FolderSearch({
   inputRef,
   htmlFor,
@@ -279,6 +286,7 @@ function MoveBookmarkModal({
         action="move-query-change"
       />
       <PopupFolderPickerHost id="move-folder-list" className={modalListClass} mode="move" />
+      <PopupModalFeedback />
     </section>
   )
 }
@@ -342,7 +350,7 @@ function SmartFolderModal({
         disabled={view.saving}
       />
       <PopupFolderPickerHost id="smart-folder-list" className={modalListClass} mode="smart" />
-      <StatusMessage id="smart-folder-error" className="m-0 text-xs leading-normal" tone="error">{view.error}</StatusMessage>
+      <PopupModalFeedback id="smart-folder-error" message={view.error} />
       <footer className={cx(modalActionsClass, 'shrink-0')}>
         <div className="min-w-0 flex-1">
           <p className={modalCardLabelClass}>保存到</p>
@@ -389,6 +397,7 @@ function AiProviderPromptModal({
         titleClassName="sr-only"
         title="AI 渠道配置提示"
       />
+      <PopupModalFeedback />
       <footer className={modalActionsClass}>
         <Button id="cancel-ai-provider-prompt" className={modalSecondaryButtonClass} type="button" onClick={() => dispatchPopupModalAction('close')} unstyled>暂不配置</Button>
         <Button ref={settingsButtonRef} id="open-ai-provider-settings" className={modalPrimaryButtonClass} type="button" onClick={() => dispatchPopupModalAction('open-ai-settings')} unstyled>配置 AI 渠道</Button>
@@ -474,6 +483,7 @@ function EditBookmarkModal({
           <span className={modalLabelClass}>网址</span>
           <Input
             id="edit-url-input"
+            aria-describedby="popup-modal-error"
             className={modalInputClass}
             type="url"
             spellCheck={false}
@@ -486,6 +496,7 @@ function EditBookmarkModal({
           />
         </label>
       </div>
+      <PopupModalFeedback className="popup-edit-lower" />
       <footer className={cx(modalActionsClass, 'popup-edit-lower')}>
         <Button id="cancel-edit" className={modalSecondaryButtonClass} type="button" disabled={view.cancelDisabled} onClick={() => dispatchPopupModalAction('close')} unstyled>取消</Button>
         <Button id="save-edit" className={modalPrimaryButtonClass} type="button" disabled={view.saveDisabled} onClick={() => dispatchPopupModalAction('save-edit')} unstyled>{view.saveLabel}</Button>
@@ -617,6 +628,7 @@ function DeleteBookmarkModal({
         <p id="delete-bookmark-title" className={modalCardTitleClass}>{view.title}</p>
         <p id="delete-bookmark-path" className={modalCardPathClass}>{view.path}</p>
       </div>
+      <PopupModalFeedback />
       <footer className={modalActionsClass}>
         <Button ref={cancelButtonRef} id="cancel-delete" className={modalSecondaryButtonClass} type="button" disabled={view.cancelDisabled} onClick={() => dispatchPopupModalAction('close')} unstyled>取消</Button>
         <Button id="confirm-delete" className={modalDangerButtonClass} type="button" disabled={view.confirmDisabled} onClick={() => dispatchPopupModalAction('confirm-delete')} unstyled>{view.confirmLabel}</Button>

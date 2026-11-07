@@ -94,7 +94,7 @@ function AiNamingResultCard({ result }: { result: AiNamingResultCardViewModel })
           })}
           unstyled
         />
-        <span>{result.selectable ? '选择' : '不可直接应用'}</span>
+        <span aria-hidden="true">{result.selectable ? '选择' : '不可直接应用'}</span>
       </label>
       <span className={`${AI_ANALYSIS_STATUS_BADGE_CLASS} ${aiAnalysisToneClass(result.badgeTone)}`}>
         {result.statusLabel}

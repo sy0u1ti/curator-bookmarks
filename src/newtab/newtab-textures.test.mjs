@@ -67,25 +67,21 @@ test('backup restore keeps texture preferences in the existing background record
   })
 })
 
-test('texture mode suspends, rather than overwrites, the wallpaper mask', () => {
+test('texture mode suspends, rather than overwrites, wallpaper adjustments', () => {
   const source = {
     type: 'texture', color: '#101013', featuredId: '', imageName: '', videoName: '', url: '',
-    maskEnabled: true, maskFilterHover: true, maskBlur: 16, maskFilterSize: 35, maskFilterSpacing: 62,
-    maskFilterStrength: 71, maskOverlay: 50, maskStyle: 'water', ...DEFAULT_TEXTURE_SETTINGS
+    wallpaperEnabled: true, wallpaperStyle: 'gradient',
+    wallpaperDim: 50, wallpaperBlur: 16, ...DEFAULT_TEXTURE_SETTINGS
   }
   const preferences = { displaySize: 100, positionX: 50, positionY: 50 }
   const limits = { displaySize: { min: 100, max: 180 }, positionX: { min: 0, max: 100 }, positionY: { min: 0, max: 100 } }
   const texture = api.createNewtabBackgroundSettingsView(source, preferences, limits)
-  assert.equal(texture.maskEnabled, false)
-  for (const field of ['maskStyleHidden', 'maskBlurHidden', 'maskFilterStrengthHidden', 'maskFilterHoverHidden']) {
-    assert.equal(texture[field], true)
-  }
-  assert.equal(source.maskEnabled, true)
-  assert.equal(source.maskStyle, 'water')
+  assert.equal(texture.wallpaperAdjustmentsHidden, true)
+  assert.equal(source.wallpaperDim, 50)
   const image = api.createNewtabBackgroundSettingsView({ ...source, type: 'image' }, preferences, limits)
-  assert.equal(image.maskEnabled, true)
-  assert.equal(image.maskStyle, 'water')
-  assert.equal(image.maskFilterStrength, 71)
+  assert.equal(image.wallpaperAdjustmentsHidden, false)
+  assert.equal(image.wallpaperDim, 50)
+  assert.equal(image.wallpaperBlur, 16)
 })
 
 test('the first-paint snapshot is validated, optional, and cleared on other backgrounds', () => {

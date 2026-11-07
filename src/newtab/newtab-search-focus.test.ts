@@ -3,7 +3,8 @@ import {
   canUseNewtabSearchFocus,
   getNewtabBlankPointerAction,
   getNewtabSearchFocusIntent,
-  getNextNewtabSearchValue
+  getNextNewtabSearchValue,
+  shouldKeepNewtabSearchOpen
 } from './newtab-search-focus.js'
 
 const baseEvent = {
@@ -14,6 +15,13 @@ const baseEvent = {
   key: '',
   metaKey: false,
   shiftKey: false
+}
+
+const inactiveSearch = { focusWithin: false, engineMenuOpen: false, settingsOpen: false, composing: false }
+assert.equal(shouldKeepNewtabSearchOpen(inactiveSearch), false)
+for (const key of Object.keys(inactiveSearch)) {
+  assert.equal(shouldKeepNewtabSearchOpen({ ...inactiveSearch, [key]: true }), true,
+    `${key} retains the active search across a transient blur`)
 }
 
 assert.deepEqual(

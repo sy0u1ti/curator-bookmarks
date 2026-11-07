@@ -70,6 +70,15 @@ test('navigation groups follow the current route and retain separate parent and 
   assert.ok(motion.includes('.options-nav-sub-indicator') && motion.includes('positionSublists'))
 })
 
+test('opening a settings panel leaves the main thread free for the sidebar slide', () => {
+  const storage = read('src/options/components/StorageManagement.tsx')
+  const app = read('src/options/OptionsApp.tsx')
+  assert.ok(storage.includes('requestStorageUsage()') && !storage.includes('getStorageUsage'),
+    'The storage inventory reads all of storage and must stay in the worker')
+  assert.ok(app.includes('runIdle(preloadOptionsPanels'),
+    'Lazy panels preload so navigation does not commit a suspended panel mid-slide')
+})
+
 test('motion roles separate feedback, state and surfaces without delaying opacity', () => {
   const ms = name => Number.parseFloat(token(name))
   assert.ok(ms('--ds-motion-feedback') <= ms('--ds-motion-fast'))
@@ -86,13 +95,15 @@ test('motion roles separate feedback, state and surfaces without delaying opacit
   assert.ok(ms('--nav-content-delay') + 5 * ms('--duration-stagger') < 300)
 })
 
-test('sidebar and reasoning slider share physics; only the moving indicator retains a frame', () => {
+test('sidebar and reasoning slider share the solver while value controls settle without overshoot', () => {
   const sidebar = read('src/options/options-sidebar-motion.ts')
   const slider = read('src/options/components/ReasoningEffortSelector.tsx')
   const chrome = read('src/options/components/options-chrome-classes.ts')
   for (const source of [sidebar, slider]) {
-    assert.ok(source.includes('advanceSpring(') && source.includes('getMotionSpring(') && source.includes('shouldSkipMotion()'))
+    assert.ok(source.includes('advanceSpring(') && source.includes('shouldSkipMotion()'))
   }
+  assert.ok(sidebar.includes('getMotionSpring('))
+  assert.ok(slider.includes("getMotionDurationMs('--slider-grip-settle'") && slider.includes('damping: 1'))
   assert.ok(!slider.includes('SPRING_STIFFNESS') && !slider.includes('SPRING_DAMPING'))
   assert.ok(!chrome.includes('options-nav-active-indicator-exit'))
   assert.ok(!/\[--acc-[\w-]+:\d/.test(chrome), 'Sidebar timings must not fork the shared roles')

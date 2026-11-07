@@ -21,6 +21,8 @@ import { handleContentSnapshotSettingsChange } from '../options-controller'
 import { useContentSnapshotControlsState } from './content-snapshot-store.js'
 
 const contentSnapshotTitle = <h2 className={AI_SETTINGS_TITLE_CLASS}>网页内容索引</h2>
+const contentSnapshotDescription = '在本地保存网页摘要，用于全文快速搜索与 AI 精准分类。'
+const contentSnapshotStatusReserve = [contentSnapshotDescription, '正在同步索引，已保存 0000 条；共 0000 条。']
 export function ContentSnapshotControls() {
   const state = useContentSnapshotControlsState()
 
@@ -28,15 +30,15 @@ export function ContentSnapshotControls() {
     <AiProviderCard
       className={AI_SETTINGS_NARROW_CARD_CLASS}
       title={contentSnapshotTitle}
-      description={<StatusMessage className={AI_SETTINGS_SUBTITLE_CLASS}>
-        {state.loading ? '正在读取本地设置…' : state.statusCopy || '在本地保存网页摘要，用于全文快速搜索与 AI 精准分类。'}
+      description={<StatusMessage className={AI_SETTINGS_SUBTITLE_CLASS} reserve={contentSnapshotStatusReserve}>
+        {state.loading ? '正在读取本地设置…' : state.statusCopy || contentSnapshotDescription}
       </StatusMessage>}
       headerClassName={AI_SETTINGS_HEADER_CLASS}
       iconName="ArchiveRestore"
       bodyClassName={`${AI_SETTINGS_BODY_CLASS} ${state.loading ? '' : AI_SETTINGS_READY_BODY_CLASS}`}
       aria-busy={state.loading ? 'true' : undefined}
     >
-      <div className={AI_SETTINGS_ROW_CLASS}>
+      <div id="settings-content-index" className={AI_SETTINGS_ROW_CLASS}>
         <span className={AI_SETTINGS_COPY_CLASS}>
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>保存网页内容索引</strong>
         </span>
@@ -55,7 +57,7 @@ export function ContentSnapshotControls() {
           )}
         </span>
       </div>
-      <div className={AI_SETTINGS_ROW_CLASS}>
+      <div id="settings-full-text" className={AI_SETTINGS_ROW_CLASS}>
         <span className={AI_SETTINGS_COPY_CLASS}>
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>保存完整正文</strong>
           <span className={AI_SETTINGS_SECONDARY_CLASS}>正文保存在本地，可离线检索。</span>

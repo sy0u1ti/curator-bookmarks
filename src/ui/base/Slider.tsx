@@ -10,6 +10,7 @@ import {
 import { cx } from './utils'
 import { assignRef, findPropertyDescriptor, restorePropertyDescriptor } from './input-sync'
 import { InputStateCommit } from './InputStateCommit'
+import { advanceSliderWeight, createSliderWeight, type SliderWeightOptions, type SliderWeightState } from './slider-weight'
 
 type BaseSliderRootProps = ComponentPropsWithoutRef<typeof BaseSlider.Root<number>>
 
@@ -81,7 +82,11 @@ export function SliderControl({
     value: initialValue
   })
   const inputElementRef = useRef<HTMLInputElement | null>(null)
+  const controlElementRef = useRef<HTMLDivElement | null>(null)
+  const dragWeightRef = useRef<{ state: SliderWeightState; options: SliderWeightOptions } | null>(null)
   const dispatchingLegacyEventRef = useRef(false)
+  const pendingLegacyEventsRef = useRef(new Set<'change' | 'input'>())
+  const committedValueRef = useRef(initialValue)
   const valueRef = useRef(initialValue)
   const minRef = useRef(initialMin)
   const maxRef = useRef(initialMax)
@@ -102,8 +107,36 @@ export function SliderControl({
   const currentValue = valueProp !== undefined ? normalizeNumber(valueProp, internalState.value) : internalState.value
   const resolvedMax = currentMax === currentMin ? currentMax + currentStep : currentMax
   const disabled = disabledProp ?? internalState.disabled
+  const defaultStop = defaultValue === undefined ? undefined : normalizeNumber(defaultValue, currentMin)
+  const referencePercent = defaultStop !== undefined && defaultStop > currentMin && defaultStop < resolvedMax
+    ? (defaultStop - currentMin) / (resolvedMax - currentMin) * 100
+    : undefined
+
+  const endWeightedDrag = useCallback(() => {
+    dragWeightRef.current = null
+    controlElementRef.current?.parentElement?.removeAttribute('data-weighted-drag')
+    controlElementRef.current?.parentElement?.removeAttribute('data-detent')
+  }, [])
+
+  const beginWeightedDrag = () => {
+    const control = controlElementRef.current
+    if (!control || disabledRef.current || control.hasAttribute('data-disabled')) return
+    const bounds = control.getBoundingClientRect()
+    dragWeightRef.current = {
+      state: createSliderWeight(valueRef.current),
+      options: {
+        min: minRef.current,
+        max: maxRef.current,
+        step: stepRef.current,
+        trackPixels: props.orientation === 'vertical' ? bounds.height : bounds.width,
+        detents: defaultStop === undefined ? [] : [defaultStop]
+      }
+    }
+    control.parentElement?.setAttribute('data-weighted-drag', '')
+  }
 
   const commitInputState = () => {
+    committedValueRef.current = currentValue
     valueRef.current = currentValue
     minRef.current = currentMin
     maxRef.current = resolvedMax
@@ -128,35 +161,62 @@ export function SliderControl({
     }
   }, [])
 
-  const dispatchInputEvent = useCallback((type: 'change' | 'input') => {
-    if (!syncInputState) {
-      return
-    }
-
-    queueMicrotask(() => {
-      const input = inputElementRef.current
-      if (!input) {
-        return
-      }
-
+  const flushInputEvents = useCallback(() => {
+    const input = inputElementRef.current
+    if (!input || valueRef.current !== committedValueRef.current) return
+    const pending = [...pendingLegacyEventsRef.current]
+    pendingLegacyEventsRef.current.clear()
+    for (const type of pending) {
       dispatchingLegacyEventRef.current = true
       try {
         input.dispatchEvent(new Event(type, { bubbles: true }))
       } finally {
         dispatchingLegacyEventRef.current = false
       }
-    })
-  }, [syncInputState])
+    }
+  }, [])
+
+  const dispatchInputEvent = useCallback((type: 'change' | 'input') => {
+    if (!syncInputState) return
+    pendingLegacyEventsRef.current.add(type)
+    queueMicrotask(flushInputEvents)
+  }, [flushInputEvents, syncInputState])
+
+  useLayoutEffect(() => {
+    flushInputEvents()
+  }, [currentValue, flushInputEvents])
 
   const handleValueChange: BaseSliderRootProps['onValueChange'] = (nextValue, eventDetails) => {
     if (dispatchingLegacyEventRef.current) {
       return
     }
-    if (valueProp === undefined) {
-      updateInternalState({ value: nextValue })
+    let acceptedValue = nextValue
+    let weighted: SliderWeightState | null = null
+    const drag = dragWeightRef.current
+    if (eventDetails.reason === 'drag' && drag && drag.options.min === minRef.current &&
+      drag.options.max === maxRef.current && drag.options.step === stepRef.current) {
+      weighted = advanceSliderWeight(drag.state, nextValue, drag.options)
+      acceptedValue = weighted.value
+      if (acceptedValue === valueRef.current) {
+        drag.state = weighted
+        controlElementRef.current?.parentElement?.toggleAttribute('data-detent', weighted.detent !== null)
+        eventDetails.cancel()
+        return
+      }
+      const target = eventDetails.event.target as unknown as { value: number } | null
+      if (target) target.value = acceptedValue
+    } else if (eventDetails.reason !== 'track-press') {
+      endWeightedDrag()
     }
-    syncInputValue(nextValue)
-    onValueChange?.(nextValue, eventDetails)
+    onValueChange?.(acceptedValue, eventDetails)
+    if (eventDetails.isCanceled) return
+    if (drag && (weighted || eventDetails.reason === 'track-press')) {
+      drag.state = weighted ?? createSliderWeight(acceptedValue)
+      controlElementRef.current?.parentElement?.toggleAttribute('data-detent', drag.state.detent !== null)
+    }
+    valueRef.current = acceptedValue
+    if (valueProp === undefined) updateInternalState({ value: acceptedValue })
+    syncInputValue(acceptedValue)
     if (eventDetails.reason !== 'input-change') {
       dispatchInputEvent('input')
     }
@@ -166,10 +226,17 @@ export function SliderControl({
     if (dispatchingLegacyEventRef.current) {
       return
     }
-    syncInputValue(nextValue)
-    onValueCommitted?.(nextValue, eventDetails)
+    const committedValue = dragWeightRef.current ? valueRef.current : nextValue
+    endWeightedDrag()
+    syncInputValue(committedValue)
+    onValueCommitted?.(committedValue, eventDetails)
     dispatchInputEvent('change')
   }
+
+  useLayoutEffect(() => {
+    if (disabled) endWeightedDrag()
+    return endWeightedDrag
+  }, [disabled, endWeightedDrag])
 
   useLayoutEffect(() => {
     if (!syncInputState) {
@@ -309,6 +376,14 @@ export function SliderControl({
       {...props}
     >
       <BaseSlider.Control
+        ref={controlElementRef}
+        onPointerDownCapture={event => {
+          if (!event.defaultPrevented && event.button === 0 && event.isPrimary !== false) beginWeightedDrag()
+        }}
+        onTouchStartCapture={beginWeightedDrag}
+        onPointerCancelCapture={endWeightedDrag}
+        onLostPointerCapture={endWeightedDrag}
+        onBlurCapture={endWeightedDrag}
         className={unstyled ? controlClassName : cx(
           'relative h-6 w-full touch-none',
           controlClassName
@@ -320,6 +395,15 @@ export function SliderControl({
             trackClassName
           )}
         >
+          {referencePercent !== undefined ? (
+            <span
+              className="base-slider-reference"
+              style={props.orientation === 'vertical'
+                ? { bottom: `${referencePercent}%` }
+                : { insetInlineStart: `${referencePercent}%` }}
+              aria-hidden="true"
+            />
+          ) : null}
           <BaseSlider.Indicator
             className={unstyled ? indicatorClassName : cx(
               'h-full rounded-full bg-ds-accent',

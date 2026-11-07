@@ -1,10 +1,10 @@
 import { OPTIONS_REDUCED_MOTION_SURFACE_CLASS } from './options-motion-classes.js'
 
 export const optionsHeaderClass =
-  'sticky top-0 z-20 col-[1] row-[1] flex h-[86px] min-h-[86px] w-[244px] min-w-0 items-start justify-start m-0 bg-ds-page bg-none p-[14px_16px_0] shadow-none pointer-events-auto max-[1180px]:w-[220px] max-[920px]:z-40 max-[920px]:mx-auto max-[920px]:h-[70px] max-[920px]:min-h-[70px] max-[920px]:w-full max-[920px]:items-center max-[920px]:justify-between max-[920px]:border-b max-[920px]:border-ds-border-subtle max-[920px]:p-0 max-[760px]:w-full max-[760px]:max-w-full max-[760px]:min-w-0'
+  'options-header sticky top-0 z-20 col-[1] row-[1] grid h-[130px] w-[244px] min-w-0 content-start gap-3 m-0 bg-ds-page p-[14px_16px_0] shadow-none pointer-events-auto max-[1180px]:w-[220px] max-[920px]:z-40 max-[920px]:mx-auto max-[920px]:h-auto max-[920px]:w-full max-[920px]:grid-cols-[minmax(0,1fr)_auto] max-[920px]:items-center max-[920px]:border-b max-[920px]:border-ds-border-subtle max-[920px]:px-0 max-[920px]:py-3'
 
 export const optionsSidebarClass =
-  'options-sidebar sticky top-0 z-[9] isolate self-stretch h-auto w-full max-w-[244px] max-[1180px]:max-w-[220px] min-h-screen max-h-screen mt-0 pt-[120px] pr-[16px] pb-[18px] pl-[16px] overflow-auto bg-ds-page border-0 pointer-events-auto rounded-none shadow-none max-[920px]:hidden'
+  'options-sidebar sticky top-0 z-[9] isolate self-stretch h-auto w-full max-w-[244px] max-[1180px]:max-w-[220px] min-h-screen max-h-screen mt-0 pt-[144px] pr-[16px] pb-[18px] pl-[16px] overflow-auto bg-ds-page border-0 pointer-events-auto rounded-none shadow-none max-[920px]:hidden'
 
 export const optionsMobileSidebarClass =
   'options-sidebar options-mobile-sidebar relative isolate h-full w-full min-w-0 overflow-y-auto overscroll-contain bg-ds-page px-3 pb-8 pt-3 [scrollbar-gutter:stable]'
@@ -67,7 +67,7 @@ export const navLinkIconClass =
   'options-nav-icon inline-grid size-4 shrink-0 place-items-center text-ds-text-disabled'
 
 export const optionsMobileNavTriggerClass =
-  'options-mobile-nav-trigger !hidden size-10 min-h-10 min-w-10 flex-none p-0 max-[920px]:!inline-flex'
+  'options-mobile-nav-trigger !hidden col-[2] row-[1] max-[920px]:!inline-flex'
 
 export const optionsMobileNavOverlayClass =
   'options-mobile-nav fixed inset-0 z-[90] hidden max-[920px]:block'

@@ -492,3 +492,91 @@ body,
     outline-offset: 2px;
   }
 }
+.options-settings-search {
+  min-width: 0;
+  width: 100%;
+}
+
+.options-settings-search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-1);
+  color: var(--ds-text-secondary);
+}
+
+.options-settings-search-field:focus-within {
+  border-color: var(--ds-focus);
+}
+
+.options-settings-search-field input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ds-text-primary);
+  font: inherit;
+  font-size: 13px;
+}
+
+.options-settings-search-field input::placeholder {
+  color: var(--ds-text-secondary);
+}
+
+.options-settings-search-field > svg { flex: none; }
+.options-settings-search-positioner { z-index: 10040; }
+
+.options-settings-search-popup {
+  width: max(var(--anchor-width), min(380px, calc(100vw - 32px)));
+  max-width: calc(100vw - 24px);
+  max-height: min(420px, var(--available-height));
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-menu);
+  background: var(--ds-surface-2);
+  color: var(--ds-text-primary);
+  box-shadow: var(--ds-shadow-popover);
+}
+
+.options-settings-search-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 36px;
+  padding: 8px;
+  border-radius: var(--ds-radius-sm);
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: default;
+}
+
+.options-settings-search-item[data-highlighted] { background: var(--ds-hover); }
+.options-settings-search-section { flex: none; color: var(--ds-text-secondary); font-size: 12px; }
+.options-settings-search-empty { padding: 12px; color: var(--ds-text-secondary); font-size: 13px; }
+.options-settings-search-empty:empty { display: none; }
+
+[data-settings-target] {
+  outline: 2px solid var(--ds-accent-line);
+  outline-offset: 3px;
+  scroll-margin: 24px;
+}
+
+@media (max-width: 920px) {
+  .options-settings-search { grid-column: 1 / -1; grid-row: 2; }
+  .options-settings-search-popup { max-height: min(320px, var(--available-height)); }
+}
+
+.options-main-scroll[data-reading-restored] > section {
+  opacity: 1;
+  transition: none;
+}

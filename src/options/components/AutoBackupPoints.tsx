@@ -41,7 +41,7 @@ export function AutoBackupPoints({ busy }: { busy: boolean }) {
   }, [refresh])
 
   return (
-    <section className={`mt-7 ${OPTION_SURFACE_CLASS} p-5`} aria-labelledby="recovery-points-title" aria-busy={loading}>
+    <section id="settings-recovery-points" className={`mt-7 ${OPTION_SURFACE_CLASS} p-5`} aria-labelledby="recovery-points-title" aria-busy={loading}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 id="recovery-points-title" className="text-[15px] font-semibold text-ds-text-primary">自动恢复点</h2>

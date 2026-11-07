@@ -145,6 +145,7 @@ import {
   getNewtabBlankPointerAction,
   getNewtabSearchFocusIntent,
   getNextNewtabSearchValue,
+  shouldKeepNewtabSearchOpen,
   type NewtabSearchFocusIntent
 } from './newtab-search-focus.js'
 import type { NewTabTimeSettings } from './time-settings.js'
@@ -200,9 +201,9 @@ import {
   readInstantWallpaperDataUrl,
   readInstantWallpaperImageDataUrl,
   readInstantWallpaperTarget,
-  saveBackgroundMaskSnapshot,
   saveInstantWallpaper,
   saveInstantWallpaperTarget,
+  saveWallpaperAdjustmentsSnapshot,
   getInstantWallpaperFallbackColor,
   normalizeInstantWallpaperColor,
   type InstantWallpaperTargetRecord
@@ -365,17 +366,14 @@ import {
 } from './newtab-background-settings-store.js'
 import { normalizeNewtabBackgroundType } from './newtab-background-types.js'
 import {
-  DEFAULT_BACKGROUND_MASK_BLUR,
-  DEFAULT_BACKGROUND_MASK_FILTER_HOVER,
-  DEFAULT_BACKGROUND_MASK_FILTER_SIZE,
-  DEFAULT_BACKGROUND_MASK_FILTER_SPACING,
-  DEFAULT_BACKGROUND_MASK_FILTER_STRENGTH,
-  DEFAULT_BACKGROUND_MASK_OVERLAY,
-  DEFAULT_BACKGROUND_MASK_STYLE,
-  normalizeBackgroundMaskBlur,
-  normalizeBackgroundMaskPercentage,
-  normalizeBackgroundMaskStyle
-} from './background-mask-settings.js'
+  DEFAULT_WALLPAPER_ADJUSTMENTS,
+  getEffectiveWallpaperAdjustments,
+  haveSameWallpaperSource,
+  normalizeWallpaperMaskStyle,
+  readWallpaperAdjustments,
+  toWallpaperAdjustmentFields,
+  WALLPAPER_MASK_PRESETS
+} from './wallpaper-adjustments.js'
 import { DEFAULT_TEXTURE_SETTINGS, TEXTURE_BACKGROUND_COLOR, isProceduralBackgroundType, normalizeTextureSettings } from './texture-settings.js'
 import { syncTextureBackground } from './texture-background.js'
 import {
@@ -436,14 +434,7 @@ const DEFAULT_BACKGROUND_SETTINGS = {
   videoName: '',
   url: '',
   featuredId: '',
-  maskEnabled: false,
-  maskStyle: DEFAULT_BACKGROUND_MASK_STYLE,
-  maskBlur: DEFAULT_BACKGROUND_MASK_BLUR,
-  maskOverlay: DEFAULT_BACKGROUND_MASK_OVERLAY,
-  maskFilterHover: DEFAULT_BACKGROUND_MASK_FILTER_HOVER,
-  maskFilterStrength: DEFAULT_BACKGROUND_MASK_FILTER_STRENGTH,
-  maskFilterSize: DEFAULT_BACKGROUND_MASK_FILTER_SIZE,
-  maskFilterSpacing: DEFAULT_BACKGROUND_MASK_FILTER_SPACING
+  ...toWallpaperAdjustmentFields(DEFAULT_WALLPAPER_ADJUSTMENTS)
 }
 const DEFAULT_FEATURED_BACKGROUND_PLACEHOLDER_COLOR = '#18200f'
 const DEFAULT_SEARCH_SETTINGS = {
@@ -851,6 +842,7 @@ const backgroundImageNaturalSizeByUrl = new Map<string, BackgroundImageNaturalSi
 let preloadedBackgroundSettings: typeof DEFAULT_BACKGROUND_SETTINGS | null = null
 let backgroundSettingsHydrated = false
 let backgroundSettingsMutationVersion = 0
+let backgroundMediaMutationVersion = 0
 let backgroundUiAppliedFromPreload = false
 let featuredBackgroundOptionsHydratedDateSeed = ''
 let bookmarkDragSlotRects = new Map<string, DOMRect>()
@@ -1075,15 +1067,23 @@ function applySyncedNewtabSetting(key: string, value: Record<string, unknown>): 
       syncFolderSettingsControls()
       scheduleRender({ updateClock: true })
       break
-    case STORAGE_KEYS.newTabBackgroundSettings:
+    case STORAGE_KEYS.newTabBackgroundSettings: {
+      const previousSettings = state.backgroundSettings
       backgroundSettingsMutationVersion += 1
       state.backgroundSettings = normalizeBackgroundSettings(value)
       preloadedBackgroundSettings = state.backgroundSettings
+      if (haveSameWallpaperSource(previousSettings, state.backgroundSettings)) {
+        saveWallpaperAdjustmentsSnapshot(getEffectiveWallpaperAdjustments(state.backgroundSettings))
+        dispatchNewtabBackgroundSettingsView(createBackgroundSettingsView())
+        break
+      }
+      backgroundMediaMutationVersion += 1
       syncInstantWallpaperTargetForSettings(state.backgroundSettings)
       syncBackgroundSettingsControls()
       scheduleFeaturedBackgroundDailyRefresh()
       runBackgroundTask(applyBackgroundSettings(), '背景应用失败')
       break
+    }
     case STORAGE_KEYS.newTabModuleSettings:
       state.moduleSettings = normalizeNewTabModuleSettings(value)
       syncModuleSettingsControls()
@@ -1257,8 +1257,6 @@ function bindEvents(): void {
       void handleBackgroundFileChange(mediaType, file)
     },
     onFieldChange: handleBackgroundSettingFieldChange,
-    onFilterHoverToggle: handleBackgroundFilterHoverToggle,
-    onMaskToggle: handleBackgroundMaskToggle,
     onUrlCommit: () => {
       void handleBackgroundUrlCommit()
     }
@@ -2013,15 +2011,6 @@ function scheduleSearchSettingsSettle(): void {
   }, SETTINGS_SAVE_DEBOUNCE_MS)
 }
 
-function handleBackgroundMaskToggle(enabled: boolean): void {
-  const previousSettings = state.backgroundSettings
-  const nextSettings = normalizeBackgroundSettings({
-    ...state.backgroundSettings,
-    maskEnabled: enabled
-  })
-  commitBackgroundSettings(previousSettings, nextSettings)
-}
-
 function handleBackgroundSettingFieldChange(
   key: NewtabBackgroundSettingsFieldKey,
   value: number | string | boolean
@@ -2039,8 +2028,10 @@ function handleBackgroundSettingFieldChange(
 
   const previousSettings = state.backgroundSettings
   if (key === 'type') setBackgroundStatus('')
+  const preset = key === 'wallpaperStyle' ? WALLPAPER_MASK_PRESETS[normalizeWallpaperMaskStyle(value)] : null
   const nextSettings = normalizeBackgroundSettings({
     ...state.backgroundSettings,
+    ...(preset ? { wallpaperBlur: preset.blur } : {}),
     [key]: value
   })
   commitBackgroundSettings(previousSettings, nextSettings)
@@ -2053,9 +2044,20 @@ function commitBackgroundSettings(
   const shouldClearUrlCache = shouldClearBackgroundUrlCache(previousSettings, nextSettings)
   backgroundSettingsHydrated = true
   state.backgroundSettings = nextSettings
-  updateBackgroundStartupCacheStatus(nextSettings)
   backgroundSettingsMutationVersion += 1
   preloadedBackgroundSettings = nextSettings
+  if (haveSameWallpaperSource(previousSettings, nextSettings)) {
+    saveWallpaperAdjustmentsSnapshot(getEffectiveWallpaperAdjustments(nextSettings))
+    dispatchNewtabBackgroundSettingsView(createBackgroundSettingsView())
+    void saveSettingsWithFeedback({
+      [STORAGE_KEYS.newTabBackgroundSettings]: nextSettings
+    }).catch(error => {
+      console.warn('新标签页背景设置保存失败。', error)
+    })
+    return
+  }
+  backgroundMediaMutationVersion += 1
+  updateBackgroundStartupCacheStatus(nextSettings)
   setWallpaperPlaceholderColor(getBackgroundPlaceholderColor(nextSettings))
   syncInstantWallpaperTargetForSettings(nextSettings)
   void saveBackgroundSettings().catch((error) => {
@@ -2078,9 +2080,9 @@ async function handleBackgroundUrlCommit(): Promise<void> {
   }
 
   const session = newTabControllerGeneration
-  const version = backgroundSettingsMutationVersion
+  const version = backgroundMediaMutationVersion
   const permissionGranted = await ensureBackgroundImageFetchPermission(imageUrl, { request: true })
-  if (!newTabControllerStarted || session !== newTabControllerGeneration || version !== backgroundSettingsMutationVersion) return
+  if (!newTabControllerStarted || session !== newTabControllerGeneration || version !== backgroundMediaMutationVersion) return
   if (!permissionGranted) {
     setBackgroundStatus('未授权该图片域名，首屏缓存可能无法准备。', 'warning')
     syncBackgroundSettingsControls()
@@ -2091,11 +2093,11 @@ async function handleBackgroundUrlCommit(): Promise<void> {
 
 async function applyBackgroundSettingsAfterCacheUpdate(shouldClearUrlCache: boolean): Promise<void> {
   const session = newTabControllerGeneration
-  const version = backgroundSettingsMutationVersion
+  const version = backgroundMediaMutationVersion
   if (shouldClearUrlCache) {
     await clearBackgroundUrlCache()
   }
-  if (!newTabControllerStarted || session !== newTabControllerGeneration || version !== backgroundSettingsMutationVersion) return
+  if (!newTabControllerStarted || session !== newTabControllerGeneration || version !== backgroundMediaMutationVersion) return
   await applyBackgroundSettings()
 }
 
@@ -2138,6 +2140,7 @@ async function handleBackgroundFileChange(
     })
     backgroundSettingsHydrated = true
     backgroundSettingsMutationVersion += 1
+    backgroundMediaMutationVersion += 1
     preloadedBackgroundSettings = state.backgroundSettings
     expectedSignature = getBackgroundMediaSignature(state.backgroundSettings)
     // Replacing a file with the same name still requires reloading its bytes.
@@ -6310,6 +6313,15 @@ function initializeSearchWidget(): boolean {
   const getSearchInput = (): HTMLInputElement | null => getSearchNodes().input
   const getSearchSlot = (): HTMLElement | null => getSearchNodes().slot
   const getSearchEngineButton = (): HTMLButtonElement | null => getSearchNodes().engineButton
+  const hasSearchInteraction = () => {
+    const active = document.activeElement
+    return shouldKeepNewtabSearchOpen({
+      focusWithin: Boolean(active && (getSearchSlot()?.contains(active) || getSearchNodes().engineMenu?.contains(active))),
+      engineMenuOpen: searchEngineMenuState.open,
+      settingsOpen: isSettingsDrawerOpen(),
+      composing: searchInputComposing
+    })
+  }
 
   const syncSearchWidgetButtons = () => {
     patchNewtabSearchWidgetView({
@@ -6358,7 +6370,10 @@ function initializeSearchWidget(): boolean {
         },
         onInputCompositionChange: (composing) => {
           searchInputComposing = composing
-          if (!composing) scheduleSuggestionsRender({ immediate: true })
+          if (!composing) {
+            if (hasSearchInteraction()) scheduleSuggestionsRender({ immediate: true })
+            else hideSuggestions()
+          }
         },
         onInputKeyDown: (event) => {
           if (event.defaultPrevented) return
@@ -6426,14 +6441,8 @@ function initializeSearchWidget(): boolean {
           window.setTimeout(() => {
             // Portal mounting can move focus through an intermediate element.
             // Check the settled destination, not the earlier blur event.
-            const nextFocusTarget = document.activeElement
             const slot = getSearchSlot()
-            const engineMenu = getSearchNodes().engineMenu
-            if (
-              slot &&
-              (!nextFocusTarget ||
-                (!slot.contains(nextFocusTarget) && !engineMenu?.contains(nextFocusTarget)))
-            ) {
+            if (slot && !hasSearchInteraction()) {
               closeEngineMenu()
               hideSuggestions()
             }
@@ -8128,15 +8137,6 @@ function createSpeedDialPanel(): 'speedDial' | null {
   return 'speedDial'
 }
 
-function handleBackgroundFilterHoverToggle(enabled: boolean): void {
-  const previousSettings = state.backgroundSettings
-  const nextSettings = normalizeBackgroundSettings({
-    ...state.backgroundSettings,
-    maskFilterHover: enabled
-  })
-  commitBackgroundSettings(previousSettings, nextSettings)
-}
-
 function hydrateSpeedDialPanel(): void {
   if (!state.moduleSettings.speedDial) {
     return
@@ -9199,26 +9199,7 @@ function normalizeBackgroundSettings(rawSettings: unknown): typeof DEFAULT_BACKG
     videoName: String(settings.videoName || '').trim(),
     url: String(settings.url || '').trim(),
     featuredId,
-    maskEnabled: settings.maskEnabled === true,
-    maskOverlay: normalizeBackgroundMaskPercentage(
-      settings.maskOverlay,
-      DEFAULT_BACKGROUND_SETTINGS.maskOverlay
-    ),
-    maskFilterHover: settings.maskFilterHover !== false,
-    maskStyle: normalizeBackgroundMaskStyle(settings.maskStyle),
-    maskBlur: normalizeBackgroundMaskBlur(settings.maskBlur, DEFAULT_BACKGROUND_SETTINGS.maskBlur),
-    maskFilterStrength: normalizeBackgroundMaskPercentage(
-      settings.maskFilterStrength,
-      DEFAULT_BACKGROUND_SETTINGS.maskFilterStrength
-    ),
-    maskFilterSize: normalizeBackgroundMaskPercentage(
-      settings.maskFilterSize,
-      DEFAULT_BACKGROUND_SETTINGS.maskFilterSize
-    ),
-    maskFilterSpacing: normalizeBackgroundMaskPercentage(
-      settings.maskFilterSpacing,
-      DEFAULT_BACKGROUND_SETTINGS.maskFilterSpacing
-    )
+    ...toWallpaperAdjustmentFields(readWallpaperAdjustments(settings))
   }
 }
 
@@ -9417,6 +9398,7 @@ function migrateStoredFeaturedBackgroundId(gallery = backgroundGalleryModule): v
   })
   state.backgroundSettings = nextSettings
   backgroundSettingsMutationVersion += 1
+  backgroundMediaMutationVersion += 1
   preloadedBackgroundSettings = nextSettings
   setWallpaperPlaceholderColor(getBackgroundPlaceholderColor(nextSettings))
   syncInstantWallpaperTargetForSettings(nextSettings)
@@ -9493,10 +9475,10 @@ function setBackgroundStatus(
  * fail silently, or the UI keeps showing the previous state with no reason. */
 function runBackgroundTask(task: Promise<unknown>, failureMessage: string): void {
   const session = newTabControllerGeneration
-  const version = backgroundSettingsMutationVersion
+  const version = backgroundMediaMutationVersion
   void task.catch((error) => {
     console.warn(failureMessage, error)
-    if (!newTabControllerStarted || session !== newTabControllerGeneration || version !== backgroundSettingsMutationVersion) return
+    if (!newTabControllerStarted || session !== newTabControllerGeneration || version !== backgroundMediaMutationVersion) return
     const detail = error instanceof Error && error.message ? `：${error.message}` : ''
     setBackgroundStatus(`${failureMessage}${detail}`, 'error')
     render()
@@ -10313,14 +10295,7 @@ function syncInstantWallpaperTargetForSettings(
   mediaSignature = getBackgroundMediaSignature(settings)
 ): void {
   syncTextureBackground(settings)
-  // Mirror the mask independently of the wallpaper target so the boot script can
-  // paint it on the first frame for every background type, solid colors included.
-  saveBackgroundMaskSnapshot({
-    maskEnabled: settings.type !== 'texture' && settings.maskEnabled,
-    maskStyle: settings.maskStyle,
-    maskOverlay: settings.maskOverlay,
-    maskBlur: settings.maskBlur
-  })
+  saveWallpaperAdjustmentsSnapshot(getEffectiveWallpaperAdjustments(settings))
   const target = buildInstantWallpaperTargetForSettings(settings, mediaSignature)
   if (!target) {
     clearInstantWallpaperTarget()
@@ -10366,10 +10341,6 @@ function buildInstantWallpaperTargetForSettings(
     backgroundSize: displayCss.backgroundSize,
     backgroundPosition: displayCss.backgroundPosition,
     placeholderColor: getBackgroundPlaceholderColor(settings),
-    maskEnabled: settings.maskEnabled,
-    maskStyle: settings.maskStyle,
-    maskOverlay: settings.maskOverlay,
-    maskBlur: settings.maskBlur,
     cacheRequired: !isProceduralBackgroundType(settings.type),
     cacheReady: hasCurrentInstantWallpaperStartupImage(mediaKey, settings),
     updatedAt: Date.now()

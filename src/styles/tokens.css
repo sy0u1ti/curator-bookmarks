@@ -59,6 +59,10 @@
   --ds-inset-card: 16px;
   --ds-inset-dialog: 24px;
   --ds-stroke-width: 1px;
+  --ds-control-icon-xs: 28px;
+  --ds-control-icon-sm: 32px;
+  --ds-control-icon: 36px;
+  --ds-control-icon-lg: 40px;
   /* One native arc for borders, backgrounds, shadows and clipping. Keeping
      these on the same contour avoids seams at thin, translucent edges. */
   --ds-corner-shape: round;
@@ -185,8 +189,10 @@
   --digit-dir-x: 0;
   --digit-dir-y: 1;
 
-  --dropdown-open-dur: 420ms;
-  --dropdown-close-dur: var(--ds-motion-standard);
+  --dropdown-open-dur: var(--ds-motion-standard);
+  --dropdown-close-dur: var(--ds-motion-fast);
+  --popover-open-dur: var(--ds-motion-fast);
+  --popover-close-dur: var(--duration-quick);
   --dropdown-pre-scale: var(--scale-medium);
   --dropdown-closing-scale: var(--scale-tiny);
   --dropdown-ease: var(--ds-ease-settle);
@@ -264,6 +270,13 @@
   --check-uncheck: var(--duration-quick);
   --check-ease: var(--ds-ease-standard);
   --check-len: 23;
+
+  --slider-grip-hover-scale: 1.06;
+  --slider-grip-press-scale: 0.96;
+  --slider-grip-settle: 150ms;
+  --slider-grip-border: var(--ds-border-hover);
+  --slider-grip-shadow: 0 1px 2px rgb(0 0 0 / 24%);
+  --slider-grip-pressed-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-accent) 14%, transparent);
 
   --ds-row-height: 52px;
   --ds-row-height-compact: 40px;

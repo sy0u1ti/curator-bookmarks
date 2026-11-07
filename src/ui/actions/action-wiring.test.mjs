@@ -123,7 +123,7 @@ for (const outcome of ['success', 'error', 'stale']) {
     isPopupActionPending: (_, id) => pending.has(id),
     setPopupActionPending: (_, id, busy) => busy ? pending.add(id) : pending.delete(id),
     renderMainContent: noop, writeClipboardText: () => { writes++; return service.promise },
-    showToast: () => { errors++ }
+    showActivity: () => { errors++ }
   })
   const running = context.subject('fixture')
   await context.subject('fixture')

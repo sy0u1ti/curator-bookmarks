@@ -53,6 +53,7 @@ try {
     await page.locator('#confirm-delete').click()
     await page.locator('#delete-modal').waitFor({ state: 'hidden' })
     assert.equal((await exists(bookmark)).length, 0)
+    await page.locator('.popup-activity-card').getByText(`已删除 ${bookmark.title}`, { exact: true }).waitFor()
   }
 
   const pin = page.locator('[data-current-page-action="pin-newtab"]')
@@ -70,19 +71,23 @@ try {
   report.liveMetadata = { tags: true, pins: true }
 
   await remove(seed.bookmarks[0])
-  const olderToastId = await page.locator('[data-toast-id]').filter({ has: page.getByRole('button', { name: '撤销', exact: true }) }).getAttribute('data-toast-id')
+  const olderActivityId = await page.locator('.popup-activity-card').getAttribute('data-activity-id')
   await remove(seed.bookmarks[1])
-  const newerToastId = await page.locator(`[data-toast-id]:not([data-toast-id="${olderToastId}"])`).filter({ has: page.getByRole('button', { name: '撤销', exact: true }) }).getAttribute('data-toast-id')
-  await page.locator(`[data-toast-id="${olderToastId}"]`).getByRole('button', { name: '撤销', exact: true }).click()
-  await page.getByText('已撤销删除', { exact: true }).waitFor()
+  const newerActivityId = await page.locator('.popup-activity-card').getAttribute('data-activity-id')
+  await page.locator(`[data-activity-entry="${olderActivityId}"]`).click()
+  await page.locator(`.popup-activity-card[data-activity-id="${olderActivityId}"]`).waitFor()
+  await page.locator('#popup-activity-action').click()
+  await page.locator('.popup-activity-card').getByText(`已恢复 ${seed.bookmarks[0].title}`, { exact: true }).waitFor()
   assert.equal((await exists(seed.bookmarks[0])).length, 1, 'The older undo must restore its own bookmark')
   assert.equal((await exists(seed.bookmarks[1])).length, 0, 'The newer deletion must remain undoable')
   report.independentUndo = true
 
   await page.evaluate(() => { window.failNextRestore = true })
-  await page.locator(`[data-toast-id="${newerToastId}"]`).getByRole('button', { name: '撤销', exact: true }).click()
-  await page.locator('[data-toast-id]').getByText(/撤销失败：测试恢复失败/).waitFor()
-  await page.locator('[data-toast-id] button').filter({ hasText: /^重试$/ }).click()
+  await page.locator(`[data-activity-entry="${newerActivityId}"]`).click()
+  await page.locator(`.popup-activity-card[data-activity-id="${newerActivityId}"]`).waitFor()
+  await page.locator('#popup-activity-action').click()
+  await page.locator('.popup-activity-card').getByText('测试恢复失败', { exact: true }).waitFor()
+  await page.locator('#popup-activity-action').click()
   await page.waitForFunction(async url => (await chrome.bookmarks.search({ url })).length === 1, seed.bookmarks[1].url)
   report.retry = true
 
@@ -106,7 +111,7 @@ try {
   assert.equal((await exists(seed.bookmarks[2]))[0].title, seed.bookmarks[2].title, 'IME confirmation must not save an edit')
   await page.locator('#edit-url-input').fill('invalid-url')
   await page.locator('#save-edit').click()
-  await page.locator('[data-toast-id]').getByText('请输入有效的网址', { exact: true }).waitFor()
+  await page.locator('#popup-modal-error').getByText('请输入有效的网址', { exact: true }).waitFor()
   await page.locator('#edit-url-input').fill(seed.bookmarks[2].url)
   await title.press('Enter')
   await page.locator('#edit-modal').waitFor({ state: 'hidden' })

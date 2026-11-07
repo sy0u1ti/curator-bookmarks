@@ -106,17 +106,16 @@ test('popup success uses one channel without removing deletion undo or errors', 
   const deletion = section('async function confirmDeleteBookmark(', 'async function undoDelete(')
   assert.match(deletion, /action: 'undo-delete'/)
   assert.match(deletion, /actionLabel: '撤销'/)
-  assert.match(controller, /actionLabel: '重试'/)
+  assert.match(controller, /actionLabel: recoverable \? '重试' : ''/,
+    'A missing recovery record must not retain a retry action')
   assert.match(await read('popup/popup.css'), /#view-caption:not\(:empty\)\s*\{[^}]*min-width: 6em;[^}]*flex-shrink: 0;/s,
     'Single-channel feedback must keep readable space in a narrow pane')
   const functionBody = code => code.slice(code.indexOf('{') + 1, code.lastIndexOf('}'))
-  const notice = new Function('message', 'isSmartOverlayActive', 'hasOpenModal', 'showToast', 'showViewNotice',
+  const notice = new Function('message', 'showActivity',
     functionBody(section('function showMutationNotice(', 'function clearViewNotice(')))
-  for (const [smart, modal] of [[false, false], [true, false], [false, true], [true, true]]) {
-    const channels = []
-    notice('Saved', () => smart, () => modal, () => channels.push('toast'), () => channels.push('inline'))
-    assert.deepEqual(channels, [smart || modal ? 'toast' : 'inline'])
-  }
+  const channels = []
+  notice('Saved', value => channels.push(value.message))
+  assert.deepEqual(channels, ['Saved'], 'Mutation feedback goes through the single activity coordinator')
   const caption = new Function('state', functionBody(section('function getViewCaptionText(', 'function getNaturalSearchPendingCaption(')))
   assert.equal(caption({ viewNoticeMessage: 'Saved', isLoading: true, searchPending: true, naturalSearchPending: true }), 'Saved',
     'A background search must not swallow the only acknowledgement before its timer expires')

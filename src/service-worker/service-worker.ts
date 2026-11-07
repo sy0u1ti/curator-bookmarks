@@ -13,7 +13,8 @@ import type {
   NavigationCancelMessage,
   NavigationCheckMessage,
   NavigationCheckResult,
-  RuntimeNotificationMessage
+  RuntimeNotificationMessage,
+  StorageUsageMessage
 } from '../shared/messages.js'
 import {
   AVAILABILITY_ENGINE_VERSION,
@@ -112,6 +113,7 @@ import { reviewInboxItem } from './inbox-review.js'
 import { isInboxItemPending, settleRemovedInboxItems } from '../shared/inbox.js'
 import { shouldAnalyzeInbox } from '../shared/inbox-workflow.js'
 import { registerModelsDevSync } from './models-dev-service.js'
+import { getStorageUsage } from '../shared/storage-maintenance.js'
 
 registerModelsDevSync()
 
@@ -337,6 +339,7 @@ type RuntimeMessage =
   | NavigationCheckMessage
   | NavigationCancelMessage
   | RuntimeNotificationMessage
+  | StorageUsageMessage
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === 'local' && (changes[STORAGE_KEYS.aiProviderSettings] || changes[STORAGE_KEYS.inboxSettings] || changes[STORAGE_KEYS.contentSnapshotSettings])) {
@@ -572,6 +575,23 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
               ? String(error.code || '')
               : ''
         })
+      })
+
+    return true
+  }
+
+  if (message?.type === 'storage:usage') {
+    if (!isTrustedAvailabilityMessageSender(sender)) {
+      sendResponse({ ok: false, error: '无权读取存储用量。' })
+      return undefined
+    }
+
+    getStorageUsage()
+      .then((result) => {
+        sendResponse({ ok: true, result })
+      })
+      .catch((error) => {
+        sendResponse({ ok: false, error: error instanceof Error ? error.message : '存储用量读取失败。' })
       })
 
     return true

@@ -7,24 +7,14 @@ import { chromium } from 'playwright'
 const extensionPath = path.resolve('dist')
 const profilePath = await mkdtemp(path.join(tmpdir(), 'curator-mask-zero-'))
 
-function parseAlpha(color) {
-  const match = color.match(/^rgba?\([^,]+,[^,]+,[^,]+(?:,\s*([\d.]+))?\)$/)
-  if (!match) {
-    throw new Error(`Unsupported computed color: ${color}`)
-  }
-  return match[1] === undefined ? 1 : Number(match[1])
-}
-
 async function readMaskSymptom(page) {
-  return page.locator('#newtab-background-mask').evaluate((mask) => {
-    const style = getComputedStyle(mask)
-    const value = document.querySelector('#background-mask-overlay-value')?.textContent?.trim()
+  return page.locator('#newtab-wallpaper-dim').evaluate((dim) => {
+    const style = getComputedStyle(dim)
+    const value = document.querySelector('#wallpaper-dim-value')?.textContent?.trim()
     return {
-      backgroundColor: style.backgroundColor,
-      backgroundImage: style.backgroundImage,
       backdropFilter: style.backdropFilter,
-      maskOpacity: style.opacity,
-      maskOverlayValue: value,
+      dimOpacity: style.opacity,
+      dimValue: value,
       reducedTransparency: matchMedia('(prefers-reduced-transparency: reduce)').matches
     }
   })
@@ -50,20 +40,14 @@ try {
   await worker.evaluate(async () => {
     await chrome.storage.local.set({
       curatorBookmarkNewTabBackgroundSettings: {
-        type: 'color',
+        type: 'urls',
         color: '#f8f8f8',
         imageName: '',
         videoName: '',
         url: '',
         featuredId: '',
-        maskEnabled: true,
-        maskStyle: 'noise',
-        maskBlur: 1,
-        maskOverlay: 0,
-        maskFilterHover: true,
-        maskFilterStrength: 50,
-        maskFilterSize: 50,
-        maskFilterSpacing: 50
+        wallpaperDim: 0,
+        wallpaperBlur: 1
       }
     })
   })
@@ -77,16 +61,10 @@ try {
   await page.goto(`chrome-extension://${extensionId}/src/newtab/newtab.html`, {
     waitUntil: 'domcontentloaded'
   })
-  await page.waitForFunction(() => {
-    const app = document.querySelector('.newtab-app')
-    const mask = document.querySelector('#newtab-background-mask')
-    return app?.classList.contains('background-mask-enabled')
-      && mask
-      && !mask.hasAttribute('data-mask-initial')
-  })
+  await page.waitForFunction(() => document.querySelector('#newtab-wallpaper-adjustments-host #newtab-wallpaper-dim'))
   await page.locator('#newtab-settings-trigger').click()
   await page.getByRole('tab', { name: '外观', exact: true }).click()
-  await page.locator('#background-mask-overlay-value').waitFor({ state: 'attached' })
+  await page.locator('#wallpaper-dim-value').waitFor({ state: 'attached' })
 
   const normal = await readMaskSymptom(page)
 
@@ -102,14 +80,12 @@ try {
 
   assert.equal(normal.reducedTransparency, false, 'The baseline must run without reduced transparency')
   assert.equal(reduced.reducedTransparency, true, 'The comparison must enable reduced transparency')
-  assert.equal(normal.maskOverlayValue, '0%', 'The baseline settings value must remain pinned to zero')
-  assert.equal(reduced.maskOverlayValue, '0%', 'The comparison settings value must remain pinned to zero')
-  assert.equal(normal.maskOpacity, '1', 'The enabled mask layer should be present in the baseline')
-  assert.equal(reduced.maskOpacity, '1', 'The enabled mask layer should be present in the comparison')
-  assert.ok(
-    parseAlpha(normal.backgroundColor) <= 0.2 && parseAlpha(reduced.backgroundColor) <= 0.2,
-    `A zero-strength mask must stay light under both transparency preferences: ${JSON.stringify({ normal, reduced })}`
-  )
+  assert.equal(normal.dimValue, '0%', 'The baseline settings value must remain pinned to zero')
+  assert.equal(reduced.dimValue, '0%', 'The comparison settings value must remain pinned to zero')
+  for (const snapshot of [normal, reduced]) {
+    assert.equal(snapshot.dimOpacity, '0', `Zero dim must add no tint: ${JSON.stringify(snapshot)}`)
+    assert.equal(snapshot.backdropFilter, 'none')
+  }
 
   console.log(`New Tab zero-mask computed styles: ${JSON.stringify({ normal, reduced })}`)
   console.log('New Tab zero-mask regression test passed.')

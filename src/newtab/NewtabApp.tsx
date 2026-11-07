@@ -42,30 +42,14 @@ import {
 import { useSettingsDrawerModalMode } from './settings-drawer-mode'
 import { InputCaretHost } from '../ui/input-caret/InputCaretHost'
 import {
-  useNewtabPaperShaderActive,
-  useNewtabBackgroundSettingsView,
-  useNewtabWallpaperFilterActive,
-  type NewtabBackgroundSettingsView
+  useNewtabBackgroundSettingsView
 } from './newtab-background-settings-store'
 import { useNewtabInstantWallpaperView } from './newtab-instant-wallpaper-store'
 import { useNewtabFolderSourceView } from './newtab-folder-source-store'
-import {
-  getBackgroundMaskBaseColor,
-  getBackgroundMaskBackdropFilter,
-  getBackgroundMaskOverlayGradient,
-  isLegacyBackgroundMaskStyle
-} from './background-mask-settings'
+import { applyWallpaperAdjustments, getEffectiveWallpaperAdjustments } from './wallpaper-adjustments'
 
 const NewtabTextureLayer = lazy(() => import('./components/NewtabTextureLayer'))
 
-const BACKGROUND_MASK_BASE_CLASS = 'newtab-background-mask fixed inset-0 z-0 pointer-events-none opacity-0 before:absolute before:inset-0 before:pointer-events-none before:opacity-0 before:mix-blend-overlay'
-const BACKGROUND_MASK_ENABLED_CLASS = 'opacity-100'
-const BACKGROUND_MASK_STYLE_CLASS_BY_STYLE = {
-  dark: '',
-  frosted: '',
-  light: '',
-  noise: 'before:opacity-[0.16] before:[background-image:radial-gradient(rgba(255,255,255,0.18)_0.65px,transparent_0.9px),radial-gradient(rgba(0,0,0,0.24)_0.7px,transparent_1px)] before:[background-position:0_0,12px_14px] before:[background-size:4px_4px,5px_5px]'
-} as const
 const SOLID_BACKGROUND_NOISE_CLASS = 'newtab-solid-background-noise fixed inset-0 z-0 pointer-events-none overflow-hidden'
 const DYNAMIC_BACKGROUND_STAGE_CLASS = 'newtab-dynamic-background-stage fixed inset-0 z-0 h-full w-full overflow-hidden pointer-events-none isolate [contain:strict] [transform:translateZ(0)]'
 const NEWTAB_REDUCED_MOTION_DESCENDANTS_CLASS = [
@@ -97,17 +81,11 @@ const NEWTAB_SHELL_CLASS = `newtab-shell relative z-[1] grid h-screen h-dvh item
 
 type SettingsDrawerHostComponent = (typeof import('./components/SettingsDrawer'))['SettingsDrawerHost']
 type NewtabDeferredHostsComponent = (typeof import('./components/NewtabDeferredHosts'))['NewtabDeferredHosts']
-type NewtabWallpaperFilterLayerComponent = (typeof import('./components/NewtabWallpaperFilterLayer'))['NewtabWallpaperFilterLayer']
-type NewtabPaperShaderLayerComponent = (typeof import('./components/NewtabPaperShaderLayer'))['NewtabPaperShaderLayer']
 
 let settingsDrawerHostComponent: SettingsDrawerHostComponent | null = null
 let settingsDrawerHostPromise: Promise<SettingsDrawerHostComponent> | null = null
 let newtabDeferredHostsComponent: NewtabDeferredHostsComponent | null = null
 let newtabDeferredHostsPromise: Promise<NewtabDeferredHostsComponent> | null = null
-let newtabWallpaperFilterLayerComponent: NewtabWallpaperFilterLayerComponent | null = null
-let newtabWallpaperFilterLayerPromise: Promise<NewtabWallpaperFilterLayerComponent> | null = null
-let newtabPaperShaderLayerComponent: NewtabPaperShaderLayerComponent | null = null
-let newtabPaperShaderLayerPromise: Promise<NewtabPaperShaderLayerComponent> | null = null
 
 function loadSettingsDrawerHost(): Promise<SettingsDrawerHostComponent> {
   if (settingsDrawerHostComponent) {
@@ -129,28 +107,6 @@ function loadNewtabDeferredHosts(): Promise<NewtabDeferredHostsComponent> {
     return module.NewtabDeferredHosts
   })
   return newtabDeferredHostsPromise
-}
-
-function loadNewtabWallpaperFilterLayer(): Promise<NewtabWallpaperFilterLayerComponent> {
-  if (newtabWallpaperFilterLayerComponent) {
-    return Promise.resolve(newtabWallpaperFilterLayerComponent)
-  }
-  newtabWallpaperFilterLayerPromise ||= import('./components/NewtabWallpaperFilterLayer').then((module) => {
-    newtabWallpaperFilterLayerComponent = module.NewtabWallpaperFilterLayer
-    return module.NewtabWallpaperFilterLayer
-  })
-  return newtabWallpaperFilterLayerPromise
-}
-
-function loadNewtabPaperShaderLayer(): Promise<NewtabPaperShaderLayerComponent> {
-  if (newtabPaperShaderLayerComponent) {
-    return Promise.resolve(newtabPaperShaderLayerComponent)
-  }
-  newtabPaperShaderLayerPromise ||= import('./components/NewtabPaperShaderLayer').then((module) => {
-    newtabPaperShaderLayerComponent = module.NewtabPaperShaderLayer
-    return module.NewtabPaperShaderLayer
-  })
-  return newtabPaperShaderLayerPromise
 }
 
 function subscribeToNewtabBookmarkEvents(): () => void {
@@ -194,7 +150,7 @@ function NewtabShell({ onOpenSettings }: { onOpenSettings: () => void }) {
   const appChromeAttributes = useNewtabAppChromeAttributes()
   const autoHideSettingsTrigger = folderSource.general.hideSettingsTrigger
   const shellRef = useRef<HTMLDivElement | null>(null)
-  const backgroundMaskHostRef = useRef<HTMLDivElement | null>(null)
+  const wallpaperAdjustmentsHostRef = useRef<HTMLDivElement | null>(null)
   const backgroundStageRef = useRef<HTMLDivElement | null>(null)
   const settingsBackdropRef = useRef<HTMLButtonElement | null>(null)
   const settingsTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -214,8 +170,6 @@ function NewtabShell({ onOpenSettings }: { onOpenSettings: () => void }) {
   }, [])
 
   useLayoutEffect(() => {
-    // Grain blending and backdrop blur must share the wallpaper's compositing
-    // group. Reuse the prepainted node so hydration never flashes a blank frame.
     const wallpaper = document.getElementById('newtab-wallpaper-stage')
     const stage = backgroundStageRef.current
     if (wallpaper && stage && wallpaper.parentElement !== stage) {
@@ -225,10 +179,10 @@ function NewtabShell({ onOpenSettings }: { onOpenSettings: () => void }) {
     if (texture && stage && texture.parentElement !== stage) {
       stage.append(texture)
     }
-    const mask = document.getElementById('newtab-background-mask')
-    const host = backgroundMaskHostRef.current
-    if (mask && host && mask.parentElement !== host) {
-      host.append(mask)
+    const host = wallpaperAdjustmentsHostRef.current
+    const layer = document.getElementById('newtab-wallpaper-dim')
+    if (layer && host && layer.parentElement !== host) {
+      host.append(layer)
     }
   }, [])
 
@@ -247,19 +201,15 @@ function NewtabShell({ onOpenSettings }: { onOpenSettings: () => void }) {
 
   useLayoutEffect(() => {
     if (!backgroundSettings.ready) return
-    const mask = document.getElementById('newtab-background-mask')
-    if (!mask) return
-
-    const style = getBackgroundMaskInlineStyle(backgroundSettings)
-    mask.className = getBackgroundMaskClass(backgroundSettings)
-    mask.style.backgroundColor = String(style.backgroundColor ?? '')
-    mask.style.backgroundImage = String(style.backgroundImage ?? '')
-    mask.style.setProperty('-webkit-backdrop-filter', String(style.WebkitBackdropFilter ?? ''))
-    mask.style.backdropFilter = String(style.backdropFilter ?? '')
-    document.documentElement.dataset.instantWallpaperMask = backgroundSettings.maskEnabled
-      ? 'true'
-      : 'false'
-  }, [backgroundSettings])
+    applyWallpaperAdjustments(document.documentElement, getEffectiveWallpaperAdjustments(backgroundSettings))
+  }, [
+    backgroundSettings.ready,
+    backgroundSettings.type,
+    backgroundSettings.wallpaperEnabled,
+    backgroundSettings.wallpaperStyle,
+    backgroundSettings.wallpaperBlur,
+    backgroundSettings.wallpaperDim
+  ])
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -292,18 +242,16 @@ function NewtabShell({ onOpenSettings }: { onOpenSettings: () => void }) {
       <div id="newtab-dynamic-background-stage" ref={backgroundStageRef} className={DYNAMIC_BACKGROUND_STAGE_CLASS} aria-hidden="true">
         <NewtabBackgroundLayer loadingWallpaper={instantWallpaper.loading} />
         <SolidBackgroundNoiseLayer active={backgroundSettings.type === 'color'} />
-        <NewtabWallpaperFilterLayer />
-        <NewtabPaperShaderLayer />
         {backgroundSettings.type === 'texture' ? (
           <Suspense fallback={null}><NewtabTextureLayer /></Suspense>
         ) : null}
+        <div
+          id="newtab-wallpaper-adjustments-host"
+          className="contents"
+          ref={wallpaperAdjustmentsHostRef}
+          aria-hidden="true"
+        ></div>
       </div>
-      <div
-        id="newtab-background-mask-host"
-        className="contents"
-        ref={backgroundMaskHostRef}
-        aria-hidden="true"
-      ></div>
       <WallpaperLoadingIndicator />
 
       <div
@@ -387,54 +335,6 @@ function DeferredNewtabHosts() {
   return Host ? <Host /> : null
 }
 
-function NewtabWallpaperFilterLayer() {
-  const active = useNewtabWallpaperFilterActive()
-  const [Layer, setLayer] = useState<NewtabWallpaperFilterLayerComponent | null>(
-    newtabWallpaperFilterLayerComponent
-  )
-
-  useEffect(() => {
-    if (!active || Layer) {
-      return
-    }
-    let mounted = true
-    void loadNewtabWallpaperFilterLayer().then((Component) => {
-      if (mounted) {
-        setLayer(() => Component)
-      }
-    })
-    return () => {
-      mounted = false
-    }
-  }, [active, Layer])
-
-  return active && Layer ? <Layer /> : null
-}
-
-function NewtabPaperShaderLayer() {
-  const active = useNewtabPaperShaderActive()
-  const [Layer, setLayer] = useState<NewtabPaperShaderLayerComponent | null>(
-    newtabPaperShaderLayerComponent
-  )
-
-  useEffect(() => {
-    if (!active || Layer) {
-      return
-    }
-    let mounted = true
-    void loadNewtabPaperShaderLayer().then((Component) => {
-      if (mounted) {
-        setLayer(() => Component)
-      }
-    })
-    return () => {
-      mounted = false
-    }
-  }, [active, Layer])
-
-  return active && Layer ? <Layer /> : null
-}
-
 function DeferredSettingsDrawerHost({ requested }: { requested: boolean }) {
   const [Host, setHost] = useState<SettingsDrawerHostComponent | null>(settingsDrawerHostComponent)
 
@@ -467,34 +367,6 @@ function SolidBackgroundNoiseLayer({ active }: { active: boolean }) {
       aria-hidden="true"
     />
   )
-}
-
-function getBackgroundMaskClass(background: NewtabBackgroundSettingsView): string {
-  return cx(
-    BACKGROUND_MASK_BASE_CLASS,
-    background.maskEnabled ? BACKGROUND_MASK_ENABLED_CLASS : '',
-    background.maskEnabled ? getBackgroundMaskStyleClass(background.maskStyle) : ''
-  )
-}
-
-function getBackgroundMaskStyleClass(maskStyle: string): string {
-  if (!isLegacyBackgroundMaskStyle(maskStyle)) {
-    return ''
-  }
-  return BACKGROUND_MASK_STYLE_CLASS_BY_STYLE[maskStyle]
-}
-
-function getBackgroundMaskInlineStyle(background: NewtabBackgroundSettingsView): CSSProperties {
-  if (!background.maskEnabled) {
-    return {}
-  }
-  const backdropFilter = getBackgroundMaskBackdropFilter(background.maskStyle, background.maskBlur)
-  return {
-    backgroundColor: getBackgroundMaskBaseColor(background.maskStyle, background.maskOverlay),
-    backgroundImage: getBackgroundMaskOverlayGradient(background.maskOverlay, background.maskStyle),
-    WebkitBackdropFilter: backdropFilter,
-    backdropFilter
-  }
 }
 
 function getSettingsTriggerButtonClass(autoHide: boolean, className = ''): string {

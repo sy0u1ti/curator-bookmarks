@@ -22,7 +22,6 @@ export function useNewtabAppChromeAttributes() {
     instantWallpaper.ready ? 'instant-wallpaper-ready' : '',
     instantWallpaper.remoteReady ? 'instant-wallpaper-remote-ready' : '',
     settingsDrawerOpen ? 'settings-open' : '',
-    background.maskEnabled ? 'background-mask-enabled' : '',
     folderSource.hideFolderNames ? 'folder-names-hidden' : '',
     folderSource.general.hideSettingsTrigger ? 'settings-trigger-auto-hide' : '',
     dragUi.bookmarkDragging ? 'bookmark-dragging' : '',
@@ -46,7 +45,6 @@ export function useNewtabAppChromeAttributes() {
     'data-instant-wallpaper-pending': instantWallpaper.pending ? 'true' : undefined,
     'data-instant-wallpaper-remote-ready': instantWallpaper.remoteReady ? 'true' : undefined,
     'data-instant-wallpaper-signature': instantWallpaper.signature || undefined,
-    'data-background-mask-style': background.maskStyle,
     className,
     style
   }

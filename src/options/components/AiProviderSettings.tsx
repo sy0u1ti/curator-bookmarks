@@ -172,7 +172,7 @@ export function AiProviderSettings({
           </div>
         </div>
 
-        <div className={AI_PROVIDER_MODEL_FIELD_CLASS}>
+        <div id="settings-ai-model" className={AI_PROVIDER_MODEL_FIELD_CLASS}>
           <AiProviderModelToolsContent
             manageModelsRef={manageModelsRef}
             state={state}

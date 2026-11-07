@@ -68,8 +68,6 @@ import { getSearchSizePreset, SEARCH_SIZE_PRESETS, type SearchSizePreset } from 
 import { SEARCH_MULTI_OPEN_LIMIT } from '../search-engines'
 import {
   dispatchNewtabBackgroundFileSelect,
-  dispatchNewtabBackgroundFilterHoverToggle,
-  dispatchNewtabBackgroundMaskToggle,
   dispatchNewtabBackgroundSettingFieldChange,
   dispatchNewtabBackgroundUrlCommit,
   useNewtabBackgroundSettingsView
@@ -77,8 +75,13 @@ import {
 import { NEWTAB_BACKGROUND_TYPE_OPTIONS } from '../newtab-background-types'
 import type { SettingsDrawerSection } from '../settings-group-sync'
 import { useSettingsDrawerModalMode } from '../settings-drawer-mode'
-import { BACKGROUND_MASK_META, BACKGROUND_MASK_STYLES, isPaperShaderMaskStyle, isWallpaperFilterMaskStyle } from '../background-mask-settings'
-import { getBackgroundFilterUnavailableReason, useBackgroundFilterStatus } from '../background-filter-runtime'
+import {
+  DEFAULT_WALLPAPER_ADJUSTMENTS,
+  WALLPAPER_BLUR_MAX,
+  WALLPAPER_DIM_MAX,
+  WALLPAPER_MASK_PRESETS,
+  WALLPAPER_MASK_STYLES
+} from '../wallpaper-adjustments'
 import {
   dispatchNewtabSettingsDrawerActiveGroupChange,
   dispatchNewtabSettingsDrawerOpenChange,
@@ -1166,43 +1169,35 @@ const BackgroundSettingsSection = memo(function BackgroundSettingsSection({
             />
           </span>
         </div>
-        <BackgroundMaskSettings panelElement={panelElement} />
+        <WallpaperAdjustmentSettings panelElement={panelElement} />
       </Surface>
     </section>
   )
 })
 
-const BackgroundMaskSettings = memo(function BackgroundMaskSettings({ panelElement }: { panelElement: HTMLElement | null }) {
+const WallpaperAdjustmentSettings = memo(function WallpaperAdjustmentSettings({ panelElement }: { panelElement: HTMLElement | null }) {
   const backgroundSettings = useNewtabBackgroundSettingsView()
-  const filterStatus = useBackgroundFilterStatus()
-  const maskMeta = BACKGROUND_MASK_META[backgroundSettings.maskStyle]
-  const unavailableReason = getBackgroundFilterUnavailableReason(backgroundSettings.maskStyle, backgroundSettings.type)
-  const filterMessage = unavailableReason || (filterStatus.style === backgroundSettings.maskStyle ? filterStatus.message : '')
-  const filterControlsHidden = Boolean(unavailableReason)
+  const hidden = backgroundSettings.wallpaperAdjustmentsHidden || !backgroundSettings.wallpaperEnabled
 
   return (
     <>
       <SwitchRow
-        id="background-mask-enabled"
+        id="wallpaper-enabled"
         title="背景蒙版"
-        description="在壁纸与卡片之间叠加视觉蒙版，提升文字和图标的可读性。"
-        checked={backgroundSettings.maskEnabled}
-        onCheckedChange={dispatchNewtabBackgroundMaskToggle}
+        hidden={backgroundSettings.wallpaperAdjustmentsHidden}
+        checked={backgroundSettings.wallpaperEnabled}
+        onCheckedChange={value => dispatchNewtabBackgroundSettingFieldChange('wallpaperEnabled', value)}
       />
-      <SliderRow rowId="background-mask-overlay-row" id="background-mask-overlay" label="遮罩浓度" description="控制背景明暗遮罩强度；0% 保持原图明度，提高后压暗以突出文字。" valueId="background-mask-overlay-value" value={`${backgroundSettings.maskOverlay}%`} min="0" max="100" defaultValue="50" ariaLabel="背景遮罩效果" hidden={backgroundSettings.maskStyleHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskOverlay', value)} sliderValue={backgroundSettings.maskOverlay} ticks={['透明', '50%', '覆盖']} />
-      <div id="background-mask-style-row" className={settingRowClassName()} hidden={backgroundSettings.maskStyleHidden}>
-        <SettingLabelStack title="蒙版样式" description={maskMeta.description} />
+      <div id="wallpaper-style-row" className={settingRowClassName()} hidden={hidden}>
+        <SettingLabelStack title="蒙版样式" />
         <Select
-          id="background-mask-style"
+          id="wallpaper-style"
           ariaLabel="背景蒙版样式"
-          onValueChange={(value) => {
-            if (value) dispatchNewtabBackgroundSettingFieldChange('maskStyle', value)
+          options={WALLPAPER_MASK_STYLES.map(value => ({ value, label: WALLPAPER_MASK_PRESETS[value].label }))}
+          onValueChange={value => {
+            if (value) dispatchNewtabBackgroundSettingFieldChange('wallpaperStyle', value)
           }}
-          options={BACKGROUND_MASK_STYLES.map(value => ({
-            value,
-            label: BACKGROUND_MASK_META[value].label,
-            disabled: isPaperShaderMaskStyle(value) && Boolean(getBackgroundFilterUnavailableReason(value, backgroundSettings.type))
-          }))}
+          value={backgroundSettings.wallpaperStyle}
           popupClassName={SETTINGS_SELECT_POPUP_CLASS}
           popupAttributes={DRAWER_PORTALED_CONTENT_ATTRIBUTES}
           modal={false}
@@ -1210,25 +1205,11 @@ const BackgroundMaskSettings = memo(function BackgroundMaskSettings({ panelEleme
           positionerClassName={SETTINGS_SELECT_POSITIONER_CLASS}
           syncInputState
           triggerClassName={SETTINGS_SELECT_TRIGGER_CLASS}
-          value={backgroundSettings.maskStyle}
           valueClassName={SETTINGS_SELECT_VALUE_CLASS}
         />
       </div>
-      {backgroundSettings.maskEnabled && (isPaperShaderMaskStyle(backgroundSettings.maskStyle) || isWallpaperFilterMaskStyle(backgroundSettings.maskStyle)) ? <StatusMessage id="background-filter-status" className={SETTINGS_STATUS_CLASS}>
-        {filterMessage}
-      </StatusMessage> : null}
-      <SwitchRow
-        id="background-mask-filter-hover"
-        title="悬停效果"
-        description="鼠标在壁纸空白处移动时，动态增强指针周围的滤镜纹理交互。"
-        checked={backgroundSettings.maskFilterHover}
-        hidden={backgroundSettings.maskFilterHoverHidden}
-        onCheckedChange={dispatchNewtabBackgroundFilterHoverToggle}
-      />
-      <SliderRow rowId="background-mask-blur-row" id="background-mask-blur" label="背景模糊" description={backgroundSettings.type === 'color' ? '纯色没有可模糊的细节，切换到图片或视频后可见。' : '只柔化壁纸，文字和书签保持清晰。'} valueId="background-mask-blur-value" value={`${backgroundSettings.maskBlur}px`} min="0" max="32" defaultValue="12" ariaLabel="背景蒙版模糊程度" hidden={backgroundSettings.maskBlurHidden} disabled={backgroundSettings.type === 'color'} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskBlur', value)} sliderValue={backgroundSettings.maskBlur} ticks={['清晰', '16px', '柔和']} />
-      <SliderRow rowId="background-mask-filter-strength-row" id="background-mask-filter-strength" label="滤镜强度" description="0% 显示原图，向右增强纹理。" valueId="background-mask-filter-strength-value" value={`${backgroundSettings.maskFilterStrength}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜采样强度" hidden={backgroundSettings.maskFilterStrengthHidden || filterControlsHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterStrength', value)} sliderValue={backgroundSettings.maskFilterStrength} ticks={['原图', '50%', '完整效果']} />
-      <SliderRow rowId="background-mask-filter-size-row" id="background-mask-filter-size" label={maskMeta.sizeLabel || '大小'} valueId="background-mask-filter-size-value" value={`${backgroundSettings.maskFilterSize}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜元素大小" hidden={backgroundSettings.maskFilterSizeHidden || filterControlsHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterSize', value)} sliderValue={backgroundSettings.maskFilterSize} ticks={['小', '50%', '大']} />
-      <SliderRow rowId="background-mask-filter-spacing-row" id="background-mask-filter-spacing" label={maskMeta.spacingLabel || '间距'} valueId="background-mask-filter-spacing-value" value={`${backgroundSettings.maskFilterSpacing}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜元素间距" hidden={backgroundSettings.maskFilterSpacingHidden || filterControlsHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterSpacing', value)} sliderValue={backgroundSettings.maskFilterSpacing} ticks={['低', '50%', '高']} />
+      <SliderRow rowId="wallpaper-dim-row" id="wallpaper-dim" label="遮罩浓度" valueId="wallpaper-dim-value" value={`${backgroundSettings.wallpaperDim}%`} min="0" max={String(WALLPAPER_DIM_MAX)} defaultValue={String(DEFAULT_WALLPAPER_ADJUSTMENTS.dim)} ariaLabel="背景遮罩浓度" hidden={hidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('wallpaperDim', value)} sliderValue={backgroundSettings.wallpaperDim} />
+      <SliderRow rowId="wallpaper-blur-row" id="wallpaper-blur" label="模糊" valueId="wallpaper-blur-value" value={`${backgroundSettings.wallpaperBlur}px`} min="0" max={String(WALLPAPER_BLUR_MAX)} defaultValue={String(WALLPAPER_MASK_PRESETS[backgroundSettings.wallpaperStyle].blur)} ariaLabel="壁纸模糊" hidden={hidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('wallpaperBlur', value)} sliderValue={backgroundSettings.wallpaperBlur} />
     </>
   )
 })

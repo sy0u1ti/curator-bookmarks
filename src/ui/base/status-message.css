@@ -10,6 +10,29 @@
   scrollbar-gutter: stable;
 }
 
+.curator-status-message[data-reserve="true"] {
+  position: relative;
+  display: grid;
+  block-size: auto;
+  min-block-size: 1lh;
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+
+.curator-status-message-reserve {
+  grid-area: 1 / 1;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.curator-status-message-live {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+}
+
 .curator-status-message[data-tone="error"] {
   color: var(--ds-danger-text);
 }

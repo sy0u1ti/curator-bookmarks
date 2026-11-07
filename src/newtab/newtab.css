@@ -63,38 +63,6 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
   --newtab-focus-ring: 0 0 0 2px rgba(0, 0, 0, 0.68), 0 0 0 4px rgba(245, 245, 247, 0.42);
 }
 
-.newtab-wallpaper-filter {
-  opacity: 0;
-  contain: strict;
-  transform: translateZ(0);
-  transition: opacity var(--ui-motion-standard) var(--ui-ease-standard);
-}
-
-.newtab-wallpaper-filter[data-ready="false"] {
-  opacity: 0 !important;
-}
-
-.newtab-paper-shader {
-  contain: strict;
-  isolation: isolate;
-  pointer-events: none;
-  transform: translateZ(0);
-  transition: opacity var(--ui-motion-standard) var(--ui-ease-standard);
-}
-
-.newtab-paper-shader > div,
-.newtab-paper-shader canvas {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .newtab-wallpaper-filter,
-  .newtab-paper-shader {
-    transition: none;
-  }
-}
-
 html,
 body {
   width: 100%;
@@ -1340,25 +1308,21 @@ body {
   pointer-events: auto;
   grid-template-rows: 1fr;
   opacity: 1;
-  transform: translateY(0);
-  transform-origin: 50% 0;
-  /* The panel grows the shared glass surface, so its height has to travel with
-     it. Keep that travel short and without overshoot: this opens on most
-     searches, and a bounce here reads as the field wobbling. */
+  /* Reveal the results by opening one grid track. The field and glyphs retain
+     their position and scale while the shared glass grows down inside its slot.
+     Only open/close changes the track; result updates do not replay the reveal. */
   transition:
-    grid-template-rows var(--duration-quick) var(--ds-ease-standard),
-    transform var(--duration-quick) var(--ds-ease-standard),
-    opacity var(--duration-quick) var(--ds-ease-standard);
+    grid-template-rows var(--acc-expand) var(--acc-ease),
+    opacity var(--ds-motion-enter-opacity) var(--ds-ease-standard);
 }
 .newtab-search-suggestions-panel[data-starting-style],
 .newtab-search-suggestions-panel[data-ending-style] {
   grid-template-rows: 0fr;
   opacity: 0;
-  transform: translateY(calc(0px - var(--distance-micro)));
 }
 .newtab-search-suggestions-panel[data-ending-style] {
   pointer-events: none;
-  transition-duration: var(--duration-micro);
+  transition-duration: var(--acc-collapse), var(--ds-motion-exit-opacity);
 }
 .newtab-search-presence-clip {
   min-height: 0;

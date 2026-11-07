@@ -68,9 +68,9 @@ export function PopupWorkspaceTools() {
 
   return <>
     <div className="relative flex items-center gap-1">
-      <Button id="popup-keyboard-help" size="sm" variant="ghost" aria-label="查看键盘帮助" title="键盘帮助" onClick={() => setPopupKeyboardHelpOpen(true)}><Icon name="Keyboard" size={16} /></Button>
-      <Button id="open-page-archive" size="sm" variant="ghost" aria-label="存档当前页面" title="存档当前页面" onClick={() => { setError(null); void openPageArchiveWorkspace().catch(reason => setError({ message: reason.message })) }}><Icon name="Save" size={16} /></Button>
-      {!isSidePanelSurface() && <Button id="open-side-panel" size="sm" variant="ghost" aria-label="打开常驻书签侧栏" title="打开常驻书签侧栏" disabled={opening} onClick={() => void openPanel()}><Icon name="PanelRight" size={16} /></Button>}
+      <Button id="popup-keyboard-help" size="icon-sm" variant="ghost" aria-label="查看键盘帮助" title="键盘帮助" onClick={() => setPopupKeyboardHelpOpen(true)}><Icon name="Keyboard" size={16} /></Button>
+      <Button id="open-page-archive" size="icon-sm" variant="ghost" aria-label="存档当前页面" title="存档当前页面" onClick={() => { setError(null); void openPageArchiveWorkspace().catch(reason => setError({ message: reason.message })) }}><Icon name="Save" size={16} /></Button>
+      {!isSidePanelSurface() && <Button id="open-side-panel" size="icon-sm" variant="ghost" aria-label="打开常驻书签侧栏" title="打开常驻书签侧栏" disabled={opening} onClick={() => void openPanel()}><Icon name="PanelRight" size={16} /></Button>}
       {error && <div className="absolute right-0 top-full z-[120] mt-2 w-[280px] max-w-[calc(100vw-28px)] rounded-ds-lg border border-ds-border bg-ds-surface-2 ds-inset-panel text-xs text-ds-text-primary" role="alert">
         <p className="m-0 leading-relaxed">{error.message}</p>
         <div className="mt-2 flex flex-wrap gap-2">

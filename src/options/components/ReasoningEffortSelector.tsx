@@ -8,11 +8,12 @@ import {
   useRef,
   useState
 } from 'react'
-import { getMotionDurationMs, getMotionEasing, getMotionSpring, shouldSkipMotion } from '../../shared/motion'
+import { getMotionDurationMs, getMotionEasing, shouldSkipMotion } from '../../shared/motion'
 import { advanceSpring, springSettled } from '../../shared/motion-spring'
 import { Button } from '../../ui/base/Button'
 import { Popover } from '../../ui/base/Popover'
 import { cx } from '../../ui/base/utils'
+import { advanceSliderWeight, createSliderWeight, type SliderWeightState } from '../../ui/base/slider-weight'
 import { OPTIONS_REDUCED_MOTION_SURFACE_CLASS } from './options-motion-classes.js'
 
 /**
@@ -48,8 +49,6 @@ type SelectorView = 'menu' | 'advanced'
 const FALLBACK_LEVEL: ReasoningEffortLevel = { id: 'default', label: '—' }
 const FALLBACK_LEVELS: ReasoningEffortLevel[] = [FALLBACK_LEVEL]
 const KNOB_DIAMETER_PX = 34
-const VELOCITY_WINDOW_MS = 90
-const VELOCITY_MAX = 2.2
 
 const PANEL_CLASS = cx(
   'reasoning-effort-popover !block !w-[var(--anchor-width)] !min-w-0 !max-w-[calc(100vw-24px)] !overflow-hidden !rounded-ds-lg !border-ds-border !bg-ds-surface-2 !p-0',
@@ -89,8 +88,8 @@ const KNOB_CLASS = cx(
   'reasoning-effort-knob absolute left-0 top-1/2 z-20 size-[34px] -translate-y-1/2 rounded-full border border-[rgba(255,255,255,0.18)] bg-ds-text-primary',
   'shadow-[0_1px_2px_rgba(6,9,14,0.35),0_2px_6px_rgba(6,9,14,0.24)]',
   'before:absolute before:inset-0 before:rounded-full before:shadow-[0_2px_3px_rgba(6,9,14,0.28),0_4px_10px_rgba(6,9,14,0.3)] before:opacity-0 before:transition-opacity before:duration-ds-fast',
-  'data-[dragging=true]:[scale:1.04] data-[dragging=true]:before:opacity-100',
-  'transition-[scale] duration-[var(--ds-motion-control)] ease-ds-standard motion-reduce:transition-none'
+  'data-[dragging=true]:[scale:var(--slider-grip-press-scale)] data-[dragging=true]:before:opacity-100',
+  'transition-[scale] duration-[var(--slider-grip-settle)] ease-ds-standard motion-reduce:transition-none'
 )
 
 export function ReasoningEffortSelector({
@@ -124,7 +123,8 @@ export function ReasoningEffortSelector({
   const draggingRef = useRef(false)
   const activePointerRef = useRef<number | null>(null)
   const trackMetricsRef = useRef<TrackMetrics | null>(null)
-  const samplesRef = useRef<Array<{ time: number; value: number }>>([])
+  const dragWeightRef = useRef<SliderWeightState | null>(null)
+  const grabOffsetRef = useRef(0)
   const springFrameRef = useRef(0)
   const previousAnimatedIndexRef = useRef(valueIndex)
 
@@ -197,7 +197,7 @@ export function ReasoningEffortSelector({
     }
   }, [maxIndex, onChange, resolvedLevels, value])
 
-  const startSpring = useCallback((targetIndex: number, initialVelocity: number) => {
+  const startSpring = useCallback((targetIndex: number) => {
     cancelSpring()
     const targetProgress = maxIndex > 0 ? targetIndex / maxIndex : 0
     const settle = () => {
@@ -211,16 +211,16 @@ export function ReasoningEffortSelector({
 
     const axis = {
       position: positionRef.current,
-      velocity: Math.max(-VELOCITY_MAX, Math.min(VELOCITY_MAX, initialVelocity))
+      velocity: 0
     }
-    const spring = getMotionSpring()
+    const spring = { response: getMotionDurationMs('--slider-grip-settle', 150) / 1000, damping: 1 }
     let previousTime = performance.now()
     const step = (time: number) => {
       if (shouldSkipMotion() || document.hidden) { settle(); return }
       const delta = (time - previousTime) / 1000
       previousTime = time
       advanceSpring(axis, targetProgress, delta, spring)
-      updateVisualProgress(axis.position)
+      updateVisualProgress(axis.position, false)
       if (springSettled(axis, targetProgress, 0.001, 0.01)) {
         settle()
         return
@@ -236,7 +236,7 @@ export function ReasoningEffortSelector({
       return positionRef.current
     }
     trackMetricsRef.current = metrics
-    const fraction = (clientX - metrics.rect.left) / metrics.rect.width
+    const fraction = (clientX - grabOffsetRef.current - metrics.rect.left) / metrics.rect.width
     return Math.min(1, Math.max(0, (fraction * metrics.width - KNOB_DIAMETER_PX / 2) / metrics.span))
   }, [readTrackMetrics])
 
@@ -249,12 +249,16 @@ export function ReasoningEffortSelector({
     activePointerRef.current = event.pointerId
     draggingRef.current = true
     setDragging(true)
-    samplesRef.current = []
     trackMetricsRef.current = readTrackMetrics()
+    const knob = knobRef.current
+    const knobBounds = knob?.getBoundingClientRect()
+    grabOffsetRef.current = knobBounds && event.target instanceof Node && knob.contains(event.target)
+      ? event.clientX - (knobBounds.left + knobBounds.width / 2)
+      : 0
     event.currentTarget.setPointerCapture(event.pointerId)
     event.currentTarget.focus({ preventScroll: true })
     const progress = progressFromPointer(event.clientX)
-    samplesRef.current.push({ time: performance.now(), value: progress })
+    dragWeightRef.current = createSliderWeight(progress)
     updateVisualProgress(progress)
   }, [cancelSpring, disabled, progressFromPointer, readTrackMetrics, updateVisualProgress])
 
@@ -263,13 +267,15 @@ export function ReasoningEffortSelector({
       return
     }
     const progress = progressFromPointer(event.clientX)
-    const now = performance.now()
-    samplesRef.current.push({ time: now, value: progress })
-    samplesRef.current = samplesRef.current
-      .filter((sample) => now - sample.time <= VELOCITY_WINDOW_MS)
-      .slice(-5)
-    updateVisualProgress(progress)
-  }, [progressFromPointer, updateVisualProgress])
+    const metrics = trackMetricsRef.current
+    const weighted = advanceSliderWeight(dragWeightRef.current ?? createSliderWeight(positionRef.current), progress, {
+      min: 0, max: 1, step: 0.0001,
+      trackPixels: metrics?.span || 1,
+      detents: maxIndex > 0 ? resolvedLevels.map((_, index) => index / maxIndex) : []
+    })
+    dragWeightRef.current = weighted
+    updateVisualProgress(weighted.value)
+  }, [maxIndex, progressFromPointer, resolvedLevels, updateVisualProgress])
 
   const handlePointerRelease = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!draggingRef.current || activePointerRef.current !== event.pointerId) {
@@ -281,22 +287,27 @@ export function ReasoningEffortSelector({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
-    const samples = samplesRef.current
-    let velocity = 0
-    if (samples.length >= 2) {
-      const first = samples[0]
-      const last = samples[samples.length - 1]
-      const elapsed = (last.time - first.time) / 1000
-      if (elapsed > 0) {
-        velocity = (last.value - first.value) / elapsed
-      }
-    }
+    dragWeightRef.current = null
     const targetIndex = maxIndex > 0 ? Math.round(positionRef.current * maxIndex) : 0
     // 语义状态在指针释放时立即提交；弹簧只负责随后跟手的视觉收尾。
     // 这样用户马上点击“保存/测试连接”时，请求不会仍读取上一个强度。
     commitLevel(targetIndex)
-    startSpring(targetIndex, velocity)
-  }, [commitLevel, maxIndex, startSpring])
+    updatePreviewIndex(targetIndex)
+    startSpring(targetIndex)
+  }, [commitLevel, maxIndex, startSpring, updatePreviewIndex])
+
+  const cancelDrag = useCallback(() => {
+    const pointerId = activePointerRef.current
+    activePointerRef.current = null
+    draggingRef.current = false
+    dragWeightRef.current = null
+    setDragging(false)
+    cancelSpring()
+    if (pointerId !== null && sliderRef.current?.hasPointerCapture(pointerId)) {
+      sliderRef.current.releasePointerCapture(pointerId)
+    }
+    updateVisualProgress(maxIndex > 0 ? valueIndex / maxIndex : 0)
+  }, [cancelSpring, maxIndex, updateVisualProgress, valueIndex])
 
   const handleSliderKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (disabled) {
@@ -394,6 +405,13 @@ export function ReasoningEffortSelector({
     cancelSpring()
   }, [cancelSpring])
 
+  useEffect(() => {
+    if (disabled) cancelDrag()
+    const handleBlur = () => { if (draggingRef.current) cancelDrag() }
+    window.addEventListener('blur', handleBlur)
+    return () => window.removeEventListener('blur', handleBlur)
+  }, [cancelDrag, disabled])
+
   const handleOpenChange = (nextOpen: boolean) => {
     if (disabled && nextOpen) {
       return
@@ -402,9 +420,7 @@ export function ReasoningEffortSelector({
       setView('menu')
       setHoveringSlider(false)
     } else {
-      draggingRef.current = false
-      activePointerRef.current = null
-      setDragging(false)
+      cancelDrag()
     }
     setOpen(nextOpen)
   }
@@ -574,7 +590,8 @@ export function ReasoningEffortSelector({
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerRelease}
-                onPointerCancel={handlePointerRelease}
+                onPointerCancel={cancelDrag}
+                onLostPointerCapture={() => { if (draggingRef.current) cancelDrag() }}
                 onKeyDown={handleSliderKeyDown}
               >
                 <span className="sr-only" id={sliderDescriptionId}>
