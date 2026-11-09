@@ -1,4 +1,5 @@
 import { BOOKMARK_CLASSIFICATION_SCHEMA as AUTO_CLASSIFY_SCHEMA, validateAiClassificationResult, meetsAiConfidenceThreshold } from '../shared/ai-task-contracts.js'
+import { formatBytes } from '../shared/format.js'
 import { getNavigationHeaderOutcome, hasVerifiedLoginRequirement, isHttpRedirectStatus, parseAvailabilityRetryAfter, readAvailabilityResponseHeaders, shouldWaitForNavigationChallenge } from '../shared/availability-evidence.js'
 import type {
   AvailabilityEngineMessage,
@@ -409,7 +410,7 @@ chrome.notifications?.onButtonClicked.addListener((notificationId, buttonIndex) 
     console.warn('[Curator] Inbox 自动移动撤销失败', error)
     showInboxNotification({
       notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}undo-failed-${Date.now()}`,
-      title: 'Inbox 撤销失败',
+      title: '撤销失败',
       message: error instanceof Error ? error.message : '未能撤销最近一次自动移动。'
     }).catch(() => {})
   })
@@ -440,11 +441,11 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
         ensureFolder: ensureBookmarkFolderPath,
         retry: async item => {
           const [settings, snapshots] = await Promise.all([loadAutoAnalyzeSettings(), loadContentSnapshotSettings()])
-          if (!hasUsableAiSettings(settings)) throw new Error('请先在 AI 设置中配置可用渠道。')
+          if (!hasUsableAiSettings(settings)) throw new Error('请先在 AI 设置中配置可用服务商。')
           if (snapshots.localOnlyNoAiUpload) throw new Error('仅本地保存已开启，请先调整网页内容设置。')
           const inboxSettings = await loadInboxSettings()
-          if (!inboxSettings.enabled) throw new Error('请先启用 Inbox 捕获。')
-          if (!shouldAnalyzeInbox(inboxSettings)) throw new Error('Inbox 当前为“只收藏”；请先在通用设置中选择分析方式。')
+          if (!inboxSettings.enabled) throw new Error('请先启用“保存到待整理”。')
+          if (!shouldAnalyzeInbox(inboxSettings)) throw new Error('待整理当前设为“只保存”；请先在通用设置中选择整理方式。')
           const result = await enqueueAutoAnalyzeBookmark(item)
           if (result.accepted === false) throw new Error(result.error)
           await updateInboxItem(item.bookmarkId, { status: 'analyzing', lastError: '' })
@@ -484,7 +485,7 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
       .catch((error) => {
         sendResponse({
           ok: false,
-          error: error instanceof Error ? error.message : 'Inbox 自动移动撤销失败。'
+          error: error instanceof Error ? error.message : '撤销自动移动失败。'
         })
       })
 
@@ -831,7 +832,7 @@ async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
     await persistPopupCommandIntent({
       action: 'feedback',
       sourceCommand,
-      message: 'Inbox 捕获未开启，请先在通用设置中启用。',
+      message: '“保存到待整理”未开启，请先在通用设置中启用。',
       tone: 'warning'
     })
     await showTransientCommandBadge('!', '#5f3432')
@@ -844,7 +845,7 @@ async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
     await persistPopupCommandIntent({
       action: 'feedback',
       sourceCommand,
-      message: '当前页面不是可收藏的普通网页。',
+      message: '当前页面不是可保存的普通网页。',
       tone: 'warning'
     })
     await showTransientCommandBadge('!', '#5f3432')
@@ -857,7 +858,7 @@ async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
     await persistPopupCommandIntent({
       action: 'feedback',
       sourceCommand,
-      message: '这一页刚刚已收藏到待整理。',
+      message: '这一页刚刚已保存到待整理。',
       tone: 'info'
     })
     return
@@ -912,7 +913,7 @@ async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
           attempts: 0,
           maxAttempts: 0,
           createdAt: now,
-          detail: '已保存到 Inbox / 待整理，但自动分析队列已满，本次未加入队列。'
+          detail: '已保存到待整理；分析队列已满，本次不分析。'
         }).catch((error) => {
           console.warn('[Curator] Inbox 自动分析队列已满状态写入失败', error)
         }),
@@ -935,14 +936,14 @@ async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
         url,
         title,
         createdAt: now,
-        detail: '已保存到 Inbox / 待整理，正在后台分析。'
+        detail: '已保存到待整理，正在后台分析。'
       }).catch((error) => {
         console.warn('[Curator] Inbox 自动分析排队状态写入失败', error)
       }),
       showTransientCommandBadge('IN', '#2f5f80'),
       showInboxNotification({
         notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}${bookmarkId}`,
-        title: '已保存到 Inbox / 待整理',
+        title: '已保存到待整理',
         message: '正在后台分析并生成标签。'
       })
     ])
@@ -952,19 +953,19 @@ async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
   await Promise.all([
     updateInboxItem(bookmarkId, {
       status: 'needs-review',
-      lastError: '已保存到 Inbox，等待手动整理。'
+      lastError: ''
     }).catch(() => {}),
     persistPopupCommandIntent({
       action: 'feedback',
       sourceCommand,
-      message: '已保存到 Inbox / 待整理，未启动 AI 分析。',
+      message: '已保存到待整理，未分析。',
       tone: 'success'
     }),
     showTransientCommandBadge('IN', '#365f45'),
     showInboxNotification({
       notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}${bookmarkId}`,
-      title: '已保存到 Inbox / 待整理',
-      message: '未启动 AI 分析；可在设置的“待整理”中处理。'
+      title: '已保存到待整理',
+      message: '未分析；可在设置的“待整理”中处理。'
     })
   ])
 }
@@ -1053,7 +1054,7 @@ async function getAutoAnalyzeCommandReadiness(
   if (!hasUsableAiSettings(settings)) {
     return {
       ok: false,
-      message: '自动分析未开启：请先在通用设置中配置并保存 AI 渠道。'
+      message: '自动分析未开启：请先在通用设置中配置并保存 AI 服务。'
     }
   }
 
@@ -1061,14 +1062,14 @@ async function getAutoAnalyzeCommandReadiness(
   if (!providerOrigin) {
     return {
       ok: false,
-      message: '自动分析未开启：AI Base URL 无效，请在通用设置中检查。'
+      message: '自动分析未开启：AI 服务地址无效，请在通用设置中检查。'
     }
   }
 
   if (!(await containsHostPermission(providerOrigin))) {
     return {
       ok: false,
-      message: '自动分析未开启：请先在设置页测试连接或保存 AI 渠道，以授予服务地址访问权限。'
+      message: '自动分析未开启：请先在设置页测试连接或保存 AI 服务，以授予服务地址访问权限。'
     }
   }
 
@@ -1499,7 +1500,7 @@ async function runAutoAnalysisForBookmark(
   const bookmark = await getBookmarkById(bookmarkId)
   const bookmarkUrlDecision = assessSensitiveExternalUrl(bookmark?.url)
   if (inboxItem && bookmark?.url && inboxItem.url !== bookmark.url) {
-    await updateInboxItem(bookmarkId, { status: 'needs-review', lastError: '书签地址已变化，旧任务已停止；可结清待办后重新收藏。' })
+    await updateInboxItem(bookmarkId, { status: 'needs-review', lastError: '书签地址已变化，旧任务已停止；处理这条待整理后重新保存。' })
     return
   }
   if (!bookmark?.url || bookmarkUrlDecision.sensitive) {
@@ -1543,7 +1544,7 @@ async function runAutoAnalysisForBookmark(
   }
 
   if (!shouldUploadToAi) {
-    if (inboxItem && inboxItem.status === 'analyzing') await updateInboxItem(bookmarkId, { status: 'needs-review', lastError: '已按设置保留在 Inbox，未调用 AI。' })
+    if (inboxItem && inboxItem.status === 'analyzing') await updateInboxItem(bookmarkId, { status: 'needs-review', lastError: '已按设置保留在待整理，未调用 AI。' })
     return
   }
 
@@ -1624,7 +1625,7 @@ async function runAutoAnalysisForBookmark(
         title: latestBookmark.title || bookmarkRecord.title || entry.title || '新增书签',
         folderPath: DEFAULT_INBOX_FOLDER_TITLE,
         moved: false,
-        message: inboxSettings?.tagOnlyNoAutoMove ? '已按设置生成标签和摘要，保留在 Inbox。' : 'AI 已生成标签，未找到合适文件夹，已保留在 Inbox。'
+        message: inboxSettings?.tagOnlyNoAutoMove ? '已按设置生成标签和摘要，保留在待整理。' : '已生成标签；没有合适的文件夹，保留在待整理。'
       })
     }
     await persistAutoAnalyzeStatus({
@@ -1860,8 +1861,8 @@ async function runAutoAnalysisForBookmark(
             : inboxSettings?.tagOnlyNoAutoMove
               ? '已按设置只生成标签，未自动移动。'
               : !inboxSettings?.autoMoveToRecommendedFolder
-                ? '已生成建议，等待你决定是否移动。'
-                : 'AI 置信度较低，已保留在 Inbox。'
+                ? ''
+                : '置信度较低，保留在待整理。'
         )
     }).catch((error) => {
       console.warn('[Curator] Inbox 状态更新失败', error)
@@ -1889,10 +1890,10 @@ async function runAutoAnalysisForBookmark(
         moved
           ? `已归类到 ${recommendation.path || recommendation.title}`
           : inboxSettings?.tagOnlyNoAutoMove
-            ? '已生成标签和摘要，按设置保留在 Inbox。'
+            ? '已生成标签和摘要，按设置保留在待整理。'
             : !inboxSettings?.autoMoveToRecommendedFolder
               ? '已生成整理建议，等待你决定是否移动。'
-              : '置信度较低，已生成标签并保留在 Inbox。',
+              : '置信度较低，已生成标签并保留在待整理。',
         completionWarning
       ].filter(Boolean).join(' ')
     })
@@ -2197,7 +2198,7 @@ async function maybeNotifyInboxClassified({
 
   await showInboxNotification({
     notificationId: `${INBOX_CLASSIFIED_NOTIFICATION_PREFIX}${bookmarkId}`,
-    title: moved ? `已归类到 ${truncateText(folderPath, 44)}` : 'Inbox 分析完成',
+    title: moved ? `已归类到 ${truncateText(folderPath, 44)}` : '待整理分析完成',
     message: truncateText(message || title, 120),
     buttons: moved ? [{ title: '撤销移动' }] : undefined
   })
@@ -2279,8 +2280,8 @@ async function undoLastInboxAutoMove(expectedBookmarkId?: string): Promise<Inbox
         }),
         showInboxNotification({
           notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}undo-${undoMove.bookmarkId}`,
-          title: '已撤销 Inbox 自动移动',
-          message: '书签已移回 Inbox / 待整理。'
+          title: '已撤销自动移动',
+          message: '书签已移回待整理。'
         })
       ])
     }
@@ -3444,7 +3445,7 @@ async function readAutoResponseTextWithLimit(
   if (Number.isFinite(declaredBytes) && declaredBytes > normalizedMaxBytes) {
     await response.body?.cancel().catch(() => {})
     throw new Error(
-      `响应正文超过 ${Math.max(1, Math.round(normalizedMaxBytes / (1024 * 1024)))} MiB 限制。`
+      `响应正文超过 ${formatBytes(normalizedMaxBytes)} 限制。`
     )
   }
 
@@ -3452,7 +3453,7 @@ async function readAutoResponseTextWithLimit(
     const text = await response.text()
     if (new TextEncoder().encode(text).byteLength > normalizedMaxBytes) {
       throw new Error(
-        `响应正文超过 ${Math.max(1, Math.round(normalizedMaxBytes / (1024 * 1024)))} MiB 限制。`
+        `响应正文超过 ${formatBytes(normalizedMaxBytes)} 限制。`
       )
     }
     return text
@@ -3475,7 +3476,7 @@ async function readAutoResponseTextWithLimit(
       if (bytesRead > normalizedMaxBytes) {
         await reader.cancel().catch(() => {})
         throw new Error(
-          `响应正文超过 ${Math.max(1, Math.round(normalizedMaxBytes / (1024 * 1024)))} MiB 限制。`
+          `响应正文超过 ${formatBytes(normalizedMaxBytes)} 限制。`
         )
       }
       text += decoder.decode(value, { stream: true })

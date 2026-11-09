@@ -19,14 +19,14 @@ const EMPTY_HINT_CLASS = 'm-0 [color:var(--ds-text-secondary)]'
 const EMPTY_ACTIONS_CLASS = 'mt-0.5 flex flex-wrap justify-center gap-[7px]'
 const EMPTY_ACTION_CLASS = [
   'inline-flex min-h-7 items-center justify-center rounded-ds-sm border px-2.5 text-xs font-bold',
-  'border-[rgba(245,245,247,0.28)] bg-ds-surface-2 [color:var(--ds-text-secondary)]',
+  'border-ds-border bg-ds-surface-2 [color:var(--ds-text-secondary)]',
   'transition-[background-color,border-color,color,transform] duration-[var(--duration-quick)] ease-ds-standard',
-  'hover:border-[rgba(245,245,247,0.54)] hover:bg-ds-hover hover:[color:var(--ds-text-primary)]',
-  'focus-visible:border-[rgba(245,245,247,0.54)] focus-visible:bg-ds-hover focus-visible:[color:var(--ds-text-primary)]',
+  'hover:border-ds-border-hover hover:bg-ds-hover hover:[color:var(--ds-text-primary)]',
+  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:[color:var(--ds-text-primary)]',
   'active:scale-[0.98]'
 ].join(' ')
 const EMPTY_PRIMARY_ACTION_CLASS = [
-  'border-[rgba(245,245,247,0.86)] bg-ds-text-primary text-ds-text-inverse',
+  'border-ds-accent bg-ds-text-primary text-ds-text-inverse',
   'hover:border-ds-text-primary hover:bg-ds-text-primary hover:text-ds-text-inverse',
   'focus-visible:border-ds-text-primary focus-visible:bg-ds-text-primary focus-visible:text-ds-text-inverse'
 ].join(' ')
@@ -51,8 +51,8 @@ export function PopupEmptyState({
       <AiSetupPrompt
         className={EMPTY_STATE_CLASS}
         iconHidden
-        title={<p className={EMPTY_TITLE_CLASS}>请配置 AI 渠道</p>}
-        description={<p className={EMPTY_HINT_CLASS}>普通搜索已包含本地规则。语义搜索需要配置 AI 渠道后使用。</p>}
+        title={<p className={EMPTY_TITLE_CLASS}>请配置 AI 服务</p>}
+        description={<p className={EMPTY_HINT_CLASS}>普通搜索已包含本地规则。语义搜索需要配置 AI 服务后使用。</p>}
         actions={
           <>
             <Button
@@ -61,7 +61,7 @@ export function PopupEmptyState({
               onClick={() => onAction?.('open-ai-settings')}
               unstyled
             >
-              配置 AI 渠道
+              配置 AI 服务
             </Button>
             <Button
               className={getEmptyActionClassName(false)}

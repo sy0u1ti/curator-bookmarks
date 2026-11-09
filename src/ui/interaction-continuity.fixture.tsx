@@ -23,7 +23,7 @@ let provider: AiProviderSettingsState = {
   modelCatalog: { ...base.modelCatalog, loaded: true },
   modelTools: {
     ...base.modelTools, manageDisabled: false, fetchDisabled: false,
-    selector: { disabled: false, currentModel: modelIds[0], models: modelIds, fetchedModels: [], customModels: [], presetModels: modelIds }
+    selector: { disabled: false, currentModel: modelIds[0], models: modelIds, fetchedModels: [], customModels: [], labs: {}, presetModels: modelIds }
   }
 }
 publishAiProviderSettings(provider)

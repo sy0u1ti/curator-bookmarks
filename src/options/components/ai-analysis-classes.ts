@@ -12,9 +12,6 @@ export const AI_ANALYSIS_PRIMARY_BUTTON_CLASS =
 export const AI_ANALYSIS_SMALL_BUTTON_CLASS =
   'font-semibold'
 
-export const AI_ANALYSIS_CONFIRM_BUTTON_ACTIVE_CLASS =
-  'border-ds-success/40 bg-ds-success-soft text-ds-success-text hover:border-ds-success hover:bg-ds-success-soft focus-visible:border-ds-success focus-visible:bg-ds-success-soft'
-
 export const AI_ANALYSIS_CONFIRM_ICON_CLASS =
   'mr-1 inline-block font-extrabold tracking-[0] text-ds-success-text'
 

@@ -15,7 +15,7 @@ const SPEED_DIAL_CARD_PREVIEW_INITIALIZING_CLASS = '[--speed-dial-card-transitio
 const SPEED_DIAL_CARD_DRAGGING_CLASS = 'dragging cursor-default border-[var(--ui-accent-line)] opacity-100 shadow-[var(--ui-shadow-menu)]'
 const SPEED_DIAL_CARD_GHOST_CLASS = 'speed-dial-drag-ghost fixed top-0 left-0 z-[120] pointer-events-none opacity-[0.96] [filter:drop-shadow(0_18px_28px_rgba(0,0,0,0.42))] [transform-origin:0_0] [--speed-dial-card-transition:none] will-change-transform'
 
-export const SPEED_DIAL_MARK_CLASS = 'newtab-speed-dial-mark h-10 w-10 rounded-ds-sm bg-[rgba(0,0,0,0.34)] text-[14px] font-[840] leading-none text-[rgba(245,245,247,0.9)] [&_.bookmark-fallback]:h-8 [&_.bookmark-fallback]:w-8 [&_.bookmark-favicon.custom-icon]:h-8 [&_.bookmark-favicon.custom-icon]:w-8 [&_.bookmark-favicon]:h-6 [&_.bookmark-favicon]:w-6'
+export const SPEED_DIAL_MARK_CLASS = 'newtab-speed-dial-mark h-10 w-10 rounded-ds-sm bg-[rgba(0,0,0,0.34)] text-sm font-[840] leading-none text-[rgba(245,245,247,0.9)] [&_.bookmark-fallback]:h-8 [&_.bookmark-fallback]:w-8 [&_.bookmark-favicon.custom-icon]:h-8 [&_.bookmark-favicon.custom-icon]:w-8 [&_.bookmark-favicon]:h-6 [&_.bookmark-favicon]:w-6'
 export const SPEED_DIAL_COPY_CLASS = 'newtab-speed-dial-copy grid min-w-0 gap-[3px]'
 export const SPEED_DIAL_COPY_TITLE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] font-[720] leading-[1.2]'
 export const SPEED_DIAL_COPY_DETAIL_CLASS = 'newtab-speed-dial-copy-detail min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-[560] leading-[1.25] text-[rgba(245,245,247,0.9)]'

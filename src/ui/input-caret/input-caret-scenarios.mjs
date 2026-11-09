@@ -178,6 +178,43 @@ export async function runInputCaretChecks(page, origin, directory) {
   await page.press('#text', 'ArrowRight')
   await page.screenshot({ path: `${directory}/caret.png` })
 
+  for (const focusTiming of ['before-transition', 'during-transition']) {
+    const landed = await page.evaluate(async timing => {
+      const frame = () => new Promise(resolve => requestAnimationFrame(resolve))
+      const panel = document.createElement('div')
+      panel.style.cssText = 'position:fixed;left:160px;top:120px;width:320px;transform:translate(30px,48px) scale(.9);transition:transform 240ms ease-out'
+      panel.innerHTML = '<input type="text" value="ab">'
+      document.body.append(panel)
+      const input = panel.firstElementChild
+      panel.getBoundingClientRect()
+      const finished = new Promise(resolve => panel.addEventListener('transitionend', resolve, { once: true }))
+      if (timing === 'before-transition') input.focus()
+      panel.style.transform = 'none'
+      if (timing === 'during-transition') {
+        panel.getAnimations()
+        input.focus()
+      }
+      input.setSelectionRange(2, 2)
+      await finished
+      await frame()
+      await frame()
+      await frame()
+      const field = input.getBoundingClientRect()
+      const caret = document.querySelector('.curator-input-caret').getBoundingClientRect()
+      const layer = document.querySelector('.curator-input-caret-layer').getBoundingClientRect()
+      const result = {
+        layerOffset: Math.max(Math.abs(layer.left - field.left), Math.abs(layer.top - field.top), Math.abs(layer.width - field.width)),
+        centerOffset: Math.abs(caret.top + caret.height / 2 - (field.top + field.height / 2)),
+        insideField: caret.left >= field.left && caret.right <= field.right
+      }
+      input.blur()
+      panel.remove()
+      return result
+    }, focusTiming)
+    check(`container-motion/${focusTiming}`, landed.layerOffset < 0.5 && landed.centerOffset < 1 && landed.insideField, landed)
+  }
+
+  await page.focus('#text')
   await page.cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] })
   await resetSamples()
   await page.keyboard.type('Wi', { delay: 25 })

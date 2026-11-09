@@ -92,10 +92,10 @@ export const OPTION_EMPTY_STATE_ACTIONS_CLASS =
   'mt-4 flex flex-wrap items-center gap-2.5'
 
 export const OPTION_PANEL_TITLE_CLASS =
-  'm-0 max-w-[780px] text-[28px] font-semibold leading-[1.15] tracking-[-0.025em] text-ds-text-primary'
+  'm-0 max-w-[780px] text-2xl font-semibold leading-[1.15] tracking-[-0.025em] text-ds-text-primary'
 
 export const OPTION_PANEL_DESCRIPTION_CLASS =
-  'mt-[10px] mb-0 max-w-[720px] text-[14px] leading-[1.7] tracking-[0] text-ds-text-secondary'
+  'mt-[10px] mb-0 max-w-[720px] text-sm leading-[1.7] tracking-[0] text-ds-text-secondary'
 
 export const OPTION_PANEL_HEADER_CLASS =
   'mb-1 pb-2'

@@ -30,7 +30,6 @@ export async function runAvailabilityWorkflowScenarios(page, url, output) {
     try { return await page.click(`loc=role:button[name="${name}"]`) }
     catch (error) { throw new Error(`Button "${name}": ${error.message}`, { cause: error }) }
   }
-  const confirm = () => click('确认当前操作')
   const settled = () => page.waitForFunction(() => !window.__availabilityQA.state().deleting && !window.__availabilityQA.state().running)
   const removed = snapshot => snapshot.trace.filter(event => event.type === 'remove').map(event => event.id)
   const shot = async name => {
@@ -109,27 +108,26 @@ export async function runAvailabilityWorkflowScenarios(page, url, output) {
     const text = await page.evaluate(() => document.body.innerText)
     assert.ok(!/高置信|低置信|移入高|移回低/.test(text))
     await shot('desktop-results')
-    await click('删除书签：站点待验证')
-    await page.waitForSelector('#confirm-modal-title')
-    assert.match(await page.evaluate(() => document.querySelector('#confirm-modal-copy').textContent), /1 条仍待确认/)
-    await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '取消当前确认操作', undefined, { timeout: 3000 })
-    await page.keyboard.press('Escape')
-    await page.waitForSelector('#confirm-modal-title', { state: 'hidden' })
-    assert.deepEqual(removed(await io()), [])
-    checks.push('pending row deletes directly, with warning and keyboard-cancellable confirmation; cancellation mutates nothing')
-
-    await click('删除书签：站点待验证')
-    await page.waitForSelector('#confirm-modal-title')
     await page.evaluate(() => window.__fixtureIO.changeUrl('review', 'https://changed.example.net/keep'))
-    await confirm()
+    await click('删除书签：站点待验证')
     await page.waitForFunction(() => window.__availabilityQA.state().error.includes('跳过'))
-    assert.deepEqual(removed(await io()), [], 'a URL edited after confirmation opened must never be removed')
+    assert.deepEqual(removed(await io()), [], 'a URL edited after the result was produced must never be removed')
     checks.push('stale URL guard preserves changed bookmark')
 
     await fresh()
     await click('删除书签：站点待验证')
-    await page.waitForSelector('#confirm-modal-title')
-    await confirm()
+    await page.waitForFunction(() => !window.__availabilityQA.state().review.includes('review') && !window.__availabilityQA.state().deleting)
+    assert.equal(await page.evaluate(() => Boolean(document.querySelector('#confirm-modal-title'))), false, 'recoverable deletion opens no confirmation')
+    await page.waitForSelector('loc=role:button[name="撤销"]', { state: 'visible' })
+    assert.match(await page.evaluate(() => document.querySelector('[data-toast-id]')?.textContent || ''), /1 条仍待确认/)
+    await shot('undo-toast')
+    await click('撤销')
+    await page.waitForFunction(() => window.__availabilityQA.state().recycle.length === 0 && !window.__availabilityQA.state().deleting)
+    assert.ok((await io()).trace.some(event => event.type === 'create' && event.url === 'https://verify.example.net/page'), 'undo restores the deleted bookmark')
+    checks.push('pending row deletes directly with its warning and undo in the toast')
+
+    await fresh()
+    await click('删除书签：站点待验证')
     await page.waitForFunction(() => !window.__availabilityQA.state().review.includes('review') && !window.__availabilityQA.state().deleting)
     const deletion = await io()
     assert.deepEqual(removed(deletion), ['review'])
@@ -152,9 +150,6 @@ export async function runAvailabilityWorkflowScenarios(page, url, output) {
     await click('全选无法访问的书签')
     assert.deepEqual((await getState()).selected, ['failed'])
     await click('删除本区无法访问的书签')
-    await page.waitForSelector('#delete-modal-title')
-    assert.match(await page.evaluate(() => document.querySelector('#delete-modal-copy').textContent), /1 条/)
-    await click('确认删除本区书签')
     await page.waitForFunction(() => !window.__availabilityQA.state().failed.includes('failed') && !window.__availabilityQA.state().deleting)
     assert.deepEqual(removed(await io()), ['failed'], 'filtered bulk deletion must not include the persistent failure')
     checks.push('filter-scoped selection and bulk deletion never include hidden results')
@@ -165,9 +160,6 @@ export async function runAvailabilityWorkflowScenarios(page, url, output) {
     assert.equal((await getState()).selected.length, 4)
     await page.evaluate(() => { window.__fixtureIO.failRemoveId = 'failed' })
     await click('批量删除可用性检测已选书签')
-    await page.waitForSelector('#confirm-modal-title')
-    assert.match(await page.evaluate(() => document.querySelector('#confirm-modal-copy').textContent), /2 条仍待确认/)
-    await confirm()
     await page.waitForFunction(() => window.__availabilityQA.state().error.includes('删除过程中断') && !window.__availabilityQA.state().deleting)
     assert.deepEqual(removed(await io()), ['review', 'permission'])
     assert.deepEqual((await getState()).selected, ['failed', 'persistent'], 'failed and unprocessed items stay selected')
@@ -203,11 +195,16 @@ export async function runAvailabilityWorkflowScenarios(page, url, output) {
       } else {
         await click('删除书签：站点待验证')
       }
-      await page.waitForSelector('#confirm-modal-title')
-      await shot('confirmation-' + width)
-      await page.keyboard.press('Escape')
-      await page.waitForSelector('#confirm-modal-title', { state: 'hidden' })
-      checks.push('responsive direct deletion and keyboard dismissal at ' + width)
+      await page.waitForSelector('loc=role:button[name="撤销"]', { state: 'visible' })
+      const toast = await page.evaluate(() => {
+        const rect = document.querySelector('[data-toast-id]').getBoundingClientRect()
+        return { left: rect.left, right: rect.right, bottom: rect.bottom }
+      })
+      assert.ok(toast.left >= 0 && toast.right <= width && toast.bottom <= 1000, 'undo toast stays inside the viewport at ' + width)
+      await shot('undo-' + width)
+      await click('撤销')
+      await page.waitForFunction(() => window.__availabilityQA.state().recycle.length === 0 && !window.__availabilityQA.state().deleting)
+      checks.push('responsive direct deletion and undo at ' + width)
     }
     assert.deepEqual(await page.evaluate(() => window.__fixtureErrors), [])
     return { checks, screenshots, realBookmarksMutated: false }

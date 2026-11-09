@@ -12,7 +12,7 @@ const defaultDuplicateControlsState: DuplicateControlsState = {
     keepCount: 0,
     unsafeGroupCount: 0
   },
-  strategyStatus: '先选择待移入回收站的副本，再确认处理。',
+  strategyStatus: '',
   summary: {
     crossFolderGroups: 0,
     deleteCandidates: 0,

@@ -23,6 +23,13 @@ const AVAILABILITY_PERMISSION_TITLE_CLASS =
   'block text-[15px] font-[650] leading-normal tracking-[0] text-ds-text-primary'
 const AVAILABILITY_PERMISSION_COPY_CLASS =
   'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
+const AVAILABILITY_PERMISSION_COPY_RESERVE = [
+  '正在读取书签并准备校验。',
+  '当前没有适合外部检测的书签。',
+  '当前范围已授权，会执行多层校验。',
+  '开始检测时申请站点权限；授权后执行多层校验。'
+]
+const AVAILABILITY_SETTINGS_NOTE_RESERVE = ['超时或 HTTP 429 时会自动降速。']
 const AVAILABILITY_CONTROLS_ACTIONS_CLASS =
   OPTION_RUN_ACTIONS_CLASS
 const AVAILABILITY_BADGE_BASE_CLASS =
@@ -130,7 +137,7 @@ export function AvailabilityControls() {
             {state.badgeText}
           </span>
         </div>
-        <StatusMessage className={AVAILABILITY_PERMISSION_COPY_CLASS} tone={state.badgeTone === 'danger' ? 'error' : 'neutral'}>
+        <StatusMessage className={AVAILABILITY_PERMISSION_COPY_CLASS} reserve={AVAILABILITY_PERMISSION_COPY_RESERVE} tone={state.badgeTone === 'danger' ? 'error' : 'neutral'}>
           {state.permissionCopy}
         </StatusMessage>
       </div>
@@ -206,7 +213,7 @@ export function AvailabilityControls() {
                 }}
               />
             </label>
-            <StatusMessage className={SETTINGS_NOTE_CLASS} tone={state.settingsError ? 'error' : 'neutral'}>
+            <StatusMessage className={SETTINGS_NOTE_CLASS} reserve={AVAILABILITY_SETTINGS_NOTE_RESERVE} tone={state.settingsError ? 'error' : 'neutral'}>
               {state.settingsError || '超时或 HTTP 429 时会自动降速。'}
             </StatusMessage>
             <div className={SETTINGS_ACTIONS_CLASS}>

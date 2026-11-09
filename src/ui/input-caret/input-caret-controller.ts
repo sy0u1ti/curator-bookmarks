@@ -118,6 +118,7 @@ class InputCaretController {
   private composing = false
   private destroyed = false
   private enabled: boolean | null = null
+  private followFrame = 0
   private layer: HTMLDivElement | null = null
   private lastInputAt: number | null = null
   private lastLayerGeometry: LayerGeometry | null = null
@@ -152,6 +153,8 @@ class InputCaretController {
     document.addEventListener('keydown', this.handleKeyDown, true)
     document.addEventListener('keyup', this.handleKeyUp, true)
     document.addEventListener('pointerup', this.handlePointerUp, true)
+    document.addEventListener('transitionrun', this.handleMotionStart, true)
+    document.addEventListener('animationstart', this.handleMotionStart, true)
     document.addEventListener('scroll', this.handleScroll, { capture: true, passive: true })
     window.addEventListener('resize', this.handleResize)
     window.visualViewport?.addEventListener('resize', this.handleResize, { passive: true })
@@ -176,6 +179,8 @@ class InputCaretController {
     document.removeEventListener('keydown', this.handleKeyDown, true)
     document.removeEventListener('keyup', this.handleKeyUp, true)
     document.removeEventListener('pointerup', this.handlePointerUp, true)
+    document.removeEventListener('transitionrun', this.handleMotionStart, true)
+    document.removeEventListener('animationstart', this.handleMotionStart, true)
     document.removeEventListener('scroll', this.handleScroll, true)
     window.removeEventListener('resize', this.handleResize)
     window.visualViewport?.removeEventListener('resize', this.handleResize)
@@ -257,6 +262,42 @@ class InputCaretController {
   private handleScroll = (): void => {
     if (!this.activeTarget) return
     this.scheduleUpdate({ snap: true })
+  }
+
+  private handleMotionStart = (event: Event): void => {
+    const source = event.target
+    if (!this.activeTarget || !(source instanceof Node) || !source.contains(this.activeTarget)) return
+    this.followTargetMotion()
+  }
+
+  // The overlay sits in viewport coordinates, so it does not inherit transforms
+  // from the field's ancestors (a dialog opening, a panel sliding in). While any
+  // of them animates, re-measure every frame until the field comes to rest.
+  private isTargetMoving(target: CaretTarget): boolean {
+    if (typeof document.getAnimations !== 'function') return false
+    return document.getAnimations().some((animation) => {
+      if (animation.playState !== 'running') return false
+      const effect = animation.effect
+      if (!(effect instanceof KeyframeEffect) || effect.pseudoElement) return false
+      const element = effect.target
+      return element instanceof Element && element.contains(target)
+    })
+  }
+
+  private followTargetMotion(): void {
+    const target = this.activeTarget
+    if (!target || this.followFrame || !this.isTargetMoving(target)) return
+    const step = () => {
+      this.followFrame = 0
+      if (this.activeTarget !== target) return
+      this.update()
+      if (this.activeTarget === target && this.isTargetMoving(target)) {
+        this.followFrame = requestAnimationFrame(step)
+      } else if (this.activeTarget === target) {
+        this.scheduleUpdate({ snap: true })
+      }
+    }
+    this.followFrame = requestAnimationFrame(step)
   }
 
   private handleViewportScroll = (): void => {
@@ -349,6 +390,7 @@ class InputCaretController {
     this.ensureOverlay()
     this.update(true)
     this.scheduleUpdate({ snap: true })
+    this.followTargetMotion()
   }
 
   private deactivate(): void {
@@ -359,6 +401,10 @@ class InputCaretController {
     if (this.updateFrame) {
       cancelAnimationFrame(this.updateFrame)
       this.updateFrame = 0
+    }
+    if (this.followFrame) {
+      cancelAnimationFrame(this.followFrame)
+      this.followFrame = 0
     }
     this.pendingSnap = false
     this.composing = false

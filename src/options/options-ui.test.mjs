@@ -114,13 +114,13 @@ try {
       }
       if (!before && section === 'ai') {
         await panel.getByText('iOS 自签名安装指南', { exact: true }).waitFor({ state: 'visible' })
-        assert.equal(await panel.getByText('先配置 AI 渠道', { exact: true }).count(), 0, 'configured local providers do not require an API key')
+        assert.equal(await panel.getByText('先配置 AI 服务', { exact: true }).count(), 0, 'configured local providers do not require an API key')
         const overview = panel.getByRole('region', { name: '书签智能分析决策概览' })
         assert.equal(await overview.evaluate(node => getComputedStyle(node).borderTopWidth), '0px',
           'analysis progress uses one tone group, not another outlined frame')
       }
       if (!before && section === 'ai-settings') {
-        const setupSteps = panel.getByRole('list', { name: 'AI 渠道配置流程' })
+        const setupSteps = panel.getByRole('list', { name: 'AI 服务配置流程' })
         assert.equal(await setupSteps.count(), 0, 'the live fields replace the redundant setup walkthrough')
         await panel.locator('#ai-base-url').waitFor({ state: 'visible' })
         assert.equal(await panel.locator('#ai-base-url').evaluate(node => Boolean(node.closest('#ai-advanced-settings'))), false,
@@ -219,10 +219,12 @@ try {
     const oldRules = await worker.evaluate(async () => (await chrome.storage.local.get('curatorBookmarkIgnoreRules')).curatorBookmarkIgnoreRules)
     await guideCard().getByRole('button', { name: '更多操作：' + seeded.guide.title, exact: true }).click()
     await page.getByRole('menuitem', { name: /^忽略此书签/ }).click()
-    const ignoreConfirmation = page.getByRole('dialog', { name: '新增书签忽略规则？', exact: true })
-    await ignoreConfirmation.waitFor({ state: 'visible' })
-    await ignoreConfirmation.getByRole('button', { name: '确认当前操作', exact: true }).click()
-    await ignoreConfirmation.waitFor({ state: 'hidden' })
+    await guideCard().waitFor({ state: 'hidden' })
+    await page.getByRole('button', { name: '撤销', exact: true }).click()
+    await guideCard().waitFor({ state: 'visible' })
+    assert.deepEqual(await worker.evaluate(async () => (await chrome.storage.local.get('curatorBookmarkIgnoreRules')).curatorBookmarkIgnoreRules), oldRules, 'undo removes only the added rule')
+    await guideCard().getByRole('button', { name: '更多操作：' + seeded.guide.title, exact: true }).click()
+    await page.getByRole('menuitem', { name: /^忽略此书签/ }).click()
     await guideCard().waitFor({ state: 'hidden' })
     const newRules = await worker.evaluate(async () => (await chrome.storage.local.get('curatorBookmarkIgnoreRules')).curatorBookmarkIgnoreRules)
     assert.deepEqual(newRules.domains, oldRules.domains)
@@ -309,9 +311,9 @@ try {
     await page.screenshot({ path: path.join(output, 'bookmark-history-details-390.png'), animations: 'disabled' })
 
     await page.setViewportSize({ width: 1440, height: 1000 })
-    const confirmMutation = async () => {
-      const dialog = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: '确认当前操作', exact: true }) })
-      await dialog.getByRole('button', { name: '确认当前操作', exact: true }).click()
+    const confirmMutation = async (name) => {
+      const dialog = page.getByRole('dialog').filter({ has: page.locator('#confirm-modal-title') })
+      await dialog.getByRole('button', { name, exact: true }).click()
       await dialog.waitFor({ state: 'hidden' })
     }
     await page.goto(base + '#duplicates')
@@ -325,16 +327,16 @@ try {
     }
     for (const strategy of ['最新', '最早', '路径最短', '有标签', '新标签页来源', '最近访问']) {
       await applyKeepRule(`保留${strategy}`)
-      await duplicateDock.getByText('已选 2 条待移入回收站', { exact: true }).waitFor()
+      await duplicateDock.getByText('已选 2 条', { exact: true }).waitFor()
     }
     await applyKeepRule('按推荐保留')
     const group = duplicates.locator('article').first()
     for (const checkbox of await group.getByRole('checkbox').all()) await checkbox.check()
-    assert.equal(await duplicateDock.getByRole('button', { name: '移入回收站', exact: true }).isDisabled(), true)
+    assert.equal(await duplicateDock.getByRole('button', { name: '删除', exact: true }).isDisabled(), true)
     await applyKeepRule('保留最早')
-    await duplicateDock.getByRole('button', { name: '移入回收站', exact: true }).click()
-    await confirmMutation()
+    await duplicateDock.getByRole('button', { name: '删除', exact: true }).click()
     await page.waitForFunction(async url => (await chrome.bookmarks.search({ url })).length === 1, origin + '/article')
+    await page.getByRole('button', { name: '撤销', exact: true }).waitFor()
     const recycled = await worker.evaluate(async () => (await chrome.storage.local.get('curatorBookmarkRecycleBin')).curatorBookmarkRecycleBin)
     assert.equal(recycled.filter(item => seeded.copies.some(copy => copy.id === item.bookmarkId)).length, 2)
 
@@ -350,7 +352,7 @@ try {
     const redirectCard = page.locator('#redirects article').filter({ hasText: seeded.redirect.title })
     await redirectCard.getByRole('checkbox').check()
     await page.getByRole('button', { name: '批量更新重定向已选书签为最终地址', exact: true }).click()
-    await confirmMutation()
+    await confirmMutation('更新 1 条 URL')
     await page.waitForFunction(async id => (await chrome.bookmarks.get(id))[0].url.endsWith('/article'), seeded.redirect.id)
     await page.screenshot({ path: path.join(output, 'cleanup-workflows.png'), animations: 'disabled' })
 

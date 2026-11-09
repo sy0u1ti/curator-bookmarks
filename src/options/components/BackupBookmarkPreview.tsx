@@ -32,7 +32,7 @@ export function BackupBookmarkPreview({ bookmarks }: { bookmarks: BackupRestoreP
         />
         <Button size="sm" variant="secondary" aria-pressed={missingOnly} onClick={() => { setMissingOnly(!missingOnly); setPage(0) }}>只看当前缺失</Button>
       </div>
-      <p className="mt-3 text-xs text-ds-text-secondary" role="status">共 {filtered.length} 条 · 第 {currentPage + 1} / {pageCount} 页</p>
+      <p className="mt-3 text-xs text-ds-text-secondary" role="status">第 {currentPage + 1} / {pageCount} 页，共 {filtered.length} 条</p>
       {filtered.length ? (
         <ul className="mt-3 grid max-h-96 list-none gap-2 overflow-y-auto p-0" aria-label="备份书签预览列表">
           {filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map(bookmark => (

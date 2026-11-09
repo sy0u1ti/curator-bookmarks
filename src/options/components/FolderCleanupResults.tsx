@@ -90,7 +90,7 @@ function SplitUndoNotice({
   return (
     <article className={SPLIT_UNDO_CARD_CLASS}>
       <div className={FOLDER_CLEANUP_CARD_HEAD_CLASS}>
-        <span className={`${FOLDER_CLEANUP_BADGE_BASE_CLASS} ${FOLDER_CLEANUP_BADGE_TONE_CLASS.warning}`}>可撤销拆分</span>
+        <span className={`${FOLDER_CLEANUP_BADGE_BASE_CLASS} ${FOLDER_CLEANUP_BADGE_TONE_CLASS.warning}`}>已拆分</span>
         <div className={FOLDER_CLEANUP_ACTIONS_CLASS}>
           <Button variant="secondary" size="sm"
             className={FOLDER_CLEANUP_ACTION_BUTTON_CLASS}
@@ -106,8 +106,7 @@ function SplitUndoNotice({
       <div className={FOLDER_CLEANUP_COPY_CLASS}>
         <strong className={FOLDER_CLEANUP_TITLE_CLASS}>{splitUndo.title}</strong>
         <p className={FOLDER_CLEANUP_DETAIL_CLASS}>
-          已记录 <NumberPop text={splitUndo.moves.length} />
-          {' '}个书签的拆分前位置，可撤销本次拆分。
+          移动了 <NumberPop text={splitUndo.moves.length} /> 个书签
         </p>
       </div>
     </article>
@@ -191,7 +190,7 @@ function SuggestionCard({
                 className={`${FOLDER_CLEANUP_BADGE_BASE_CLASS} ${FOLDER_CLEANUP_BADGE_TONE_CLASS.muted}`}
                 key={`${suggestion.id}:${group.label}`}
               >
-                {group.label} · <NumberPop text={group.count} />
+                {group.label}：<NumberPop text={group.count} />
               </span>
             ))}
           </div>
@@ -202,7 +201,7 @@ function SuggestionCard({
               <div className={PREVIEW_ROW_CLASS} key={folder.id}>
                 <strong className={PREVIEW_ROW_TITLE_CLASS}>{folder.path || folder.title}</strong>
                 <span>
-                  <NumberPop text={folder.descendantBookmarkCount} /> 个书签 · <NumberPop text={folder.depth} /> 层
+                  <NumberPop text={folder.descendantBookmarkCount} /> 个书签，<NumberPop text={folder.depth} /> 层
                 </span>
               </div>
             ))}

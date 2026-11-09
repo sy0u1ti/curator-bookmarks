@@ -86,7 +86,7 @@ let ai: AiProviderSettingsState = {
     fetchDisabled: false, fetchLabel: '获取模型', fetchModelsStatus: '',
     fetchingModels: false, fetchFeedback: IDLE_ACTION_FEEDBACK, manageDisabled: false,
     selector: { currentModel: 'fixture-text-model', customModels: [], disabled: false,
-      fetchedModels: ['fixture-text-model'], models: ['fixture-text-model'], presetModels: [] }
+      fetchedModels: ['fixture-text-model'], labs: {}, models: ['fixture-text-model'], presetModels: [] }
   }
 }
 let backup: BackupControlsState = {
@@ -97,7 +97,7 @@ let confirmationId = 0
 function showConfirmation(open = true) {
   publishOptionsModals({ confirm: {
     requestId: ++confirmationId, holdToConfirm: true, open, cancelLabel: '取消',
-    confirmLabel: '清空标签数据', title: '清空 3 条标签数据？', label: '清空标签',
+    confirmLabel: '清空标签数据', title: '清空 3 条标签数据？',
     copy: '只会清空本地标签数据，不会删除 Chrome 书签。', tone: 'danger'
   } })
 }

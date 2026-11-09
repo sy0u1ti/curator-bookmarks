@@ -1287,7 +1287,6 @@ function resetPopupSessionStateForNextOpen() {
   state.editSaving = false
   state.editTargetBookmarkId = null
   state.moveTargetBookmarkId = null
-  state.confirmDeleteBookmarkId = null
   state.isLoading = true
   state.loadError = ''
   state.currentTab = null
@@ -1536,7 +1535,7 @@ async function prepareNaturalLanguageSearchAi(version = popupPreferencesVersion)
     await naturalSearchAi.ensureNaturalSearchAiPermissions(settings, { interactive: true })
   } catch {
     if (version !== popupPreferencesVersion || configVersion !== popupAiConfigVersion) return
-    state.naturalSearchError = 'AI 未就绪，请检查 AI 渠道配置或授权。'
+    state.naturalSearchError = 'AI 未就绪，请检查 AI 服务配置或授权。'
   }
 }
 function runSearch() {
@@ -1947,7 +1946,7 @@ function getNaturalSearchToggleTitle(isPending: boolean) {
   if (!state.naturalSearchEnabled) {
     return state.naturalSearchAiConfigured
       ? '开启 AI 语义搜索'
-      : '需要先配置 AI 渠道'
+      : '需要先配置 AI 服务'
   }
   if (isPending) {
     return '正在用 AI 理解搜索意图，点击关闭'
@@ -1977,8 +1976,8 @@ function getNaturalSearchResultCaption() {
   const plan = state.naturalSearchPlan
   const modeLabel = plan?.source === 'ai' ? 'AI 改写后匹配' : '本地匹配'
   const statusLabel = getNaturalSearchStatusLabelFallback(plan)
-  const detail = statusLabel.replace(/^(AI 解析|本地解析)( · )?/, '').trim()
-  return detail ? `${modeLabel} · ${detail}` : modeLabel
+  const detail = statusLabel.replace(/^(AI 解析|本地解析)(，)?/, '').trim()
+  return detail ? `${modeLabel}，${detail}` : modeLabel
 }
 function getNaturalSearchStatusLabelFallback(plan: NaturalSearchPlan | null): string {
   if (!plan) {
@@ -1996,7 +1995,7 @@ function getNaturalSearchStatusLabelFallback(plan: NaturalSearchPlan | null): st
   if (exclusionSummary) {
     parts.push(`排除 ${exclusionSummary}`)
   }
-  return parts.join(' · ')
+  return parts.join('，')
 }
 function getNaturalKeywordSummaryFallback(plan: NaturalSearchPlan): string {
   const excludedTerms = new Set(plan.excludedTerms)
@@ -2140,7 +2139,7 @@ function getPopupSmartPageViewModel() {
       pinLabel: '',
       pinPending: false,
       pinned: false,
-      status: pagePolicy.canClassify ? '未收藏 · 可快速保存到文件夹' : '未收藏 · 仅手动保存',
+      status: pagePolicy.canClassify ? '未保存' : '未保存，仅可手动保存',
       statusTitle: pagePolicy.classificationMessage,
       title
     }
@@ -2156,7 +2155,7 @@ function getPopupSmartPageViewModel() {
     pinLabel: pinned ? '已固定' : '固定到新标签页',
     pinPending: isPopupActionPending('pin-newtab', bookmark.id),
     pinned,
-    status: `已收藏 · ${formatBookmarkPath(bookmark.path) || '未归档路径'}`,
+    status: bookmark.path ? `已保存到 ${formatBookmarkPath(bookmark.path)}` : '已保存',
     statusTitle: bookmark.path || '',
     title
   }
@@ -2471,7 +2470,7 @@ function getPopupContentViewModel({
     mainState,
     mainRows,
     meta: reorder.active
-      ? `${reorder.folderTitle} · ${mainRows.length} 个直属书签`
+      ? `${reorder.folderTitle}：${mainRows.length} 个直属书签`
       : `${mainRows.length} 个书签`,
     mode: 'tree',
     reorder,
@@ -2846,7 +2845,7 @@ function getSearchResultRows(): PopupContentSearchResultViewModel[] {
       })
       const reasonTokens = presentation.reasonTokens
       const reasonTitle = Array.isArray(bookmark.matchReasons) && bookmark.matchReasons.length
-        ? bookmark.matchReasons.join(' · ')
+        ? bookmark.matchReasons.join('；')
         : ''
 
       return {
@@ -2957,7 +2956,6 @@ function getPopupModalsViewModel(): PopupModalsView {
     error: state.modalError,
     active: getActivePopupModal(),
     aiProvider: getAiProviderPromptModalView(),
-    delete: getDeleteModalView(),
     edit: getEditModalView(),
     move: getMoveModalView(),
     open: hasOpenModal(),
@@ -2977,9 +2975,6 @@ function getActivePopupModal(): PopupModalsView['active'] {
   }
   if (state.editTargetBookmarkId) {
     return 'edit'
-  }
-  if (state.confirmDeleteBookmarkId) {
-    return 'delete'
   }
   return null
 }
@@ -3081,20 +3076,6 @@ function getEditModalView(): PopupModalsView['edit'] {
   }
 }
 
-function getDeleteModalView(): PopupModalsView['delete'] {
-  const bookmark = state.confirmDeleteBookmarkId
-    ? state.bookmarkMap.get(state.confirmDeleteBookmarkId)
-    : null
-  const deleting = bookmark ? isPopupActionPending('delete', bookmark.id) : false
-  return {
-    cancelDisabled: deleting,
-    confirmDisabled: deleting,
-    confirmLabel: deleting ? '删除中…' : '删除',
-    open: Boolean(bookmark),
-    path: bookmark?.path || '未归档路径',
-    title: bookmark?.title || ''
-  }
-}
 function resetEditDraft(bookmark) {
   clearEditDiscardGuard()
   state.editDraftBookmarkId = String(bookmark?.id || '')
@@ -3417,7 +3398,7 @@ function handleCurrentPageQuickAction(action, returnFocusElement: HTMLElement | 
     return
   }
   if (!bookmarkId) {
-    showActivity({ type: 'error', message: '当前页面尚未收藏。' })
+    showActivity({ type: 'error', message: '当前页面尚未保存。' })
     return
   }
   if (action === 'edit') {
@@ -3544,7 +3525,7 @@ function handleContentAction(detail: PopupContentActionDetail) {
       return
     }
     if (action === 'delete') {
-      openDeleteDialog(bookmarkId, detail.returnFocusElement)
+      void deleteBookmark(bookmarkId)
     }
     return
   }
@@ -3618,7 +3599,7 @@ function handleFolderPickerAction(detail: PopupFolderPickerActionDetail) {
 function handleModalAction(detail: PopupModalActionDetail) {
   const action = String(detail.action || '')
   const value = String(detail.value || '')
-  if (action.endsWith('-change') || action.startsWith('save-') || action === 'confirm-delete') state.modalError = ''
+  if (action.endsWith('-change') || action.startsWith('save-')) state.modalError = ''
 
   if (action === 'close') {
     closeDialogs()
@@ -3678,10 +3659,6 @@ function handleModalAction(detail: PopupModalActionDetail) {
   }
   if (action === 'save-edit') {
     void saveEditedBookmark()
-    return
-  }
-  if (action === 'confirm-delete') {
-    void confirmDeleteBookmark()
   }
 }
 
@@ -3820,7 +3797,7 @@ function handleEscapeAction() {
   }
   if (state.folderFilterQuery) {
     clearFolderFilterQuery()
-    showViewNotice('已清空文件夹筛选')
+    showViewNotice('已清除文件夹筛选')
     return true
   }
   if (state.keyboardPane === 'folders') {
@@ -4077,7 +4054,6 @@ function openMoveDialog(bookmarkId, returnFocusElement = null) {
     return
   }
   rememberDialogReturnFocus(returnFocusElement)
-  state.confirmDeleteBookmarkId = null
   state.editTargetBookmarkId = null
   state.moveTargetBookmarkId = bookmarkId
   state.moveSearchQuery = ''
@@ -4097,26 +4073,11 @@ function openEditDialog(bookmarkId, returnFocusElement = null) {
   }
   rememberDialogReturnFocus(returnFocusElement)
   state.moveTargetBookmarkId = null
-  state.confirmDeleteBookmarkId = null
   state.editTargetBookmarkId = bookmarkId
   resetEditDraft(bookmark)
   // Prepare only the bounded visible window during the dialog's entrance,
   // so the first disclosure click does not have to mount the folder controls.
   dispatchPopupFolderPickerChange('edit', getEditFolderPickerState(bookmark))
-  render()
-}
-function openDeleteDialog(bookmarkId, returnFocusElement = null) {
-  state.modalError = ''
-  if (hasBlockingPopupActionPending()) {
-    return
-  }
-  if (shouldBlockDirtyEditClose()) {
-    return
-  }
-  rememberDialogReturnFocus(returnFocusElement)
-  state.moveTargetBookmarkId = null
-  state.editTargetBookmarkId = null
-  state.confirmDeleteBookmarkId = bookmarkId
   render()
 }
 function closeDialogs(options: { force?: boolean } | Event = {}) {
@@ -4133,7 +4094,6 @@ function closeDialogs(options: { force?: boolean } | Event = {}) {
   clearSmartFolderDraft()
   state.aiProviderPromptOpen = false
   state.editTargetBookmarkId = null
-  state.confirmDeleteBookmarkId = null
   clearEditDraft()
   render()
   if (isSmartOverlayActive()) {
@@ -4442,7 +4402,6 @@ function openSmartFolderDialog(returnFocusElement: HTMLElement | null = null) {
   rememberDialogReturnFocus(returnFocusElement)
   state.moveTargetBookmarkId = null
   state.editTargetBookmarkId = null
-  state.confirmDeleteBookmarkId = null
   state.smartFolderPickerOpen = true
   state.smartFolderSearchQuery = ''
   state.smartFolderError = ''
@@ -4483,7 +4442,6 @@ function openAiProviderPromptDialog(returnFocusElement: HTMLElement | null = nul
   state.moveTargetBookmarkId = null
   clearSmartFolderDraft()
   state.editTargetBookmarkId = null
-  state.confirmDeleteBookmarkId = null
   state.aiProviderPromptOpen = true
   render()
 }
@@ -4702,7 +4660,7 @@ async function grantSmartPermissionAndClassify() {
     const smartClassifier = await loadSmartClassifierModule()
     const granted = await smartClassifier.requestPermissions({ origins })
     if (!granted) {
-      throw smartClassifier.createSmartPermissionRequiredError(origins, '未完成 AI 渠道授权，暂时无法智能分类。')
+      throw smartClassifier.createSmartPermissionRequiredError(origins, '未完成 AI 服务授权，暂时无法智能分类。')
     }
     await classifyCurrentPage()
   } catch (error) {
@@ -5017,16 +4975,14 @@ async function saveEditedBookmark() {
     }
   }
 }
-async function confirmDeleteBookmark() {
-  const bookmark = state.confirmDeleteBookmarkId
-    ? state.bookmarkMap.get(state.confirmDeleteBookmarkId)
-    : null
-  if (!bookmark || isPopupActionPending('delete', bookmark?.id || '')) {
+async function deleteBookmark(bookmarkId: string) {
+  const bookmark = bookmarkId ? state.bookmarkMap.get(bookmarkId) : null
+  if (!bookmark || hasBlockingPopupActionPending() || isPopupActionPending('delete', bookmark.id)) {
     return
   }
   const session = popupSessionId
   setPopupActionPending('delete', bookmark.id, true)
-  renderModals()
+  render()
   try {
     const recycleBin = await loadRecycleBinModule()
     const recycleId = `recycle-${bookmark.id}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
@@ -5056,7 +5012,6 @@ async function confirmDeleteBookmark() {
       actionLabel: '撤销',
       recycleId
     })
-    closeDialogs({ force: true })
     await refreshData({ preserveSearch: true })
   } catch (error) {
     if (session !== popupSessionId) return
@@ -5067,7 +5022,7 @@ async function confirmDeleteBookmark() {
   } finally {
     if (session === popupSessionId) {
       setPopupActionPending('delete', bookmark.id, false)
-      renderModals()
+      render()
     }
   }
 }
@@ -5728,8 +5683,7 @@ function hasOpenModal() {
     state.moveTargetBookmarkId ||
       state.smartFolderPickerOpen ||
       state.aiProviderPromptOpen ||
-      state.editTargetBookmarkId ||
-      state.confirmDeleteBookmarkId
+      state.editTargetBookmarkId
   )
 }
 function getDefaultExpandedFolders(node) {
@@ -5749,7 +5703,7 @@ function describeFolder(folder) {
   if (folder.bookmarkCount) {
     parts.push(`${folder.bookmarkCount} 个书签`)
   }
-  return parts.join(' · ') || '空文件夹'
+  return parts.join('，') || '空文件夹'
 }
 function showActivity(input: Omit<PopupActivity, 'id' | 'type'> & { id?: string; type?: PopupActivity['type'] }) {
   // A form's own failure must remain inside its focus trap.

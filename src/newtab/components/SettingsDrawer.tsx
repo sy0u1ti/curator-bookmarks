@@ -150,8 +150,8 @@ const SETTINGS_LIST_CLASS = 'grid gap-2'
 const SETTINGS_INPUT_SURFACE_CLASS = 'border-ds-border rounded-ds-sm bg-[rgba(245,245,247,0.055)] text-ds-text-primary shadow-none'
 const SETTINGS_INPUT_INTERACTION_CLASS = 'outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary hover:shadow-none hover:outline-none focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50'
 const SETTINGS_CONTROL_CLASS = cx(SETTINGS_INPUT_SURFACE_CLASS, SETTINGS_INPUT_INTERACTION_CLASS)
-const SETTINGS_TEXT_INPUT_FOCUS_CLASS = 'focus:border-ds-focus focus:bg-ds-hover focus:outline-none focus:shadow-ds-focus focus-visible:border-ds-focus focus-visible:bg-ds-hover focus-visible:outline-none focus-visible:shadow-ds-focus'
-const SETTINGS_TEXT_INPUT_CLASS = cx('h-9 min-h-9 w-full min-w-0 px-3 text-xs font-semibold', SETTINGS_INPUT_SURFACE_CLASS, SETTINGS_INPUT_INTERACTION_CLASS, SETTINGS_TEXT_INPUT_FOCUS_CLASS)
+const SETTINGS_TEXT_INPUT_INTERACTION_CLASS = 'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus:bg-ds-hover focus:text-ds-text-primary disabled:cursor-not-allowed disabled:opacity-50'
+const SETTINGS_TEXT_INPUT_CLASS = cx('h-9 min-h-9 w-full min-w-0 px-3 text-xs font-semibold', SETTINGS_INPUT_SURFACE_CLASS, SETTINGS_TEXT_INPUT_INTERACTION_CLASS)
 const SETTINGS_ROW_CLASS = 'settings-control-row grid min-h-12 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-ds-lg border-0 bg-[rgba(245,245,247,0.045)] p-2 @max-[440px]/settings:grid-cols-1 @max-[440px]/settings:justify-items-stretch'
 const SETTINGS_ROW_DISABLED_CLASS = 'opacity-60'
 // Switch rows keep label and control side by side at every drawer width.
@@ -1263,7 +1263,7 @@ const GlassSettingsSection = memo(function GlassSettingsSection({
         >
           <span className="grid gap-1">
             <span>精细调整</span>
-            <span className={SETTINGS_DESCRIPTION_CLASS}>模糊 {settings.blur}px · 底色 {settings.tint}%</span>
+            <span className={SETTINGS_DESCRIPTION_CLASS}>模糊 {settings.blur}px，底色 {settings.tint}%</span>
           </span>
           <span className="t-acc-chevron"><Icon name="ChevronDown" size={14} aria-hidden="true" /></span>
         </CollapsibleTrigger>
@@ -1605,7 +1605,7 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
             options={[['bookmarks', '关闭，仅搜索书签'], ...searchEngines.map(([value, label]) => [value, label] as const)]}
           />
           <div className={settingRowClassName()}>
-            <SettingLabelStack title="尺寸" description={sizePreset === 'custom' ? `自定义 · ${searchSettings.height}px` : undefined} />
+            <SettingLabelStack title="尺寸" description={sizePreset === 'custom' ? `自定义 ${searchSettings.height}px` : undefined} />
             <ToggleGroup
               id="search-size-control"
               slidingIndicator
@@ -1687,7 +1687,7 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
                 ['flow', '跟随页面布局'],
                 ['center', '自动居中'],
                 ...(!searchSettings.autoVerticalCenter && searchSettings.offsetY !== 0
-                  ? [['custom', `自定义 · ${searchSettings.offsetY}px`] as const]
+                  ? [['custom', `自定义 ${searchSettings.offsetY}px`] as const]
                   : [])
               ]}
               onValueChange={(value) => {

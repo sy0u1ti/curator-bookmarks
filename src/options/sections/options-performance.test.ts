@@ -45,30 +45,28 @@ test('applying a duplicate strategy visits the catalog linearly and keeps the se
   assert.ok(fixture.reads().groups <= count * 2, `Repeated group scans: ${JSON.stringify(fixture.reads())}`)
 })
 
-test('duplicate deletion preview visits each selected bookmark without rescanning every group', async () => {
+test('duplicate deletion visits each selected bookmark without rescanning every group', async () => {
   const count = 1000
   const fixture = duplicateFixture(count)
   managerState.selectedDuplicateIds = new Set(Array.from({ length: count }, (_, index) => `bookmark-${index * 2}`))
-  let confirmation = ''
+  let lockRequests = 0
   await deleteSelectedDuplicates({
-    confirm: async ({ title, copy }) => { confirmation = `${title} ${copy}`; return false },
+    recycleCallbacks: { claimAvailabilityMutationLock: async () => { lockRequests++; return null } },
     renderAvailabilitySection() {}
   })
-  assert.match(confirmation, /1000 条重复书签/)
-  assert.match(confirmation, /保留 1000 条/)
-  assert.equal(managerState.selectedDuplicateIds.size, count, 'Cancelling preserves the current selection')
+  assert.equal(lockRequests, 1, 'A recoverable deletion starts without a confirmation step')
   assert.ok(fixture.reads().bookmarks <= count * 10, `Repeated bookmark scans: ${JSON.stringify(fixture.reads())}`)
 })
 
 test('duplicate deletion still blocks a selection that would empty a group', async () => {
   duplicateFixture(1)
   managerState.selectedDuplicateIds = new Set(['bookmark-0', 'bookmark-1'])
-  let confirmed = false
+  let lockRequests = 0
   await deleteSelectedDuplicates({
-    confirm: async () => { confirmed = true; return false },
+    recycleCallbacks: { claimAvailabilityMutationLock: async () => { lockRequests++; return null } },
     renderAvailabilitySection() {}
   })
-  assert.equal(confirmed, false)
+  assert.equal(lockRequests, 0)
   assert.match(availabilityState.lastError, /每组至少需要保留 1 条/)
 })
 
@@ -83,13 +81,17 @@ test('redirect previews retain selected current results and ignore stale selecti
   }))
   managerState.selectedRedirectIds = new Set(['redirect-0', 'redirect-1999', 'stale-id'])
   const confirmations: string[] = []
+  let lockRequests = 0
   const callbacks = {
     getCurrentAvailabilityScopeMeta: () => ({ key: 'all', type: 'all' }),
     confirm: async ({ title }) => { confirmations.push(title); return false },
+    recycleCallbacks: { claimAvailabilityMutationLock: async () => { lockRequests++; return null } },
     renderAvailabilitySection() {}
   }
   await updateSelectedRedirects(callbacks)
+  assert.deepEqual(confirmations, ['更新 2 条重定向书签 URL？'])
+  assert.equal(managerState.selectedRedirectIds.size, 3, 'Cancelling an update preserves the selection')
   await deleteSelectedRedirects(callbacks)
-  assert.deepEqual(confirmations, ['更新 2 条重定向书签 URL？', '删除 2 条重定向书签？'])
-  assert.equal(managerState.selectedRedirectIds.size, 3)
+  assert.deepEqual(confirmations, ['更新 2 条重定向书签 URL？'], 'A recoverable deletion is not confirmed')
+  assert.equal(lockRequests, 1)
 })

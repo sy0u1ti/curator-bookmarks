@@ -6,6 +6,15 @@
   --font-sans: "Geist", "Geist Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
   --font-mono: "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 
+  /* One type scale: meta 12 / body 13 / title 15 / display 28. Line boxes keep
+     the previous 20 / 24 / 32px rhythm so the scale change does not move layout. */
+  --text-sm: 13px;
+  --text-sm--line-height: calc(20 / 13);
+  --text-base: 15px;
+  --text-base--line-height: calc(24 / 15);
+  --text-2xl: 28px;
+  --text-2xl--line-height: calc(32 / 28);
+
   --color-ds-page: var(--ds-bg-page);
   --color-ds-app: var(--ds-bg-app);
   --color-ds-surface-1: var(--ds-surface-1);

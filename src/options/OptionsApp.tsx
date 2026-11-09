@@ -31,6 +31,7 @@ import { AiSettingsPanel } from './components/AiSettingsPanel'
 import { InboxPanel } from './components/InboxPanel'
 import { useInboxReviewData } from './components/inbox-review-store'
 import { useOptionsModalsState } from './components/options-modals-store'
+import { OptionsUndoToast } from './components/OptionsUndoToast'
 import {
   getOptionsSectionNavigationFromLink,
   type OptionsSectionKey
@@ -163,9 +164,9 @@ const settingsLinks: NavLink[] = [
 ]
 
 const availabilityLinks: NavLink[] = [
-  { section: 'availability', href: '#availability', icon: 'Gauge', label: '书签可用性检测', variant: 'subitem' },
+  { section: 'availability', href: '#availability', icon: 'Gauge', label: '失效书签检测', variant: 'subitem' },
   { section: 'history', href: '#history', icon: 'ArchiveRestore', label: '检测历史', variant: 'subitem' },
-  { section: 'redirects', href: '#redirects', icon: 'RefreshCw', label: '重定向更新', variant: 'subitem' },
+  { section: 'redirects', href: '#redirects', icon: 'RefreshCw', label: '网址更新', variant: 'subitem' },
   { section: 'ignore', href: '#ignore', icon: 'CircleHelp', label: '忽略规则', variant: 'subitem' }
 ]
 
@@ -280,8 +281,8 @@ function OptionsHeader({
           <img className={optionsBrandMarkImageClass} src="../assets/icon128.png" alt="" />
         </span>
         <span className={optionsBrandCopyClass}>
-          <strong className="block truncate whitespace-nowrap text-[15px] font-[650] leading-none tracking-[-0.01em] text-ds-text-primary max-[1180px]:text-[13px] max-[1180px]:tracking-[-0.02em] max-[760px]:text-[20px] max-[760px]:tracking-[0]">
-            Curator Bookmark
+          <strong className="block whitespace-nowrap text-[15px] font-[650] leading-none tracking-[-0.01em] text-ds-text-primary">
+            Curator
           </strong>
         </span>
       </a>
@@ -684,6 +685,7 @@ export function OptionsApp() {
         open={mobileNavigationOpen}
       />
       <DeferredOptionsModals />
+      <OptionsUndoToast />
     </ThemeProvider>
   )
 }
@@ -722,7 +724,7 @@ function OptionsPanelLoading() {
 
 function DeferredOptionsModals() {
   const modals = useOptionsModalsState()
-  const open = modals.confirm.open || modals.delete.open || modals.move.open || modals.scope.open
+  const open = modals.confirm.open || modals.move.open || modals.scope.open
   const [Modals, setModals] = useState<OptionsModalsComponent | null>(optionsModalsComponent)
 
   useEffect(() => {

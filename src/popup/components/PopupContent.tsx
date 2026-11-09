@@ -126,7 +126,7 @@ const paneCaptionClass = 'ml-auto min-w-0 truncate text-right font-medium text-d
 const paneHeaderActionClass = [
   'inline-flex h-7 flex-none items-center gap-1.5 rounded-ds-sm border border-transparent bg-transparent px-2 text-xs font-semibold text-ds-text-secondary outline-none',
   'transition-[border-color,background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
-  'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)] disabled:cursor-default disabled:opacity-40'
 ].join(' ')
 const folderTreeClass =
@@ -138,9 +138,9 @@ const mainListClass =
 // main search shell, which would make the header grow.
 const folderFilterShellClass = [
   'popup-folder-filter group/filter relative flex h-[26px] min-h-[26px] w-full min-w-0 items-center gap-1 rounded-ds-sm border border-transparent bg-ds-text-primary/[0.055] ds-inset-menu pl-2 text-ds-text-primary',
-  'transition-[background-color,border-color,box-shadow] duration-ds-fast ease-ds-standard',
+  'shadow-[0_0_0_3px_transparent] transition-[background-color,border-color,box-shadow] duration-ds-standard ease-ds-standard',
   'hover:border-ds-border hover:bg-ds-text-primary/[0.085]',
-  'focus-within:border-ds-border-hover focus-within:bg-ds-text-primary/[0.085] focus-within:[outline:3px_solid_rgba(245,245,247,0.14)] focus-within:outline-offset-0'
+  'focus-within:border-ds-border-hover focus-within:bg-ds-text-primary/[0.085] focus-within:shadow-[0_0_0_3px_var(--ds-accent-soft)]'
 ].join(' ')
 const folderFilterIconClass =
   'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard group-focus-within/filter:text-ds-text-secondary'
@@ -156,7 +156,7 @@ const folderFilterClearClass = [
 const folderFilterEmptyClass =
   'grid place-items-center rounded-ds-sm px-3 py-6 text-center text-xs leading-[1.55] text-ds-text-muted'
 const mainRowClass =
-  'popup-main-row relative z-[1] grid min-h-[var(--popup-bookmark-row-height)] grid-cols-[minmax(0,1fr)] items-center border-t border-[rgba(38,40,46,0.72)] py-1'
+  'popup-main-row relative z-[1] grid min-h-[var(--popup-bookmark-row-height)] grid-cols-[minmax(0,1fr)] items-center border-t border-ds-border-subtle py-1'
 const virtualSpacerClass = 'pointer-events-none block w-full'
 const POPUP_FOLDER_ROW_HEIGHT = 34
 const POPUP_VIRTUALIZATION_THRESHOLD = 24
@@ -166,7 +166,7 @@ const rootFolderBranchClass = 'rounded-full border border-white/30'
 const listButtonClass = [
   'popup-list-button flex min-h-12 w-full min-w-0 items-center gap-2.5 rounded-ds-sm border border-transparent bg-transparent text-left text-ds-text-primary outline-none',
   'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
-  'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
+  'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1 active:scale-[0.993]'
 ].join(' ')
 const listButtonBaseStyle: CSSProperties = {
   padding: '6px var(--popup-row-copy-rest-inset) 6px calc(var(--popup-row-label-inset) - var(--ds-stroke-width))'
@@ -186,7 +186,7 @@ const rowActionRailClass = 'popup-row-actions-menu'
 const rowActionButtonClass = [
   'inline-flex h-7 w-7 flex-none items-center justify-center rounded-ds-sm border-0 bg-ds-surface-3 text-ds-text-primary outline-none',
   'transition-[background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
-  'hover:bg-ds-surface-3 focus-visible:bg-ds-surface-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'hover:bg-ds-surface-3 focus-visible:bg-ds-surface-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)] disabled:cursor-default disabled:opacity-45'
 ].join(' ')
 const rowActionTriggerClass = cx(rowActionButtonClass, 'popup-row-actions-trigger')
@@ -195,7 +195,7 @@ const rowActionDangerClass =
 const rowReorderHandleClass = [
   'popup-bookmark-reorder-handle absolute right-[7px] top-1/2 z-[3] inline-flex h-10 w-10 -translate-y-1/2 touch-none select-none items-center justify-center rounded-ds-sm border border-transparent bg-transparent text-ds-text-muted outline-none',
   'transition-[border-color,background-color,color,opacity] duration-ds-fast ease-ds-standard',
-  'cursor-grab hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'cursor-grab hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:cursor-grabbing disabled:cursor-default disabled:opacity-40'
 ].join(' ')
 const compactStateClass =
@@ -777,7 +777,7 @@ function PopupFolderFilterField({
         className={folderFilterClearClass}
         data-visible={filter.clearVisible ? 'true' : 'false'}
         type="button"
-        aria-label="清空文件夹筛选"
+        aria-label="清除文件夹筛选"
         aria-hidden={!filter.clearVisible}
         tabIndex={filter.clearVisible ? undefined : -1}
         onClick={() => handlers?.onFolderFilterClear?.()}
@@ -1612,7 +1612,7 @@ function PopupSearchResultRow({
           />
           {reasons.length ? (
             <span className={resultMatchReasonsClass} title={row.reasonTitle} aria-label={row.reasonLabel}>
-              {reasons.join(' · ')}
+              {reasons.join('；')}
             </span>
           ) : null}
         </span>

@@ -1,17 +1,17 @@
 export function getAiProviderBaseUrlIssue(baseUrl: unknown): string {
   const value = String(baseUrl || '').trim()
   if (!value) {
-    return '请填写 Base URL。'
+    return '请填写服务地址。'
   }
 
   let parsedUrl: URL
   try {
     parsedUrl = new URL(value)
   } catch {
-    return 'Base URL 格式无效。'
+    return '服务地址格式无效。'
   }
 
-  if (parsedUrl.username || parsedUrl.password) return 'Base URL 不支持内嵌用户名或密码，请在 API Key 中填写密钥。'
+  if (parsedUrl.username || parsedUrl.password) return '服务地址不支持内嵌用户名或密码，请在 API Key 中填写密钥。'
 
   if (parsedUrl.protocol === 'https:') {
     return ''
@@ -22,10 +22,10 @@ export function getAiProviderBaseUrlIssue(baseUrl: unknown): string {
   }
 
   if (parsedUrl.protocol === 'http:') {
-    return 'Base URL 必须使用 https；只有 localhost 可作为高级开发选项使用 http。'
+    return '服务地址必须使用 https；只有 localhost 可作为高级开发选项使用 http。'
   }
 
-  return '仅支持 https Base URL；localhost 高级开发例外可使用 http。'
+  return '服务地址仅支持 https；localhost 高级开发例外可使用 http。'
 }
 
 /** 仅识别 Anthropic 官方 API；第三方 Claude 网关仍按其 OpenAI-compatible 协议调用。 */

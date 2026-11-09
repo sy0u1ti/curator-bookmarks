@@ -19,7 +19,7 @@ const cases = {
 }
 
 export async function runLayoutStabilityChecks(page, origin, directory, options = {}) {
-  const report = { checks: [], failures: [], screenshots: [], frames: 0, samples: 0 }
+  const report = { checks: [], failures: [], screenshots: [], frames: 0, samples: 0, typography: {}, deadSpace: {} }
   const widths = options.widths || [1440, 768, 390]
   const surfaces = options.surfaces || Object.keys(cases)
   for (const surface of surfaces) assert.ok(cases[surface], `Unknown surface ${surface}`)
@@ -106,6 +106,7 @@ export async function runLayoutStabilityChecks(page, origin, directory, options 
         await page.cdp('Emulation.setFocusEmulationEnabled', { enabled: true })
         await page.waitForSelector(cases[surface].selectors[0], { state: 'visible' })
         await settle()
+        report.deadSpace[label] = await page.evaluate(findRestingDeadSpace)
         console.log(`${label}: ${(await page.snapshot()).slice(0, 220)}`)
         const selectors = cases[surface].selectors
         if (surface === 'archive') {
@@ -208,7 +209,7 @@ export async function runLayoutStabilityChecks(page, origin, directory, options 
               await page.focus(checkbox)
               await page.press(checkbox, 'Space')
               await page.waitForSelector('.options-selection-dock', { state: 'visible' })
-              await page.click('loc=role:button[name="清空可用性检测已选书签"]')
+              await page.click('loc=role:button[name="取消选择可用性检测书签"]')
               await page.waitForSelector('.options-selection-dock', { state: 'hidden' })
               assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '选择排版与交互参考', 'Clearing the dock restores focus to the selection control')
             }
@@ -239,10 +240,59 @@ export async function runLayoutStabilityChecks(page, origin, directory, options 
           // An open dialog's scroll lock owns document overflow meanwhile.
           if (width < 800 && surface === 'popup') assert.equal(shell.overflowX, 'auto', 'A clipped popup must stay reachable by scrolling')
         } else assert.ok(safety.overflow <= 1, `Page overflows horizontally by ${safety.overflow}px`)
+        report.typography[label] = await page.evaluate(() => {
+          const sizes = {}
+          for (const node of document.querySelectorAll('body *')) {
+            const text = [...node.childNodes].filter(child => child.nodeType === Node.TEXT_NODE).map(child => child.textContent).join('').trim()
+            if (!text || node.closest('[aria-hidden="true"], script, style, svg')) continue
+            const rect = node.getBoundingClientRect()
+            const style = getComputedStyle(node)
+            if (!rect.width || !rect.height || style.visibility !== 'visible' || Number(style.opacity) === 0) continue
+            const size = style.fontSize
+            sizes[size] ||= []
+            if (sizes[size].length < 4) sizes[size].push(text.slice(0, 24))
+          }
+          return sizes
+        })
         await screenshot(`${surface}-${width}`)
         console.log(`${label}: checked`)
       })
     }
   }
   return report
+}
+
+// Runs in the page: visible boxes with no painted content that still occupy
+// layout (empty status slots, empty wrappers with margins/padding).
+function findRestingDeadSpace() {
+  const found = []
+  const describe = node => {
+    const id = node.id ? `#${node.id}` : ''
+    const cls = typeof node.className === 'string' ? node.className.split(/\s+/).filter(Boolean).slice(0, 4).join('.') : ''
+    return `${node.tagName.toLowerCase()}${id}${cls ? '.' + cls : ''}`
+  }
+  const paints = node => {
+    const style = getComputedStyle(node)
+    return style.backgroundImage !== 'none' ||
+      (style.backgroundColor !== 'rgba(0, 0, 0, 0)' && style.backgroundColor !== 'transparent') ||
+      ['Top', 'Right', 'Bottom', 'Left'].some(side => parseFloat(style[`border${side}Width`]) > 0 && style[`border${side}Style`] !== 'none') ||
+      style.boxShadow !== 'none'
+  }
+  for (const node of document.querySelectorAll('body *')) {
+    if (node.closest('[aria-hidden="true"], script, style, svg, template, [hidden], [inert]')) continue
+    if (['INPUT', 'TEXTAREA', 'SELECT', 'IMG', 'VIDEO', 'CANVAS', 'IFRAME', 'BUTTON', 'HR', 'BR'].includes(node.tagName)) continue
+    const style = getComputedStyle(node)
+    if (style.display === 'none' || style.visibility !== 'visible' || style.position === 'absolute' || style.position === 'fixed') continue
+    const rect = node.getBoundingClientRect()
+    if (rect.width < 24) continue
+    const margin = parseFloat(style.marginTop) + parseFloat(style.marginBottom)
+    const footprint = rect.height + Math.max(0, margin)
+    if (footprint < 8) continue
+    if (node.textContent.trim()) continue
+    if (node.querySelector('input, textarea, select, img, video, canvas, iframe, button, svg, [role]')) continue
+    if (paints(node) || [...node.querySelectorAll('*')].some(paints)) continue
+    if (node.parentElement && !node.parentElement.textContent.trim() && found.some(entry => entry.node.contains(node))) continue
+    found.push({ node, entry: { node: describe(node), height: Math.round(rect.height), margin: Math.round(margin), parent: describe(node.parentElement || document.body) } })
+  }
+  return found.filter(({ node }) => !found.some(other => other.node !== node && other.node.contains(node))).map(({ entry }) => entry)
 }

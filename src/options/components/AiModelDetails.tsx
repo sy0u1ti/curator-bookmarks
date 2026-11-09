@@ -5,6 +5,7 @@ import { SwitchControl } from '../../ui/base/Switch'
 import { StatusButton } from '../../ui/actions/StatusButton'
 import { StatusMessage } from '../../ui/base/StatusMessage'
 import { actionFeedback, IDLE_ACTION_FEEDBACK } from '../../shared/action-feedback.js'
+import { formatDateTime } from '../../shared/format.js'
 import { MODELS_DEV_ERROR_LABELS } from '../../shared/models-dev-cache.js'
 import { requestModelsDevUpdate } from '../../shared/models-dev-client.js'
 import { REASONING_EFFORT_LABELS, type ReasoningEffortId } from '../../shared/ai-reasoning.js'
@@ -25,7 +26,7 @@ export function AiModelDetails({ state }: { state: AiProviderSettingsState }) {
   const model = catalog.match?.model
   const rows: Array<[string, string]> = []
   if (model) {
-    rows.push(['匹配范围', catalog.match?.kind === 'provider' ? catalog.match.providerName ?? '当前渠道' : '仅模型，渠道未匹配'])
+    rows.push(['匹配范围', catalog.match?.kind === 'provider' ? catalog.match.providerName ?? '当前服务商' : '仅模型，服务商未匹配'])
     if (model.context !== undefined) rows.push(['上下文', `${integer.format(model.context)} tokens`])
     if (model.output !== undefined) rows.push(['最大输出', `${integer.format(model.output)} tokens`])
     if (model.inputModalities?.length) rows.push(['输入', model.inputModalities.map((mode) => MODALITY_LABELS[mode] ?? mode).join(' / ')])
@@ -87,7 +88,7 @@ export function AiModelDetails({ state }: { state: AiProviderSettingsState }) {
             <DetailsRows rows={rows} />
             {costs.length ? (
               <div className="mt-4">
-                <p className="m-0 mb-2 text-xs text-ds-text-secondary">渠道参考价 · 美元 / 百万 tokens</p>
+                <p className="m-0 mb-2 text-xs text-ds-text-secondary">服务商参考价（美元 / 百万 tokens）</p>
                 <DetailsRows rows={costs} />
               </div>
             ) : null}
@@ -110,14 +111,13 @@ export function AiModelDetails({ state }: { state: AiProviderSettingsState }) {
             onCheckedChange={(checked) => { void configure(checked) }}
           />
         </div>
-        <p className="m-0 text-xs leading-relaxed text-ds-text-secondary">仅下载公开资料，不发送密钥、书签或渠道配置。</p>
+        <p className="m-0 text-xs leading-relaxed text-ds-text-secondary">仅下载公开资料，不发送密钥、书签或服务商配置。</p>
         <StatusMessage
           className="m-0 text-xs leading-relaxed text-ds-text-secondary"
           tone={error ? 'error' : 'neutral'}
-          title={catalog.checkedAt ? new Date(catalog.checkedAt).toLocaleString('zh-CN') : undefined}
         >
           {error || (pending ? '正在更新模型资料…' : catalog.checkedAt
-            ? `检查于 ${new Date(catalog.checkedAt).toLocaleString('zh-CN')}` : '尚未同步')}
+            ? `检查于 ${formatDateTime(catalog.checkedAt)}` : '尚未同步')}
         </StatusMessage>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0 text-xs leading-relaxed text-ds-text-secondary">
@@ -161,5 +161,5 @@ function reasoningLabel(model: ModelsDevModel): string {
     if (option.type === 'effort') return option.values.map((level) => Object.hasOwn(REASONING_EFFORT_LABELS, level) ? REASONING_EFFORT_LABELS[level as ReasoningEffortId] : level).join(' / ')
     return option.min !== undefined && option.max !== undefined
       ? `${integer.format(option.min)}–${integer.format(option.max)} tokens 预算` : '思考预算'
-  }).join(' · ')
+  }).join('，')
 }

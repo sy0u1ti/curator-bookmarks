@@ -1,4 +1,4 @@
-import { ROOT_ID } from './constants.js'
+import { DEFAULT_INBOX_FOLDER_TITLE, LEGACY_INBOX_FOLDER_TITLES, ROOT_ID } from './constants.js'
 import type { BookmarkTagIndex } from './bookmark-tags.js'
 
 export type FolderCleanupSuggestionKind =
@@ -95,7 +95,7 @@ interface FolderNodeModel {
 }
 
 const SYSTEM_FOLDER_IDS = new Set([ROOT_ID])
-const DEFAULT_RESERVED_FOLDER_TITLES = ['Inbox / 待整理']
+const DEFAULT_RESERVED_FOLDER_TITLES = [DEFAULT_INBOX_FOLDER_TITLE, ...LEGACY_INBOX_FOLDER_TITLES]
 
 export function analyzeFolderCleanup(
   rootNode: chrome.bookmarks.BookmarkTreeNode | null | undefined,

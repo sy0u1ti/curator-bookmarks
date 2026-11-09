@@ -28,14 +28,18 @@ export function AiClassificationResult({
 }: AiClassificationResultProps) {
   return (
     <Surface className={cx('curator-classification-card grid gap-2', className)} variant="group" {...props}>
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Icon name="Sparkles" size={16} aria-hidden="true" />
           {typeof title === 'string' ? <strong className="text-sm">{title}</strong> : title}
         </div>
-        {confidence ? <Badge key={String(confidence)} animate>{confidence}</Badge> : null}
+        {confidence || actions ? (
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2.5">
+            {confidence ? <Badge key={String(confidence)} animate>{confidence}</Badge> : null}
+            {actions}
+          </div>
+        ) : null}
       </div>
-      {actions}
       {meta}
       {description ? <p className="text-sm text-ds-text-secondary">{description}</p> : null}
       {folder ? <p className="text-sm text-ds-text-primary">{folder}</p> : null}

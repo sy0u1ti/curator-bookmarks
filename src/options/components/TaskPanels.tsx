@@ -66,7 +66,7 @@ export function BackupPanel({ hidden }: OptionsPanelVisibilityProps) {
 export function RedirectsPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="redirects" className={OPTION_PANEL_CLASS} aria-labelledby="redirects-title" hidden={hidden}>
-      <OptionPanelHeader titleId="redirects-title" title="重定向更新" />
+      <OptionPanelHeader titleId="redirects-title" title="网址更新" />
 
       <div className={REDIRECTS_GROUP_CLASS}>
         <RedirectControls />

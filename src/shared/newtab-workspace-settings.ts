@@ -28,7 +28,7 @@ export interface WorkspaceMutationOptions {
 export const DEFAULT_NEW_TAB_WORKSPACES: NewTabWorkspace[] = [
   {
     id: DEFAULT_NEW_TAB_WORKSPACE_ID,
-    name: 'Speed Dial',
+    name: '固定入口',
     pinnedIds: [],
     createdAt: 0,
     updatedAt: 0

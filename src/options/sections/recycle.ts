@@ -23,6 +23,7 @@ import { availabilityState, managerState } from '../shared-options/state.js'
 import { isInteractionLocked, syncSelectionSet } from '../shared-options/utils.js'
 import { publishRecycleBin } from '../components/recycle-bin-store.js'
 import { publishRecycleControls } from '../components/recycle-controls-store.js'
+import { dismissOptionsUndoToast, showOptionsUndoToast } from '../components/options-undo-toast-store.js'
 
 export function normalizeRecycleBin(rawEntries) {
   if (!Array.isArray(rawEntries)) {
@@ -139,7 +140,6 @@ async function clearRecycleEntriesByIds(recycleIds, callbacks) {
           : `清除 ${targetEntries.length} 条回收站记录？`,
         copy: '这只会从扩展回收站中移除记录，之后无法再从扩展内恢复；不会再次修改 Chrome 书签。',
         confirmLabel: '清除记录',
-        label: '清除回收站记录',
         tone: 'danger'
       })
     : true
@@ -220,14 +220,22 @@ export async function clearSelectedRecycleEntries(callbacks) {
   await clearRecycleEntriesByIds([...managerState.selectedRecycleIds], callbacks)
 }
 
-async function restoreRecycleEntriesByIds(recycleIds, callbacks) {
+async function restoreRecycleEntriesByIds(recycleIds, callbacks, { fromUndo = false } = {}) {
   const targetSet = new Set(recycleIds.flatMap(id => { const mappedResult = String(id); return mappedResult ? [mappedResult] : [] }))
   if (isInteractionLocked()) {
+    if (fromUndo) {
+      availabilityState.lastError = '有任务正在运行，暂时无法撤销；可稍后在回收站恢复。'
+      callbacks.renderAvailabilitySection()
+    }
     return
   }
 
   const releaseMutationLock = await callbacks.claimAvailabilityMutationLock?.()
   if (!releaseMutationLock) {
+    if (fromUndo) {
+      availabilityState.lastError = '书签正在被其他页面使用，暂时无法撤销；可稍后在回收站恢复。'
+      callbacks.renderAvailabilitySection()
+    }
     return
   }
   const targetEntries = managerState.recycleBin.filter((entry) => {
@@ -322,9 +330,13 @@ async function restoreRecycleEntriesByIds(recycleIds, callbacks) {
             ? `恢复过程中断，已提交 ${committedRestoredCount} 条：${restoreError.message}`
             : `恢复过程中断，已提交 ${committedRestoredCount} 条。`
       }
+    } else if (fromUndo) {
+      availabilityState.lastError = ''
+      showOptionsUndoToast({ title: `已恢复 ${committedRestoredCount} 条书签` })
     } else {
       availabilityState.lastError = `已从回收站恢复 ${committedRestoredCount} 条书签。`
     }
+    if (restoreError && fromUndo) dismissOptionsUndoToast()
     if (reconciliationWarnings.length) {
       availabilityState.lastError += ` 但本地状态同步未完全成功：${reconciliationWarnings.join('；')}。`
     }
@@ -351,7 +363,6 @@ export async function clearRecycleBin(callbacks) {
         copy: '这些回收站记录会被永久移除，之后无法再从扩展内恢复。',
         confirmLabel: '清空回收站',
         holdToConfirm: true,
-        label: '清空回收站',
         tone: 'danger'
       })
     : true
@@ -396,7 +407,7 @@ export async function clearRecycleBin(callbacks) {
   }
 }
 
-export async function deleteBookmarksToRecycle(bookmarkCandidates: unknown[], source: string, callbacks: any) {
+export async function deleteBookmarksToRecycle(bookmarkCandidates: unknown[], source: string, callbacks: any, { notice = '' }: { notice?: string } = {}) {
   const candidateMap = new Map<string, { id: string; expectedUrl: string }>()
   for (const candidate of Array.isArray(bookmarkCandidates) ? bookmarkCandidates : []) {
     const candidateRecord = candidate && typeof candidate === 'object'
@@ -498,10 +509,13 @@ export async function deleteBookmarksToRecycle(bookmarkCandidates: unknown[], so
             ? `删除过程中断，已删除 ${removedIds.length} 条：${removalError.message}`
             : `删除过程中断，已删除 ${removedIds.length} 条。`
       } else if (removedIds.length) {
-        const skippedCopy = skippedIds.length
-          ? ` ${skippedIds.length} 条因 URL 已变化或书签不存在而跳过。`
-          : ''
-        availabilityState.lastError = `已删除 ${removedIds.length} 条书签，并移入回收站。可在左侧“回收站”查看并恢复。${skippedCopy}`.trim()
+        availabilityState.lastError = ''
+        const recycleIds = recycleEntries.map((entry) => String(entry.recycleId))
+        showOptionsUndoToast({
+          title: `已删除 ${removedIds.length} 条书签`,
+          detail: [notice, skippedIds.length ? `${skippedIds.length} 条已变化或不存在，未删除。` : ''].filter(Boolean).join(''),
+          onUndo: () => restoreRecycleEntriesByIds(recycleIds, callbacks, { fromUndo: true })
+        })
       } else if (skippedIds.length) {
         availabilityState.lastError = `${skippedIds.length} 条书签因 URL 已变化或已不存在而跳过，未执行删除。`
       }
@@ -511,7 +525,6 @@ export async function deleteBookmarksToRecycle(bookmarkCandidates: unknown[], so
       }
     } finally {
       availabilityState.deleting = false
-      availabilityState.deleteModalOpen = false
       releaseMutationLock()
       callbacks.renderAvailabilitySection()
     }

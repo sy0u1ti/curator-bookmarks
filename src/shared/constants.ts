@@ -57,4 +57,5 @@ export const COMMAND_FEEDBACK_BADGE_TTL_MS = 3000
 export const AUTO_BACKUP_RETENTION_LIMIT = 5
 export const CONTENT_SNAPSHOT_LOCAL_TEXT_LIMIT = 20 * 1024
 export const INBOX_AUTO_MOVE_MIN_CONFIDENCE = 0.72
-export const DEFAULT_INBOX_FOLDER_TITLE = 'Inbox / 待整理'
+export const DEFAULT_INBOX_FOLDER_TITLE = '待整理'
+export const LEGACY_INBOX_FOLDER_TITLES = ['Inbox / 待整理']

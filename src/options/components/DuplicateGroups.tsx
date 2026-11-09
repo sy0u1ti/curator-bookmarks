@@ -1,6 +1,7 @@
 import { OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { memo, startTransition, useEffect, useState } from 'react'
 import { runIdle } from '../../shared/idle.js'
+import { formatDateTime } from '../../shared/format.js'
 import { displayUrl } from '../../shared/text.js'
 import { Button } from '../../ui/base/Button'
 import { Checkbox } from '../../ui/base/Checkbox'
@@ -34,8 +35,8 @@ const EMPTY_CLASS =
 const DOCKED_SELECTION_CLASS =
   'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-ds-card border border-ds-border bg-ds-surface-2 ds-inset-card [filter:var(--ds-filter-card)] max-[760px]:grid-cols-1'
 const DOCKED_COPY_CLASS = 'min-w-0'
-const DOCKED_TITLE_CLASS = 'block text-sm font-bold text-ds-text-primary'
-const DOCKED_TEXT_CLASS = 'mt-[5px] text-xs leading-[1.55] text-[rgba(245,245,247,0.58)]'
+const DOCKED_TITLE_CLASS = 'block text-[15px] font-bold text-ds-text-primary'
+const DOCKED_TEXT_CLASS = 'mt-[5px] text-xs leading-[1.55] text-ds-text-secondary'
 const DOCKED_WARNING_CLASS = `${DOCKED_TEXT_CLASS} font-semibold text-ds-danger-text`
 const DOCKED_ACTIONS_CLASS =
   'flex flex-wrap items-center justify-end gap-2 max-[760px]:justify-start'
@@ -53,7 +54,7 @@ const RECOMMENDATION_TEXT_CLASS =
 const ITEM_LIST_CLASS = 'mt-3 flex flex-col'
 const ITEM_ROW_CLASS =
   'duplicate-item grid grid-cols-[24px_minmax(0,1fr)] items-start gap-2.5 border-t border-ds-border-subtle px-2 py-3 transition-colors hover:bg-ds-hover'
-const ITEM_ROW_PENDING_CLASS = 'bg-ds-danger-soft'
+const ITEM_ROW_PENDING_CLASS = 'bg-ds-hover'
 const ITEM_CHECK_LABEL_CLASS =
   'inline-flex size-6 items-center justify-center self-start'
 const ITEM_COPY_CLASS = 'min-w-0'
@@ -75,7 +76,7 @@ export function DuplicateGroups() {
       <div className={RESULTS_CLASS}>
         <OptionEmptyState
           title="未发现重复书签"
-          description="按 URL 聚合检测；发现重复后会给出推荐保留项，其余可移入回收站。"
+          description="按网址检测，并给出推荐保留项。"
         />
       </div>
     )
@@ -147,12 +148,12 @@ function DuplicateDockedSelection({
           <strong className={DOCKED_TITLE_CLASS}>
             <TextSwap
               animate={entered}
-              text={`已选 ${selectionStats.deleteCount} 条待移入回收站`}
+              text={`已选 ${selectionStats.deleteCount} 条`}
             />
           </strong>
           <StatusMessage className={unsafe ? DOCKED_WARNING_CLASS : DOCKED_TEXT_CLASS} tone={unsafe ? 'error' : 'neutral'}>
             {unsafe
-              ? `${selectionStats.unsafeGroupCount} 组已全选；每组至少保留 1 条后才能移入回收站。`
+              ? `${selectionStats.unsafeGroupCount} 组已全选，每组至少保留 1 条。`
               : `保留 ${selectionStats.keepCount} 条，涉及 ${selectionStats.groupCount} 组。`}
           </StatusMessage>
         </div>
@@ -165,17 +166,17 @@ function DuplicateDockedSelection({
             disabled={locked}
             onClick={() => handleDuplicateAction({ action: 'clear-selection' })}
           >
-            清空选择
+            取消选择
           </Button>
           <Button
             className={DOCKED_ACTION_BUTTON_CLASS}
             size="sm"
             type="button"
-            variant="danger"
+            variant="secondary"
             disabled={locked || unsafe}
             onClick={() => handleDuplicateAction({ action: 'delete-selection' })}
           >
-            移入回收站
+            删除
           </Button>
         </div>
       </section>
@@ -224,8 +225,8 @@ const DuplicateGroupCard = memo(function DuplicateGroupCard({
       <div className={GROUP_HEADER_CLASS}>
         <div className={GROUP_COPY_CLASS}>
           <strong className={GROUP_TITLE_CLASS} title={group.displayUrl}>{group.displayUrl}</strong>
-          <p className={`${GROUP_SUBTITLE_CLASS} tabular-nums`}>
-            {selectedCount > 0 ? `已选 ${selectedCount} 条 · 保留 ${keepCount} 条` : `${group.items.length} 个副本 · ${group.folders.length} 个文件夹`}
+          <p className={`${GROUP_SUBTITLE_CLASS} tabular-nums ${keepCount === 0 ? 'text-ds-danger-text' : ''}`}>
+            {selectedCount > 0 ? `已选 ${selectedCount} 条，保留 ${keepCount} 条` : `${group.items.length} 个副本，分布在 ${group.folders.length} 个文件夹`}
           </p>
         </div>
         <Button
@@ -238,11 +239,7 @@ const DuplicateGroupCard = memo(function DuplicateGroupCard({
           选择其余副本
         </Button>
       </div>
-      <StatusMessage className={RECOMMENDATION_TEXT_CLASS} tone={selectedCount === group.items.length ? 'error' : 'neutral'}>
-        {selectedCount === group.items.length
-          ? '已选中全部副本，至少保留 1 条才能清理。'
-          : reviewNote ? `${reviewNote}，请确认是否需要分别保留。` : ''}
-      </StatusMessage>
+      {reviewNote ? <p className={RECOMMENDATION_TEXT_CLASS}>{reviewNote}，请确认是否需要分别保留。</p> : null}
       <div className={ITEM_LIST_CLASS}>
         {orderedItems.map((item) => (
           <DuplicateItemRow context={context} group={group} item={item} key={item.id} />
@@ -274,7 +271,7 @@ function DuplicateItemRow({
     !tagExplained && itemId === String(group.taggedItemId) ? context.taggedLabel || '有整理信息' : '',
     explainedKind !== 'recent' && itemId === String(group.recentItemId) ? '最近访问' : '',
     isBookmarkInCurrentDuplicateScope(item, context.currentScopeFolderId) ? '当前范围' : ''
-  ].filter(Boolean).join(' · ')
+  ].filter(Boolean).join('，')
 
   return (
     <div
@@ -299,11 +296,11 @@ function DuplicateItemRow({
       <div className={ITEM_COPY_CLASS}>
         <div className={ITEM_META_CLASS}>
           <strong className={ITEM_TITLE_CLASS} title={`${item.title || '未命名书签'}\n${item.url}`}>{item.title || '未命名书签'}</strong>
-          <span className={`${ITEM_STATE_CLASS} ${selected ? 'text-ds-danger-text' : recommended ? 'text-ds-text-primary' : ''}`}>
-            {selected ? '待清理' : recommended ? '推荐保留' : '保留'}
+          <span className={`${ITEM_STATE_CLASS} ${selected || recommended ? 'text-ds-text-primary' : ''}`}>
+            {selected ? '待删除' : recommended ? '推荐保留' : '保留'}
           </span>
           <span className={ITEM_PATH_CLASS} title={item.path || '未归档路径'}>{item.path || '未归档路径'}</span>
-          <span className={ITEM_DETAIL_CLASS} title={Number(item.dateAdded) > 0 ? new Date(Number(item.dateAdded)).toLocaleString('zh-CN') : undefined}>
+          <span className={ITEM_DETAIL_CLASS} title={Number(item.dateAdded) > 0 ? formatDateTime(Number(item.dateAdded)) : undefined}>
             {formatDuplicateDate(item.dateAdded)}
           </span>
         </div>
@@ -311,7 +308,7 @@ function DuplicateItemRow({
         {details ? <p className="mb-0 mt-1 text-xs leading-relaxed text-ds-text-secondary">{details}</p> : null}
         {isNewtabSource ? (
           <StatusMessage className="mb-0 mt-1 text-xs leading-relaxed text-ds-text-secondary" tone={sourceWarning ? 'error' : 'neutral'}>
-            {sourceWarning ? '清理此副本也会移除新标签页入口。' : recommended && group.recommendation.reason ? group.recommendation.reason : '用于新标签页入口。'}
+            {sourceWarning ? '删除此副本也会移除新标签页入口。' : recommended && group.recommendation.reason ? group.recommendation.reason : '用于新标签页入口。'}
           </StatusMessage>
         ) : null}
       </div>
@@ -346,8 +343,8 @@ function getDuplicateItemSelectionLabel(item: DuplicateBookmarkViewModel): strin
   const path = String(item?.path || '').replace(/\s+/g, ' ').trim()
 
   return path
-    ? `移入回收站：${safeTitle || '未命名书签'}，位置：${path}`
-    : `移入回收站：${safeTitle || '未命名书签'}`
+    ? `选择删除：${safeTitle || '未命名书签'}，位置：${path}`
+    : `选择删除：${safeTitle || '未命名书签'}`
 }
 
 function isBookmarkInCurrentDuplicateScope(item: DuplicateBookmarkViewModel, scopeFolderId: string): boolean {

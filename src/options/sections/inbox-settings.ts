@@ -14,14 +14,14 @@ export async function saveInboxWorkflowMode(
 
   try {
     managerState.inboxSettingsSaving = true
-    managerState.inboxSettingsStatus = '正在保存 Inbox 设置…'
+    managerState.inboxSettingsStatus = '正在保存待整理设置…'
     render()
     managerState.inboxSettings = await saveInboxSettings(getInboxWorkflowSettings(mode))
-    managerState.inboxSettingsStatus = 'Inbox 设置已保存。'
+    managerState.inboxSettingsStatus = '待整理设置已保存。'
   } catch (error) {
     managerState.inboxSettingsStatus = error instanceof Error
       ? error.message
-      : 'Inbox 设置保存失败，请稍后重试。'
+      : '待整理设置保存失败，请稍后重试。'
   } finally {
     managerState.inboxSettingsSaving = false
     render()

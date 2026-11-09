@@ -29,7 +29,7 @@ const IGNORE_SUMMARY_LABEL_CLASS =
   'block text-xs font-semibold leading-[1.3] text-ds-text-muted'
 const IGNORE_SUMMARY_VALUE_CLASS =
   'text-sm font-semibold leading-none text-ds-text-primary tabular-nums'
-const IGNORE_SUMMARY_PRIMARY_VALUE_CLASS = 'text-[28px] font-[650] leading-none tracking-[-0.03em] text-ds-text-primary tabular-nums'
+const IGNORE_SUMMARY_PRIMARY_VALUE_CLASS = 'text-2xl font-[650] leading-none tracking-[-0.03em] text-ds-text-primary tabular-nums'
 const IGNORE_RULE_GROUP_CLASS =
   `mt-5 ${OPTION_SURFACE_CLASS} p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
 const IGNORE_RULE_HEADER_CLASS =

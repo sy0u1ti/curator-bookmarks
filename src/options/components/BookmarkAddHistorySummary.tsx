@@ -31,7 +31,7 @@ const BOOKMARK_ADD_HISTORY_SECONDARY_ITEM_CLASS = 'flex items-baseline justify-b
 const BOOKMARK_ADD_HISTORY_SUMMARY_LABEL_CLASS =
   'block text-xs font-medium leading-4 text-ds-text-secondary'
 const BOOKMARK_ADD_HISTORY_SUMMARY_VALUE_CLASS =
-  'block text-[28px] font-[650] leading-none tracking-[-0.03em] text-ds-text-primary tabular-nums'
+  'block text-2xl font-[650] leading-none tracking-[-0.03em] text-ds-text-primary tabular-nums'
 const BOOKMARK_ADD_HISTORY_SECONDARY_VALUE_CLASS = 'text-sm font-semibold text-ds-text-primary tabular-nums'
 
 export function BookmarkAddHistorySummary({ state }: { state: BookmarkAddHistorySummaryState }) {

@@ -20,17 +20,17 @@ export function AvailabilitySelectionActions() {
     <SelectionDock open={entered} label="已选异常书签操作">
       <div className="options-selection-bar">
         <div className="options-selection-summary">
-          <strong className="text-sm font-semibold tabular-nums">{state.countLabel}</strong>
+          <strong className="text-[15px] font-semibold tabular-nums">{state.countLabel}</strong>
           <Button
             size="sm"
             type="button"
             variant="ghost"
-            aria-label="清空可用性检测已选书签"
+            aria-label="取消选择可用性检测书签"
             disabled={state.clearDisabled}
             focusableWhenDisabled={state.clearDisabled}
             onClick={() => handleAvailabilityPanelAction({ action: 'clear-selection' })}
           >
-            清空选择
+            取消选择
           </Button>
         </div>
         <div className="options-selection-actions">
@@ -65,7 +65,7 @@ export function AvailabilitySelectionActions() {
           <Button
             size="sm"
             type="button"
-            variant="danger"
+            variant="secondary"
             aria-label="批量删除可用性检测已选书签"
             disabled={state.deleteDisabled}
             focusableWhenDisabled={state.deleteDisabled}

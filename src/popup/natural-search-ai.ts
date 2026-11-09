@@ -88,7 +88,7 @@ export function validateNaturalSearchAiProvider(settings: AiNamingSettings): voi
     throw new Error(baseUrlIssue)
   }
   if (!hasConfiguredNaturalSearchAiProvider(settings)) {
-    throw new Error('请先到通用设置配置“自定义AI渠道”。')
+    throw new Error('请先到通用设置配置“自定义 AI 服务”。')
   }
 
 }
@@ -113,7 +113,7 @@ export async function ensureNaturalSearchAiPermissions(
 
   const granted = await requestPermissions({ origins: missingOrigins })
   if (!granted) {
-    throw createNaturalSearchPermissionRequiredError(missingOrigins, '未完成 AI 渠道授权，暂时无法自然语言搜索。')
+    throw createNaturalSearchPermissionRequiredError(missingOrigins, '未完成 AI 服务授权，暂时无法自然语言搜索。')
   }
   return true
 }
@@ -144,16 +144,16 @@ export async function requestNaturalSearchAiPlan({
 
 export function normalizeNaturalSearchAiError(error: unknown): string {
   if (isNaturalSearchPermissionRequiredError(error)) {
-    return 'AI 渠道未授权，请完成授权后再使用语义搜索。'
+    return 'AI 服务未授权，请完成授权后再使用语义搜索。'
   }
 
   const message = error instanceof Error ? error.message : ''
   if (!message) {
-    return 'AI 解析不可用，请稍后重试或检查 AI 渠道配置。'
+    return 'AI 解析不可用，请稍后重试或检查 AI 服务配置。'
   }
 
   if (message.includes('请先到通用设置')) {
-    return '请配置 AI 渠道后再使用语义搜索。'
+    return '请配置 AI 服务后再使用语义搜索。'
   }
 
   return `AI 解析不可用：${truncateNaturalSearchText(message, 72)}`
@@ -304,7 +304,7 @@ async function getMissingPermissionOrigins(origins: string[]): Promise<string[]>
 
 function createNaturalSearchPermissionRequiredError(
   origins: unknown[],
-  message = '需要授权 AI 渠道后才能自然语言搜索。'
+  message = '需要授权 AI 服务后才能自然语言搜索。'
 ): Error & { naturalSearchPermissionRequest?: { origins: string[] } } {
   const error = new Error(message) as Error & {
     naturalSearchPermissionRequest?: { origins: string[] }

@@ -38,7 +38,7 @@ function refresh(): Promise<void> {
         const { folders, bookmarkMap: bookmarks } = extractBookmarkData(tree[0])
         store.setState({ data: { inbox, folders, bookmarks, pending: inbox.items.filter(item => isInboxItemPending(item) && bookmarks.has(item.bookmarkId)) }, error: '' })
       } catch (error) {
-        if (request === version && subscribers) store.setState({ ...store.getState(), error: error instanceof Error ? error.message : 'Inbox 读取失败，请重试。' })
+        if (request === version && subscribers) store.setState({ ...store.getState(), error: error instanceof Error ? error.message : '待整理读取失败，请重试。' })
       }
     } while (refreshQueued && subscribers)
   })().finally(() => { refreshInFlight = null })
@@ -71,6 +71,10 @@ function subscribe() {
 export function useInboxReviewData() {
   useEffect(subscribe, [])
   return useUiViewStoreSlice(store)
+}
+
+export function getInboxReviewData(): InboxReviewData | null {
+  return store.getState().data
 }
 
 export function refreshInboxReview(): Promise<void> {

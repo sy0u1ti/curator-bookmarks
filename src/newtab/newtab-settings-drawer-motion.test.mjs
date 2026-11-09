@@ -1537,10 +1537,18 @@ async function verifyOptions(page, extensionId) {
   const modelGroupBox = await page.locator('.ai-provider-model-group').boundingBox()
   const modelSelectorBox = await page.locator('.ai-provider-model-select-host').boundingBox()
   const effortHostBox = await page.locator('.ai-provider-effort-host').boundingBox()
+  const credentialColumns = await page.locator('label[for="ai-base-url"]').evaluate((field) =>
+    [...field.parentElement.children].map((column) => {
+      const rect = column.getBoundingClientRect()
+      return { left: rect.left, width: rect.width }
+    })
+  )
   assert.ok(modelGroupBox && modelSelectorBox && effortHostBox, 'Model and reasoning controls should be measurable')
   assert.ok(
-    modelLayoutBefore.controls[0].width > modelLayoutBefore.controls[1].width,
-    `Model field should have more row space than reasoning effort: ${JSON.stringify(modelLayoutBefore.controls)}`
+    modelLayoutBefore.controls.every((control, index) =>
+      Math.abs(control.left - credentialColumns[index].left) <= 1 &&
+      Math.abs(control.width - credentialColumns[index].width) <= 1),
+    `Model row columns should align with the Base URL / API Key columns: ${JSON.stringify({ models: modelLayoutBefore.controls, credentials: credentialColumns })}`
   )
   assert.ok(
     Math.abs(modelGroupBox.x - modelLayoutBefore.controls[0].left) <= 1 &&
@@ -1691,7 +1699,7 @@ async function verifyOptionsRefreshStability(page, worker, extensionId) {
       return null
     }
     const sample = (now) => {
-      const feature = findCard('收藏与整理')
+      const feature = findCard('保存与整理')
       const content = findCard('网页内容索引')
       const shortcuts = findCard('快捷键')
       const switches = (element) => element
@@ -1725,7 +1733,7 @@ async function verifyOptionsRefreshStability(page, worker, extensionId) {
   await page.goto(`chrome-extension://${extensionId}/src/options/options.html#general`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => {
     const autoAnalyze = document.querySelector('[role="switch"][aria-label="自动分析"]')
-    const tagOnly = document.querySelector('[role="combobox"][aria-label="Inbox 收藏后的整理方式"]')
+    const tagOnly = document.querySelector('[role="combobox"][aria-label="保存到待整理后的整理方式"]')
     const contentIndex = document.querySelector('[role="switch"][aria-label="保存网页内容索引"]')
     const fullText = document.querySelector('[role="switch"][aria-label="保存完整正文"]')
     const shortcutHeading = [...document.querySelectorAll('h2')]
@@ -1860,7 +1868,7 @@ async function verifyOptionsBorderIntegrity(page, extensionId) {
   await page.locator('#ai').waitFor({ state: 'visible' })
   const aiToolbarButtonHeights = await page.evaluate(() => {
     const buttons = [...document.querySelectorAll('#ai button')]
-    const apiKeyButton = buttons.find((button) => button.textContent?.trim() === 'AI 渠道设置')
+    const apiKeyButton = buttons.find((button) => button.textContent?.trim() === 'AI 服务设置')
     const startButton = buttons.find((button) => button.textContent?.trim() === '开始分析并生成建议')
     return {
       apiKey: apiKeyButton?.getBoundingClientRect().height ?? 0,
@@ -1911,7 +1919,7 @@ async function verifyOptionsBorderIntegrity(page, extensionId) {
     )
   }
 
-  const disabledFilterStyle = await page.getByRole('button', { name: '清空书签智能分析筛选条件' }).evaluate((element) => {
+  const disabledFilterStyle = await page.getByRole('button', { name: '清除书签智能分析筛选' }).evaluate((element) => {
     const style = getComputedStyle(element)
     return {
       borderWidths: [

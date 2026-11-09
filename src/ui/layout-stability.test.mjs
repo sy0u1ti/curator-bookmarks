@@ -86,7 +86,7 @@ test('compact selection actions retain safety and secondary operations', () => {
   const duplicates = source('../options/components/DuplicateGroups.tsx')
   assert.match(duplicates, /disabled=\{locked \|\| unsafe\}/)
   assert.match(duplicates, /isNewtabSource \? \(\s*<StatusMessage/)
-  assert.match(duplicates, /清理此副本也会移除新标签页入口/)
+  assert.match(duplicates, /删除此副本也会移除新标签页入口/)
 })
 
 test('quiet states reuse existing copy and preserve the shared corner inset', () => {
@@ -96,4 +96,19 @@ test('quiet states reuse existing copy and preserve the shared corner inset', ()
   assert.match(source('../options/options.css'), /padding: calc\(var\(--ds-inset-card\) - var\(--ds-stroke-width\)\)/)
   const controller = source('../options/options-controller.ts')
   assert.match(controller, /statusTone: statusTone === 'success' && !hasAssignedShortcut \? 'muted' : statusTone/)
+})
+
+test('resting copy owns the status slot, so no blank fixed-height line appears at rest', () => {
+  const components = ['BackupControls', 'StorageManagement', 'AutoBackupPoints', 'AvailabilityControls', 'AiAnalysisProgressPanel', 'RecycleBin']
+  for (const name of components) {
+    const file = source(`../options/components/${name}.tsx`)
+    for (const [tag] of file.matchAll(/<StatusMessage\b[^>]*>/g)) {
+      assert.match(tag, /reserve=\{/, `${name}: a status slot beside resting copy must size from that copy`)
+    }
+  }
+  assert.doesNotMatch(source('../options/components/DuplicateGroups.tsx'), /<StatusMessage className=\{RECOMMENDATION_TEXT_CLASS\}/)
+})
+
+test('a panel named by the URL hash is never scrolled past its own title', () => {
+  assert.match(source('../options/options.css'), /\.options-main-scroll > section \{\s*scroll-margin-block-start: 100dvh;/)
 })

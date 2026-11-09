@@ -109,7 +109,6 @@ export interface PopupState {
   editDiscardArmed: boolean
   editDiscardTimer: number | null
   editSaving: boolean
-  confirmDeleteBookmarkId: string | null
   pendingActionIds: Set<string>
   currentTab: chrome.tabs.Tab | null
   currentPageBookmarkId: string | null
@@ -223,7 +222,6 @@ export const state: PopupState = {
   editDiscardArmed: false,
   editDiscardTimer: null,
   editSaving: false,
-  confirmDeleteBookmarkId: null,
   pendingActionIds: new Set(),
   currentTab: null,
   currentPageBookmarkId: null,

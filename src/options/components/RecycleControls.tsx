@@ -36,12 +36,12 @@ export function RecycleControls() {
                 size="sm"
                 type="button"
                 variant="secondary"
-                aria-label="清空回收站已选书签"
+                aria-label="取消选择回收站书签"
                 disabled={state.locked}
                 focusableWhenDisabled={state.locked}
                 onClick={() => handleRecycleAction('clear-selection')}
               >
-                清空选择
+                取消选择
               </Button>
               <Button
                 size="sm"

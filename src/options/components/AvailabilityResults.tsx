@@ -72,13 +72,13 @@ function AvailabilityResultCard({ kind, result }: { kind: AvailabilityResultPane
         ariaLabel={'检测详情：' + result.title}
         actions={<>
           {result.url ? <Button size="sm" variant="secondary" aria-label={result.openLabel} render={<a aria-label={result.openLabel} href={result.url} target="_blank" rel="noreferrer noopener" />}>
-            <Icon name="ExternalLink" size={14} aria-hidden="true" />打开链接
+            <Icon name="ExternalLink" size={14} aria-hidden="true" />打开
           </Button> : null}
           {result.selectable ? <Button size="sm" variant="secondary" disabled={result.retestDisabled} aria-label={(result.retestLabel || '重新检测') + '：' + result.title}
             onClick={() => handleAvailabilityResultAction({ action: 'retest', bookmarkId: result.bookmarkId, panel: kind })}>
             <Icon name="RefreshCw" size={14} aria-hidden="true" />{result.retestLabel || '重新检测'}
           </Button> : null}
-          {result.selectable ? <Button size="sm" variant="danger" disabled={result.deleteDisabled}
+          {result.selectable ? <Button size="sm" variant="secondary" disabled={result.deleteDisabled}
             aria-label={'删除书签：' + result.title}
             onClick={() => handleAvailabilityResultAction({ action: 'delete', bookmarkId: result.bookmarkId, panel: kind })}>
             <Icon name="Trash2" size={14} aria-hidden="true" />删除

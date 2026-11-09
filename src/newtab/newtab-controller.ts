@@ -1,5 +1,6 @@
 import { flushSync } from 'react-dom'
 import { actionFeedback, IDLE_ACTION_FEEDBACK } from '../shared/action-feedback.js'
+import { formatBytes } from '../shared/format.js'
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -675,7 +676,6 @@ const state = {
   menuStatus: '',
   editIconMode: 'website',
   pendingCustomIconDataUrl: '',
-  pendingDeleteBookmarkId: '',
   lastDeletedBookmark: null as LastDeletedBookmarkState | null,
   deleteToastStatus: '',
   deleteToastBusy: false,
@@ -2307,7 +2307,6 @@ function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number, 
   state.editUrl = String(bookmark.url || '').trim()
   state.editIconMode = state.customIcons[bookmarkId] ? 'custom' : 'website'
   state.pendingCustomIconDataUrl = ''
-  state.pendingDeleteBookmarkId = ''
   state.menuBusy = false
   state.menuError = ''
   state.menuStatus = ''
@@ -2357,7 +2356,6 @@ function closeBookmarkMenu({ animate = true, restoreFocus = false } = {}): void 
   state.menuError = ''
   state.menuStatus = ''
   state.pendingCustomIconDataUrl = ''
-  state.pendingDeleteBookmarkId = ''
   if (animate) {
     dispatchNewtabBookmarkEditMenuClosing()
   } else {
@@ -5145,7 +5143,6 @@ async function toggleActiveMenuBookmarkPin(): Promise<void> {
   const pinned = isBookmarkPinnedInSpeedDial(workspace.pinnedIds, bookmarkId)
   try {
     state.menuBusy = true
-    state.pendingDeleteBookmarkId = ''
     renderBookmarkMenu({ focusFirst: false, focusAction: 'toggle-pin' })
     const workspaceSettings = await persistNewtabWorkspaceMutation({ type: 'pin', bookmarkId, pinned: !pinned })
     if (controllerSession !== newTabControllerGeneration || !newTabControllerStarted) return
@@ -5183,7 +5180,6 @@ async function saveBookmarkMenuChanges(): Promise<void> {
     const title = state.editTitle.trim() || state.editUrl.trim()
     const url = normalizeBookmarkInputUrl(state.editUrl)
     const customIcon = getCustomIconChoice(bookmark.id)
-    state.pendingDeleteBookmarkId = ''
     state.menuBusy = true
     state.menuError = ''
     state.menuStatus = ''
@@ -5220,7 +5216,6 @@ async function copyActiveMenuBookmarkUrl(): Promise<void> {
   bookmarkCopyFeedback = actionFeedback('pending')
   try {
     state.menuBusy = true
-    state.pendingDeleteBookmarkId = ''
     state.menuError = ''
     state.menuStatus = ''
     renderBookmarkMenu({ focusFirst: false })
@@ -5258,7 +5253,6 @@ async function moveActiveMenuBookmark(folderId: string): Promise<void> {
 
   const session = bookmarkMenuSession
   state.menuBusy = true
-  state.pendingDeleteBookmarkId = ''
   state.menuError = ''
   state.menuStatus = ''
   renderBookmarkMenu({ focusFirst: false })
@@ -5289,15 +5283,6 @@ async function deleteActiveMenuBookmark(): Promise<void> {
 
   const session = bookmarkMenuSession
   const controllerSession = newTabControllerGeneration
-  const bookmarkId = String(bookmark.id || '')
-  if (state.pendingDeleteBookmarkId !== bookmarkId) {
-    state.pendingDeleteBookmarkId = bookmarkId
-    state.menuError = ''
-    state.menuStatus = getDeleteBookmarkConfirmationText(bookmark)
-    renderBookmarkMenu({ focusFirst: false, focusAction: 'delete-bookmark' })
-    return
-  }
-
   try {
     state.menuBusy = true
     state.menuError = ''
@@ -5357,16 +5342,11 @@ async function deleteActiveMenuBookmark(): Promise<void> {
     await refreshNewTab({ showLoading: false })
   } catch (error) {
     if (!isCurrentBookmarkMenuSession(session)) return
-    state.pendingDeleteBookmarkId = ''
     state.menuBusy = false
     state.menuStatus = ''
     state.menuError = error instanceof Error ? error.message : '删除失败，请稍后重试。'
     renderBookmarkMenu()
   }
-}
-
-function getDeleteBookmarkConfirmationText(bookmark: chrome.bookmarks.BookmarkTreeNode): string {
-  return '再次点击确认删除，可在回收站恢复。'
 }
 
 async function undoLastDeletedBookmark(): Promise<void> {
@@ -5445,7 +5425,6 @@ function refreshActiveMenuIcon(): void {
     return
   }
 
-  state.pendingDeleteBookmarkId = ''
   state.faviconRefreshTokens.set(bookmark.id, Date.now())
   clearActiveFaviconSource(String(bookmark.url || ''))
   if (!renderBookmarkSections()) {
@@ -6913,7 +6892,7 @@ function initializeSearchWidget(): boolean {
         ? (state.naturalSearchError || 'AI 已改写查询；点击关闭语义搜索')
         : state.searchSettings.naturalSearchAiConfigured
           ? '开启 AI 语义搜索'
-          : '需要先配置 AI 渠道'
+          : '需要先配置 AI 服务'
     }
   }
 
@@ -6978,7 +6957,7 @@ async function toggleNewTabNaturalSearch({
       naturalSearchSuggestionCache.clear()
       state.naturalSearchPlan = null
       state.naturalSearchError = ''
-      setSettingsSaveStatus('error', '请配置 AI 渠道。')
+      setSettingsSaveStatus('error', '请配置 AI 服务。')
       openAiProviderSettings()
       updateNaturalButton()
       input.focus()
@@ -7233,8 +7212,8 @@ const NEWTAB_COMMAND_SUGGESTIONS: NewTabCommandSuggestion[] = [
   },
   {
     id: 'open-inbox',
-    title: '打开 Inbox',
-    subtitle: '查看待整理收藏和自动分析添加历史',
+    title: '打开待整理',
+    subtitle: '查看待整理和自动分析记录',
     keywords: ['inbox', '收件箱', '待整理', '未分类', '临时收藏', '稍后整理'],
     run: () => openOptionsHash('#bookmark-history')
   }
@@ -7399,7 +7378,7 @@ async function resolveNewTabNaturalSearchPlan(
       })
       state.naturalSearchError = ''
       state.naturalSearchPlan = null
-      setSettingsSaveStatus('error', '请配置 AI 渠道。')
+      setSettingsSaveStatus('error', '请配置 AI 服务。')
       openAiProviderSettings()
       scheduleSearchSettingsSave()
       return localPlan
@@ -8915,7 +8894,6 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
 
   const bookmarkLabel = getBookmarkActionLabelContext(bookmark)
   const pinCopy = getSpeedDialPinActionCopyLocal(isActiveMenuBookmarkPinned())
-  const deleteLabel = state.pendingDeleteBookmarkId === String(bookmark.id) ? '确认删除书签' : '删除书签'
   const session = bookmarkMenuSession
   dispatchNewtabBookmarkEditMenuView({
     sessionId: session,
@@ -8953,10 +8931,10 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
           )
         },
         createMenuActionViewModel(
-          state.pendingDeleteBookmarkId === String(bookmark.id) ? '确认删除 1 个' : '删除链接',
+          '删除',
           'trash',
           deleteActiveMenuBookmark,
-          { actionId: 'delete-bookmark', variant: 'danger', ariaLabel: `${deleteLabel}：${bookmarkLabel}` }
+          { actionId: 'delete-bookmark', variant: 'danger', ariaLabel: `删除书签：${bookmarkLabel}` }
         ),
         createMenuActionViewModel('刷新图标', 'refresh', refreshActiveMenuIcon, {
           actionId: 'refresh-icon',
@@ -8984,7 +8962,6 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
       onCloseRequest: () => closeBookmarkMenu({ restoreFocus: true }),
       onIconModeChange: handleIconModeChange,
       status: state.menuStatus,
-      statusTone: state.pendingDeleteBookmarkId === String(bookmark.id) ? 'warning' : '',
       x: state.menuX,
       y: state.menuY
     }
@@ -9043,7 +9020,6 @@ function handleIconModeChange(nextMode: 'website' | 'custom'): void {
   if (nextMode === 'website') {
     state.editIconMode = 'website'
     state.pendingCustomIconDataUrl = ''
-    state.pendingDeleteBookmarkId = ''
     state.menuError = ''
     state.menuStatus = ''
     renderBookmarkMenu({ focusFirst: false })
@@ -9063,7 +9039,6 @@ async function handleCustomIconFileSelect(file: File | null): Promise<void> {
 
   const session = bookmarkMenuSession
   state.menuBusy = true
-  state.pendingDeleteBookmarkId = ''
   state.menuError = ''
   state.menuStatus = ''
   renderBookmarkMenu({ focusFirst: false })
@@ -9103,7 +9078,6 @@ function createMenuTextFieldViewModel(
     id: label === '链接' ? 'url' : 'title',
     label,
     onChange(value: string) {
-      state.pendingDeleteBookmarkId = ''
       onInput(value)
     },
     onEnter,
@@ -12343,7 +12317,7 @@ async function refreshFeaturedBackgroundGallery(): Promise<void> {
     if (!isCurrent()) return
     state.featuredBackgroundGallery = gallery
     const fetchedProviderCount = refreshModule.getFeaturedBackgroundRefreshProviderCount(fetchedItems)
-    const providerText = fetchedProviderCount ? `，来自 ${fetchedProviderCount} 个渠道` : ''
+    const providerText = fetchedProviderCount ? `，来自 ${fetchedProviderCount} 个服务商` : ''
     setFeaturedBackgroundStatus(
       'refresh',
       `已拉取 ${fetchedItems.length} 张高分辨率图片${providerText}，收藏图片已保留。`,
@@ -12483,7 +12457,7 @@ function selectFeaturedBackgroundFromPicker(featuredId: string): void {
 function getFeaturedBackgroundPickerLabel(settings = state.backgroundSettings): string {
   const activeItem = getActiveFeaturedBackgroundItemSync(settings)
   if (!settings.featuredId) {
-    return activeItem ? `精选图库 · ${activeItem.title}` : '选择壁纸'
+    return activeItem ? `精选图库：${activeItem.title}` : '选择壁纸'
   }
 
   return activeItem?.title || '当前精选图片'
@@ -12792,17 +12766,6 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
     return fallback
   }
   return Math.max(min, Math.min(max, Math.round(numericValue)))
-}
-
-function formatBytes(bytes: number): string {
-  const size = Math.max(0, Number(bytes) || 0)
-  if (size < 1024) {
-    return `${Math.round(size)} B`
-  }
-  if (size < 1024 * 1024) {
-    return `${Math.round(size / 1024)} KB`
-  }
-  return `${(size / 1024 / 1024).toFixed(1)} MB`
 }
 
 function normalizeHexColor(value: unknown, fallback: string): string {

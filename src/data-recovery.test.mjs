@@ -146,11 +146,11 @@ try {
   await ui.setViewportSize({ width: 1280, height: 900 })
   await ui.goto(origin + '/src/options/options.html#general')
   for (const [label, move, tags] of [
-    ['只生成标签和摘要，保留在 Inbox', false, true],
+    ['只生成标签和摘要，保留在待整理', false, true],
     ['生成整理建议，由我决定是否移动', false, false],
     ['生成标签，高置信时自动移动', true, false]
   ]) {
-    const select = ui.getByRole('combobox', { name: 'Inbox 收藏后的整理方式' })
+    const select = ui.getByRole('combobox', { name: '保存到待整理后的整理方式' })
     await select.click()
     await ui.getByRole('option', { name: label, exact: true }).click()
     await page.waitForFunction(async ({ move, tags }) => {
@@ -158,7 +158,7 @@ try {
       return settings?.autoMoveToRecommendedFolder === move && settings?.tagOnlyNoAutoMove === tags
     }, { move, tags })
     await ui.reload()
-    await ui.getByRole('combobox', { name: 'Inbox 收藏后的整理方式' }).filter({ hasText: label }).waitFor()
+    await ui.getByRole('combobox', { name: '保存到待整理后的整理方式' }).filter({ hasText: label }).waitFor()
   }
   await ui.screenshot({ path: path.join(output, 'options.png'), fullPage: true })
   assert.deepEqual(errors, [])

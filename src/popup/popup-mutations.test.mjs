@@ -50,10 +50,8 @@ try {
   const exists = bookmark => worker.evaluate(url => chrome.bookmarks.search({ url }), bookmark.url)
   const remove = async bookmark => {
     await action(bookmark.title, '删除书签')
-    await page.locator('#confirm-delete').click()
-    await page.locator('#delete-modal').waitFor({ state: 'hidden' })
-    assert.equal((await exists(bookmark)).length, 0)
     await page.locator('.popup-activity-card').getByText(`已删除 ${bookmark.title}`, { exact: true }).waitFor()
+    assert.equal((await exists(bookmark)).length, 0)
   }
 
   const pin = page.locator('[data-current-page-action="pin-newtab"]')

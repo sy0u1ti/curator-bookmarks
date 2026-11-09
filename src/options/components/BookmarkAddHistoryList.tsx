@@ -35,7 +35,7 @@ export function BookmarkAddHistoryList({ entries }: { entries: BookmarkAddHistor
             variant="secondary"
             onClick={() => navigateToOptionsEmptyStateAction('configure-ai')}
           >
-            配置 AI 渠道
+            配置 AI 服务
           </Button>
         </div>
       </div>

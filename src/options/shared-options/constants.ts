@@ -5,7 +5,7 @@ export const SECTION_META = {
     title: '通用设置'
   },
   availability: {
-    title: '书签可用性检测'
+    title: '失效书签检测'
   },
   history: {
     title: '检测历史'
@@ -20,7 +20,7 @@ export const SECTION_META = {
     title: '数据与备份'
   },
   redirects: {
-    title: '重定向更新'
+    title: '网址更新'
   },
   duplicates: {
     title: '重复书签'

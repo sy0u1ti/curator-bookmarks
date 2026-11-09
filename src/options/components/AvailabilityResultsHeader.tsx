@@ -42,7 +42,7 @@ export function AvailabilityResultsHeader({ kind }: { kind: 'failed' | 'review' 
               className={AVAILABILITY_RESULTS_ACTION_BUTTON_CLASS}
               size="sm"
               type="button"
-              variant="danger"
+              variant="secondary"
               aria-label="删除本区无法访问的书签"
               disabled={state.deleteFailedDisabled}
               focusableWhenDisabled={state.deleteFailedDisabled}

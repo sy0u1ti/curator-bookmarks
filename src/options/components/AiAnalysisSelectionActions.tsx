@@ -1,8 +1,6 @@
 import { Button } from '../../ui/base/Button'
 import { SelectionDock } from './SelectionDock'
 import {
-  AI_ANALYSIS_CONFIRM_BUTTON_ACTIVE_CLASS,
-  AI_ANALYSIS_CONFIRM_ICON_CLASS,
   AI_ANALYSIS_SELECTION_GROUP_CLASS,
   AI_ANALYSIS_SMALL_BUTTON_CLASS
 } from './ai-analysis-classes.js'
@@ -34,37 +32,25 @@ export function AiAnalysisSelectionActions() {
               size="sm"
               type="button"
               variant="secondary"
-              aria-label="清空书签智能分析已选建议"
+              aria-label="取消选择书签智能分析建议"
               disabled={state.clearDisabled}
               focusableWhenDisabled={state.clearDisabled}
               onClick={() => handleAiAnalysisAction('clear-selection')}
             >
-              清空选择
+              取消选择
             </Button>
             <Button
-              className={[
-                AI_ANALYSIS_SMALL_BUTTON_CLASS,
-                state.moveConfirm ? AI_ANALYSIS_CONFIRM_BUTTON_ACTIVE_CLASS : ''
-              ].filter(Boolean).join(' ')}
+              className={AI_ANALYSIS_SMALL_BUTTON_CLASS}
               size="sm"
               type="button"
               variant="secondary"
-              aria-label={state.moveConfirm
-                ? '确认将书签智能分析已选建议移动至推荐文件夹'
-                : '将书签智能分析已选建议移动至推荐文件夹'}
+              aria-label="将书签智能分析已选建议移动至推荐文件夹"
               title={state.moveTitle}
               disabled={state.moveDisabled}
               focusableWhenDisabled={state.moveDisabled}
               onClick={() => handleAiAnalysisAction('move-selection-to-suggested')}
             >
-              <span className="t-icon-swap" data-state={state.moveConfirm ? 'b' : 'a'} aria-hidden="true">
-                <span className="t-icon inline-flex items-center justify-center" data-icon="a">
-                  {state.moveLabel}
-                </span>
-                <span className="t-icon inline-flex items-center justify-center" data-icon="b">
-                  <span className={AI_ANALYSIS_CONFIRM_ICON_CLASS}>{'\u2713\u2713'}</span> 确认移动
-                </span>
-              </span>
+              {state.moveLabel}
             </Button>
             <Button
               className={AI_ANALYSIS_SMALL_BUTTON_CLASS}

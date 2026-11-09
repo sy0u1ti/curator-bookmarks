@@ -4,7 +4,7 @@ import { getSafeAvailabilityRedirectUrl } from './classifier.js'
 
 type DeletionResult = Pick<AvailabilityResult, 'id' | 'title' | 'url' | 'status'>
 
-/** Confirmation owns this exact URL snapshot, not whatever happens to be selected later. */
+/** Deletion owns this exact URL snapshot, not whatever happens to be selected later. */
 export function buildAvailabilityDeletionRequest(results: DeletionResult[]) {
   const unique = new Map(results.filter(result => result.id && result.url &&
     (result.status === 'review' || result.status === 'failed')).map(result => [String(result.id), result]))
@@ -13,11 +13,7 @@ export function buildAvailabilityDeletionRequest(results: DeletionResult[]) {
   const uncertain = entries.filter(result => result.status === 'review').length
   return {
     candidates: entries.map(result => ({ id: String(result.id), expectedUrl: result.url })),
-    title: entries.length === 1 ? `删除“${entries[0].title || '未命名书签'}”？` : `删除 ${entries.length} 条书签？`,
-    copy: [
-      uncertain ? `其中 ${uncertain} 条仍待确认，并不代表已失效。` : '',
-      '将从浏览器书签中移除，可在回收站恢复。'
-    ].join('')
+    notice: uncertain ? `其中 ${uncertain} 条仍待确认，不一定已失效。` : ''
   }
 }
 

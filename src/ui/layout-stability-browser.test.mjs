@@ -107,6 +107,7 @@ if (windowInfo.bounds.windowState === "minimized") {
 const report = await runLayoutStabilityChecks(page, "http://127.0.0.1:${server.address().port}", ${JSON.stringify(directory.replaceAll('\\', '/'))}, ${JSON.stringify(options)});
 await (await import("node:fs/promises")).writeFile(${JSON.stringify(path.join(directory, 'report.json'))}, JSON.stringify(report, null, 2));
 console.log(JSON.stringify({ checks: report.checks.length, failures: report.failures, screenshots: report.screenshots.length, frames: report.frames }));
+console.log(JSON.stringify(Object.fromEntries(Object.entries(report.typography).map(([label, sizes]) => [label, Object.keys(sizes).sort((a, b) => parseFloat(a) - parseFloat(b)).join(" ")]))));
 if (report.failures.length) throw new Error("Interaction layout regression(s); see report.json");
 ${space ? '' : 'await task.finish({ keep: [] });'}
 `

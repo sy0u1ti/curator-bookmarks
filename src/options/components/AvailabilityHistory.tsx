@@ -49,7 +49,7 @@ const HISTORY_CARD_PATH_CLASS =
   'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-disabled [overflow-wrap:anywhere] [word-break:break-word]'
 const HISTORY_CARD_DETAIL_CLASS =
   'mt-[7px] text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
-const HISTORY_RUN_TREND_CLASS = 'mb-3 grid gap-2.5'
+const HISTORY_RUN_TREND_CLASS = 'grid gap-2.5'
 const HISTORY_TREND_META_CLASS =
   'flex items-center justify-between gap-3 max-[760px]:flex-col max-[760px]:items-start'
 const HISTORY_TREND_META_TITLE_CLASS =
@@ -289,16 +289,18 @@ function HistoryRunCard({
         <div className={HISTORY_RUN_TREND_CLASS}>
           <div className={HISTORY_TREND_META_CLASS}>
             <strong className={HISTORY_TREND_META_TITLE_CLASS}>异常 {abnormalCount} 条</strong>
-            <span className={HISTORY_TREND_META_COPY_CLASS}>待确认 {reviewCount} · 无法访问 {failedCount}</span>
+            <span className={HISTORY_TREND_META_COPY_CLASS}>待确认 {reviewCount}，无法访问 {failedCount}</span>
           </div>
           <div className={HISTORY_TREND_BAR_TRACK_CLASS} aria-hidden="true">
             <span className={HISTORY_TREND_BAR_CLASS} style={{ width: `${width}%` }} />
           </div>
-          <div className={HISTORY_RUN_COPY_CLASS}>
-            新增 {newCount} · 持续 {persistentCount} · 恢复 {recoveredCount}
-          </div>
         </div>
-        <OptionDetails className="mt-3" label="查看本轮明细" ariaLabel={'查看本轮明细：' + formatDateTime(run.completedAt)}>
+        <OptionDetails
+          className="mt-3"
+          label="查看本轮明细"
+          ariaLabel={'查看本轮明细：' + formatDateTime(run.completedAt)}
+          actions={<div className={HISTORY_RUN_COPY_CLASS}>新增 {newCount}，持续 {persistentCount}，恢复 {recoveredCount}</div>}
+        >
           <HistoryRunDetails run={run} />
         </OptionDetails>
       </div>
@@ -345,7 +347,7 @@ function HistoryRunResultSection({
             {visibleResults.map((result) => (
               <li key={result.id}>
                 {result.title || '未命名书签'} · {displayUrl(result.url)}
-                {showStreak ? ` · 连续异常 ${result.streak || 1} 次` : ''}
+                {showStreak ? `，连续异常 ${result.streak || 1} 次` : ''}
               </li>
             ))}
           </ul>

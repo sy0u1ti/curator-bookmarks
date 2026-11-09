@@ -30,7 +30,7 @@ export function AvailabilityPanel({ hidden }: OptionsPanelVisibilityProps) {
     <section id="availability" className={OPTION_PANEL_CLASS} aria-labelledby="availability-title" hidden={hidden}>
       <OptionPanelHeader
         titleId="availability-title"
-        title="书签可用性检测"
+        title="失效书签检测"
       />
 
       <div className={OPTION_RUN_HEADER_CLASS}>

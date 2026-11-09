@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { actionFeedback, IDLE_ACTION_FEEDBACK, type ActionFeedback } from '../shared/action-feedback.js'
-import { findModelsDevModel } from '../shared/models-dev.js'
+import { formatBytes, formatDuration } from '../shared/format.js'
+import { findModelsDevModel, type ModelsDevLab } from '../shared/models-dev.js'
+import { resolveModelLab } from '../shared/model-labs.js'
 import { getModelsDevSnapshot, loadModelsDevSnapshot, subscribeModelsDevSnapshot } from '../shared/models-dev-cache.js'
 import { saveInboxWorkflowMode } from './sections/inbox-settings.js'
 import { createContentSnapshotSettingsController } from './sections/content-snapshot-settings.js'
@@ -118,7 +120,6 @@ import {
 import {
   buildAvailabilityProfileFromUserSettings,
   createAvailabilityRunScheduler,
-  formatAvailabilityRunnerStatus,
   getDefaultAvailabilityRunnerUserSettings,
   normalizeAvailabilityRunnerUserSettings,
   runAvailabilityQueue,
@@ -341,6 +342,7 @@ import {
 import { publishScopePickerTrigger } from './components/scope-picker-store.js'
 import type { ScopePickerSource } from './components/scope-picker-types.js'
 import { publishOptionsModals } from './components/options-modals-store.js'
+import { showOptionsUndoToast } from './components/options-undo-toast-store.js'
 import type { OptionsModalActionDetail } from './components/options-modals-types.js'
 
 let activeSectionKey = ''
@@ -357,7 +359,6 @@ let availabilitySettingsDraftRevision = 0
 let availabilityCatalogRefreshPending = false
 let availabilityCatalogReadVersion = 0
 let availabilityBookmarkRootNode: chrome.bookmarks.BookmarkTreeNode | null = null
-let availabilityDeleteModalSnapshot: Array<{ id: string; expectedUrl: string }> = []
 const availabilityRunSessions = createAvailabilityRunSessionCoordinator()
 const aiAnalysisRunSessions = createAiAnalysisRunSessionCoordinator()
 const availabilityGlobalRunLocks = createAvailabilityGlobalRunLockCoordinator({
@@ -424,20 +425,20 @@ const SHORTCUT_COMMAND_ORDER = [
 ]
 const SHORTCUT_COMMAND_LABELS: Record<string, { title: string; detail: string }> = {
   'curator-capture-inbox': {
-    title: '直接收藏到 Inbox',
-    detail: '保存当前网页到 Inbox / 待整理，并在后台分析归类。'
+    title: '保存到待整理',
+    detail: '保存当前网页到待整理，并在后台归类。'
   },
   'curator-open-search': {
     title: '打开并聚焦搜索',
-    detail: '打开弹窗后直接聚焦搜索框。'
+    detail: '打开弹窗并聚焦搜索框。'
   },
   'curator-open-smart-classifier': {
-    title: '直接智能分类当前页',
-    detail: '打开弹窗后立即分析当前页面并给出保存建议。'
+    title: '智能分类当前页',
+    detail: '打开弹窗，分析当前页面并给出保存位置。'
   },
   'curator-toggle-auto-analyze': {
     title: '切换自动分析',
-    detail: '通过快捷键开启或关闭新增书签自动分析。'
+    detail: '开启或关闭新增书签的自动分析。'
   }
 }
 const recycleCallbacks = {
@@ -948,13 +949,6 @@ export function handleOptionsModalAction(detail: OptionsModalActionDetail): void
     return
   }
 
-  if (detail.modal === 'delete') {
-    if (detail.action === 'confirm') {
-      void confirmDeleteFailedBookmarks()
-      return
-    }
-    closeDeleteModal()
-  }
 }
 
 export function handleScopePickerTriggerOpen(source: ScopePickerSource): void {
@@ -1159,7 +1153,7 @@ export function handleAvailabilityPanelAction(detail: AvailabilityPanelActionDet
   }
 
   if (detail.action === 'delete-failed') {
-    openDeleteModal()
+    void deleteFailedAvailabilityResults()
   }
 }
 
@@ -1465,7 +1459,6 @@ function resetAiNamingRunState() {
   aiNamingState.resultsPage = 1
   aiNamingState.selectedResultIds = new Set()
   aiNamingState.pendingMoveResultIds = new Set()
-  aiNamingState.pendingMoveSelection = false
   aiNamingState.runStartedAt = 0
   aiNamingState.lastCompletedAt = 0
   aiNamingState.lastRunOutcome = ''
@@ -1727,7 +1720,6 @@ function resetCurrentAvailabilityRunState() {
   availabilityState.lastRunOutcome = ''
   availabilityState.runTotalBookmarks = 0
   availabilityState.runStartedAt = 0
-  availabilityState.runnerStatusCopy = ''
   availabilityState.currentRunProbeEnabled = false
   availabilityState.retestingSelection = false
   availabilityState.retestSelectionTotal = 0
@@ -1977,7 +1969,7 @@ async function handleAvailabilityAction() {
     await runAvailabilityDetection({ probeEnabled, sessionId })
   } catch (error) {
     availabilityState.lastError =
-      error instanceof Error ? error.message : '书签可用性检测启动失败，请稍后重试。'
+      error instanceof Error ? error.message : '失效书签检测启动失败，请稍后重试。'
   } finally {
     if (isAvailabilityRunSessionOwner(sessionId)) {
       await finishAvailabilityRunSession(sessionId)
@@ -2063,7 +2055,6 @@ async function runAvailabilityDetection({
   availabilityState.lastCompletedAt = 0
   availabilityState.lastRunOutcome = ''
   availabilityState.runStartedAt = runStartedAt
-  updateAvailabilityRunnerStatus(scheduler)
   availabilityState.runQueue = availabilityState.bookmarks.slice()
   availabilityState.runTotalBookmarks = availabilityState.runQueue.length
   availabilityState.deletedBookmarkIds = new Set()
@@ -2087,11 +2078,6 @@ async function runAvailabilityDetection({
       shouldContinue: () => waitForAvailabilityRun(sessionId),
       shouldSkip: (bookmark) => !bookmark || isBookmarkRemovedDuringRun(bookmark.id),
       wait: waitForAvailabilityQueueDelay,
-      onWait: () => {
-        if (isAvailabilityRunSessionOwner(sessionId)) {
-          updateAvailabilityRunnerStatus(scheduler)
-        }
-      },
       processItem: async (bookmark) => {
         const result = await evidenceCache.inspect(bookmark, () => inspectBookmarkAvailability(bookmark, {
           probeEnabled,
@@ -2112,7 +2098,6 @@ async function runAvailabilityDetection({
         }
 
         applyAvailabilityResult(result)
-        updateAvailabilityRunnerStatus(scheduler)
       }
     })
 
@@ -2151,7 +2136,7 @@ async function runAvailabilityDetection({
       startedAt: availabilityState.runStartedAt,
       completedAt: availabilityState.lastCompletedAt
     }).catch((error) => {
-      console.warn('[Curator] 书签可用性检测完成通知发送失败', error)
+      console.warn('[Curator] 失效书签检测完成通知发送失败', error)
     })
     recordPrivacyAudit({
       feature: 'availability-check',
@@ -2193,7 +2178,7 @@ async function runAvailabilityDetection({
       ? `已停止检测，保留 ${availabilityState.checkedBookmarks} 条已完成结果。`
       : error instanceof Error
         ? error.message
-        : '书签可用性检测失败，请稍后重试。'
+        : '失效书签检测失败，请稍后重试。'
     recordPrivacyAudit({
       feature: 'availability-check',
       label: '死链/重定向检测',
@@ -2205,9 +2190,6 @@ async function runAvailabilityDetection({
       reason: availabilityState.lastError
     })
   } finally {
-    if (isAvailabilityRunSessionOwner(sessionId)) {
-      updateAvailabilityRunnerStatus(scheduler)
-    }
     await finishAvailabilityRunSession(sessionId)
     renderAvailabilitySection()
   }
@@ -2271,7 +2253,7 @@ async function notifyAvailabilityRunFinished({
 } = {}): Promise<void> {
   const processed = Math.max(0, Number(availabilityState.checkedBookmarks) || 0)
   const total = Math.max(processed, Number(availabilityState.eligibleBookmarks) || 0)
-  const title = stopped ? '书签可用性检测已停止' : '书签可用性检测已完成'
+  const title = stopped ? '失效书签检测已停止' : '失效书签检测已完成'
   const message = stopped
     ? `已检测 ${processed}/${total} 条，可访问 ${availabilityState.availableCount} 条，异常 ${availabilityState.reviewCount + availabilityState.failedCount} 条。`
     : `共检测 ${processed}/${total} 条，可访问 ${availabilityState.availableCount} 条，重定向 ${availabilityState.redirectedCount} 条，异常 ${availabilityState.reviewCount + availabilityState.failedCount} 条。`
@@ -2281,7 +2263,7 @@ async function notifyAvailabilityRunFinished({
   await createOptionsNotification(`availability-${completedAt}-${Math.random().toString(16).slice(2)}`, {
     title,
     message,
-    contextMessage: `范围：${scopeMeta.label}${elapsedCopy ? ` · 用时 ${elapsedCopy}` : ''}`,
+    contextMessage: `范围：${scopeMeta.label}${elapsedCopy ? `，用时 ${elapsedCopy}` : ''}`,
     priority: 1,
     requireInteraction: false,
     silent: false
@@ -2317,7 +2299,6 @@ async function waitForAvailabilityCooldown(
     shouldContinue: () => waitForAvailabilityRun(sessionId),
     onWait: () => {
       if (isAvailabilityRunSessionOwner(sessionId)) {
-        updateAvailabilityRunnerStatus(scheduler)
         scheduleAvailabilityRender()
       }
     }
@@ -2606,12 +2587,6 @@ async function waitForAvailabilityQueueDelay(ms: number, signal?: AbortSignal | 
   })
 }
 
-function updateAvailabilityRunnerStatus(scheduler: AvailabilityRunScheduler | null = null) {
-  availabilityState.runnerStatusCopy = scheduler
-    ? formatAvailabilityRunnerStatus(scheduler.getSnapshot())
-    : formatAvailabilityRunnerStatus(createAvailabilityScheduler().getSnapshot())
-}
-
 const AI_PAGE_RESPONSE_MAX_BYTES = 3 * 1024 * 1024
 const AI_AUXILIARY_RESPONSE_MAX_BYTES = 2 * 1024 * 1024
 
@@ -2668,13 +2643,13 @@ async function readResponseTextWithLimit(
   const declaredBytes = Number(response.headers.get('content-length'))
   if (Number.isFinite(declaredBytes) && declaredBytes > normalizedMaxBytes) {
     await response.body?.cancel().catch(() => {})
-    throw new Error(`响应正文超过 ${formatResponseSizeLimit(normalizedMaxBytes)} 限制。`)
+    throw new Error(`响应正文超过 ${formatBytes(normalizedMaxBytes)} 限制。`)
   }
 
   if (!response.body?.getReader) {
     const text = await response.text()
     if (new TextEncoder().encode(text).byteLength > normalizedMaxBytes) {
-      throw new Error(`响应正文超过 ${formatResponseSizeLimit(normalizedMaxBytes)} 限制。`)
+      throw new Error(`响应正文超过 ${formatBytes(normalizedMaxBytes)} 限制。`)
     }
     return text
   }
@@ -2693,7 +2668,7 @@ async function readResponseTextWithLimit(
       bytesRead += value.byteLength
       if (bytesRead > normalizedMaxBytes) {
         await reader.cancel().catch(() => {})
-        throw new Error(`响应正文超过 ${formatResponseSizeLimit(normalizedMaxBytes)} 限制。`)
+        throw new Error(`响应正文超过 ${formatBytes(normalizedMaxBytes)} 限制。`)
       }
       text += decoder.decode(value, { stream: true })
     }
@@ -2701,10 +2676,6 @@ async function readResponseTextWithLimit(
   } finally {
     reader.releaseLock()
   }
-}
-
-function formatResponseSizeLimit(bytes: number): string {
-  return `${Math.max(1, Math.round(bytes / (1024 * 1024)))} MiB`
 }
 
 function parseJsonResponseText(text: string): unknown | null {
@@ -2836,7 +2807,6 @@ function renderAvailabilitySection() {
   renderActiveOptionsSection()
   renderScopeModal()
   renderMoveModal()
-  renderDeleteModal()
   renderConfirmModal()
 }
 
@@ -3068,7 +3038,7 @@ function getAvailabilityResultsHeaderState() {
       isInteractionLocked() ||
       getAvailabilityPanelResults('failed').filter(result => result.status === 'failed').length === 0
     ),
-    deleteFailedLabel: '批量删除',
+    deleteFailedLabel: '删除本区',
     failedCount: `${panelCounts.failed} 条${getAvailabilityPanelCountLabel('failed')}`,
     failedLastRun: availabilityState.lastCompletedAt
       ? `${availabilityState.lastRunOutcome === 'stopped' ? '最近一次停止于' : '最近一次完成于'} ${formatDateTime(availabilityState.lastCompletedAt)}`
@@ -3435,18 +3405,6 @@ function clearAvailabilityDurationTimer() {
 
   window.clearInterval(availabilityDurationTimer)
   availabilityDurationTimer = 0
-}
-
-function formatDuration(durationMs) {
-  const totalSeconds = Math.max(0, Math.round((Number(durationMs) || 0) / 1000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-
-  if (minutes) {
-    return `${minutes} 分 ${seconds} 秒`
-  }
-
-  return `${seconds} 秒`
 }
 
 function getAvailabilityPanelCounts() {
@@ -3955,7 +3913,7 @@ async function saveAiNamingSettingsFromState({
     await hydrateAiNamingPermissionState()
     return true
   } catch (error) {
-    reportError(error instanceof Error ? error.message : 'AI 渠道保存失败，请稍后重试。')
+    reportError(error instanceof Error ? error.message : 'AI 服务保存失败，请稍后重试。')
     return false
   } finally {
     aiSettingsSaving = false
@@ -4249,21 +4207,17 @@ function renderAiNamingSection() {
   const highConfidenceResults = selectableResults.filter((result) => result.confidence === 'high')
   const selectedResults = getSelectedAiNamingResults()
   const selectedMovableResults = selectedResults.filter((result) => canMoveAiNamingResultToSuggestedFolder(result))
-  const pendingSelectionMove = aiNamingState.pendingMoveSelection && selectedMovableResults.length > 0
   publishAiAnalysisSelectionActions({
     applyDisabled: areAiResultActionsLocked() || selectedResults.length === 0,
     clearDisabled: areAiResultActionsLocked() || selectedResults.length === 0,
     countLabel: `${selectedResults.length} 条已选择`,
     hidden: selectedResults.length === 0,
-    moveConfirm: pendingSelectionMove,
     moveDisabled:
       areAiResultActionsLocked() ||
       selectedMovableResults.length === 0,
     moveLabel: '移动至推荐文件夹',
     moveTitle: selectedMovableResults.length
-      ? pendingSelectionMove
-        ? `再次点击移动 ${selectedMovableResults.length} 条`
-        : `移动 ${selectedMovableResults.length} 条`
+      ? `移动 ${selectedMovableResults.length} 条`
       : '所选结果没有可用的推荐文件夹',
     selectAllDisabled:
       areAiResultActionsLocked() ||
@@ -4469,18 +4423,6 @@ async function handleBookmarkTagImport(file?: File) {
         `没有可导入的匹配标签数据：跳过 ${result.skipped}，无法匹配 ${result.unmatched}。`
       return
     }
-    const confirmed = await requestConfirmation({
-      title: `导入 ${changedCount} 条标签数据？`,
-      copy: `将新增 ${result.added} 条、覆盖 ${result.overwritten} 条、跳过 ${result.skipped} 条，无法匹配 ${result.unmatched} 条。导入只会写入本地标签/摘要/别名数据，不会删除或移动 Chrome 书签；执行前会创建本地自动备份。`,
-      confirmLabel: '导入标签数据',
-      cancelLabel: '取消',
-      tone: 'warning',
-      label: '导入标签'
-    })
-    if (!confirmed) {
-      aiNamingState.tagDataStatus = '已取消标签数据导入。'
-      return
-    }
     await createAutoBackupBeforeDangerousOperation({
       kind: 'tag-import',
       source: 'options',
@@ -4510,12 +4452,11 @@ async function handleBookmarkTagClear() {
   const count = Object.keys(normalizeBookmarkTagIndex(aiNamingState.tagIndex).records).length
   const confirmed = await requestConfirmation({
     title: `清空 ${count} 条标签数据？`,
-    copy: '只会清空本地标签数据，包括 AI 生成内容和手动维护标签；不会删除 Chrome 书签、AI 渠道设置或 API Key。建议先导出备份。',
+    copy: '只会清空本地标签数据，包括 AI 生成内容和手动维护标签；不会删除 Chrome 书签、AI 服务设置或 API Key。建议先导出备份。',
     confirmLabel: '清空标签数据',
     holdToConfirm: true,
     cancelLabel: '取消',
     tone: 'danger',
-    label: 'Clear'
   })
 
   if (!confirmed) {
@@ -4807,7 +4748,7 @@ async function handleAutoBackupPreview(backupId: string) {
   renderBackupRestoreSection()
   try {
     const { point, backup } = await readAutoBackupPoint(backupId)
-    const name = `${formatDateTime(point.createdAt)} · ${point.operationReason || '自动恢复点'}`
+    const name = `${point.operationReason || '自动恢复点'}（${formatDateTime(point.createdAt)}）`
     const preview = await buildBackupRestorePreview(backup, name)
     backupRestoreState.fileName = name
     backupRestoreState.backup = backup
@@ -4844,8 +4785,7 @@ async function handleFullBackupRestore(mode: BackupRestoreMode) {
         : '恢复会写入对应的本地扩展数据，不会恢复 API Key。',
     confirmLabel: modeLabel,
     cancelLabel: '取消',
-    tone: mode === 'safeFull' ? 'warning' : 'danger',
-    label: 'Restore'
+    tone: mode === 'safeFull' || mode === 'bookmarksOnly' ? 'warning' : 'danger',
   })
   if (!confirmed || backupRestoreState.restoring || backupRestoreState.backup !== backup || tagDataOperationPending) {
     return
@@ -5063,12 +5003,21 @@ function renderAiProviderSettings(
 }
 
 function buildAiModelSelectorState(settings = aiNamingManagerState.settings) {
+  const catalog = getModelsDevSnapshot().cache?.catalog
+  const currentModel = settings.model || AI_NAMING_DEFAULT_MODEL
+  const models = getAiNamingModelOptions(settings)
+  const labs: Record<string, ModelsDevLab> = {}
+  for (const model of new Set([currentModel, ...models, ...settings.fetchedModels])) {
+    const lab = resolveModelLab(catalog, { ...settings, model })
+    if (lab) labs[model] = lab
+  }
   return {
-    currentModel: settings.model || AI_NAMING_DEFAULT_MODEL,
+    currentModel,
     customModels: settings.customModels,
     disabled: areAiProviderSettingsLocked(),
     fetchedModels: settings.fetchedModels,
-    models: getAiNamingModelOptions(settings),
+    labs,
+    models,
     presetModels: AI_NAMING_PRESET_MODELS
   }
 }
@@ -5112,7 +5061,7 @@ function getAiFetchModelsStatus(): string {
   }
   if (aiNamingState.lastFetchModelsAt) {
     const timeLabel = formatDateTime(aiNamingState.lastFetchModelsAt)
-    return `已获取 ${aiNamingState.lastFetchModelsCount} 个模型 · ${timeLabel}`
+    return `已获取 ${aiNamingState.lastFetchModelsCount} 个模型，${timeLabel}`
   }
   return ''
 }
@@ -5161,7 +5110,7 @@ async function handleFetchAiModels() {
       const remainingMs = deadline - Date.now()
       if (remainingMs < 1000) {
         if (modelIds.size) break
-        throw new Error('获取模型列表超时，请检查渠道后重试。')
+        throw new Error('获取模型列表超时，请检查服务商后重试。')
       }
       const { response, text } = await fetchTextWithRequestTimeout(pageUrl, {
         method: 'GET', cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error',
@@ -5181,7 +5130,7 @@ async function handleFetchAiModels() {
     if (!ids.length) throw new Error('接口未返回可生成文本的模型。可手动填写模型 ID 后测试连接。')
     const current = aiNamingManagerState.settings
     if (current.baseUrl !== settings.baseUrl || current.apiStyle !== settings.apiStyle || current.apiKey !== apiKey) {
-      throw new Error('渠道设置已变化，请重新获取模型列表。')
+      throw new Error('服务商设置已变化，请重新获取模型列表。')
     }
 
     const normalizedIds = normalizeAiNamingFetchedModels(ids)
@@ -5293,7 +5242,7 @@ function renderAiNamingResults() {
   if (!aiNamingState.results.length) {
     const emptyMessage = aiNamingState.lastError || aiNamingState.statusMessage || (aiNamingState.lastCompletedAt
         ? '最近一次生成已完成，当前没有待确认的书签智能分析结果。'
-        : '保存 AI 渠道并开始分析后，这里会展示书签智能分析结果。')
+        : '保存 AI 服务并开始分析后，这里会展示书签智能分析结果。')
     publishAiAnalysisResults({
       emptyMessage,
       results: []
@@ -5390,7 +5339,7 @@ function buildAiNamingResultCardViewModel(result) {
   const detailRows = [
     result.summary ? `摘要：${result.summary}` : '',
     result.contentType || topics.length
-      ? `类型：${result.contentType || '未分类'}${topics.length ? ` · 主题：${topics.join(' / ')}` : ''}`
+      ? `类型：${result.contentType || '未分类'}${topics.length ? `；主题：${topics.join(' / ')}` : ''}`
       : '',
     tags.length ? `标签：${tags.join(' / ')}` : '',
     aliases.length ? `别名：${aliases.join(' / ')}` : '',
@@ -5716,12 +5665,10 @@ function getSelectedAiNamingResults() {
 
 function clearAiNamingSelection() {
   aiNamingState.selectedResultIds.clear()
-  aiNamingState.pendingMoveSelection = false
   renderAvailabilitySection()
 }
 
 function selectAllAiNamingResults() {
-  aiNamingState.pendingMoveSelection = false
   aiNamingState.selectedResultIds = new Set(
     getSelectableAiNamingResults().map((result) => String(result.id))
   )
@@ -5729,7 +5676,6 @@ function selectAllAiNamingResults() {
 }
 
 function selectHighConfidenceAiResults() {
-  aiNamingState.pendingMoveSelection = false
   aiNamingState.selectedResultIds = new Set(
     getSelectableAiNamingResults().flatMap((combineValue, combineIndex, combineArray) => { if (!((result) => result.confidence === 'high')(combineValue)) return []; const combinedResult = ((result) => String(result.id))(combineValue); return [combinedResult] })
   )
@@ -5757,7 +5703,6 @@ export function handleAiAnalysisResultAction(detail: AiAnalysisResultActionDetai
       aiNamingState.selectedResultIds.delete(bookmarkId)
     }
 
-    aiNamingState.pendingMoveSelection = false
     renderAvailabilitySection()
     return
   }
@@ -5783,7 +5728,6 @@ export function handleAiAnalysisResultAction(detail: AiAnalysisResultActionDetai
       return
     }
 
-    aiNamingState.pendingMoveSelection = false
     aiNamingState.pendingMoveResultIds = new Set([bookmarkId])
     renderAvailabilitySection()
     return
@@ -5819,7 +5763,6 @@ async function rejectAiNamingResult(bookmarkId: string): Promise<void> {
     const remainingIds = new Set(aiNamingState.results.map((result) => String(result.id)))
     syncSelectionSet(aiNamingState.selectedResultIds, remainingIds)
     syncSelectionSet(aiNamingState.pendingMoveResultIds, remainingIds)
-    aiNamingState.pendingMoveSelection = false
     aiNamingState.statusMessage = `已拒绝“${targetResult.suggestedTitle || targetResult.currentTitle || '未命名书签'}”的建议，后续不会重复展示同一建议。`
     recalculateAiNamingSummary()
     await persistAiAnalysisCheckpoint().catch(() => {})
@@ -6211,7 +6154,6 @@ async function applySelectedAiNamingResults() {
     title: `应用 ${selectedResults.length} 条 AI 命名建议？`,
     copy: `会重命名这些书签：${formatAiNamingRenameImpactList(selectedResults)}。只改书签标题，不移动文件夹。`,
     confirmLabel: `应用 ${selectedResults.length} 条命名`,
-    label: 'Rename',
     tone: 'warning'
   })
   if (!confirmed) {
@@ -6228,7 +6170,6 @@ async function applySelectedAiNamingResults() {
     return
   }
 
-  aiNamingState.pendingMoveSelection = false
   aiNamingState.pendingMoveResultIds.clear()
   await applyAiNamingResultsByIds(selectedResults.map((result) => result.id))
 }
@@ -6241,15 +6182,6 @@ async function handleMoveSelectedAiNamingResults() {
   const selectedMovableResults = getSelectedAiNamingResults()
     .filter((result) => canMoveAiNamingResultToSuggestedFolder(result))
   if (!selectedMovableResults.length) {
-    aiNamingState.pendingMoveSelection = false
-    renderAvailabilitySection()
-    return
-  }
-
-  if (!aiNamingState.pendingMoveSelection) {
-    aiNamingState.pendingMoveSelection = true
-    aiNamingState.pendingMoveResultIds.clear()
-    renderAvailabilitySection()
     return
   }
 
@@ -6257,16 +6189,12 @@ async function handleMoveSelectedAiNamingResults() {
     title: `移动 ${selectedMovableResults.length} 条书签到推荐文件夹？`,
     copy: `会移动这些书签：${formatAiNamingMoveImpactList(selectedMovableResults)}。书签标题不变，必要时会创建推荐文件夹路径。`,
     confirmLabel: `移动 ${selectedMovableResults.length} 条书签`,
-    label: 'Move',
     tone: 'warning'
   })
   if (!confirmed) {
-    aiNamingState.pendingMoveSelection = false
-    renderAvailabilitySection()
     return
   }
   if (areAiResultActionsLocked() || !areAiNamingResultSnapshotsCurrent(selectedMovableResults)) {
-    aiNamingState.pendingMoveSelection = false
     aiNamingState.lastError = '确认期间推荐文件夹已更新，请重新检查并选择。'
     renderAvailabilitySection()
     return
@@ -6305,7 +6233,6 @@ async function moveAiNamingResultsToSuggestedFolders(bookmarkIds) {
   })
 
   if (!targetResults.length) {
-    aiNamingState.pendingMoveSelection = false
     aiNamingState.pendingMoveResultIds.clear()
     renderAvailabilitySection()
     return
@@ -6323,7 +6250,6 @@ async function moveAiNamingResultsToSuggestedFolders(bookmarkIds) {
   const releaseMutationLock = await claimAvailabilityMutationLock()
   if (!releaseMutationLock) {
     aiNamingState.applying = false
-    aiNamingState.pendingMoveSelection = false
     aiNamingState.pendingMoveResultIds.clear()
     aiNamingState.lastError = '另一个 Curator 页面正在分析或修改书签，请稍后重试。'
     renderAvailabilitySection()
@@ -6363,7 +6289,6 @@ async function moveAiNamingResultsToSuggestedFolders(bookmarkIds) {
     moveErrors.push(error instanceof Error ? error.message : '移动至推荐文件夹失败。')
   } finally {
     releaseMutationLock()
-    aiNamingState.pendingMoveSelection = false
     aiNamingState.pendingMoveResultIds.clear()
 
     if (movedIds.length || availabilityCatalogRefreshPending) {
@@ -6668,7 +6593,7 @@ function getAiNamingStatusCopy() {
     return `最近完成：${formatDateTime(aiNamingState.lastCompletedAt)}`
   }
 
-  return '配置 AI 渠道后，可批量生成标签和标题建议。'
+  return '配置 AI 服务后，可批量生成标签和标题建议。'
 }
 
 function getAiNamingReadinessMeta() {
@@ -6725,7 +6650,7 @@ function getAiNamingProgressCopy() {
   const remoteCopy = aiNamingManagerState.settings.allowRemoteParsing
     ? '远程解析已开启。'
     : '本地解析。'
-  return `范围：${scopeMeta.label} · ${aiNamingState.eligibleBookmarks} 条 · 模型：${aiNamingManagerState.settings.model || '未配置'}。${remoteCopy}`
+  return `范围：${scopeMeta.label}，${aiNamingState.eligibleBookmarks} 条，模型：${aiNamingManagerState.settings.model || '未配置'}。${remoteCopy}`
 }
 
 function getAiNamingConnectivityMeta() {
@@ -7144,7 +7069,7 @@ async function notifyAiNamingRunFinished({
   await createOptionsNotification(`ai-naming-${completedAt}-${Math.random().toString(16).slice(2)}`, {
     title,
     message,
-    contextMessage: `范围：${scopeMeta.label}${elapsedCopy ? ` · 用时 ${elapsedCopy}` : ''}`,
+    contextMessage: `范围：${scopeMeta.label}${elapsedCopy ? `，用时 ${elapsedCopy}` : ''}`,
     priority: 1,
     requireInteraction: failed,
     silent: false
@@ -7341,7 +7266,7 @@ function createAiNamingRunFailure(
   const model = String(settings.model || '未配置模型').trim() || '未配置模型'
   const detail = getAiNamingFailureMessage(error)
   const failureSummary = decision.immediate
-    ? '首个请求已被 AI 渠道明确拒绝'
+    ? '首个请求已被 AI 服务明确拒绝'
     : `连续 ${decision.consecutiveFailures} 次生成失败`
   const failure = new Error(
     `书签智能分析已停止：模型“${model}”${failureSummary}。API 返回：${detail} ${getAiNamingFailureAction(error)}`
@@ -7383,7 +7308,7 @@ function getAiNamingFailureAction(error: unknown): string {
     return '请检查 API Key、账户权限和接口授权后重试。'
   }
   if (status === 404) {
-    return '请检查接口地址和模型 ID 后重试。'
+    return '请检查服务地址和模型 ID 后重试。'
   }
   if (status === 429) {
     return '请检查账户额度和服务限流设置，稍后再试。'
@@ -7391,7 +7316,7 @@ function getAiNamingFailureAction(error: unknown): string {
   if (status === 400 || status === 415 || status === 422) {
     return '请检查模型 ID、API 协议和推理强度设置后重试。'
   }
-  return '请检查 API Key、模型 ID、接口地址和账户额度后重试。'
+  return '请检查 API Key、模型 ID、服务地址和账户额度后重试。'
 }
 
 async function commitAiNamingResult(bookmark, modelItem, settings = aiNamingManagerState.settings, preparedItem = null) {
@@ -7861,7 +7786,7 @@ async function requestAiNamingConnectivityTest(
   try {
     const result = await requestAiProviderConnectivityTest(settings as AiProviderSettings, { signal: options.signal })
     const compatibilityNote = result.metadata.compatibilityWarnings?.length
-      ? ' 已启用渠道兼容模式，结果通过本地结构校验。'
+      ? ' 已启用服务商兼容模式，结果通过本地结构校验。'
       : ''
 
     recordPrivacyAudit({
@@ -9098,7 +9023,6 @@ async function retestSelectedAvailabilityResults(onlyBookmarkId?: string) {
     availabilityState.retestSelectionCompleted = 0
     availabilityState.retestSelectionProbeEnabled = probeEnabled
     scheduler = createAvailabilityScheduler()
-    updateAvailabilityRunnerStatus(scheduler)
     renderAvailabilitySection()
 
     await runAvailabilityQueue({
@@ -9118,17 +9042,11 @@ async function retestSelectedAvailabilityResults(onlyBookmarkId?: string) {
       shouldContinue: () => waitForAvailabilityRun(sessionId),
       shouldSkip: (bookmark) => !bookmark,
       wait: waitForAvailabilityQueueDelay,
-      onWait: () => {
-        if (isAvailabilityRunSessionOwner(sessionId)) {
-          updateAvailabilityRunnerStatus(scheduler)
-        }
-      },
       onItemSettled: () => {
         if (!isAvailabilityRunSessionOwner(sessionId)) {
           return
         }
         availabilityState.retestSelectionCompleted += 1
-        updateAvailabilityRunnerStatus(scheduler)
         scheduleAvailabilityRender()
       },
       processItem: async (bookmark) => {
@@ -9213,9 +9131,6 @@ async function retestSelectedAvailabilityResults(onlyBookmarkId?: string) {
 
     availabilityState.retestSelectionTotal = 0
     availabilityState.retestSelectionCompleted = 0
-    if (scheduler && isAvailabilityRunSessionOwner(sessionId)) {
-      updateAvailabilityRunnerStatus(scheduler)
-    }
     await finishAvailabilityRunSession(sessionId)
     renderAvailabilitySection()
   }
@@ -9346,19 +9261,6 @@ async function ignoreSelectedAvailabilityResults(kind) {
     return
   }
 
-  const confirmed = await requestConfirmation({
-    title: `新增 ${candidateResults.length} 条忽略规则？`,
-    copy: `将按${getIgnoreKindLabel(kind)}忽略所选异常结果，后续检测会自动过滤匹配项；不会删除或移动 Chrome 书签。`,
-    confirmLabel: '新增忽略规则',
-    cancelLabel: '取消',
-    tone: 'warning',
-    label: '忽略规则'
-  })
-  if (!confirmed) {
-    availabilityState.lastError = '已取消新增忽略规则。'
-    renderAvailabilitySection()
-    return
-  }
   if (isAvailabilityResultActionLocked()) {
     availabilityState.lastError = '检测状态已变化，请等待当前操作结束后重试。'
     renderAvailabilitySection()
@@ -9371,6 +9273,7 @@ async function ignoreSelectedAvailabilityResults(kind) {
   }
 
   let addedCount = 0
+  const previousIgnoreRules = normalizeIgnoreRules(managerState.ignoreRules)
   try {
     const nextIgnoreRules = normalizeIgnoreRules(managerState.ignoreRules)
     for (const result of candidateResults) {
@@ -9392,7 +9295,8 @@ async function ignoreSelectedAvailabilityResults(kind) {
   }
   repartitionAvailabilityResultsByIgnoreRules()
   clearAvailabilitySelection()
-  availabilityState.lastError = `已新增 ${addedCount} 条忽略规则。`
+  availabilityState.lastError = ''
+  showIgnoreRulesUndoToast(`已忽略 ${addedCount} 条`, previousIgnoreRules)
   renderAvailabilitySection()
 }
 
@@ -9414,26 +9318,13 @@ async function ignoreSingleAvailabilityResult(bookmarkId, kind) {
     return
   }
 
-  const confirmed = await requestConfirmation({
-    title: `新增${getIgnoreKindLabel(kind)}忽略规则？`,
-    copy: `后续检测会自动过滤这个${getIgnoreKindLabel(kind)}匹配的异常结果；不会删除或移动 Chrome 书签。`,
-    confirmLabel: '新增忽略规则',
-    cancelLabel: '取消',
-    tone: 'warning',
-    label: '忽略规则'
-  })
-  if (!confirmed) {
-    availabilityState.lastError = '已取消新增忽略规则。'
-    renderAvailabilitySection()
-    return
-  }
-
   const releaseMutationLock = await claimAvailabilityMutationLock()
   if (!releaseMutationLock) {
     return
   }
 
   let added = false
+  const previousIgnoreRules = normalizeIgnoreRules(managerState.ignoreRules)
   try {
     const nextIgnoreRules = normalizeIgnoreRules(managerState.ignoreRules)
     added = addAvailabilityIgnoreRule(nextIgnoreRules, result, kind)
@@ -9455,8 +9346,33 @@ async function ignoreSingleAvailabilityResult(bookmarkId, kind) {
   }
 
   repartitionAvailabilityResultsByIgnoreRules()
-  availabilityState.lastError = `已${getIgnoreKindActionLabel(kind)}，后续检测会自动过滤。`
+  availabilityState.lastError = ''
+  showIgnoreRulesUndoToast(`已${getIgnoreKindActionLabel(kind)}`, previousIgnoreRules)
   renderAvailabilitySection()
+}
+
+function showIgnoreRulesUndoToast(title: string, previousIgnoreRules: ReturnType<typeof normalizeIgnoreRules>) {
+  showOptionsUndoToast({
+    title,
+    detail: '后续检测会自动过滤。',
+    onUndo: async () => {
+      const releaseMutationLock = await claimAvailabilityMutationLock()
+      if (!releaseMutationLock) {
+        availabilityState.lastError = '书签正在被其他页面使用，暂时无法撤销；可在“忽略规则”中移除。'
+        renderAvailabilitySection()
+        return
+      }
+      try {
+        await saveIgnoreRules(previousIgnoreRules)
+        repartitionAvailabilityResultsByIgnoreRules()
+      } catch (error) {
+        availabilityState.lastError = error instanceof Error ? `撤销失败：${error.message}` : '撤销失败。'
+      } finally {
+        releaseMutationLock()
+        renderAvailabilitySection()
+      }
+    }
+  })
 }
 
 function addAvailabilityIgnoreRule(ignoreRules, result, kind) {
@@ -9609,21 +9525,11 @@ async function deleteSelectedAvailabilityResults(onlyBookmarkId?: string) {
     return
   }
 
-  const confirmed = await requestConfirmation({
-    title: deletion.title,
-    copy: deletion.copy,
-    confirmLabel: '删除并移入回收站',
-    label: '移入回收站',
-    tone: 'danger'
-  })
-  if (!confirmed) {
-    return
-  }
-
   await deleteBookmarksToRecycle(
     deletion.candidates,
     '可用性检测删除',
-    recycleCallbacks
+    recycleCallbacks,
+    { notice: deletion.notice }
   )
   renderAvailabilitySection()
 }
@@ -9963,31 +9869,9 @@ async function moveSelectedAvailabilityToFolder(folderId) {
   }
 }
 
-function openDeleteModal() {
-  if (isInteractionLocked()) {
-    return
-  }
-
-  const deletion = buildAvailabilityDeletionRequest(getAvailabilityPanelResults('failed'))
-  if (!deletion) return
-  availabilityState.deleteModalOpen = true
-  availabilityDeleteModalSnapshot = deletion.candidates
-  renderDeleteModal()
-}
-
-function closeDeleteModal() {
-  if (availabilityState.deleting) {
-    return
-  }
-
-  availabilityState.deleteModalOpen = false
-  availabilityDeleteModalSnapshot = []
-  renderDeleteModal()
-}
-
-async function confirmDeleteFailedBookmarks() {
+async function deleteFailedAvailabilityResults() {
   if (
-    !availabilityDeleteModalSnapshot.length ||
+    isInteractionLocked() ||
     availabilityState.deleting ||
     availabilityState.stopRequested ||
     availabilityState.runSessionActive
@@ -9995,15 +9879,14 @@ async function confirmDeleteFailedBookmarks() {
     return
   }
 
-  availabilityState.deleteModalOpen = false
-  const deleteCandidates = availabilityDeleteModalSnapshot.slice()
-  availabilityDeleteModalSnapshot = []
-  renderDeleteModal()
+  const deletion = buildAvailabilityDeletionRequest(getAvailabilityPanelResults('failed'))
+  if (!deletion) return
 
   await deleteBookmarksToRecycle(
-    deleteCandidates,
+    deletion.candidates,
     '可用性检测批量删除',
-    recycleCallbacks
+    recycleCallbacks,
+    { notice: deletion.notice }
   )
 }
 
@@ -10052,25 +9935,13 @@ function getBookmarkRecord(bookmarkId) {
   )
 }
 
-function renderDeleteModal() {
-  publishOptionsModals({
-    delete: {
-      confirmDisabled: availabilityState.deleting,
-      confirmLabel: '确认删除',
-      copy: `删除本区 ${availabilityDeleteModalSnapshot.length} 条无法访问的书签？将从浏览器书签中移除，可在回收站恢复。`,
-      open: availabilityState.deleteModalOpen
-    }
-  })
-}
-
 function requestConfirmation({
   title = '确认操作？',
   copy = '请确认是否继续。',
   confirmLabel = '确认',
   cancelLabel = '取消',
   tone = 'danger',
-  holdToConfirm = false,
-  label = ''
+  holdToConfirm = false
 }: {
   title?: string
   copy?: string
@@ -10078,7 +9949,6 @@ function requestConfirmation({
   cancelLabel?: string
   tone?: string
   holdToConfirm?: boolean
-  label?: string
 } = {}): Promise<boolean> {
   if (confirmModalResolve) {
     confirmModalResolve(false)
@@ -10089,7 +9959,6 @@ function requestConfirmation({
   managerState.confirmModalRequestId += 1
   managerState.confirmModalHoldToConfirm = holdToConfirm
   managerState.confirmModalTone = tone === 'warning' ? 'warning' : 'danger'
-  managerState.confirmModalLabel = label || (managerState.confirmModalTone === 'warning' ? '确认' : '删除')
   managerState.confirmModalTitle = title
   managerState.confirmModalCopy = copy
   managerState.confirmModalConfirmLabel = confirmLabel
@@ -10125,7 +9994,6 @@ function renderConfirmModal() {
         cancelLabel: managerState.confirmModalCancelLabel,
         confirmLabel: managerState.confirmModalConfirmLabel,
         copy: managerState.confirmModalCopy,
-        label: managerState.confirmModalLabel,
         open: false,
         tone: managerState.confirmModalTone === 'warning' ? 'warning' : 'danger',
         title: managerState.confirmModalTitle
@@ -10141,7 +10009,6 @@ function renderConfirmModal() {
       cancelLabel: managerState.confirmModalCancelLabel,
       confirmLabel: managerState.confirmModalConfirmLabel,
       copy: managerState.confirmModalCopy,
-      label: managerState.confirmModalLabel,
       open: true,
       tone: managerState.confirmModalTone === 'warning' ? 'warning' : 'danger',
       title: managerState.confirmModalTitle
@@ -10382,10 +10249,10 @@ function getAvailabilityStatusCopy() {
     const abnormalCount = availabilityState.reviewCount + availabilityState.failedCount
     // The progress label already states the outcome and checked count.
     if (availabilityState.lastRunOutcome === 'stopped') {
-      return `可访问 ${availabilityState.availableCount} · 重定向 ${availabilityState.redirectedCount} · 异常 ${abnormalCount}`
+      return `可访问 ${availabilityState.availableCount}，重定向 ${availabilityState.redirectedCount}，异常 ${abnormalCount}`
     }
 
-    return `可访问 ${availabilityState.availableCount} · 重定向 ${availabilityState.redirectedCount} · 异常 ${abnormalCount} · 保护跳过 ${availabilityState.skippedCount}`
+    return `可访问 ${availabilityState.availableCount}，重定向 ${availabilityState.redirectedCount}，异常 ${abnormalCount}，保护跳过 ${availabilityState.skippedCount}`
   }
 
   return '仅检测适合外部访问的 http/https 书签；敏感地址会自动跳过。'

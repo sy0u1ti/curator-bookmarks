@@ -360,8 +360,13 @@ try {
     }
     assert.equal(await input.evaluate(element => {
       const style = getComputedStyle(element)
-      return element === document.activeElement && parseFloat(style.outlineWidth) >= 1
-    }), true, 'the unclipped input keeps a visible keyboard focus indicator')
+      const focusStroke = document.createElement('i')
+      focusStroke.style.color = getComputedStyle(element.closest('.bookmark-menu-surface')).getPropertyValue('--bookmark-control-border-focus')
+      element.append(focusStroke)
+      const expected = getComputedStyle(focusStroke).color
+      focusStroke.remove()
+      return element === document.activeElement && style.outlineStyle === 'none' && style.borderTopColor === expected
+    }), true, 'the focused input is marked by its own border alone')
     reports.bookmarkMenuContours.push({ width, contours })
     await capture(page, 'newtab-edit-contours-' + width)
     await page.keyboard.press('Escape')
@@ -460,7 +465,7 @@ try {
     assert.equal(await group.getByRole('checkbox', { checked: true }).count(), 1)
   }
   for (const checkbox of await group.getByRole('checkbox').all()) await checkbox.check()
-  const deleteButton = page.getByRole('button', { name: '移入回收站', exact: true })
+  const deleteButton = page.getByRole('region', { name: '已选重复书签操作', exact: true }).getByRole('button', { name: '删除', exact: true })
   assert.equal(await deleteButton.isDisabled(), true, 'selecting every duplicate must still block deletion')
   await group.getByRole('button', { name: /^按推荐选择/ }).click()
   assert.equal(await deleteButton.isDisabled(), false)

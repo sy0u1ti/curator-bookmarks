@@ -1,5 +1,5 @@
 import { OPTION_INSET_CLASS } from './option-layout-classes.js'
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { displayUrl } from '../../shared/text.js'
 import { AiClassificationResult } from '../../ui/ai/AiClassificationResult'
 import { Button } from '../../ui/base/Button'
@@ -46,7 +46,8 @@ const AI_RESULT_FOLDER_LABEL_CLASS =
 const AI_RESULT_FOLDER_VALUE_CLASS =
   'min-w-0 text-[13px] font-semibold text-ds-text-primary [overflow-wrap:anywhere]'
 const AI_RESULT_MOVE_ACTION_CLASS = 'flex-[0_0_auto]'
-const AI_RESULT_TAG_SHELL_CLASS = 'mt-3'
+const AI_RESULT_TAG_SHELL_CLASS = 'min-w-0 flex-1 basis-60'
+const AI_RESULT_TAG_ROW_CLASS = 'mt-3'
 const AI_RESULT_TAG_LIST_CLASS =
   'flex max-h-[calc((12px*1.35+6px)*2+6px)] flex-wrap gap-1.5 overflow-hidden'
 const AI_RESULT_TAG_LIST_EXPANDED_CLASS = 'max-h-none'
@@ -177,8 +178,7 @@ function AiNamingResultCard({ result }: { result: AiNamingResultCardViewModel })
         <span className={AI_RESULT_META_ITEM_CLASS}>{result.path || '未归档路径'}</span>
       </div>
       <SuggestedFolder result={result} />
-      <TagPreview result={result} />
-      <ResultDetails result={result} />
+      <ResultDetails result={result} tags={<TagPreview result={result} />} />
     </AiClassificationResult>
   )
 }
@@ -283,13 +283,13 @@ function TagPreview({ result }: { result: AiNamingResultCardViewModel }) {
   )
 }
 
-function ResultDetails({ result }: { result: AiNamingResultCardViewModel }) {
+function ResultDetails({ result, tags }: { result: AiNamingResultCardViewModel; tags: ReactNode }) {
   if (!result.detailRows.length) {
-    return null
+    return result.tags.length ? <div className={AI_RESULT_TAG_ROW_CLASS}>{tags}</div> : null
   }
 
   return (
-    <OptionDetails className={AI_RESULT_DETAILS_CLASS} label="分析详情" ariaLabel={'分析详情：' + result.currentTitle}>
+    <OptionDetails className={AI_RESULT_DETAILS_CLASS} label="分析详情" ariaLabel={'分析详情：' + result.currentTitle} actions={tags}>
       <div className="grid gap-2">
         {result.detailRows.map((detail) => (
           <p className={AI_RESULT_DETAIL_CLASS} key={`${result.id}:${detail}`}>

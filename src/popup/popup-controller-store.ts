@@ -98,17 +98,9 @@ export interface PopupSearchFocusRequestDetail {
 
 export interface PopupModalsView {
   error?: string
-  active: 'move' | 'smart-folder' | 'ai-provider' | 'edit' | 'delete' | null
+  active: 'move' | 'smart-folder' | 'ai-provider' | 'edit' | null
   aiProvider: {
     open: boolean
-  }
-  delete: {
-    cancelDisabled: boolean
-    confirmDisabled: boolean
-    confirmLabel: string
-    open: boolean
-    path: string
-    title: string
   }
   edit: {
     cancelDisabled: boolean
@@ -208,7 +200,7 @@ export const EMPTY_POPUP_CHROME_VIEW: PopupChromeView = {
     placeholder: '关键词搜索',
     pressed: false,
     query: '',
-    title: 'AI 语义搜索：需要先配置 AI 渠道'
+    title: 'AI 语义搜索：需要先配置 AI 服务'
   },
   viewCaption: ''
 }
@@ -225,14 +217,6 @@ export const EMPTY_POPUP_CONTENT_CHANGE_DETAIL: PopupContentChangeDetail = {
 export const EMPTY_POPUP_MODALS_VIEW: PopupModalsView = {
   active: null,
   aiProvider: { open: false },
-  delete: {
-    cancelDisabled: false,
-    confirmDisabled: false,
-    confirmLabel: '删除',
-    open: false,
-    path: '',
-    title: ''
-  },
   edit: {
     cancelDisabled: false,
     closeDisabled: false,
@@ -343,7 +327,6 @@ function createInitialPopupViewStoreSnapshot(): PopupViewStoreSnapshot {
     modals: {
       ...EMPTY_POPUP_MODALS_VIEW,
       aiProvider: { ...EMPTY_POPUP_MODALS_VIEW.aiProvider },
-      delete: { ...EMPTY_POPUP_MODALS_VIEW.delete },
       edit: { ...EMPTY_POPUP_MODALS_VIEW.edit },
       move: { ...EMPTY_POPUP_MODALS_VIEW.move },
       smartFolder: { ...EMPTY_POPUP_MODALS_VIEW.smartFolder }

@@ -23,7 +23,7 @@ const AI_RESULTS_FILTER_FIELD_CLASS =
 const AI_RESULTS_FILTER_LABEL_CLASS =
   'text-xs font-medium leading-none text-ds-text-secondary'
 const AI_RESULTS_FILTER_QUERY_CLASS =
-  'h-[42px] min-h-[42px] w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3.5 font-[inherit] text-sm font-medium leading-[42px] text-ds-text-primary outline-none shadow-none placeholder:text-[rgba(255,255,255,0.58)] focus:border-ds-border focus:bg-ds-surface-2 focus:outline focus:outline-1 focus:outline-offset-2 focus:outline-ds-focus'
+  'h-[42px] min-h-[42px] w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3.5 font-[inherit] text-sm font-medium leading-[42px] text-ds-text-primary placeholder:text-ds-text-muted'
 const AI_RESULTS_FILTER_SELECT_CLASS = 'w-full'
 const AI_RESULTS_FILTER_SELECT_TRIGGER_CLASS = 'min-h-[42px] w-full'
 const AI_RESULTS_FILTER_CLEAR_CLASS =
@@ -74,13 +74,13 @@ export function AiAnalysisResultsFilter() {
           size="sm"
           type="button"
           variant="secondary"
-          aria-label="清空书签智能分析筛选条件"
+          aria-label="清除书签智能分析筛选"
           onClick={() => {
             inputRef.current?.focus()
             handleAiResultsFilterChange({ action: 'clear' })
           }}
         >
-          清空筛选
+          清除筛选
         </Button> : null}
       </div>
     </div>

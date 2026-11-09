@@ -606,9 +606,8 @@ body {
   box-shadow: none;
   filter: none;
   transition:
-    border-color var(--ui-motion-fast) var(--ui-ease-standard),
-    background-color var(--ui-motion-fast) var(--ui-ease-standard),
-    box-shadow var(--ui-motion-fast) var(--ui-ease-standard),
+    border-color var(--ds-motion-standard) var(--ds-ease-standard),
+    background-color var(--ds-motion-standard) var(--ds-ease-standard),
     transform var(--ds-motion-control) var(--ds-ease-standard),
     scale var(--ds-motion-control) var(--ds-ease-standard);
 }
@@ -625,8 +624,7 @@ body {
 .bookmark-menu-surface .base-select-trigger[data-popup-open] {
   border-color: var(--bookmark-control-border-focus);
   background: rgba(245, 245, 247, 0.1);
-  outline: 1px solid var(--bookmark-control-border-focus);
-  outline-offset: 2px;
+  outline: none;
   box-shadow: none;
 }
 
@@ -1303,6 +1301,7 @@ body {
   -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
   backdrop-filter: var(--newtab-glass-backdrop-filter);
   pointer-events: none;
+  transition: border-color var(--ds-motion-standard) var(--ds-ease-standard);
 }
 .newtab-search-suggestions-panel {
   pointer-events: auto;
@@ -1688,7 +1687,7 @@ body {
 }
 
 .featured-wallpaper-section-title {
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .featured-wallpaper-provider-title {

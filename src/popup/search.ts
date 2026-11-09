@@ -792,7 +792,7 @@ function getQuickSearchScore(
   if (reasons) {
     matchesStructuredFilters(bookmark, parsedQuery, reasons)
     if (parsedQuery.sort === 'recent') addReason(reasons, '排序：最近添加优先')
-    else if (parsedQuery.recencyHint) addReason(reasons, '排序：相关性 · 最近偏好')
+    else if (parsedQuery.recencyHint) addReason(reasons, '排序：相关性，偏向最近')
   }
   if (!query) {
     return parsedQuery.hasStructuredFilters || parsedQuery.recencyHint

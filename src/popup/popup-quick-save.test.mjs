@@ -189,7 +189,7 @@ try {
     assert.equal(savedProtected[0].url, url, 'local saving must not strip paths, query values or credentials')
     await page.reload()
     await page.locator('[data-current-page-action="edit"]').waitFor()
-    assert.match(await pageCard.innerText(), /已收藏/)
+    assert.match(await pageCard.innerText(), /已保存/)
     assert.equal(await page.locator('[data-current-page-action="pin-newtab"]').isEnabled(), true)
   }
   page.off('request', recordRequest)

@@ -15,12 +15,16 @@ export function BookmarkAddHistoryCard({ entry }: { entry: BookmarkAddHistoryEnt
       </div>
       <strong className="mt-3 block text-[15px] font-semibold leading-6 text-ds-text-primary [overflow-wrap:anywhere]">{entry.title || '未命名书签'}</strong>
       <div className="mt-1 truncate text-[13px] leading-5 text-ds-text-secondary" title={entry.url}>{displayUrl(entry.url)}</div>
-      <p className="mb-0 mt-2 text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere]">
-        {entry.moved ? <>{originalFolder}<span className="px-2 text-ds-text-muted" aria-label="移至">→</span></> : null}{targetFolder}
-      </p>
-      <OptionDetails className="mt-3" label="整理详情" ariaLabel={'整理详情：' + entry.title}>
+      <OptionDetails
+        className="mt-2"
+        label="整理详情"
+        ariaLabel={'整理详情：' + entry.title}
+        actions={<p className="m-0 min-w-0 flex-1 text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere]">
+          {entry.moved ? <>{originalFolder}<span className="px-2 text-ds-text-muted" aria-label="移至">→</span></> : null}{targetFolder}
+        </p>}
+      >
         <div className="grid gap-2 text-[13px] leading-[1.65] text-ds-text-secondary [overflow-wrap:anywhere]">
-          <p className="m-0 text-xs text-ds-text-muted">推荐类型：{entry.recommendationKind === 'new' ? '新建文件夹' : '已有文件夹'} · 模型置信度 {Math.round(entry.confidence * 100)}%</p>
+          <p className="m-0 text-xs text-ds-text-muted">推荐类型：{entry.recommendationKind === 'new' ? '新建文件夹' : '已有文件夹'}，模型置信度 {Math.round(entry.confidence * 100)}%</p>
           {entry.reason ? <p className="m-0">{entry.reason}</p> : null}
           {entry.summary ? <p className="m-0">{entry.summary}</p> : null}
         </div>

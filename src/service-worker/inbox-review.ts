@@ -9,10 +9,10 @@ export async function reviewInboxItem(message: InboxReviewMessage, dependencies:
   ensureFolder: (path: string) => Promise<string>
   retry: (item: InboxItem) => Promise<void>
 }): Promise<string> {
-  if (!['accept', 'move', 'keep', 'retry'].includes(message.action)) throw new Error('Inbox 操作无效。')
+  if (!['accept', 'move', 'keep', 'retry'].includes(message.action)) throw new Error('待整理操作无效。')
   const item = await findInboxItemByBookmarkId(String(message.bookmarkId || ''))
-  if (!item || item.captureId !== message.captureId) throw new Error('这条 Inbox 记录已变化，请刷新后重试。')
-  if (!isInboxItemPending(item)) throw new Error('这条 Inbox 记录已处理，请刷新列表。')
+  if (!item || item.captureId !== message.captureId) throw new Error('这条待整理已变化，请刷新后重试。')
+  if (!isInboxItemPending(item)) throw new Error('这条待整理已处理，请刷新列表。')
   if (message.action === 'keep') {
     await updateInboxItem(item.bookmarkId, { status: 'kept', lastError: '已结清待办，保留现有书签与位置。' })
     return '已结清待办，未修改书签。'
@@ -20,8 +20,8 @@ export async function reviewInboxItem(message: InboxReviewMessage, dependencies:
   if (item.status === 'analyzing') throw new Error('书签正在分析，请等待结果后再处理。')
   const bookmark = await getBookmarkById(item.bookmarkId)
   if (!bookmark?.url) throw new Error('原书签已删除，可选择“结清待办”移除这条记录。')
-  if (bookmark.url !== item.url) throw new Error('书签地址已变化，旧建议不再适用；请结清待办，重新收藏后再分析。')
-  if (bookmark.parentId !== item.inboxFolderId) throw new Error('书签已移出 Inbox；请保留现有位置或重新捕获。')
+  if (bookmark.url !== item.url) throw new Error('书签地址已变化，旧建议不再适用；处理这条待整理后重新保存。')
+  if (bookmark.parentId !== item.inboxFolderId) throw new Error('书签已移出待整理；请保留现有位置或重新保存。')
   if (message.action === 'retry') {
     await dependencies.retry(item)
     return '已重新加入分析队列。'

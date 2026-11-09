@@ -187,8 +187,8 @@ export async function runActionFeedbackChecks(page, origin, directory, startAt =
   await page.fill('#ai-api-key', 'sk-options-fixture')
   await page.click('#ai-api-key-reveal')
   assert.equal(await page.evaluate(() => document.querySelector('#ai-api-key').type), 'text')
-  const test = 'button[aria-label^="测试自定义 AI 渠道连接"]'
-  const fetch = 'button[aria-label^="从自定义 AI 渠道获取模型列表"]'
+  const test = 'button[aria-label^="测试自定义 AI 服务连接"]'
+  const fetch = 'button[aria-label^="从自定义 AI 服务获取模型列表"]'
   const testWidth = await width(test)
   await page.click(test)
   await phase(test, 'pending')
@@ -220,7 +220,7 @@ export async function runActionFeedbackChecks(page, origin, directory, startAt =
 
   await activate('button[aria-label="清空全部书签标签数据"]')
   await page.waitForSelector('[role="dialog"] #confirm-modal-title')
-  assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), '取消当前确认操作')
+  assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), '取消')
   assert.ok(await page.evaluate(() => document.querySelector('#confirm-modal-title').textContent.includes('3')))
   await page.click('.curator-hold-button')
   assert.equal(await count(), 0)

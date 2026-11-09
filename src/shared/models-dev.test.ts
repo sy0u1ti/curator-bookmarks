@@ -13,6 +13,7 @@ import { STORAGE_KEYS } from './constants.js'
 import { getModelReasoningProfile, getReasoningTransport } from './ai-reasoning.js'
 import { buildAiProviderConnectivityRequestBody, requestStructuredAiOutput, clearAiProviderCompatibilityCache } from './ai-runtime.js'
 import { normalizeAiNamingSettings, serializeAiNamingSettings } from '../options/sections/ai-settings.js'
+import { resolveModelLab } from './model-labs.js'
 
 const tests: Array<[string, () => void | Promise<void>]> = []
 const test = (name: string, run: () => void | Promise<void>) => tests.push([name, run])
@@ -124,6 +125,29 @@ test('providers with omitted API URLs use only explicit official defaults', () =
   const catalog = parseModelsDevCatalog(raw)
   assert.equal(findModelsDevModel(catalog, { baseUrl: 'https://api.openai.com/v1/responses', model: 'future-model' })?.providerId, 'openai')
   assert.equal(findModelsDevModel(catalog, { baseUrl: 'https://unknown.example/v1', model: 'future-model' }), null)
+})
+
+test('model labs come from the models.dev canonical namespace, not the routing prefix', () => {
+  const raw = fixturePayload() as any
+  raw.providers.minimax = { id: 'minimax', name: 'MiniMax (minimax.io)', api: 'https://api.minimax.io/v1', models: { 'MiniMax-M3.1-Flash': { name: 'MiniMax M3.1 Flash' } } }
+  raw.models['minimax/MiniMax-M3.1-Flash'] = { id: 'minimax/MiniMax-M3.1-Flash', name: 'MiniMax M3.1 Flash' }
+  raw.models['openai/gpt-6-astra'] = { id: 'openai/gpt-6-astra', name: 'GPT-6 Astra' }
+  raw.models['bytedance-seed/seed-2'] = { id: 'bytedance-seed/seed-2', name: 'Seed 2' }
+  const catalog = parseModelsDevCatalog(raw)
+  const relay = 'https://relay.example/v1'
+  for (const model of ['auto/minimax-m3.1-flash', 'minimax-code-global/MiniMax-M3.1-Flash']) {
+    assert.deepEqual(resolveModelLab(catalog, { baseUrl: relay, model }), { id: 'minimax', name: 'MiniMax' })
+  }
+  assert.equal(resolveModelLab(catalog, { baseUrl: relay, model: 'agentrouter/gpt-6-astra' })?.id, 'openai')
+  assert.equal(resolveModelLab(catalog, { baseUrl: relay, model: 'siliconflow/deepseek-ai/DeepSeek-V4.1-Flash' })?.id, 'deepseek')
+  assert.equal(resolveModelLab(catalog, { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-flash' })?.name, 'DeepSeek')
+  assert.deepEqual(resolveModelLab(catalog, { model: 'seed-2' }), { id: 'bytedance-seed', name: 'bytedance-seed' })
+  assert.equal(resolveModelLab(catalog, { model: 'auto/minimax-unreleased' })?.id, 'minimax')
+  assert.equal(resolveModelLab(null, { model: 'auto/minimax-m3.1-flash' })?.id, 'minimax')
+  for (const model of ['auto/house-model', 'anyrouter/nova-o1-mini', 'meta-tuned-model']) {
+    assert.equal(resolveModelLab(null, { model }), null)
+  }
+  assert.equal(resolveModelLab(null, { model: 'o3-mini' })?.id, 'openai')
 })
 
 test('case-distinct route IDs keep their own prices and ambiguous casing is not guessed', () => {

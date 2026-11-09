@@ -30,7 +30,7 @@ const FOLDER_CLEANUP_SUMMARY_LABEL_CLASS =
   'block text-xs font-semibold leading-[1.3] text-ds-text-muted'
 const FOLDER_CLEANUP_SUMMARY_VALUE_CLASS =
   'text-sm font-semibold leading-none text-ds-text-primary tabular-nums'
-const FOLDER_CLEANUP_SUMMARY_PRIMARY_VALUE_CLASS = 'text-[28px] font-[650] leading-none tracking-[-0.03em] text-ds-text-primary tabular-nums'
+const FOLDER_CLEANUP_SUMMARY_PRIMARY_VALUE_CLASS = 'text-2xl font-[650] leading-none tracking-[-0.03em] text-ds-text-primary tabular-nums'
 const FOLDER_CLEANUP_HEADER_CLASS =
   'mt-5 flex min-w-0 flex-wrap items-center justify-between gap-3'
 const FOLDER_CLEANUP_HEADER_COPY_CLASS = 'min-w-0'

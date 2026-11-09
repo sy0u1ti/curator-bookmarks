@@ -110,6 +110,25 @@ test('sidebar and reasoning slider share the solver while value controls settle 
   assert.ok(sidebar.includes('cancelAnimationFrame(frame)') && sidebar.includes('observer.disconnect()'))
 })
 
+test('text fields mark focus with one eased stroke', () => {
+  const motion = read('src/styles/controls-motion.css')
+  const fieldMotion = motion.slice(motion.indexOf('.base-input,'), motion.indexOf('.options-switch-thumb'))
+  assert.ok(fieldMotion.includes('border-color var(--ds-motion-standard)'))
+  for (const file of [
+    'src/ui/base/Input.tsx',
+    'src/ui/base/Textarea.tsx',
+    'src/options/components/ai-provider-settings-classes.ts',
+    'src/options/components/AiAnalysisResultsFilter.tsx',
+    'src/popup/components/PopupContent.tsx',
+    'src/popup/components/PopupModalsHost.tsx',
+    'src/popup/components/PopupSmartClassifier.tsx',
+    'src/newtab/components/SettingsDrawer.tsx',
+    'src/newtab/components/BookmarkMenusHost.tsx'
+  ]) {
+    assert.doesNotMatch(read(file), /(?<![\w-])focus(?:-within)?:(?:shadow-ds|\[outline|outline\b)/, file)
+  }
+})
+
 test('keyboard policy removes interpolation, not truthful transforms or busy indicators', () => {
   const css = read('src/styles/globals.css')
   const policy = css.slice(css.indexOf('/* Keyboard input'), css.indexOf('@media (pointer: coarse)'))

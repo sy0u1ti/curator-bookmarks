@@ -90,51 +90,12 @@ function confirmButtonClass(tone: 'danger' | 'warning') {
 
 export function OptionsModals() {
   const modals = useOptionsModalsState()
-  const cancelDeleteRef = useRef<HTMLElement | null>(null)
   const cancelConfirmRef = useRef<HTMLElement | null>(null)
   const moveSearchRef = useRef<HTMLInputElement | null>(null)
   const scopeSearchRef = useRef<HTMLInputElement | null>(null)
 
   return (
     <>
-      <ModalBackdrop
-        labelledBy="delete-modal-title"
-        describedBy="delete-modal-copy"
-        initialFocusRef={cancelDeleteRef}
-        modal="delete"
-        open={modals.delete.open}
-      >
-        <>
-          <h2 id="delete-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>删除本区无法访问的书签？</h2>
-          <p id="delete-modal-copy" className={OPTIONS_MODAL_COPY_CLASS}>
-            {modals.delete.copy}
-          </p>
-          <div className={OPTIONS_MODAL_ACTIONS_CLASS}>
-            <Button
-              className={OPTIONS_MODAL_BUTTON_CLASS}
-              ref={cancelDeleteRef}
-              type="button"
-              variant="secondary"
-              aria-label="取消删除本区书签"
-              onClick={() => handleOptionsModalAction({ action: 'cancel', modal: 'delete' })}
-            >
-              取消
-            </Button>
-            <Button
-              className={cx(OPTIONS_MODAL_BUTTON_CLASS, OPTIONS_MODAL_DANGER_BUTTON_CLASS)}
-              type="button"
-              variant="danger"
-              aria-label="确认删除本区书签"
-              disabled={modals.delete.confirmDisabled}
-              focusableWhenDisabled={modals.delete.confirmDisabled}
-              onClick={() => handleOptionsModalAction({ action: 'confirm', modal: 'delete' })}
-            >
-              {modals.delete.confirmLabel}
-            </Button>
-          </div>
-        </>
-      </ModalBackdrop>
-
       <ModalBackdrop
         labelledBy="confirm-modal-title"
         describedBy="confirm-modal-copy"
@@ -151,7 +112,6 @@ export function OptionsModals() {
               ref={cancelConfirmRef}
               type="button"
               variant="secondary"
-              aria-label="取消当前确认操作"
               onClick={() => handleOptionsModalAction({ action: 'cancel', modal: 'confirm' })}
             >
               {modals.confirm.cancelLabel}
@@ -170,7 +130,6 @@ export function OptionsModals() {
                 className={confirmButtonClass(modals.confirm.tone)}
                 type="button"
                 variant={modals.confirm.tone === 'danger' ? 'danger' : 'primary'}
-                aria-label="确认当前操作"
                 onClick={() => handleOptionsModalAction({ action: 'confirm', modal: 'confirm' })}
               >
                 {modals.confirm.confirmLabel}

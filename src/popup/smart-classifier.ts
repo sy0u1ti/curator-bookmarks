@@ -67,7 +67,7 @@ export function validateSmartAiSettings(settings: PopupSmartSettings): void {
     throw new Error(baseUrlIssue)
   }
   if (!isAiProviderConfigured(settings)) {
-    throw new Error('请先到通用设置配置“自定义AI渠道”。')
+    throw new Error('请先到通用设置配置“自定义 AI 服务”。')
   }
 
 }
@@ -95,7 +95,7 @@ export async function ensureSmartClassifyPermissions(
 
   const granted = await requestPermissions({ origins: missingOrigins })
   if (!granted) {
-    throw createSmartPermissionRequiredError(missingOrigins, '未完成 AI 渠道授权，暂时无法智能分类。')
+    throw createSmartPermissionRequiredError(missingOrigins, '未完成 AI 服务授权，暂时无法智能分类。')
   }
   return true
 }
@@ -436,7 +436,7 @@ export async function requestPermissions(query: chrome.permissions.Permissions):
 
 export function createSmartPermissionRequiredError(
   origins: unknown[],
-  message = '需要授权 AI 渠道后才能智能分类。'
+  message = '需要授权 AI 服务后才能智能分类。'
 ): PopupSmartPermissionError {
   const error = new Error(message) as PopupSmartPermissionError
   error.smartPermissionRequest = {

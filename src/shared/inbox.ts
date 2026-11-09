@@ -2,6 +2,7 @@ import {
   BOOKMARKS_BAR_ID,
   DEFAULT_INBOX_FOLDER_TITLE,
   INBOX_AUTO_MOVE_MIN_CONFIDENCE,
+  LEGACY_INBOX_FOLDER_TITLES,
   STORAGE_KEYS
 } from './constants.js'
 import { getLocalStorage, setLocalStorage, withLocalStorageTransaction, type LocalStorageTransaction } from './storage.js'
@@ -191,7 +192,11 @@ async function resolveInboxFolder(settings: InboxSettings): Promise<string> {
   const tree = await getBookmarkTree()
   const rootNode = Array.isArray(tree) ? tree[0] : tree
   const rootFolder = getBookmarksBarNode(rootNode)
-  const existing = findFolderByTitle(rootFolder, title)
+  const candidateTitles = title === DEFAULT_INBOX_FOLDER_TITLE ? [title, ...LEGACY_INBOX_FOLDER_TITLES] : [title]
+  const existing = candidateTitles.reduce<chrome.bookmarks.BookmarkTreeNode | null>(
+    (found, candidate) => found || findFolderByTitle(rootFolder, candidate),
+    null
+  )
   const folderId = existing
     ? String(existing.id)
     : String((await createBookmarkFolder({ parentId: String(rootFolder.id), title })).id)
@@ -350,8 +355,16 @@ function normalizeInboxItem(rawItem: unknown): InboxItem | null {
     status: normalizeInboxItemStatus(source.status),
     createdAt,
     updatedAt: Number(source.updatedAt) || createdAt,
-    lastError: cleanInboxText(source.lastError) || undefined
+    lastError: normalizeInboxNote(source.lastError)
   }
+}
+
+// Earlier versions stored state narration that the review list now expresses through its layout.
+const OBSOLETE_INBOX_NOTES = new Set(['已生成建议，等待你决定是否移动。', '已保存到待整理，等待手动整理。'])
+
+function normalizeInboxNote(value: unknown): string | undefined {
+  const note = cleanInboxText(value)
+  return note && !OBSOLETE_INBOX_NOTES.has(note) ? note : undefined
 }
 
 function normalizeInboxUndoMove(rawMove: unknown): InboxUndoMove | undefined {

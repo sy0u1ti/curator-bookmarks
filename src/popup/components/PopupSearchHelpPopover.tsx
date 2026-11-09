@@ -3,7 +3,7 @@ import { Button } from '../../ui/base/Button'
 import { Popover } from '../../ui/base/Popover'
 
 const searchHelpPopoverClass =
-  '[z-index:90] w-[min(320px,calc(100vw-28px))] max-w-[320px] gap-2 rounded-ds-card border-ds-border bg-ds-surface-2 ds-inset-card text-xs leading-snug text-ds-text-secondary shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2'
+  '[z-index:90] w-[min(320px,calc(100vw-28px))] max-w-[320px] gap-2 rounded-ds-card border-ds-border bg-ds-surface-2 ds-inset-card text-xs leading-snug text-ds-text-secondary shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-2'
 const searchHelpTitleClass = 'text-sm font-semibold text-ds-text-primary'
 const searchHelpListClass = 'm-0 grid list-none gap-1.5 p-0'
 const searchHelpItemClass = 'grid grid-cols-[52px_minmax(0,1fr)] items-baseline gap-2'
@@ -93,7 +93,7 @@ export function PopupSearchHelpPopover({
         </li>
       </ul>
       <span className={searchHelpHintClass}>条件可组合；引号内按原文查找。</span>
-      <span className={searchHelpHintClass}>Esc 关闭 · 点击外部收起</span>
+      <span className={searchHelpHintClass}>按 Esc 或点击外部关闭</span>
     </Popover>
   )
 }

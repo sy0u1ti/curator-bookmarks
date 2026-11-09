@@ -40,6 +40,8 @@ const BACKUP_PREVIEW_DETAIL_CLASS =
   'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 const BACKUP_WARNING_LIST_CLASS =
   'mt-[10px] mb-0 pl-[18px] text-[13px] leading-[1.65] text-ds-text-secondary [&_li+li]:mt-1'
+const BACKUP_SCOPE_COPY =
+  '包含自定义书签图标。正文索引内容、本地壁纸图片和视频、已下载的 MHTML 存档不在备份内；迁移时请另行保留这些文件，正文索引需重新采集。'
 
 export function BackupControls() {
   const state = useBackupControlsState()
@@ -65,7 +67,7 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
         </div>
         <div className={BACKUP_ROW_CLASS}>
           <div className={BACKUP_COPY_COLUMN_CLASS}>
-            <StatusMessage className={BACKUP_STATUS_CLASS}>{state.tagData.status || state.tagData.updatedLabel}</StatusMessage>
+            <StatusMessage className={BACKUP_STATUS_CLASS} reserve={[state.tagData.updatedLabel]}>{state.tagData.status || state.tagData.updatedLabel}</StatusMessage>
           </div>
           <div className={BACKUP_ROW_ACTIONS_CLASS}>
             {state.tagData.hasRecords ? (
@@ -128,9 +130,9 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
             <p className={BACKUP_COPY_CLASS}>
               导出书签、标签、规则和设置；不包含 API Key、密码或 Cookie。
             </p>
-            <p className={BACKUP_COPY_CLASS}>
-              包含自定义书签图标。正文索引内容、本地壁纸图片和视频、已下载的 MHTML 存档不在备份内；迁移时请另行保留这些文件，正文索引需重新采集。
-            </p>
+            <StatusMessage className={BACKUP_COPY_CLASS} reserve={[BACKUP_SCOPE_COPY]}>
+              {state.backup.status || BACKUP_SCOPE_COPY}
+            </StatusMessage>
           </div>
           <div className={BACKUP_ROW_ACTIONS_CLASS}>
             <StatusButton
@@ -169,13 +171,11 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
             }}
           />
         </div>
-        <StatusMessage className={BACKUP_STATUS_CLASS}>{state.backup.status}</StatusMessage>
         <div className={BACKUP_ROW_CLASS}>
           <div className={BACKUP_COPY_COLUMN_CLASS}>
             <strong className={BACKUP_TITLE_CLASS}>跨浏览器导出</strong>
             <p className={BACKUP_COPY_CLASS}>
-              将书签、文件夹和添加时间保存为通用 HTML 文件，可导入 Chrome、Edge 或 Firefox。
-              标签与设置请使用上方的完整备份。
+              将书签、文件夹和添加时间保存为通用 HTML 文件，可导入 Chrome、Edge 或 Firefox。标签与设置请使用上方的完整备份。
             </p>
           </div>
           <div className={BACKUP_ROW_ACTIONS_CLASS}>
@@ -285,7 +285,7 @@ function BackupPreview({
       <div className={BACKUP_PREVIEW_COPY_CLASS}>
         <strong className={BACKUP_PREVIEW_TITLE_CLASS}>{state.preview.fileName || '已导入备份文件'}</strong>
         <div className={BACKUP_PREVIEW_DETAIL_CLASS}>
-          导出时间：{state.preview.exportedAt || '未知'} · 扩展版本：{state.preview.extensionVersion || '未知'}
+          导出时间：{state.preview.exportedAt || '未知'}，扩展版本：{state.preview.extensionVersion || '未知'}
         </div>
         <div className={BACKUP_PREVIEW_DETAIL_CLASS}>
           书签 URL：{counts.bookmarkUrls}，当前缺失：{counts.missingBookmarkUrls}；标签记录：

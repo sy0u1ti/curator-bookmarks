@@ -44,7 +44,6 @@ export interface AiAnalysisSelectionActionsState {
   clearDisabled: boolean
   countLabel: string
   hidden: boolean
-  moveConfirm: boolean
   moveDisabled: boolean
   moveLabel: string
   moveTitle: string
@@ -85,7 +84,7 @@ export interface AiAnalysisResultsPaginationState {
 const defaultState: AiAnalysisStatusState = {
   badgeText: '书签智能分析',
   badgeTone: 'muted',
-  statusCopy: '配置 AI 渠道后，可批量生成标签和标题建议。'
+  statusCopy: '配置 AI 服务后，可批量生成标签和标题建议。'
 }
 
 const defaultProgressState: AiAnalysisProgressState = {
@@ -125,7 +124,6 @@ const defaultSelectionActionsState: AiAnalysisSelectionActionsState = {
   clearDisabled: true,
   countLabel: '0 条已选择',
   hidden: true,
-  moveConfirm: false,
   moveDisabled: true,
   moveLabel: '移动至推荐文件夹',
   moveTitle: '所选结果没有可用的推荐文件夹',

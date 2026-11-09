@@ -82,7 +82,7 @@ export function PopupWorkspaceTools() {
     <DialogOverlay open={open} onOpenChange={setPopupKeyboardHelpOpen} keepMounted={false} className="fixed inset-0 z-[200] grid place-items-center p-3">
       <DialogBackdrop className="absolute inset-0 bg-black/70" />
       <DialogPanel id="popup-keyboard-help-dialog" className="relative max-h-[calc(100dvh-24px)] w-full max-w-lg overflow-y-auto rounded-ds-card border border-ds-border bg-ds-surface-2 ds-inset-card text-ds-text-primary" initialFocus={() => document.getElementById('popup-keyboard-help-title')}>
-        <DialogTitle id="popup-keyboard-help-title" tabIndex={-1} className="text-lg font-semibold outline-none">键盘操作</DialogTitle>
+        <DialogTitle id="popup-keyboard-help-title" tabIndex={-1} className="text-base font-semibold outline-none">键盘操作</DialogTitle>
         <div className="my-4 grid gap-4">
           {shortcutGroups.map((group) => (
             <section className="grid gap-2" key={group.title} aria-label={group.title}>

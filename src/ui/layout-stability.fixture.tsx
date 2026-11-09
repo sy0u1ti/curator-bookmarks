@@ -60,7 +60,7 @@ const recycled = Array.from({ length: 3 }, (_, i) => ({
   source: 'manual', title: `设计参考 ${i + 1}`, url: `https://example.test/design/${i}`
 }))
 const shortcuts = [
-  ['save-to-inbox', '直接收藏到 Inbox', '保存当前网页到 Inbox / 待整理，并在后台分析归类。', ''],
+  ['save-to-inbox', '直接收藏到待整理', '保存当前网页到待整理，并在后台分析归类。', ''],
   ['open-side-panel', '打开侧栏搜索', '打开侧栏页面并聚焦搜索框。', 'Alt+Shift+S'],
   ['open-smart-classifier', '直接智能分类当前页', '打开弹窗立即分析当前页面并给出保存建议。', 'Alt+Shift+F'],
   ['toggle-auto-analyze', '切换自动分析', '通过快捷键开启或关闭新增书签自动分析。', '']

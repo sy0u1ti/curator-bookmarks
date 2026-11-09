@@ -21,7 +21,8 @@ import {
 } from './ai-model-selector-types.js'
 import { OPTIONS_REDUCED_MOTION_SURFACE_CLASS } from './options-motion-classes.js'
 
-const MODEL_SELECTOR_CHECK_CLASS = 'size-3.5 text-[rgba(245,245,247,0.78)]'
+const MODEL_SELECTOR_CHECK_CLASS = 'size-3.5 text-ds-text-secondary'
+const MODEL_SELECTOR_LOGO_SLOT_CLASS = 'size-3 flex-none'
 const MODEL_SELECTOR_REDUCED_MOTION_CLASS = OPTIONS_REDUCED_MOTION_SURFACE_CLASS
 
 export function AiModelSelector({
@@ -72,7 +73,7 @@ export function AiModelSelector({
         aria-label="选择 AI 模型"
         disabled={state.disabled}
       >
-        {selectedMeta.provider ? <ModelSelectorLogo provider={selectedMeta.provider} /> : null}
+        {selectedMeta.lab ? <ModelSelectorLogo provider={selectedMeta.lab.id} /> : null}
         <ModelSelectorName>{selectedModel || '选择模型'}</ModelSelectorName>
       </ModelSelectorTrigger>
       <ModelSelectorContent
@@ -107,7 +108,7 @@ export function AiModelSelector({
               <ModelSelectorGroup
                 className={groupIndex === 0 ? undefined : 'mt-1.5'}
                 heading={group.heading}
-                key={group.heading}
+                key={group.key}
               >
                 {group.models.map((model) => {
                   const meta = getModelMeta(model, state)
@@ -116,7 +117,9 @@ export function AiModelSelector({
                       key={model}
                       value={model}
                     >
-                      <ModelSelectorLogo provider={meta.provider} />
+                      {meta.lab
+                        ? <ModelSelectorLogo provider={meta.lab.id} />
+                        : <span aria-hidden="true" className={MODEL_SELECTOR_LOGO_SLOT_CLASS} />}
                       <ModelSelectorName>{model}</ModelSelectorName>
                       <ModelSelectorLogoGroup>
                         {meta.tags.map((tag) => (
@@ -141,22 +144,25 @@ export function AiModelSelector({
 }
 
 function groupModels(models: string[], state: AiModelSelectorState) {
-  const groups = new Map<string, string[]>()
+  const groups = new Map<string, { heading: string; key: string; models: string[] }>()
+  const unknown: string[] = []
   for (const model of models) {
-    const heading = getModelMeta(model, state).heading
-    const group = groups.get(heading) || []
-    group.push(model)
-    groups.set(heading, group)
+    const lab = state.labs[model]
+    if (!lab) {
+      unknown.push(model)
+      continue
+    }
+    const group = groups.get(lab.id) ?? { heading: lab.name, key: lab.id, models: [] }
+    group.models.push(model)
+    groups.set(lab.id, group)
   }
 
-  return [...groups.entries()].map(([heading, groupModels]) => ({
-    heading,
-    models: groupModels
-  }))
+  return unknown.length
+    ? [...groups.values(), { heading: '其他', key: '', models: unknown }]
+    : [...groups.values()]
 }
 
 function getModelMeta(model: string, state: AiModelSelectorState) {
-  const provider = inferModelProvider(model)
   const tags: string[] = []
   if (state.fetchedModels.length && state.fetchedModels.includes(model)) {
     tags.push('已拉取')
@@ -170,88 +176,11 @@ function getModelMeta(model: string, state: AiModelSelectorState) {
   }
 
   return {
-    heading: getModelGroupHeading(provider),
-    provider,
+    lab: state.labs[model] ?? null,
     tags
   }
 }
 
 function normalizeModelSearchText(value: string) {
   return value.trim().toLocaleLowerCase()
-}
-
-function inferModelProvider(model: string) {
-  const normalized = model.toLocaleLowerCase()
-  if (/claude|anthropic/.test(normalized)) {
-    return 'anthropic'
-  }
-  if (/gemini|google/.test(normalized)) {
-    return 'google'
-  }
-  if (/gpt|o\d|openai/.test(normalized)) {
-    return 'openai'
-  }
-  if (/deepseek/.test(normalized)) {
-    return 'deepseek'
-  }
-  if (/qwen|alibaba/.test(normalized)) {
-    return 'alibaba'
-  }
-  if (/mistral|codestral/.test(normalized)) {
-    return 'mistral'
-  }
-  if (/llama|meta/.test(normalized)) {
-    return 'llama'
-  }
-  if (/grok|xai/.test(normalized)) {
-    return 'xai'
-  }
-  if (/sonar|perplexity/.test(normalized)) {
-    return 'perplexity'
-  }
-  if (/moonshot|kimi/.test(normalized)) {
-    return 'moonshotai'
-  }
-  if (/nova|bedrock|amazon/.test(normalized)) {
-    return 'amazon-bedrock'
-  }
-  if (/azure/.test(normalized)) {
-    return 'azure'
-  }
-  if (/openrouter/.test(normalized)) {
-    return 'openrouter'
-  }
-  if (/groq/.test(normalized)) {
-    return 'groq'
-  }
-  if (/together/.test(normalized)) {
-    return 'togetherai'
-  }
-  if (/v0|vercel/.test(normalized)) {
-    return 'vercel'
-  }
-  return 'openai'
-}
-
-function getModelGroupHeading(provider: string) {
-  const labels: Record<string, string> = {
-    alibaba: 'Alibaba',
-    anthropic: 'Anthropic',
-    'amazon-bedrock': 'Amazon',
-    azure: 'Azure',
-    deepseek: 'DeepSeek',
-    google: 'Google',
-    groq: 'Groq',
-    llama: 'Meta',
-    mistral: 'Mistral AI',
-    moonshotai: 'Moonshot AI',
-    openai: 'OpenAI',
-    openrouter: 'OpenRouter',
-    perplexity: 'Perplexity',
-    togetherai: 'Together AI',
-    vercel: 'Vercel',
-    xai: 'xAI'
-  }
-
-  return labels[provider] || 'Custom'
 }

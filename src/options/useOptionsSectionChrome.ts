@@ -44,7 +44,7 @@ export function useOptionsSectionChrome({
   }, [onSectionChange])
 
   useEffect(() => {
-    document.title = `${SECTION_META[sectionState.sectionKey].title} · Curator Bookmark`
+    document.title = `${SECTION_META[sectionState.sectionKey].title} - Curator`
   }, [sectionState.sectionKey])
 
   const navigateToSectionHash = useCallback((hash: string) => {

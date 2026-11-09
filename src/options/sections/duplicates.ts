@@ -285,7 +285,7 @@ function buildDuplicateControlsState(summary, selectionStats, visibleGroups) {
       ? `已选 ${selectionStats.deleteCount} 条，可继续调整。`
       : `${visibleGroups.length} 组重复，建议清理 ${candidateCount} 条。`,
     selectionStats,
-    strategyStatus: managerState.duplicateStrategyStatus || '先选择副本，再确认处理。',
+    strategyStatus: managerState.duplicateStrategyStatus || '',
     summary
   }
 }
@@ -353,24 +353,8 @@ export async function deleteSelectedDuplicates(callbacks) {
   if (!deleteCandidates.length) {
     return
   }
-  const confirmed = callbacks.confirm
-    ? await callbacks.confirm({
-        title: `移入回收站 ${deleteCandidates.length} 条重复书签？`,
-        copy: `这些重复项会从 Chrome 书签中移除并进入扩展回收站；本次会保留 ${selectionStats.keepCount} 条。`,
-        confirmLabel: '移入回收站',
-        label: '移入回收站',
-        tone: 'danger'
-      })
-    : true
-  if (!confirmed) {
-    return
-  }
 
-  await deleteBookmarksToRecycle(
-    deleteCandidates,
-    `重复书签批量清理：移入回收站 ${deleteCandidates.length} 条，保留 ${selectionStats.keepCount} 条`,
-    callbacks.recycleCallbacks
-  )
+  await deleteBookmarksToRecycle(deleteCandidates, '重复书签清理', callbacks.recycleCallbacks)
   clearDuplicateSelection(callbacks)
 }
 
@@ -562,7 +546,7 @@ function setDuplicateStrategyStatus(result, strategyLabel) {
   }
 
   managerState.duplicateStrategyStatus =
-    `${strategyLabel}：已选择 ${result.deleteCount} 条待移入回收站，保留 ${result.keepCount} 条。`
+    `${strategyLabel}：已选 ${result.deleteCount} 条待删除，保留 ${result.keepCount} 条。`
 }
 
 function getSelectedDuplicateCandidates() {

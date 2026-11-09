@@ -23,7 +23,6 @@ interface FolderCleanupCallbacks {
     confirmLabel?: string
     cancelLabel?: string
     tone?: string
-    label?: string
   }) => Promise<boolean>
   hydrateAvailabilityCatalog: (options?: {
     preserveResults?: boolean
@@ -138,12 +137,11 @@ export async function executeFolderCleanupAction(suggestionId, callbacks: Folder
   folderCleanupState.executing = true
   renderFolderCleanupSection(callbacks)
   try {
-    const confirmed = await callbacks.confirm({
+    const confirmed = suggestion.operation === 'split' || await callbacks.confirm({
       title: getConfirmTitle(suggestion),
       copy: getConfirmCopy(suggestion),
       confirmLabel: getConfirmLabel(suggestion.operation),
       tone: suggestion.severity === 'danger' ? 'danger' : 'warning',
-      label: '文件夹清理'
     })
     if (!confirmed) return
     const release = await callbacks.claimAvailabilityMutationLock()
@@ -309,17 +307,6 @@ async function handleSplitUndoClick(callbacks: FolderCleanupCallbacks) {
   folderCleanupState.executing = true
   renderFolderCleanupSection(callbacks)
   try {
-    const confirmed = await callbacks.confirm({
-      title: '撤销本次拆分？',
-      copy: [
-        `将把仍在拆分目录中的书签移回原位置，并清理本次新建的 ${splitUndo.createdFolderIds.length} 个空文件夹。`,
-        '已删除或手动移走的书签会跳过。撤销前会自动备份；新建文件夹里的额外内容会保留。'
-      ].join('\n'),
-      confirmLabel: '撤销本次拆分',
-      tone: 'warning',
-      label: '文件夹清理'
-    })
-    if (!confirmed) return
     const release = await callbacks.claimAvailabilityMutationLock()
     if (!release) {
       folderCleanupState.statusMessage = availabilityState.lastError || '书签正在被其他页面使用，请稍后重试。'
@@ -493,21 +480,17 @@ function getConfirmLabel(operation: FolderCleanupOperationKind): string {
 }
 
 function getConfirmTitle(suggestion: FolderCleanupSuggestion): string {
-  return `确认${getConfirmLabel(suggestion.operation)}？`
+  return `${getConfirmLabel(suggestion.operation)}？`
 }
 
 function getConfirmCopy(suggestion: FolderCleanupSuggestion): string {
   const target = suggestion.targetFolderId
     ? suggestion.folders.find((folder) => folder.id === suggestion.targetFolderId)?.path || '目标文件夹'
     : ''
-  const splitUndoCopy = suggestion.operation === 'split'
-    ? '拆分完成后会显示“撤销本次拆分”，可把本次移动的书签移回拆分前位置。'
-    : ''
   return [
     suggestion.summary,
     target ? `目标：${target}` : '',
-    `涉及 ${suggestion.folderIds.length} 个文件夹、${suggestion.bookmarkIds.length} 个书签。执行前会调用自动备份 hook。`,
-    splitUndoCopy
+    `涉及 ${suggestion.folderIds.length} 个文件夹、${suggestion.bookmarkIds.length} 个书签。执行前会自动备份。`
   ].filter(Boolean).join('\n')
 }
 

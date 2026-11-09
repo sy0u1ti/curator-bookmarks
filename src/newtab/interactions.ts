@@ -1,3 +1,5 @@
+import { formatBytes } from '../shared/format.js'
+
 export const BACKGROUND_URL_FETCH_TIMEOUT_MS = 12000
 export const BACKGROUND_URL_PREVIEW_MAX_BYTES = 8 * 1024 * 1024
 export const BACKGROUND_URL_FULL_MAX_BYTES = 32 * 1024 * 1024
@@ -419,18 +421,3 @@ function haveSameMembers(left: string[], right: string[]): boolean {
   return left.length === rightSet.size && left.every((id) => rightSet.has(id))
 }
 
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return '0 B'
-  }
-
-  const units = ['B', 'KB', 'MB', 'GB']
-  let value = bytes
-  let unitIndex = 0
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024
-    unitIndex += 1
-  }
-
-  return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`
-}

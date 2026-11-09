@@ -59,10 +59,10 @@ test('inline settings disclosure retains automation consequences and third-party
     inboxSettings: {}, inboxStatus: '', inboxSaving: false, loading: false, permissionsLoading: false, remoteParserGranted: false,
     locked: false, pending: '', testingConnection: false
   })
-  assert.match(state.switches[0].description, /会改名、移动/)
+  assert.match(state.switches[0].description, /改名并移动/)
   assert.match(state.switches[1].description, /Jina Reader.*第三方服务会收到目标网址/)
   assert.equal(state.switches[1].status, '待授权')
-  assert.match(state.inboxWorkflow.status, /独立.*未能成功分析时保留/)
+  assert.match(state.inboxWorkflow.status, /不受.*自动分析.*影响.*分析失败时保留/)
 })
 
 test('primary provider fields replace the walkthrough, while low-level settings stay optional', async () => {
@@ -73,8 +73,8 @@ test('primary provider fields replace the walkthrough, while low-level settings 
   assert.ok(source.indexOf('id="ai-batch-size"') > advanced)
   assert.doesNotMatch(source, /aiProviderSteps|AI_PROVIDER_FLOW|id="ai-timeout-ms"/)
   assert.match(source, /API Key 仅保存在本地；本机服务可留空/)
-  assert.match(source, /aria-label="测试自定义 AI 渠道连接"/)
-  assert.match(source, /aria-label="保存自定义 AI 渠道设置"/)
+  assert.match(source, /aria-label="测试自定义 AI 服务连接"/)
+  assert.match(source, /aria-label="保存自定义 AI 服务设置"/)
 })
 
 test('selection and pagination do not reserve empty controls, but recovery stays available', async () => {
@@ -97,13 +97,13 @@ test('popup success uses one channel without removing deletion undo or errors', 
   const controller = await read('popup/popup-controller.ts')
   const section = (start, end) => controller.slice(controller.indexOf(start), controller.indexOf(end))
   const move = section('async function moveBookmarkToFolder(', 'async function saveEditedBookmark(')
-  const edit = section('async function saveEditedBookmark(', 'async function confirmDeleteBookmark(')
+  const edit = section('async function saveEditedBookmark(', 'async function deleteBookmark(')
   for (const code of [move, edit]) {
     assert.doesNotMatch(code, /type: 'success'/)
     assert.match(code, /showMutationNotice/)
     assert.match(code, /type: 'error'/)
   }
-  const deletion = section('async function confirmDeleteBookmark(', 'async function undoDelete(')
+  const deletion = section('async function deleteBookmark(', 'async function undoDelete(')
   assert.match(deletion, /action: 'undo-delete'/)
   assert.match(deletion, /actionLabel: '撤销'/)
   assert.match(controller, /actionLabel: recoverable \? '重试' : ''/,

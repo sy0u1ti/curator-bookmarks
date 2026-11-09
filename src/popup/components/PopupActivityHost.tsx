@@ -21,7 +21,7 @@ function focusSearch() {
 }
 
 function activityName(item: PopupActivity): string {
-  return item.subject && !item.message.includes(item.subject) ? `${item.message} · ${item.subject}` : item.message
+  return item.subject && !item.message.includes(item.subject) ? `${item.message}：${item.subject}` : item.message
 }
 
 function ActivityGlyph({ item, size }: { item: PopupActivity; size: number }) {
@@ -66,13 +66,21 @@ export function PopupActivityHost({ state, handlers, suspended }: {
 
   useEffect(() => {
     const visibility = () => popupActivities.pause('hidden', document.hidden)
+    // A focused control that re-renders away never emits blur; follow real focus.
+    const focus = () => popupActivities.pause('focus', Boolean(root.current?.contains(document.activeElement)))
     visibility()
     document.addEventListener('visibilitychange', visibility)
+    document.addEventListener('focusin', focus)
     return () => {
       document.removeEventListener('visibilitychange', visibility)
+      document.removeEventListener('focusin', focus)
       for (const reason of ['workflow', 'modal', 'hidden', 'pointer', 'focus']) popupActivities.pause(reason, false)
     }
   }, [])
+
+  useLayoutEffect(() => {
+    if (!root.current?.contains(document.activeElement)) popupActivities.pause('focus', false)
+  }, [snapshot])
 
   useLayoutEffect(() => {
     if (chromeView.loadError) {

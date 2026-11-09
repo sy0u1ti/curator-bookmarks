@@ -137,7 +137,7 @@ export function renderBookmarkAddHistory(): void {
   const headerState: BookmarkAddHistoryHeaderState = {
     clearDisabled: summary.total === 0,
     subtitle: summary.total
-      ? `最近 ${summary.total} 条记录 · ${formatDateTime(latestEntry!.createdAt)}`
+      ? `最近 ${summary.total} 条记录，最近一次 ${formatDateTime(latestEntry!.createdAt)}`
       : '自动分析完成后，这里记录新增书签的位置。',
     timestamp
   }
@@ -161,7 +161,6 @@ export async function clearBookmarkAddHistory(callbacks: {
     title: string
     copy: string
     confirmLabel: string
-    label: string
     tone: string
   }) => Promise<boolean>
 }): Promise<void> {
@@ -174,7 +173,6 @@ export async function clearBookmarkAddHistory(callbacks: {
         title: `清空 ${managerState.bookmarkAddHistory.length} 条添加书签历史？`,
         copy: '只会清空 AI 整理记录，不会删除已经保存的书签。',
         confirmLabel: '清空整理记录',
-        label: '清空历史',
         tone: 'warning'
       })
     : true

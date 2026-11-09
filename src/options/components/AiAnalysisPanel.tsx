@@ -65,9 +65,9 @@ export function AiAnalysisPanel({ hidden }: OptionsPanelVisibilityProps) {
       ) : (
         <div className="mt-6">
           <OptionEmptyState
-            title="先配置 AI 渠道"
+            title="先配置 AI 服务"
             description="填写服务地址并选择模型后，即可开始分析。本机服务可不填密钥。"
-            actions={[{ action: 'configure-ai', label: '配置 AI 渠道', variant: 'primary' }]}
+            actions={[{ action: 'configure-ai', label: '配置 AI 服务', variant: 'primary' }]}
           />
         </div>
       )}

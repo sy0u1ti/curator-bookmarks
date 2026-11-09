@@ -8,7 +8,7 @@ import { useAiConfigLinkState } from './ai-config-link-store.js'
 
 export function AiConfigLink() {
   const { configured } = useAiConfigLinkState()
-  const label = configured ? 'AI 渠道设置' : '配置 AI 渠道'
+  const label = configured ? 'AI 服务设置' : '配置 AI 服务'
 
   return (
     <Button

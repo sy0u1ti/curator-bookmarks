@@ -17,9 +17,9 @@ import type { PopupFolderPickerState } from './PopupViewModels'
 
 const folderSearchShellClass = [
   'flex min-h-10 w-full items-center gap-1.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary',
-  'transition-[border-color,background-color,box-shadow] duration-ds-fast ease-ds-standard',
+  'shadow-[0_0_0_3px_transparent] transition-[border-color,background-color,box-shadow] duration-ds-standard ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover',
-  'focus-within:border-ds-text-primary/45 focus-within:bg-ds-hover focus-within:[outline:3px_solid_rgba(245,245,247,0.14)] focus-within:outline-offset-0'
+  'focus-within:border-ds-text-primary/45 focus-within:bg-ds-hover focus-within:shadow-[0_0_0_3px_var(--ds-accent-soft)]'
 ].join(' ')
 const folderSearchIconClass =
   'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard'
@@ -28,7 +28,7 @@ const folderSearchInputClass =
 const modalButtonBaseClass = [
   'inline-flex min-h-[34px] min-w-[88px] items-center justify-center gap-2 rounded-ds-sm border px-3 py-2 text-center text-xs font-semibold leading-none shadow-none',
   'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
-  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-2',
   'active:scale-[0.985]',
   'disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 ].join(' ')
@@ -44,19 +44,13 @@ const modalPrimaryButtonClass = [
   'hover:bg-ds-text-primary hover:text-[var(--ds-bg-app)]',
   'focus-visible:bg-ds-text-primary focus-visible:text-[var(--ds-bg-app)]'
 ].join(' ')
-const modalDangerButtonClass = [
-  modalButtonBaseClass,
-  'border-[rgba(255,138,130,0.62)] bg-ds-danger-soft text-ds-danger-text',
-  'hover:border-[rgba(255,183,176,0.86)] hover:bg-ds-danger-soft hover:text-ds-danger-text',
-  'focus-visible:border-[rgba(255,183,176,0.86)] focus-visible:bg-ds-danger-soft focus-visible:text-ds-danger-text'
-].join(' ')
 const modalCompactButtonClass =
   cx(modalSecondaryButtonClass, 'min-h-[30px] min-w-0 flex-none px-2.5 py-0 text-xs')
 const modalCloseButtonClass = [
   'inline-flex size-8 shrink-0 items-center justify-center rounded-ds-sm border-0 bg-transparent p-0 text-ds-text-secondary shadow-none',
   'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
-  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
+  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-2',
   'active:scale-[var(--ds-press-scale)]',
   'disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 ].join(' ')
@@ -65,10 +59,8 @@ const modalFieldClass = 'flex flex-col gap-1.5'
 const modalLabelClass = 'text-xs font-medium leading-tight text-ds-text-secondary'
 const modalInputClass = [
   'min-h-[42px] w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-[11px] text-[13px] leading-normal text-ds-text-primary outline-none',
-  'transition-[border-color,background-color,box-shadow] duration-ds-fast ease-ds-standard',
   'placeholder:text-ds-text-muted',
-  'focus:border-ds-text-primary/45 focus:bg-ds-hover focus:[outline:3px_solid_rgba(245,245,247,0.14)] focus:outline-offset-0',
-  'focus-visible:border-ds-text-primary/45 focus-visible:bg-ds-hover focus-visible:[outline:3px_solid_rgba(245,245,247,0.14)] focus-visible:outline-offset-0',
+  'focus:bg-ds-hover',
   'disabled:opacity-50 data-[disabled]:opacity-50'
 ].join(' ')
 const modalHeaderClass = 'flex items-center justify-between gap-2.5'
@@ -78,7 +70,6 @@ const modalTitleClass =
   'm-0 mt-0.5 min-w-0 text-base font-semibold leading-[1.1] text-ds-text-primary'
 const modalEyebrowClass =
   'm-0 text-xs font-medium leading-4 text-ds-text-secondary'
-const modalDangerEyebrowClass = cx(modalEyebrowClass, 'text-ds-danger-text')
 const modalBookmarkCardClass =
   'relative flex flex-col gap-2 rounded-ds-sm border-0 bg-ds-surface-2 px-3 py-3 shadow-none'
 const modalCardLabelClass =
@@ -103,7 +94,7 @@ const modalDismissLayerClass =
   'absolute inset-0 z-0 block cursor-default border-0 bg-transparent'
 const modalCardShellClass = [
   'relative z-[1] flex min-h-0 flex-col gap-4 overflow-hidden rounded-ds-card border border-ds-border bg-ds-surface-1 ds-inset-card text-ds-text-primary shadow-none outline-none',
-  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.86)] focus-visible:outline-offset-2'
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-2'
 ].join(' ')
 const modalStandardCardClass = cx(
   modalCardShellClass,
@@ -135,7 +126,6 @@ export function PopupModalsHost() {
   const aiProviderSettingsRef = useRef<HTMLButtonElement | null>(null)
   const editTitleRef = useRef<HTMLInputElement | null>(null)
   const editFolderSearchRef = useRef<HTMLInputElement | null>(null)
-  const cancelDeleteRef = useRef<HTMLButtonElement | null>(null)
 
   useLayoutEffect(() => {
     if (liveState.open) {
@@ -153,7 +143,6 @@ export function PopupModalsHost() {
       previousActiveRef.current = liveState.active
       focusInitialModalControl(liveState.active, {
         aiProviderSettingsRef,
-        cancelDeleteRef,
         editTitleRef,
         moveSearchRef,
         smartFolderTitleRef
@@ -178,7 +167,6 @@ export function PopupModalsHost() {
       {state.smartFolder.open ? <SmartFolderModal titleRef={smartFolderTitleRef} searchRef={smartFolderSearchRef} view={state.smartFolder} /> : null}
       {state.aiProvider.open ? <AiProviderPromptModal settingsButtonRef={aiProviderSettingsRef} /> : null}
       {state.edit.open ? <EditBookmarkModal folderSearchRef={editFolderSearchRef} titleRef={editTitleRef} view={state.edit} /> : null}
-      {state.delete.open ? <DeleteBookmarkModal cancelButtonRef={cancelDeleteRef} view={state.delete} /> : null}
     </div>
   )
 }
@@ -384,23 +372,23 @@ function AiProviderPromptModal({
       <header className={modalHeaderCompactClass}>
         <div className={modalHeaderCopyClass}>
           <p className={modalEyebrowClass}>AI 搜索</p>
-          <h2 id="ai-provider-prompt-title" className={modalTitleClass}>请配置 AI 渠道</h2>
+          <h2 id="ai-provider-prompt-title" className={modalTitleClass}>请配置 AI 服务</h2>
         </div>
-        <Button id="close-ai-provider-prompt" className={modalCloseButtonClass} type="button" aria-label="关闭 AI 渠道配置提示" onClick={() => dispatchPopupModalAction('close')} unstyled>
+        <Button id="close-ai-provider-prompt" className={modalCloseButtonClass} type="button" aria-label="关闭 AI 服务配置提示" onClick={() => dispatchPopupModalAction('close')} unstyled>
           <Icon name="X" size={16} aria-hidden="true" />
         </Button>
       </header>
       <AiSetupPrompt
         className={modalAiSetupPromptClass}
-        description="普通搜索已包含本地规则。语义搜索需要先配置 AI 渠道。"
+        description="普通搜索已包含本地规则。语义搜索需要先配置 AI 服务。"
         descriptionClassName={modalNoteClass}
         titleClassName="sr-only"
-        title="AI 渠道配置提示"
+        title="AI 服务配置提示"
       />
       <PopupModalFeedback />
       <footer className={modalActionsClass}>
         <Button id="cancel-ai-provider-prompt" className={modalSecondaryButtonClass} type="button" onClick={() => dispatchPopupModalAction('close')} unstyled>暂不配置</Button>
-        <Button ref={settingsButtonRef} id="open-ai-provider-settings" className={modalPrimaryButtonClass} type="button" onClick={() => dispatchPopupModalAction('open-ai-settings')} unstyled>配置 AI 渠道</Button>
+        <Button ref={settingsButtonRef} id="open-ai-provider-settings" className={modalPrimaryButtonClass} type="button" onClick={() => dispatchPopupModalAction('open-ai-settings')} unstyled>配置 AI 服务</Button>
       </footer>
     </section>
   )
@@ -608,35 +596,6 @@ function EditFolderDisclosure({
   )
 }
 
-function DeleteBookmarkModal({
-  cancelButtonRef,
-  view
-}: {
-  cancelButtonRef: RefObject<HTMLButtonElement | null>
-  view: PopupModalsView['delete']
-}) {
-  return (
-    <section id="delete-modal" className={modalSmallCardClass} aria-labelledby="delete-modal-title" tabIndex={-1}>
-      <header className={modalHeaderCompactClass}>
-        <div className={modalHeaderCopyClass}>
-          <p className={modalDangerEyebrowClass}>删除确认</p>
-          <h2 id="delete-modal-title" className={modalTitleClass}>确认删除该书签？</h2>
-        </div>
-      </header>
-      <div className={modalBookmarkCardClass}>
-        <p className={modalCardLabelClass}>即将删除</p>
-        <p id="delete-bookmark-title" className={modalCardTitleClass}>{view.title}</p>
-        <p id="delete-bookmark-path" className={modalCardPathClass}>{view.path}</p>
-      </div>
-      <PopupModalFeedback />
-      <footer className={modalActionsClass}>
-        <Button ref={cancelButtonRef} id="cancel-delete" className={modalSecondaryButtonClass} type="button" disabled={view.cancelDisabled} onClick={() => dispatchPopupModalAction('close')} unstyled>取消</Button>
-        <Button id="confirm-delete" className={modalDangerButtonClass} type="button" disabled={view.confirmDisabled} onClick={() => dispatchPopupModalAction('confirm-delete')} unstyled>{view.confirmLabel}</Button>
-      </footer>
-    </section>
-  )
-}
-
 function handleEditInputKeydown(event: React.KeyboardEvent<HTMLInputElement>) {
   if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
   if (event.key === 'Enter') {
@@ -647,7 +606,6 @@ function handleEditInputKeydown(event: React.KeyboardEvent<HTMLInputElement>) {
 
 interface ModalFocusRefs {
   aiProviderSettingsRef: RefObject<HTMLElement | null>
-  cancelDeleteRef: RefObject<HTMLElement | null>
   editTitleRef: RefObject<HTMLInputElement | null>
   moveSearchRef: RefObject<HTMLElement | null>
   smartFolderTitleRef: RefObject<HTMLInputElement | null>
@@ -668,10 +626,6 @@ function focusInitialModalControl(active: PopupModalsView['active'], refs: Modal
   }
   if (active === 'edit') {
     focusElement(refs.editTitleRef, true)
-    return
-  }
-  if (active === 'delete') {
-    focusElement(refs.cancelDeleteRef)
   }
 }
 

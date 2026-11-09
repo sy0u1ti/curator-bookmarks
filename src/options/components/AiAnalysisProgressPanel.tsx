@@ -42,7 +42,7 @@ export function AiAnalysisProgressPanel({ children }: { children: ReactNode }) {
     </strong>
   ), [state.busy, state.progressLabel])
   const description = useMemo(() => (
-    <StatusMessage className={AI_ANALYSIS_PROGRESS_COPY_CLASS}>
+    <StatusMessage className={AI_ANALYSIS_PROGRESS_COPY_CLASS} reserve={[state.progressCopy]}>
       {state.progressCopy}
     </StatusMessage>
   ), [state.progressCopy])

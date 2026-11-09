@@ -19,7 +19,7 @@ import { isSidePanelSurface } from '../../shared/extension-surfaces'
 import type { PopupSmartClassifierViewModel, PopupSmartPageViewModel } from './PopupViewModels'
 
 const SMART_ERROR_BANNER_CLASS =
-  'popup-surface relative z-[1] flex-none border border-[rgba(255,138,130,0.42)] bg-[rgba(255,138,130,0.10)] px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-ds-danger-text shadow-none'
+  'popup-surface relative z-[1] flex-none border border-ds-danger/35 bg-ds-danger-soft px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-ds-danger-text shadow-none'
 
 const pageRevealShellClass = 't-skel popup-t-skel popup-page-reveal relative min-h-12 w-full'
 const pageLayerClass = 'absolute inset-0 min-h-12'
@@ -50,20 +50,20 @@ const currentPageActionsClass =
 const currentPageActionBaseClass = [
   'inline-flex min-h-6 min-w-0 items-center justify-center overflow-hidden truncate whitespace-nowrap rounded-ds-sm border px-[7px] text-xs font-semibold leading-none outline-none',
   'transition-[border-color,background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
-  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)] disabled:cursor-default disabled:opacity-70'
 ].join(' ')
 const currentPageSecondaryActionClass = cx(
   currentPageActionBaseClass,
-  'min-w-[42px] border-ds-border bg-ds-surface-2 text-[rgba(244,246,251,0.72)] hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary'
+  'min-w-[42px] border-ds-border bg-ds-surface-2 text-ds-text-secondary hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary'
 )
 const currentPagePrimaryActionClass = cx(
   currentPageActionBaseClass,
-  'w-full border-[rgba(245,245,247,0.82)] bg-ds-text-primary text-ds-text-inverse hover:border-ds-text-primary hover:bg-ds-text-primary hover:text-ds-text-inverse focus-visible:border-ds-text-primary focus-visible:bg-ds-text-primary focus-visible:text-ds-text-inverse'
+  'w-full border-ds-accent bg-ds-text-primary text-ds-text-inverse hover:border-ds-text-primary hover:bg-ds-text-primary hover:text-ds-text-inverse focus-visible:border-ds-text-primary focus-visible:bg-ds-text-primary focus-visible:text-ds-text-inverse'
 )
 const currentPagePinnedActionClass = cx(
   currentPageActionBaseClass,
-  'w-full border-[rgba(245,245,247,0.5)] bg-ds-success-soft text-ds-success-text hover:border-[rgba(245,245,247,0.62)] hover:bg-ds-success-soft hover:text-ds-success-text focus-visible:border-[rgba(245,245,247,0.62)] focus-visible:bg-ds-success-soft focus-visible:text-ds-success-text'
+  'w-full border-ds-success/40 bg-ds-success-soft text-ds-success-text hover:border-ds-success/40 hover:bg-ds-success-soft hover:text-ds-success-text focus-visible:border-ds-success/40 focus-visible:bg-ds-success-soft focus-visible:text-ds-success-text'
 )
 const placeholderSecondaryActionClass = cx(
   currentPageActionBaseClass,
@@ -96,7 +96,7 @@ const exitButtonClass = [
   'inline-flex h-7 min-w-[42px] items-center justify-center rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2 text-xs font-[650] text-ds-text-secondary outline-none',
   'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
-  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)]'
 ].join(' ')
 
@@ -105,7 +105,7 @@ const actionsThreeClass = cx(actionsClass, 'grid-cols-3 @max-[430px]/popup:grid-
 const actionButtonBaseClass = [
   'inline-flex min-h-[38px] w-full items-center justify-center gap-2 rounded-ds-sm border px-3 text-[13px] font-semibold leading-none outline-none',
   'transition-[border-color,background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
-  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)] disabled:cursor-default'
 ].join(' ')
 const secondaryActionButtonClass = cx(
@@ -118,7 +118,7 @@ const settingsActionButtonClass = cx(
 )
 const primaryActionButtonClass = cx(
   actionButtonBaseClass,
-  'border-[rgba(245,245,247,0.92)] bg-ds-text-primary text-ds-text-inverse hover:border-ds-text-primary hover:bg-ds-text-primary focus-visible:border-ds-text-primary focus-visible:bg-ds-text-primary'
+  'border-ds-accent bg-ds-text-primary text-ds-text-inverse hover:border-ds-text-primary hover:bg-ds-text-primary focus-visible:border-ds-text-primary focus-visible:bg-ds-text-primary'
 )
 const savedActionButtonClass =
   'border-ds-success bg-ds-success-soft text-ds-success-text disabled:opacity-100'
@@ -127,7 +127,7 @@ const manualButtonClass = [
   'mx-auto inline-flex w-fit items-center justify-center gap-[7px] rounded-ds-sm border border-transparent bg-transparent px-2 py-1.5 text-xs font-semibold text-ds-text-secondary outline-none',
   'transition-[color,background-color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-hover hover:text-ds-text-primary',
-  'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)]'
 ].join(' ')
 const manualButtonSlotClass = 'mt-auto flex justify-center pt-4'
@@ -157,14 +157,14 @@ const progressBarClass = SHEEN_PROGRESS_BAR_CLASS
 const resultCardClass = cx(panelCardClass, 'flex h-full min-h-0 flex-col overflow-hidden px-[18px] py-4')
 const titleRowClass = 'mb-3.5 grid grid-cols-[minmax(0,1fr)] gap-2'
 const titleInputClass =
-  'min-h-9 w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-[13px] font-[650] leading-tight text-ds-text-primary outline-none placeholder:text-ds-text-muted focus:border-ds-text-primary/45 focus:bg-ds-hover focus:[outline:3px_solid_rgba(245,245,247,0.14)] focus:outline-offset-0 focus-visible:border-ds-text-primary/45 focus-visible:bg-ds-hover focus-visible:[outline:3px_solid_rgba(245,245,247,0.14)] focus-visible:outline-offset-0'
+  'min-h-9 w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-[13px] font-[650] leading-tight text-ds-text-primary placeholder:text-ds-text-muted focus:bg-ds-hover'
 const sectionLabelClass = 'mb-[9px] mt-0 text-xs font-semibold text-ds-text-secondary'
 const recommendationsClass =
   'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const folderOptionBaseClass = [
   'grid min-h-[50px] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 py-2.5 text-left outline-none @max-[430px]/popup:grid-cols-[minmax(0,1fr)]',
   'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
-  'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[0.993]'
 ].join(' ')
 const folderOptionSelectedClass =
@@ -481,7 +481,7 @@ function PopupSmartPermission({
   return (
     <article className={permissionCardClass}>
       <div className={panelHeaderWithMarginClass}>
-        <p className={panelHeaderTitleClass}>需要授权 AI 渠道</p>
+        <p className={panelHeaderTitleClass}>需要授权 AI 服务</p>
         <PopupSmartExitButton handlers={handlers} />
       </div>
       <div className={permissionBodyClass}>

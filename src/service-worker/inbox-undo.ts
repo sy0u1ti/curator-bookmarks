@@ -24,7 +24,7 @@ export async function undoInboxAutoMove(
   }
   if (!undoMove || undoMove.expiresAt <= now) {
     await dependencies.clearUndo(undoMove?.bookmarkId)
-    throw new Error('没有可撤销的 Inbox 自动移动。')
+    throw new Error('没有可撤销的自动移动。')
   }
 
   const bookmark = await dependencies.getBookmark(undoMove.bookmarkId)

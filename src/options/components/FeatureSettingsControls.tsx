@@ -44,7 +44,7 @@ export function FeatureSettingsControls() {
     <>
       <AiProviderCard
         className={AI_SETTINGS_CARD_CLASS}
-        title={<h2 className={AI_SETTINGS_TITLE_CLASS}>收藏与整理</h2>}
+        title={<h2 className={AI_SETTINGS_TITLE_CLASS}>保存与整理</h2>}
         headerClassName={AI_SETTINGS_HEADER_CLASS}
         iconName="Sparkles"
         bodyClassName={`${AI_SETTINGS_BODY_CLASS} ${state.loading ? '' : AI_SETTINGS_READY_BODY_CLASS}`}
@@ -78,17 +78,17 @@ function InboxWorkflowControl({ state }: { state: FeatureSettingsControlsState['
   return (
     <div id="settings-inbox-workflow" className="grid gap-3 px-4 py-4" aria-hidden={!state || undefined}>
       <div>
-        <h3 className={AI_SETTINGS_ROW_TITLE_CLASS}>待整理 · 快捷键收藏后</h3>
+        <h3 className={AI_SETTINGS_ROW_TITLE_CLASS}>用快捷键保存到待整理后</h3>
       </div>
       {state ? (
         <Select
-          ariaLabel="Inbox 收藏后的整理方式"
+          ariaLabel="保存到待整理后的整理方式"
           value={state.value}
           disabled={state.disabled}
           options={[
-            { value: 'capture', label: '只收藏，暂不分析' },
+            { value: 'capture', label: '只保存，暂不分析' },
             { value: 'move', label: '生成标签，高置信时自动移动' },
-            { value: 'tags', label: '只生成标签和摘要，保留在 Inbox' },
+            { value: 'tags', label: '只生成标签和摘要，保留在待整理' },
             { value: 'keep', label: '生成整理建议，由我决定是否移动' }
           ]}
           onValueChange={value => {

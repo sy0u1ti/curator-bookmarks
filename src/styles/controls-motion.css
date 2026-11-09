@@ -47,12 +47,13 @@
   --control-press-scale: 1;
 }
 
+/* A text field marks focus with one stroke, its own border. */
 .base-input,
 .base-textarea {
   transition:
-    background-color var(--ds-motion-fast) var(--ds-ease-standard),
-    border-color var(--ds-motion-fast) var(--ds-ease-standard),
-    color var(--ds-motion-fast) var(--ds-ease-standard);
+    background-color var(--ds-motion-standard) var(--ds-ease-standard),
+    border-color var(--ds-motion-standard) var(--ds-ease-standard),
+    color var(--ds-motion-standard) var(--ds-ease-standard);
 }
 
 .options-switch-thumb {
@@ -215,6 +216,12 @@
     transition-timing-function: linear !important;
   }
 
+  .base-input,
+  .base-textarea {
+    transition-duration: 80ms;
+    transition-timing-function: linear;
+  }
+
   :is(.curator-button, .curator-control, .base-select-trigger, .base-toggle-group-item, .curator-checkbox, .t-check, .t-toggle, .options-switch-control):active,
   .base-slider-thumb,
   .base-slider:is([data-dragging], :focus-within, :hover) .base-slider-thumb,
@@ -240,6 +247,15 @@
 
   .newtab-search-clear {
     transition: opacity 80ms linear, display 80ms allow-discrete !important;
+  }
+}
+
+/* Forced colours repaint borders uniformly, so the stroke cannot carry focus. */
+@media (forced-colors: active) {
+  .base-input:focus-visible,
+  .base-textarea:focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px;
   }
 }
 

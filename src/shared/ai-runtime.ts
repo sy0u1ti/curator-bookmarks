@@ -27,6 +27,7 @@ import {
   type ReasoningEffortId
 } from './ai-reasoning.js'
 import { normalizeAiOutput } from './ai-output-normalization.js'
+import { formatBytes } from './format.js'
 import { AiEventStreamError, parseAiEventStream } from './ai-event-stream.js'
 import { isTextGenerationModelId } from './ai-model-catalog.js'
 import { findModelsDevModel, type ModelsDevMatch } from './models-dev.js'
@@ -48,7 +49,7 @@ export interface AiProviderSettings {
   model: string
   apiStyle: AiApiStyle
   timeoutMs?: number
-  /** 从渠道模型列表缓存的逐模型推理能力。 */
+  /** 从服务商模型列表缓存的逐模型推理能力。 */
   reasoningCapabilities?: unknown
   /** Request-local catalog snapshot; never serialized with provider credentials. */
   modelMetadata?: ModelsDevMatch | null
@@ -179,7 +180,7 @@ export class AiRuntimeError extends Error {
 function ensureAiProviderConfigured(settings: AiProviderSettings): void {
   const baseUrlIssue = getAiProviderBaseUrlIssue(settings.baseUrl)
   if (baseUrlIssue) throw new AiRuntimeError('configuration', baseUrlIssue)
-  if (!isAiProviderConfigured(settings)) throw new AiRuntimeError('configuration', '请先到通用设置配置“自定义AI渠道”。')
+  if (!isAiProviderConfigured(settings)) throw new AiRuntimeError('configuration', '请先到通用设置配置“自定义 AI 服务”。')
   if (!isTextGenerationModelId(settings.model)) throw new AiRuntimeError('configuration', '此功能需要可生成文本或 JSON 的模型，请改选对话模型。')
 }
 
@@ -692,18 +693,18 @@ export async function requestStructuredAiOutput<T>({
       if (effort && isReasoningEffortCompatibilityError(failure)) {
         const explicitEffort = normalizeReasoningEffortValue(settings.reasoningEffort)
         if (explicitEffort || attempt >= maxAttempts) {
-          throw new AiRuntimeError('provider', 'AI 渠道拒绝推理强度“' + effort + '”：' + failure.message, {
+          throw new AiRuntimeError('provider', 'AI 服务拒绝推理强度“' + effort + '”：' + failure.message, {
             status: failure.status, details: failure.details, cause: failure
           })
         }
         compatibility.omitDefaultReasoning = true
-        compatibility.warnings.push('渠道不支持默认推理参数，已使用模型原生默认值。')
+        compatibility.warnings.push('服务商不支持默认推理参数，已使用模型原生默认值。')
         continue
       }
       if (attempt < maxAttempts && compatibility.mode !== 'prompt' && isStructuredFormatCompatibilityError(failure)) {
         compatibility.mode = compatibility.apiStyle === 'anthropic_messages'
           ? 'prompt' : getLessStrictOutputMode(compatibility.mode)
-        compatibility.warnings.push(compatibility.mode === 'prompt' ? '渠道不支持输出格式约束，已使用提示词与本地结构校验。' : '渠道不支持严格 Schema，已使用 JSON 模式与本地结构校验。')
+        compatibility.warnings.push(compatibility.mode === 'prompt' ? '服务商不支持输出格式约束，已使用提示词与本地结构校验。' : '服务商不支持严格 Schema，已使用 JSON 模式与本地结构校验。')
         continue
       }
       if (attempt < maxAttempts && !compatibility.mergeSystemPrompt && isSystemRoleCompatibilityError(failure)) {
@@ -719,7 +720,7 @@ export async function requestStructuredAiOutput<T>({
         compatibility.mode = 'json_schema'
         compatibility.omitDefaultReasoning = false
         compatibility.mergeSystemPrompt = false
-        compatibility.warnings.push('自动模式已切换至渠道支持的 ' + compatibility.apiStyle + ' 接口。')
+        compatibility.warnings.push('自动模式已切换至服务商支持的 ' + compatibility.apiStyle + ' 接口。')
         continue
       }
       if (attempt >= maxAttempts || !shouldRetryAiRuntimeError(failure)) throw failure
@@ -1161,10 +1162,9 @@ function parseAiContentLength(value: unknown): number | undefined {
 }
 
 function buildAiResponseTooLargeError(status: unknown, bytes: number): AiRuntimeError {
-  const limitMb = Math.round(AI_PROVIDER_RESPONSE_MAX_BYTES / (1024 * 1024))
   return new AiRuntimeError(
     'provider',
-    `AI 响应体超过 ${limitMb} MB 安全上限，已停止读取。请减小批量大小或检查自定义 API 返回内容。`,
+    `AI 响应体超过 ${formatBytes(AI_PROVIDER_RESPONSE_MAX_BYTES)} 安全上限，已停止读取。请减小批量大小或检查自定义 API 返回内容。`,
     {
       status: Number(status) || undefined,
       retryable: false,

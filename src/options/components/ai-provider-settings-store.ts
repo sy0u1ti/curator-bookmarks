@@ -30,6 +30,7 @@ const defaultAiProviderSettingsState: AiProviderSettingsState = {
       customModels: [],
       disabled: true,
       fetchedModels: [],
+      labs: {},
       models: [],
       presetModels: []
     }

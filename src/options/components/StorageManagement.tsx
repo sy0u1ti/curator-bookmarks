@@ -3,10 +3,9 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '../../ui/base/Button.js'
 import { StatusMessage } from '../../ui/base/StatusMessage.js'
 import { STORAGE_KEYS } from '../../shared/constants.js'
+import { formatBytes as size } from '../../shared/format.js'
 import { requestStorageUsage } from '../../shared/messages.js'
 import { cleanStorageCategory, type StorageCleanupCategory, type StorageUsage } from '../../shared/storage-maintenance.js'
-
-const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
 
 export function StorageManagement() {
   const [usage, setUsage] = useState<StorageUsage | null>(null)
@@ -47,6 +46,9 @@ export function StorageManagement() {
   }, [run])
   const refresh = () => run()
   const clean = (category: StorageCleanupCategory) => run(category)
+  const summary = usage
+    ? `配置与搜索索引占用约 ${size(usage.localBytes)}${usage.originBytes !== null ? `，浏览器站点存储估算 ${size(usage.originBytes)}` : ''}`
+    : busy ? '正在读取用量…' : '用量暂不可用，请点击刷新用量重试。'
   return <section id="settings-storage" aria-labelledby="storage-management-title" className={`mt-7 ${OPTION_SURFACE_CLASS} p-5`}>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h3 id="storage-management-title" className="m-0 text-[15px] font-semibold">本地存储空间</h3>
@@ -55,22 +57,21 @@ export function StorageManagement() {
     {storageIssue ? (
       <p role="alert" className="mt-2 rounded-ds-sm border border-ds-border px-3 py-2 text-[13px] text-ds-text-secondary">{storageIssue}</p>
     ) : null}
+    <StatusMessage className="mt-2 text-[13px] leading-relaxed text-ds-text-secondary" reserve={[summary]}>{status || summary}</StatusMessage>
     {usage ? <>
-      <p className="text-[13px] text-ds-text-secondary">配置与搜索索引占用约 {size(usage.localBytes)}{usage.originBytes !== null ? ` · 浏览器站点存储估算 ${size(usage.originBytes)}` : ''}</p>
-      <StorageRow title={`自定义图标 · ${usage.icons.count} 张 · ${size(usage.icons.bytes)}`} copy={`${usage.icons.unused} 张暂未关联任何书签。首次扫描后保留 24 小时缓冲期，确认后再次清理即可彻底移除。`}>
+      <StorageRow title={`自定义图标：${usage.icons.count} 张，${size(usage.icons.bytes)}`} copy={`${usage.icons.unused} 张暂未关联任何书签。首次扫描后保留 24 小时缓冲期，确认后再次清理即可彻底移除。`}>
         <Button size="sm" variant="secondary" disabled={busy} onClick={() => void clean('icons')}>清理闲置图标</Button>
       </StorageRow>
       {usage.missingIcons > 0 ? <StorageRow title={`${usage.missingIcons} 张图标无法读取`} copy="已自动使用站点图标。移除失效引用后，可从书签菜单重新选择图片。">
         <Button size="sm" variant="secondary" disabled={busy} onClick={() => void clean('missing-icons')}>移除失效图标引用</Button>
       </StorageRow> : null}
-      <StorageRow title={`本地正文 · ${usage.fullText.count} 份 · ${size(usage.fullText.bytes)}`} copy="清除后无法再按这些正文检索；摘要、标签和书签保留。">
+      <StorageRow title={`本地正文：${usage.fullText.count} 份，${size(usage.fullText.bytes)}`} copy="清除后无法再按这些正文检索；摘要、标签和书签保留。">
         <Button size="sm" variant="secondary" disabled={busy || !usage.fullText.count} onClick={() => void clean('full-text')}>清除本地正文</Button>
       </StorageRow>
-      <StorageRow title={`壁纸预览缓存 · ${size(usage.previewBytes)}`} copy="清理后再次浏览新标签页壁纸库时会按需重新拉取缩略图。">
+      <StorageRow title={`壁纸预览缓存：${size(usage.previewBytes)}`} copy="清理后再次浏览新标签页壁纸库时会按需重新拉取缩略图。">
         <Button size="sm" variant="secondary" disabled={busy || !usage.previewBytes} onClick={() => void clean('previews')}>清除预览缓存</Button>
       </StorageRow>
-    </> : <p className="text-[13px] text-ds-text-secondary">{busy ? '正在读取用量…' : '用量暂不可用，请点击刷新用量重试。'}</p>}
-    <StatusMessage className="mt-2 text-[13px] leading-relaxed text-ds-text-secondary">{status}</StatusMessage>
+    </> : null}
   </section>
 }
 

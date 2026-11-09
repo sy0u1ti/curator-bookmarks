@@ -61,14 +61,12 @@ type IconPresetValues = Omit<IconSettings, 'preset' | 'verticalCenter'>
 
 export const ICON_PRESET_META: Record<IconLayoutPresetKey, {
   name: string
-  desc: string
-  detail: string
   cols: number
   rows: number
 }> = {
-  compact: { name: '紧凑', desc: '148px · 28px', detail: '高频访问 · 单行卡片', cols: 4, rows: 3 },
-  comfortable: { name: '均衡', desc: '184px · 32px', detail: '日常桌面 · 标准卡片', cols: 3, rows: 3 },
-  spacious: { name: '宽松', desc: '224px · 36px', detail: '大屏展示 · 双行卡片', cols: 2, rows: 3 }
+  compact: { name: '紧凑', cols: 4, rows: 3 },
+  comfortable: { name: '均衡', cols: 3, rows: 3 },
+  spacious: { name: '宽松', cols: 2, rows: 3 }
 }
 
 export const DEFAULT_ICON_SETTINGS: IconSettings = {

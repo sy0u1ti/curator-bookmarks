@@ -1,4 +1,4 @@
-export type OptionsModalKey = 'confirm' | 'delete' | 'move' | 'scope'
+export type OptionsModalKey = 'confirm' | 'move' | 'scope'
 
 export type OptionsModalAction = 'cancel' | 'confirm' | 'dismiss' | 'search-change'
 
@@ -8,20 +8,12 @@ export interface OptionsModalActionDetail {
   query?: string
 }
 
-export interface DeleteModalState {
-  confirmDisabled: boolean
-  confirmLabel: string
-  copy: string
-  open: boolean
-}
-
 export interface ConfirmModalState {
   requestId: number
   holdToConfirm: boolean
   cancelLabel: string
   confirmLabel: string
   copy: string
-  label: string
   open: boolean
   tone: 'danger' | 'warning'
   title: string
@@ -43,7 +35,6 @@ export interface ScopeModalState {
 
 export interface OptionsModalsState {
   confirm: ConfirmModalState
-  delete: DeleteModalState
   move: MoveModalState
   scope: ScopeModalState
 }

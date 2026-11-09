@@ -72,14 +72,14 @@ try {
   await page.getByRole('combobox', { name: '接口类型', exact: true }).click()
   await page.getByRole('option', { name: '自动识别（推荐）', exact: true }).click()
 
-  await page.getByRole('button', { name: '从自定义 AI 渠道获取模型列表', exact: true }).click()
+  await page.getByRole('button', { name: '从自定义 AI 服务获取模型列表', exact: true }).click()
   await page.waitForFunction((key) => chrome.storage.local.get(key).then((stored) => stored[key]?.fetchedModels?.includes('fixture-local-text')), storageKey)
   const stored = await page.evaluate((key) => chrome.storage.local.get(key), storageKey)
   assert.deepEqual(stored[storageKey].fetchedModels, ['fixture-local-text'])
   assert.equal(stored[storageKey].apiKey, '')
   assert.equal(stored[storageKey].apiStyle, 'auto')
 
-  const testButton = page.getByRole('button', { name: '测试自定义 AI 渠道连接', exact: true })
+  const testButton = page.getByRole('button', { name: '测试自定义 AI 服务连接', exact: true })
   await testButton.click()
   await page.getByText(/已通过结构化输出测试/).first().waitFor({ state: 'visible' })
   const strictRequest = requests.find((entry) => entry.method === 'POST')
@@ -88,7 +88,7 @@ try {
   mode = 'compatible'
   const beforeFallback = requests.length
   await testButton.click()
-  await page.getByText(/已启用渠道兼容模式/).first().waitFor({ state: 'visible' })
+  await page.getByText(/已启用服务商兼容模式/).first().waitFor({ state: 'visible' })
   const fallbackRequests = requests.slice(beforeFallback).filter((entry) => entry.method === 'POST')
   assert.deepEqual(fallbackRequests.map((entry) => entry.body.response_format.type), ['json_schema', 'json_object'])
   await page.screenshot({ path: path.join(outputDir, 'compatible-connection.png'), fullPage: true })

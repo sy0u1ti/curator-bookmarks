@@ -3,8 +3,8 @@ import type { ModelsDevMatch } from './models-dev.js'
 /**
  * 推理强度能力解析。
  *
- * 渠道 `/models` 返回能力元数据时以元数据为准；没有元数据时，再按模型 ID
- * 使用保守的能力规则。这样既能适配 OpenRouter / Anthropic 等会公开能力的渠道，
+ * 服务商 `/models` 返回能力元数据时以元数据为准；没有元数据时，再按模型 ID
+ * 使用保守的能力规则。这样既能适配 OpenRouter / Anthropic 等会公开能力的服务商，
  * 也能兼容只返回模型 ID 的 OpenAI-compatible 服务。
  */
 
@@ -32,7 +32,7 @@ export const REASONING_EFFORT_LABELS: Record<ReasoningEffortId, string> = {
 }
 
 export const REASONING_EFFORT_HINTS: Record<ReasoningEffortId, string> = {
-  default: '不发送推理参数，由渠道或模型决定',
+  default: '不发送推理参数，由服务商或模型决定',
   none: '关闭额外推理，延迟最低',
   minimal: '几乎不额外推理，最快最省',
   low: '少量推理，速度优先',
@@ -59,9 +59,9 @@ const KNOWN_EFFORTS = new Set<ReasoningEffortId>([
 
 /** 可持久化的单模型能力，由模型列表接口的元数据提取。 */
 export interface ModelReasoningCapability {
-  /** 渠道显式声明的实际档位；不包含 default，支持关闭时可包含 none。 */
+  /** 服务商显式声明的实际档位；不包含 default，支持关闭时可包含 none。 */
   levels: ReasoningEffortId[]
-  /** 渠道在未显式指定时使用的档位。 */
+  /** 服务商在未显式指定时使用的档位。 */
   defaultEffort?: ReasoningEffortId
   /** true 表示该模型始终启用推理。 */
   mandatory?: boolean
@@ -72,7 +72,7 @@ export type ModelReasoningCapabilityMap = Record<string, ModelReasoningCapabilit
 export interface ModelReasoningProfile extends ModelReasoningCapability {
   /** 是否存在至少两个档位可供调节。 */
   supported: boolean
-  /** 能力结论来自渠道元数据、模型规则还是兼容兜底。 */
+  /** 能力结论来自服务商元数据、模型规则还是兼容兜底。 */
   source: ReasoningCapabilitySource
   /** 面向用户的一句说明。 */
   note: string
@@ -194,7 +194,7 @@ const REASONING_RULES: ReasoningRule[] = [
   { test: /gpt-5(?:[-._/]|$)/, levels: MINIMAL_TO_HIGH, defaultEffort: 'medium', note: 'GPT-5 支持极简、轻度、中、高 4 档' },
   { test: /(?:^|\/)o[1-9](?:[.\-]|$)|(?:^|\/)o[1-9]-(?:mini|preview)/, levels: LOW_TO_HIGH, defaultEffort: 'medium', note: 'OpenAI o 系推理模型支持轻度、中、高 3 档' },
 
-  // Anthropic Claude 原生 Models API 会返回精确 capability；以下规则供兼容渠道兜底。
+  // Anthropic Claude 原生 Models API 会返回精确 capability；以下规则供兼容服务商兜底。
   { test: /claude-(?:fable-5|mythos-5|opus-4[-.]?(?:7|8)|sonnet-5)|(?:fable|mythos)[-_. ]?5/, levels: LOW_TO_MAX, defaultEffort: 'high', note: '该 Claude 模型支持轻度到最高共 5 档' },
   { test: /claude-mythos-preview|mythos[-_. ]preview/, levels: LOW_MEDIUM_HIGH_MAX, defaultEffort: 'high', note: 'Claude Mythos Preview 支持轻度、中、高、最高 4 档' },
   { test: /claude-(?:opus-4[-.]?6|sonnet-4[-.]?6)/, levels: LOW_MEDIUM_HIGH_MAX, defaultEffort: 'high', note: '该 Claude 模型支持轻度、中、高、最高 4 档' },
@@ -243,7 +243,7 @@ const FALLBACK_PROFILE: ModelReasoningProfile = {
   supported: true,
   levels: ['default', 'low', 'medium', 'high'],
   source: 'fallback',
-  note: '渠道未公开该模型的档位，按兼容协议提供默认、轻度、中、高；若渠道拒绝会明确报错，不会偷偷退回默认'
+  note: '服务商未公开该模型的档位，按兼容协议提供默认、轻度、中、高；若服务商拒绝会明确报错，不会偷偷退回默认'
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -729,7 +729,7 @@ function getProviderReasoningMatch(
         { kind: 'unsupported' },
         {
           levels: NONE,
-          note: '万擎 Responses 使用不透明的 ep-* 推理点 ID；只有渠道显式元数据声明 effort 档位后才发送 reasoning.effort'
+          note: '万擎 Responses 使用不透明的 ep-* 推理点 ID；只有服务商显式元数据声明 effort 档位后才发送 reasoning.effort'
         },
         true
       )
@@ -2269,7 +2269,7 @@ function normalizeCapabilityLevels(value: unknown): ReasoningEffortId[] {
   return CAPABILITY_LEVEL_ORDER.filter((effort) => unique.has(effort))
 }
 
-/** 清洗从存储或渠道元数据得到的能力对象。 */
+/** 清洗从存储或服务商元数据得到的能力对象。 */
 export function normalizeModelReasoningCapability(value: unknown): ModelReasoningCapability | null {
   if (
     !isRecord(value) ||
@@ -2454,10 +2454,10 @@ function createMetadataProfile(
     : capability.levels.slice()
   const labels = levels.map((level) => REASONING_EFFORT_LABELS[level]).join('、')
   const note = levels.length > 1
-    ? `已从渠道模型元数据识别 ${levels.length} 档：${labels}`
+    ? `已从服务商模型元数据识别 ${levels.length} 档：${labels}`
     : levels.length === 1
-      ? `渠道模型元数据表明该模型仅支持${labels}档`
-      : '渠道模型元数据表明该模型不支持推理强度调节'
+      ? `服务商模型元数据表明该模型仅支持${labels}档`
+      : '服务商模型元数据表明该模型不支持推理强度调节'
   return {
     levels,
     defaultEffort,
@@ -2508,14 +2508,14 @@ function getCatalogReasoningMatch(
   let profile: ModelReasoningProfile
   let selectedTransport = transport
   if (metadata.reasoning === false) {
-    profile = { levels: [], supported: false, source: 'models_dev', note: 'models.dev：该渠道模型不支持推理' }
+    profile = { levels: [], supported: false, source: 'models_dev', note: 'models.dev：该服务商模型不支持推理' }
     selectedTransport = { kind: 'unsupported' }
   } else if (effort?.type === 'effort' && acceptsEffortMetadata(provider)) {
     const levels = normalizeCapabilityLevels(effort.values)
     if (!levels.length) return null
     if (toggle && fallback?.levels.includes('none') && !levels.includes('none')) levels.unshift('none')
     profile = createMetadataProfile({ levels }, fallback ? { ...fallback, optionLabels: undefined, optionHints: undefined } : null)
-    profile = { ...profile, source: 'models_dev', note: '推理档位来自 models.dev 的当前渠道资料' }
+    profile = { ...profile, source: 'models_dev', note: '推理档位来自 models.dev 的当前服务商资料' }
   } else if (budget && transport.budgetByEffort && fallback) {
     const levels = fallback.levels.filter((level) => {
       if (level === 'default' || level === 'none') return true
@@ -2537,14 +2537,14 @@ function getCatalogReasoningMatch(
     profile = createMetadataProfile({ levels: ['none', 'high'] }, fallback)
     profile = {
       ...profile, source: 'models_dev', optionLabels: OFF_ON_LABELS, optionHints: OFF_ON_HINTS,
-      note: 'models.dev：该渠道仅支持思考开关，不提供强度档位'
+      note: 'models.dev：该服务商仅支持思考开关，不提供强度档位'
     }
   } else {
     profile = {
       levels: ['default'], supported: false, source: 'models_dev',
       note: budget ? 'models.dev 仅声明思考预算，不推测强度档位'
         : toggle ? 'models.dev 仅声明思考开关；当前协议未配置开关映射'
-          : 'models.dev：该渠道未提供可调推理档位'
+          : 'models.dev：该服务商未提供可调推理档位'
     }
     selectedTransport = { kind: 'fixed' }
   }

@@ -36,10 +36,10 @@ export function RedirectControls() {
                 size="sm"
                 type="button"
                 variant="secondary"
-                aria-label="清空重定向更新已选书签"
+                aria-label="取消选择网址更新书签"
                 onClick={() => handleRedirectAction({ action: 'clear-selection' })}
               >
-                清空选择
+                取消选择
               </Button>
               <Button
                 size="sm"
@@ -55,7 +55,7 @@ export function RedirectControls() {
                 size="sm"
                 type="button"
                 variant="danger"
-                aria-label="删除重定向更新已选书签"
+                aria-label="删除网址更新已选书签"
                 disabled={state.locked || !hasSelection}
                 focusableWhenDisabled={state.locked}
                 onClick={() => handleRedirectAction({ action: 'delete-selected' })}

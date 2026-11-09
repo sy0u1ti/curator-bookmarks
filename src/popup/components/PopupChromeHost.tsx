@@ -63,9 +63,9 @@ const searchBlockClass = 'flex flex-col gap-2'
 const searchShellClass = [
   'popup-search-shell group/search flex h-10 min-h-10 w-full cursor-text items-center gap-2 popup-surface border-0 bg-ds-surface-2 py-0 pl-3 pr-1 text-ds-text-primary @max-[520px]/popup:flex-wrap @max-[520px]/popup:items-stretch @max-[520px]/popup:py-1.5 @max-[520px]/popup:pl-2.5',
   // The focus ring is an inset shadow so it grows inward from the edge instead of popping in.
-  'shadow-[inset_0_0_0_0_rgba(245,245,247,0)] transition-[background-color,box-shadow] duration-ds-standard ease-ds-standard data-[focus-handoff=true]:transition-none',
+  'shadow-[inset_0_0_0_0_transparent] transition-[background-color,box-shadow] duration-ds-standard ease-ds-standard data-[focus-handoff=true]:transition-none',
   'hover:bg-ds-hover',
-  'focus-within:bg-ds-hover focus-within:shadow-[inset_0_0_0_3px_rgba(245,245,247,0.14)]'
+  'focus-within:bg-ds-hover focus-within:shadow-[inset_0_0_0_3px_var(--ds-accent-soft)]'
 ].join(' ')
 const searchIconClass =
   'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard group-focus-within/search:text-ds-text-secondary'
@@ -83,7 +83,7 @@ const semanticSearchBaseClass = [
   'relative inline-flex h-8 w-[76px] min-w-[76px] flex-none items-center justify-center gap-[5px] whitespace-nowrap rounded-ds-sm border-0 bg-transparent px-3.5 text-xs font-medium tracking-[0.01em] text-ds-text-secondary @max-[520px]/popup:h-8 @max-[520px]/popup:px-2.5',
   'transition-[background-color,color,box-shadow,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-hover hover:text-ds-text-primary',
-  'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:[outline:3px_solid_rgba(245,245,247,0.14)] focus-visible:outline-offset-0',
+  'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:[outline:3px_solid_var(--ds-accent-soft)] focus-visible:outline-offset-0',
   'active:scale-[var(--ds-press-scale)]'
 ].join(' ')
 const semanticSearchNotConfiguredClass =
@@ -91,7 +91,7 @@ const semanticSearchNotConfiguredClass =
 const semanticSearchActiveClass =
   'bg-ds-accent text-ds-accent-contrast hover:bg-ds-accent-hover hover:text-ds-accent-contrast focus-visible:bg-ds-accent-hover focus-visible:text-ds-accent-contrast'
 const semanticSearchFallbackClass =
-  'bg-[rgba(248,214,109,0.14)] text-ds-warning hover:bg-[rgba(248,214,109,0.14)] hover:text-ds-warning focus-visible:bg-[rgba(248,214,109,0.14)] focus-visible:text-ds-warning'
+  'bg-ds-warning-soft text-ds-warning hover:bg-ds-warning-soft hover:text-ds-warning focus-visible:bg-ds-warning-soft focus-visible:text-ds-warning'
 const semanticSearchPendingDotClass =
   'h-1.5 w-1.5 rounded-full bg-current animate-[cb-search-pulse_1s_var(--ds-ease-standard)_infinite] motion-reduce:animate-none'
 

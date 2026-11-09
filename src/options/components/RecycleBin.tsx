@@ -16,6 +16,7 @@ const RECYCLE_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
 // Row spacing lives on .t-list-exit-inner so a removed card collapses its gap too.
 const RECYCLE_ENTRY_LIST_CLASS = 'flex flex-col [--list-exit-gap:0.75rem]'
 const RECYCLE_PAGE_SIZE = 30
+const RECYCLE_STATUS_RESERVE = ['当前页已选 30 条，其他页或筛选外已选 999 条。']
 const RECYCLE_CARD_CLASS =
   `${OPTION_INSET_CLASS} p-[14px_16px] [transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:border-ds-border-hover hover:bg-ds-hover`
 const RECYCLE_CARD_SELECTED_CLASS = 'border-ds-border-hover bg-ds-selected'
@@ -53,7 +54,7 @@ export function RecycleBin() {
   return (
     <div className={RECYCLE_RESULTS_LIST_CLASS}>
       {hasRows ? <Input aria-label="搜索回收站记录" placeholder="搜索标题、网址或原文件夹" value={query} onChange={event => { setQuery(event.target.value); setPage(0) }} /> : null}
-      {hasRows ? <StatusMessage className="m-0 text-xs leading-relaxed text-ds-text-secondary">
+      {hasRows ? <StatusMessage className="m-0 text-xs leading-relaxed text-ds-text-secondary" reserve={RECYCLE_STATUS_RESERVE}>
         {state.selectedIds.size > 0
           ? `当前页已选 ${visibleSelectedCount} 条，其他页或筛选外已选 ${hiddenSelectedCount} 条。`
           : `共 ${filtered.length} 条`}
@@ -73,7 +74,7 @@ export function RecycleBin() {
       {state.entries.length && !filtered.length ? <p className="text-sm text-ds-text-secondary">没有匹配的回收记录。</p> : null}
       {pageCount > 1 ? <div className="flex items-center justify-between gap-3">
         <Button size="sm" variant="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</Button>
-        <span className="text-xs tabular-nums text-ds-text-secondary">第 {currentPage + 1} / {pageCount} 页 · {filtered.length} 条</span>
+        <span className="text-xs tabular-nums text-ds-text-secondary">第 {currentPage + 1} / {pageCount} 页，共 {filtered.length} 条</span>
         <Button size="sm" variant="secondary" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>下一页</Button>
       </div> : null}
     </div>
@@ -178,7 +179,7 @@ function RecycleEntryCard({
         <strong className={RECYCLE_CARD_TITLE_CLASS}>{entry.title || '未命名书签'}</strong>
         <div className={RECYCLE_CARD_URL_CLASS}>{displayUrl(entry.url)}</div>
         <div className={RECYCLE_CARD_DETAIL_CLASS}>
-          来源：{entry.source || '删除'} · 删除于 {formatDateTime(entry.deletedAt)}
+          来源：{entry.source || '删除'}，删除于 {formatDateTime(entry.deletedAt)}
         </div>
         <div className={RECYCLE_CARD_PATH_CLASS} title={entry.path || '未归档路径'}>
           {entry.path || '未归档路径'}

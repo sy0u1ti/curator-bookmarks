@@ -8,16 +8,9 @@ const defaultOptionsModalsState: OptionsModalsState = {
     cancelLabel: '取消',
     confirmLabel: '确认',
     copy: '请确认是否继续。',
-    label: '确认',
     open: false,
     tone: 'danger',
     title: '确认操作？'
-  },
-  delete: {
-    confirmDisabled: false,
-    confirmLabel: '确认删除',
-    copy: '将从浏览器书签中移除，可在回收站恢复。',
-    open: false
   },
   move: {
     copy: '请选择一个目标文件夹，所选书签会被一起移动到该位置。',

@@ -8,6 +8,7 @@ import { Surface } from '../ui/base/Surface'
 import { Icon } from '../ui/icons/Icon'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { downloadBlobFile } from '../shared/download'
+import { formatBytes } from '../shared/format'
 import { capturePageArchive, getArchiveSourceTab, getPageArchiveFilename, parseArchiveTabId, requestPageCapturePermission } from './page-archive'
 import { InputCaretHost } from '../ui/input-caret/InputCaretHost'
 
@@ -99,7 +100,7 @@ function ArchivePage() {
         {error || (loading ? '正在读取来源网页…' : busy ? <><span className="sr-only">正在保存已加载的页面内容…</span>{archivePrivacyNote}</> : result ? (
           <span className="flex items-start gap-2">
             <svg className="archive-saved-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5 L6.5 11.5 L12.5 4.5" /></svg>
-            <span>离线文件已生成：{result.filename}（{result.blob.size >= 1024 * 1024 ? `${(result.blob.size / 1024 / 1024).toFixed(2)} MB` : `${Math.max(1, Math.ceil(result.blob.size / 1024))} KB`}）。</span>
+            <span>离线文件已生成：{result.filename}（{formatBytes(result.blob.size)}）。</span>
           </span>
         ) : archivePrivacyNote)}
       </StatusMessage>

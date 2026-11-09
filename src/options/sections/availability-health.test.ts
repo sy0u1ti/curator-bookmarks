@@ -446,15 +446,15 @@ test('review and failed bookmarks share direct deletion without changing classif
   const failed = { ...healthy(bookmark('failed')), status: 'failed' as const }
   const request = buildAvailabilityDeletionRequest([review, failed, review, healthy(bookmark('healthy'))])!
   assert.equal(request.candidates.length, 2)
-  assert.match(request.copy, /1 条仍待确认/)
+  assert.match(request.notice, /1 条仍待确认/)
   assert.deepEqual(request.candidates, [
     { id: 'review', expectedUrl: review.url }, { id: 'failed', expectedUrl: failed.url }
   ])
   review.url = 'https://changed.example.net/'
-  assert.equal(request.candidates[0].expectedUrl, 'https://example.net/page', 'confirmation freezes exact URL identity')
+  assert.equal(request.candidates[0].expectedUrl, 'https://example.net/page', 'deletion freezes exact URL identity')
   assert.equal(review.status, 'review', 'deleting is not evidence for a status promotion')
   assert.equal(buildAvailabilityDeletionRequest([healthy(bookmark())]), null)
-  assert.match(buildAvailabilityDeletionRequest([failed])!.title, /Bookmark failed/)
+  assert.equal(buildAvailabilityDeletionRequest([failed])!.notice, '')
 })
 
 test('retest actions state the need for authorization without granting it implicitly', () => {

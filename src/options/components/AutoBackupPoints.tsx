@@ -2,10 +2,13 @@ import { OPTION_SURFACE_CLASS, OPTION_INSET_CLASS } from './option-layout-classe
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { listAutoBackupPoints, type AutoBackupIndexEntry } from '../../shared/backup'
 import { STORAGE_KEYS } from '../../shared/constants'
+import { formatBytes, formatDateTime } from '../../shared/format'
 import { Button } from '../../ui/base/Button'
 import { StatusMessage } from '../../ui/base/StatusMessage'
 import { Icon } from '../../ui/icons/Icon'
 import { handleBackupAction } from '../options-controller'
+
+const AUTO_BACKUP_COPY = '整理前的本地备份。选中后先比较差异，再选择恢复范围。'
 
 export function AutoBackupPoints({ busy }: { busy: boolean }) {
   const [points, setPoints] = useState<AutoBackupIndexEntry[]>([])
@@ -45,8 +48,8 @@ export function AutoBackupPoints({ busy }: { busy: boolean }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 id="recovery-points-title" className="text-[15px] font-semibold text-ds-text-primary">自动恢复点</h2>
-          <StatusMessage className="mt-2 text-[13px] leading-relaxed text-ds-text-secondary" tone={error ? 'error' : 'neutral'}>
-            {error || '整理前的本地备份。选中后先比较差异，再选择恢复范围。'}
+          <StatusMessage className="mt-2 text-[13px] leading-relaxed text-ds-text-secondary" reserve={[AUTO_BACKUP_COPY]} tone={error ? 'error' : 'neutral'}>
+            {error || AUTO_BACKUP_COPY}
           </StatusMessage>
         </div>
         <Button size="sm" variant="secondary" disabled={loading || busy} onClick={() => void refresh()} aria-label="刷新自动恢复点">
@@ -59,7 +62,7 @@ export function AutoBackupPoints({ busy }: { busy: boolean }) {
             <li key={point.backupId} className={`flex min-w-0 flex-wrap items-center justify-between gap-3 ${OPTION_INSET_CLASS} p-3`}>
               <div className="min-w-0 flex-1 basis-52">
                 <strong className="block break-words text-sm text-ds-text-primary">{point.operationReason || '自动恢复点'}</strong>
-                <p className="mt-1 text-xs text-ds-text-secondary"><time dateTime={new Date(point.createdAt).toISOString()}>{new Date(point.createdAt).toLocaleString('zh-CN')}</time> · {formatBackupSize(point.sizeBytes || 0)}</p>
+                <p className="mt-1 flex flex-wrap gap-x-3 text-xs text-ds-text-secondary"><time dateTime={new Date(point.createdAt).toISOString()}>{formatDateTime(point.createdAt)}</time><span className="tabular-nums">{formatBytes(point.sizeBytes || 0)}</span></p>
               </div>
               <Button size="sm" variant="secondary" disabled={busy} aria-label={`预览恢复点：${point.operationReason || '自动恢复点'}`} onClick={() => handleBackupAction({ action: 'preview-auto-backup', backupId: point.backupId })}>
                 <Icon name="ArchiveRestore" size={14} />预览恢复
@@ -72,6 +75,3 @@ export function AutoBackupPoints({ busy }: { busy: boolean }) {
   )
 }
 
-function formatBackupSize(bytes: number): string {
-  return bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.ceil(bytes / 1024))} KB`
-}

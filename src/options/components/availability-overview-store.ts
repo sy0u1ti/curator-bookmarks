@@ -35,7 +35,7 @@ const defaultFiltersState: AvailabilityFiltersState = {
 const defaultResultsHeaderState: AvailabilityResultsHeaderState = {
   visible: false,
   deleteFailedDisabled: true,
-  deleteFailedLabel: '批量删除',
+  deleteFailedLabel: '删除本区',
   failedCount: '0 条无法访问',
   failedLastRun: '尚未执行检测',
   failedTitle: '无法访问',

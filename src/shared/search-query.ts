@@ -139,7 +139,7 @@ export function buildSearchQueryChips(parsed: ParsedSearchQuery): ParsedSearchQu
   }
   if (parsed.dateRange) chips.push({ kind: 'time', label: `时间：${parsed.dateRange.label}`, value: parsed.dateRange.label })
   if (parsed.sort === 'recent') chips.push({ kind: 'sort', label: '排序：最近添加', value: 'recent' })
-  else if (parsed.recencyHint) chips.push({ kind: 'sort', label: '排序：相关性 · 最近偏好', value: 'recent-preference' })
+  else if (parsed.recencyHint) chips.push({ kind: 'sort', label: '排序：相关性，偏向最近', value: 'recent-preference' })
   return chips
 }
 

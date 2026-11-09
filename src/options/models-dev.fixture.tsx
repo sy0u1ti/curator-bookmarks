@@ -109,7 +109,7 @@ function publish() {
       fetchDisabled: probe.fetchModelsPending, fetchLabel: '获取模型', fetchModelsStatus: modelsStatus,
       fetchingModels: probe.fetchModelsPending, fetchFeedback: modelsFeedback, manageDisabled: false,
       selector: { currentModel: settings.model, customModels: [], disabled: false, fetchedModels: [],
-        models: [settings.model], presetModels: [] }
+        labs: {}, models: [settings.model], presetModels: [] }
     }
   })
 }

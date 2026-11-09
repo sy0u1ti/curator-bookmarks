@@ -519,17 +519,6 @@ export async function runAvailabilityQueue<TItem>({
   if (failed) throw failure
 }
 
-export function formatAvailabilityRunnerStatus(snapshot: AvailabilityRunnerSnapshot): string {
-  const base = `${snapshot.profileLabel} · 并发 ${snapshot.concurrency} · 单域名 ${snapshot.domainConcurrency} · 导航 ${formatSeconds(snapshot.navigationTimeoutMs)}/${formatSeconds(snapshot.retryNavigationTimeoutMs)} · 探测 ${formatSeconds(snapshot.probeTimeoutMs)}`
-
-  if (snapshot.slowedDomainCount > 0) {
-    const reason = snapshot.lastSlowdownReason ? `，最近因 ${snapshot.lastSlowdownReason}` : ''
-    return `${base}；已对 ${snapshot.slowedDomainCount} 个域名自动降速${reason}。`
-  }
-
-  return `${base}；遇到超时或 HTTP 429 会自动降速。`
-}
-
 function getAvailabilityDomainKey(url: unknown): string {
   try {
     return new URL(String(url || '')).hostname.replace(/^www\./i, '').toLowerCase() || '__unknown__'
@@ -579,10 +568,6 @@ function clampInteger(value: unknown, min: number, max: number, fallback: number
   }
 
   return Math.max(min, Math.min(max, Math.round(numericValue)))
-}
-
-function formatSeconds(ms: number): string {
-  return `${Math.max(1, Math.round(ms / 1000))}s`
 }
 
 function waitForAvailabilityRunnerDelay(

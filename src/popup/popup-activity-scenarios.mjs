@@ -59,9 +59,6 @@ export async function runPopupActivityChecks(page, origin, directory, { cases } 
       await page.click(`button[aria-label="打开 ${title} 的操作菜单"]`)
     }
     await page.click(`button[aria-label="删除书签：${title}"]`)
-    await page.waitForSelector('#confirm-delete', { state: 'visible' })
-    await page.click('#confirm-delete')
-    await page.waitForSelector('#delete-modal', { state: 'hidden' })
     await active(`已删除 ${title}`)
     await settled()
   }

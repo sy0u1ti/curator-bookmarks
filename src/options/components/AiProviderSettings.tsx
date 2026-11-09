@@ -37,16 +37,12 @@ import {
   AI_PROVIDER_EFFORT_HOST_CLASS,
   AI_PROVIDER_FETCH_BUTTON_CLASS,
   AI_PROVIDER_FIELD_CLASS,
-  AI_PROVIDER_FIELD_HEAD_CLASS,
   AI_PROVIDER_FIELD_LABEL_CLASS,
   AI_PROVIDER_GRID_CLASS,
   AI_PROVIDER_HEADER_CLASS,
-  AI_PROVIDER_INLINE_ACTION_CLASS,
   AI_PROVIDER_INPUT_CLASS,
-  AI_PROVIDER_MODEL_CONTROL_CLASS,
   AI_PROVIDER_MODEL_FIELD_CLASS,
   AI_PROVIDER_MODEL_GROUP_CLASS,
-  AI_PROVIDER_MODEL_LABEL_CLASS,
   AI_PROVIDER_MODEL_ROW_CLASS,
   AI_PROVIDER_MODEL_SELECT_HOST_CLASS,
   AI_PROVIDER_SELECT_HOST_CLASS,
@@ -107,7 +103,7 @@ export function AiProviderSettings({
     }
   }, [attentionState.requestId, attentionState.visible])
 
-  const title = useMemo(() => <h2 className={AI_PROVIDER_TITLE_CLASS}>自定义 AI 渠道</h2>, [])
+  const title = useMemo(() => <h2 className={AI_PROVIDER_TITLE_CLASS}>自定义 AI 服务</h2>, [])
   const manageModelsRef = useRef<HTMLButtonElement | null>(null)
 
   return (
@@ -128,9 +124,7 @@ export function AiProviderSettings({
       >
         <div className={AI_PROVIDER_GRID_CLASS}>
           <label className={AI_PROVIDER_FIELD_CLASS} htmlFor="ai-base-url">
-            <span className={AI_PROVIDER_FIELD_HEAD_CLASS}>
-              <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>服务地址（Base URL）</span>
-            </span>
+            <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>服务地址（Base URL）</span>
             <Input
               id="ai-base-url"
               className={AI_PROVIDER_INPUT_CLASS}
@@ -149,9 +143,7 @@ export function AiProviderSettings({
             />
           </label>
           <div className={AI_PROVIDER_FIELD_CLASS}>
-            <div className={AI_PROVIDER_FIELD_HEAD_CLASS}>
-              <label className={AI_PROVIDER_FIELD_LABEL_CLASS} htmlFor="ai-api-key">API Key</label>
-            </div>
+            <label className={AI_PROVIDER_FIELD_LABEL_CLASS} htmlFor="ai-api-key">API Key</label>
             <RevealInput
               id="ai-api-key"
               className={AI_PROVIDER_INPUT_CLASS}
@@ -239,7 +231,7 @@ export function AiProviderSettings({
               className={state.showSaveSettingsButton ? undefined : 'invisible'}
               variant="primary"
               type="button"
-              aria-label="保存自定义 AI 渠道设置"
+              aria-label="保存自定义 AI 服务设置"
               aria-hidden={!state.showSaveSettingsButton || undefined}
               tabIndex={state.showSaveSettingsButton ? undefined : -1}
               disabled={state.saveDisabled || !state.showSaveSettingsButton}
@@ -253,7 +245,7 @@ export function AiProviderSettings({
               labels={AI_PROVIDER_TEST_LABELS}
               icon="RefreshCw"
               type="button"
-              aria-label="测试自定义 AI 渠道连接"
+              aria-label="测试自定义 AI 服务连接"
               disabled={state.testDisabled}
               focusableWhenDisabled={state.testingConnection}
               onClick={() => handleAiProviderSettingsAction({ action: 'test-connection' })}
@@ -293,8 +285,8 @@ function AiProviderModelToolsContent({
   return (
     <>
       <div className={AI_PROVIDER_MODEL_ROW_CLASS}>
-        <div className={AI_PROVIDER_MODEL_CONTROL_CLASS}>
-          <span className={AI_PROVIDER_MODEL_LABEL_CLASS}>模型</span>
+        <div className={AI_PROVIDER_FIELD_CLASS}>
+          <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>模型</span>
           <div className={AI_PROVIDER_MODEL_GROUP_CLASS}>
             <div className={AI_PROVIDER_MODEL_SELECT_HOST_CLASS}>
               <AiModelSelector
@@ -313,7 +305,7 @@ function AiProviderModelToolsContent({
               size="sm"
               type="button"
               variant="secondary"
-              aria-label="从自定义 AI 渠道获取模型列表"
+              aria-label="从自定义 AI 服务获取模型列表"
               aria-description={modelTools.fetchModelsStatus || undefined}
               title={modelTools.fetchModelsStatus || undefined}
               disabled={modelTools.fetchDisabled}
@@ -322,8 +314,8 @@ function AiProviderModelToolsContent({
             />
           </div>
         </div>
-        <div className={AI_PROVIDER_MODEL_CONTROL_CLASS}>
-          <span className={AI_PROVIDER_MODEL_LABEL_CLASS}>推理强度</span>
+        <div className={AI_PROVIDER_FIELD_CLASS}>
+          <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>推理强度</span>
           <div className={AI_PROVIDER_EFFORT_HOST_CLASS}>
             <ReasoningEffortSelector
               ariaLabel="推理强度"
@@ -340,16 +332,16 @@ function AiProviderModelToolsContent({
           </div>
         </div>
       </div>
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+      <div className="-mx-2.5 flex min-w-0 flex-wrap items-center justify-between gap-2">
         <AiModelDetails state={state} />
         <Button
           ref={manageModelsRef}
-          className={AI_PROVIDER_INLINE_ACTION_CLASS}
+          size="sm"
+          variant="ghost"
           type="button"
           aria-label="打开自定义模型列表设置"
           disabled={modelTools.manageDisabled}
           onClick={onOpenCustomModels}
-          unstyled
         >
           设置更多模型
         </Button>

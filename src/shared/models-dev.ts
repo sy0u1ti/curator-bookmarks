@@ -48,6 +48,11 @@ export interface ModelsDevMatch {
   providerName?: string
 }
 
+export interface ModelsDevLab {
+  id: string
+  name: string
+}
+
 const MAX_PROVIDERS = 512
 const MAX_MODELS = 30000
 const MAX_CANONICAL_MODELS = 5000
@@ -213,6 +218,7 @@ function exactOrUniqueModel(candidates: ModelsDevModel[], id: string): ModelsDev
 
 interface CatalogIndex {
   endpoints: Map<string, ModelsDevProvider[]>
+  labNames: Map<string, string>
   models: Map<string, ModelsDevModel[]>
   providerModels: Map<ModelsDevProvider, Map<string, ModelsDevModel[]>>
 }
@@ -221,7 +227,8 @@ const indexes = new WeakMap<ModelsDevCatalog, CatalogIndex>()
 function indexCatalog(catalog: ModelsDevCatalog): CatalogIndex {
   const existing = indexes.get(catalog)
   if (existing) return existing
-  const index: CatalogIndex = { endpoints: new Map(), models: new Map(), providerModels: new Map() }
+  const index: CatalogIndex = { endpoints: new Map(), labNames: new Map(), models: new Map(), providerModels: new Map() }
+  const providerNames = new Map(catalog.providers.map((provider) => [provider.id.toLowerCase(), provider.name]))
   for (const provider of catalog.providers) {
     const api = provider.api ?? (Object.hasOwn(OFFICIAL_APIS, provider.id) ? OFFICIAL_APIS[provider.id] : undefined)
     const key = api && endpointKey({ baseUrl: api })
@@ -236,9 +243,17 @@ function indexCatalog(catalog: ModelsDevCatalog): CatalogIndex {
   for (const model of catalog.models) {
     const key = canonicalKey(model.id)
     index.models.set(key, [...(index.models.get(key) ?? []), model])
+    const lab = labId(model.id)
+    // Provider names may carry a region or domain suffix, e.g. "MiniMax (minimax.io)".
+    if (lab && !index.labNames.has(lab)) index.labNames.set(lab, providerNames.get(lab)?.replace(/\s*\([^)]*\)\s*$/, '') || lab)
   }
   indexes.set(catalog, index)
   return index
+}
+
+function labId(canonicalId: string | undefined): string | null {
+  const separator = canonicalId?.indexOf('/') ?? -1
+  return canonicalId && separator > 0 ? canonicalId.slice(0, separator).toLowerCase() : null
 }
 
 export function findModelsDevModel(catalog: ModelsDevCatalog | null | undefined, settings: AiEndpointSettings): ModelsDevMatch | null {
@@ -259,4 +274,22 @@ export function findModelsDevModel(catalog: ModelsDevCatalog | null | undefined,
   if (exact) return { kind: 'model', model: exact }
   const canonical = index.models.get(canonicalKey(settings.model)) ?? []
   return canonical.length === 1 ? { kind: 'model', model: canonical[0] } : null
+}
+
+/** The creator lab is the namespace of the canonical id, e.g. "minimax/MiniMax-M3.1-Flash". */
+export function findModelsDevLab(catalog: ModelsDevCatalog | null | undefined, settings: AiEndpointSettings): ModelsDevLab | null {
+  if (!catalog || typeof settings.model !== 'string' || !settings.model.trim()) return null
+  const index = indexCatalog(catalog)
+  const key = endpointKey(settings)
+  const providerIds = (key ? index.endpoints.get(key) ?? [] : []).flatMap((provider) => {
+    const model = exactOrUniqueModel(index.providerModels.get(provider)?.get(modelKey(String(settings.model))) ?? [], String(settings.model))
+    const canonicalId = model && (model.canonicalId ?? (index.labNames.has(provider.id.toLowerCase()) ? `${provider.id}/` : ''))
+    return canonicalId ? [canonicalId] : []
+  })
+  const canonical = index.models.get(canonicalKey(settings.model)) ?? []
+  const exact = canonical.filter((model) => modelKey(model.id) === modelKey(String(settings.model)))
+  const candidates = providerIds.length ? providerIds : (exact.length ? exact : canonical).map((model) => model.id)
+  const labs = new Set(candidates.map(labId))
+  const [lab] = labs
+  return labs.size === 1 && lab ? { id: lab, name: index.labNames.get(lab) ?? lab } : null
 }

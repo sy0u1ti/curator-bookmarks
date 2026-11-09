@@ -48,7 +48,6 @@ try {
 
   await tile.click({ button: 'right' })
   await menu.locator('[aria-label^="删除书签："]').click()
-  await menu.locator('[aria-label^="确认删除书签："]').click()
   await tile.waitFor({ state: 'hidden' })
   await worker.evaluate(id => chrome.bookmarks.remove(id), seed.first.id)
   await page.getByRole('button', { name: /^撤销删除：/ }).click()
