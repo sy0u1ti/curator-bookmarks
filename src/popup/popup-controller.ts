@@ -2152,7 +2152,7 @@ function getPopupSmartPageViewModel() {
     classificationStatusTitle: pagePolicy.classificationMessage,
     fallbackIcon: getSmartFallbackIconLabel(title),
     favicon,
-    pinLabel: pinned ? '已固定' : '固定到新标签页',
+    pinLabel: pinned ? '已固定' : '固定',
     pinPending: isPopupActionPending('pin-newtab', bookmark.id),
     pinned,
     status: bookmark.path ? `已保存到 ${formatBookmarkPath(bookmark.path)}` : '已保存',

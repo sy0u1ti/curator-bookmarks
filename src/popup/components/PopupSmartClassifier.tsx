@@ -32,7 +32,7 @@ const pageContentLayerClass = cx(
   't-skel-content popup-page-content z-[2]'
 )
 const pageCardClass =
-  'popup-surface grid min-h-12 w-full grid-cols-[minmax(0,1fr)_156px] items-center gap-2 overflow-hidden border-0 bg-ds-surface-1 py-1.5 pl-2.5 pr-1.5 shadow-none @max-[520px]/popup:grid-cols-[minmax(0,1fr)] @max-[520px]/popup:items-stretch @max-[520px]/popup:gap-2 @max-[520px]/popup:p-2.5'
+  'popup-surface grid min-h-12 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 overflow-hidden border-0 bg-ds-surface-1 px-2.5 py-1.5 shadow-none @max-[520px]/popup:grid-cols-[minmax(0,1fr)] @max-[520px]/popup:items-stretch @max-[520px]/popup:gap-2 @max-[520px]/popup:p-2.5'
 const pageMainClass = 'grid min-w-0 grid-cols-[26px_minmax(0,1fr)] items-center gap-2.5'
 const pageIconClass =
   'grid h-[26px] w-[26px] place-items-center overflow-hidden rounded-ds-sm border-0 bg-ds-surface-2 text-sm font-bold leading-none text-ds-text-primary'
@@ -45,34 +45,23 @@ const placeholderIconClass = 'border-ds-border bg-ds-surface-2 text-ds-text-seco
 const placeholderTitleClass = 'text-ds-text-primary'
 const placeholderStatusClass = 'text-ds-text-muted'
 
-const currentPageActionsClass =
-  'grid w-[156px] grid-cols-[minmax(0,1fr)_auto] gap-1 justify-self-end @max-[520px]/popup:w-full @max-[520px]/popup:grid-cols-2 @max-[520px]/popup:justify-self-stretch'
-const currentPageActionBaseClass = [
-  'inline-flex min-h-6 min-w-0 items-center justify-center overflow-hidden truncate whitespace-nowrap rounded-ds-sm border px-[7px] text-xs font-semibold leading-none outline-none',
-  'transition-[border-color,background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
+const currentPageActionsBaseClass =
+  'flex h-7 w-36 items-center rounded-ds-sm justify-self-end @max-[520px]/popup:w-full @max-[520px]/popup:justify-self-stretch'
+const currentPageActionsClass = cx(currentPageActionsBaseClass, 'bg-ds-text-primary text-ds-text-inverse')
+const savedPageActionsClass = cx(currentPageActionsBaseClass, 'bg-ds-surface-3 text-ds-text-primary')
+const placeholderPageActionsClass = cx(currentPageActionsBaseClass, 'pointer-events-none bg-ds-surface-2 text-ds-text-disabled')
+const currentPageActionClass = [
+  'inline-flex h-full min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap bg-transparent px-2 text-xs font-semibold leading-none text-current outline-none',
+  'first:rounded-l-ds-sm last:rounded-r-ds-sm',
+  'transition-[background-color,color,opacity] duration-ds-fast ease-ds-standard',
+  'hover:bg-[color-mix(in_srgb,currentColor_10%,transparent)] focus-visible:bg-[color-mix(in_srgb,currentColor_10%,transparent)]',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
-  'active:scale-[var(--ds-press-scale)] disabled:cursor-default disabled:opacity-70'
+  'disabled:cursor-default disabled:bg-transparent disabled:opacity-45'
 ].join(' ')
-const currentPageSecondaryActionClass = cx(
-  currentPageActionBaseClass,
-  'min-w-[42px] border-ds-border bg-ds-surface-2 text-ds-text-secondary hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary'
-)
-const currentPagePrimaryActionClass = cx(
-  currentPageActionBaseClass,
-  'w-full border-ds-accent bg-ds-text-primary text-ds-text-inverse hover:border-ds-text-primary hover:bg-ds-text-primary hover:text-ds-text-inverse focus-visible:border-ds-text-primary focus-visible:bg-ds-text-primary focus-visible:text-ds-text-inverse'
-)
-const currentPagePinnedActionClass = cx(
-  currentPageActionBaseClass,
-  'w-full border-ds-success/40 bg-ds-success-soft text-ds-success-text hover:border-ds-success/40 hover:bg-ds-success-soft hover:text-ds-success-text focus-visible:border-ds-success/40 focus-visible:bg-ds-success-soft focus-visible:text-ds-success-text'
-)
-const placeholderSecondaryActionClass = cx(
-  currentPageActionBaseClass,
-  'min-w-[42px] border-ds-border bg-ds-surface-2 text-ds-text-disabled disabled:opacity-100'
-)
-const placeholderPrimaryActionClass = cx(
-  currentPageActionBaseClass,
-  'w-full border-ds-border-hover bg-ds-surface-2 text-ds-text-muted disabled:opacity-100'
-)
+const currentPagePinnedActionClass = cx(currentPageActionClass, 'text-ds-success-text')
+const placeholderPageActionClass = cx(currentPageActionClass, 'disabled:opacity-100')
+const currentPageActionDividerClass = 'h-3.5 w-px flex-none bg-current opacity-20'
+const currentPageActionIconClass = 'flex-none'
 
 const skeletonBarClass =
   'block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)] rounded-full bg-[rgba(255,255,255,0.065)]'
@@ -81,9 +70,7 @@ const skeletonDotClass =
 const pageSkeletonCopyClass = 'grid min-w-0 gap-[7px]'
 const pageSkeletonTitleClass = cx(skeletonBarClass, 'h-[11px] min-w-24')
 const pageSkeletonStatusClass = cx(skeletonBarClass, 'h-2 min-w-[132px] opacity-[0.68]')
-const pageSkeletonActionsClass = cx(currentPageActionsClass, 'items-center')
-const pageSkeletonActionClass = cx(skeletonBarClass, 'h-6 w-full rounded-ds-sm')
-const pageSkeletonSecondaryActionClass = cx(pageSkeletonActionClass, 'min-w-[42px]')
+const pageSkeletonActionsClass = cx(skeletonBarClass, 'h-7 w-36 justify-self-end rounded-ds-sm @max-[520px]/popup:w-full')
 
 const panelCardClass =
   'w-full bg-transparent shadow-none'
@@ -336,9 +323,9 @@ function PopupSmartPageCardContent({
         </div>
       </div>
       {page.bookmarked ? (
-        <Toolbar className={currentPageActionsClass} aria-label="当前页快捷操作" unstyled>
+        <Toolbar className={savedPageActionsClass} aria-label="当前页快捷操作" unstyled>
           <Button
-            className={page.pinned ? currentPagePinnedActionClass : currentPagePrimaryActionClass}
+            className={page.pinned ? currentPagePinnedActionClass : currentPageActionClass}
             type="button"
             data-current-page-action="pin-newtab"
             aria-pressed={page.pinned}
@@ -347,31 +334,36 @@ function PopupSmartPageCardContent({
             onClick={() => handlers?.onCurrentPageAction?.('pin-newtab')}
             unstyled
           >
-           {page.pinLabel}
+            <Icon name="Pin" size={14} className={currentPageActionIconClass} aria-hidden="true" />
+            {page.pinLabel}
           </Button>
+          <span className={currentPageActionDividerClass} aria-hidden="true"></span>
           <Button
-            className={currentPageSecondaryActionClass}
+            className={currentPageActionClass}
             type="button"
             data-current-page-action="edit"
             onClick={(event) => handlers?.onCurrentPageAction?.('edit', event.currentTarget)}
             unstyled
           >
+            <Icon name="Pencil" size={14} className={currentPageActionIconClass} aria-hidden="true" />
             编辑
           </Button>
         </Toolbar>
       ) : (
         <Toolbar className={currentPageActionsClass} aria-label="当前页快捷操作" unstyled>
           <Button
-            className={currentPagePrimaryActionClass}
+            className={currentPageActionClass}
             type="button"
             data-current-page-action="save"
             onClick={(event) => handlers?.onCurrentPageAction?.('save', event.currentTarget)}
             unstyled
           >
-            快速保存
+            <Icon name="BookmarkPlus" size={14} className={currentPageActionIconClass} aria-hidden="true" />
+            保存
           </Button>
+          <span className={currentPageActionDividerClass} aria-hidden="true"></span>
           <Button
-            className={page.canClassify ? currentPageSecondaryActionClass : placeholderSecondaryActionClass}
+            className={currentPageActionClass}
             type="button"
             data-smart-action="classify"
             aria-label={page.canClassify ? '智能分类' : '智能分类（当前页面受隐私保护）'}
@@ -380,7 +372,8 @@ function PopupSmartPageCardContent({
             onClick={() => handlers?.onAction?.('classify')}
             unstyled
           >
-            智能分类
+            <Icon name="Sparkles" size={14} className={currentPageActionIconClass} aria-hidden="true" />
+            智能
           </Button>
         </Toolbar>
       )}
@@ -404,10 +397,7 @@ function PopupSmartPageSkeletonContent() {
           ></span>
         </span>
       </div>
-      <span className={pageSkeletonActionsClass} aria-hidden="true">
-        <span className={pageSkeletonActionClass}></span>
-        <span className={pageSkeletonSecondaryActionClass}></span>
-      </span>
+      <span className={pageSkeletonActionsClass} aria-hidden="true"></span>
     </>
   )
 }
@@ -429,12 +419,15 @@ function PopupSmartPagePlaceholderContent({ accessory }: { accessory?: ReactNode
           </div>
         </div>
       </div>
-      <Toolbar className={cx(currentPageActionsClass, 'pointer-events-none')} aria-label="当前页快捷操作" unstyled>
-        <Button className={placeholderPrimaryActionClass} type="button" disabled unstyled>
-          快速保存
+      <Toolbar className={placeholderPageActionsClass} aria-label="当前页快捷操作" unstyled>
+        <Button className={placeholderPageActionClass} type="button" disabled unstyled>
+          <Icon name="BookmarkPlus" size={14} className={currentPageActionIconClass} aria-hidden="true" />
+          保存
         </Button>
-        <Button className={placeholderSecondaryActionClass} type="button" disabled unstyled>
-          智能分类
+        <span className={currentPageActionDividerClass} aria-hidden="true"></span>
+        <Button className={placeholderPageActionClass} type="button" disabled unstyled>
+          <Icon name="Sparkles" size={14} className={currentPageActionIconClass} aria-hidden="true" />
+          智能
         </Button>
       </Toolbar>
     </>
