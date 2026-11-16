@@ -31,10 +31,10 @@
 
 ---
 
-https://github.com/user-attachments/assets/54babc20-983f-42e3-bfc9-89510a9194aa
+https://github.com/user-attachments/assets/bc6c5a9b-81f3-4d29-85da-30e031a6f9ca
 
 <p align="center">
-  <sub>功能演示。下方截图来自当前构建，使用隔离的演示书签和同步服务。</sub>
+  <sub>《让收藏，回到日常》 · 96 秒 · 基于 1.6 界面制作。<a href="videos/intro">Remotion 源码与制作说明</a></sub>
 </p>
 
 ## 功能与界面
