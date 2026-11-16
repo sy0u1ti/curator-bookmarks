@@ -202,23 +202,28 @@ export async function runActionFeedbackChecks(page, origin, directory, startAt =
   await phase(fetch, 'pending')
   await complete(true)
   await phase(fetch, 'success')
-  for (const [label, success] of [
-    ['导出书签标签数据', true], ['导出完整书签备份', true], ['导出通用 HTML 书签文件', false]
-  ]) {
-    const button = `button[aria-label^="${label}"]`
-    const originalWidth = await width(button)
-    await activate(button)
-    await phase(button, 'pending')
-    assert.equal(await page.evaluate(() => document.querySelectorAll('.curator-action-spinner').length), 1)
+  const backupButton = 'button[aria-label="备份到文件"]'
+  const backupWidth = await width(backupButton)
+  await activate(backupButton)
+  await phase(backupButton, 'pending')
+  assert.equal(await page.evaluate(() => document.querySelectorAll('.curator-action-spinner').length), 1)
+  await complete(true)
+  await phase(backupButton, 'success')
+  assert.equal(await width(backupButton), backupWidth)
+  for (const [label, success] of [['导出标签数据', true], ['导出 HTML 书签', false]]) {
+    await activate('button[aria-label="其他备份操作"]')
+    await activate(`[role="menuitem"][aria-label="${label}"]`)
+    await page.waitForFunction(() => document.querySelector('#backup-action-status')?.textContent.includes('正在生成导出文件'))
     await complete(success)
-    await phase(button, success ? 'success' : 'error')
-    assert.equal(await width(button), originalWidth)
+    await page.waitForFunction(success => document.querySelector('#backup-action-status')?.textContent.includes(success ? '文件已导出' : '导出失败'), success)
+    assert.equal(await width(backupButton), backupWidth)
   }
   await page.keyboard.press('Control+Home')
   await shot('options-desktop')
-  pass('production settings: connection, model fetch and all three exports render their own results')
+  pass('production settings: main backup and secondary-format results keep their control footprint')
 
-  await activate('button[aria-label="清空全部书签标签数据"]')
+  await activate('button[aria-label="其他备份操作"]')
+  await activate('[role="menuitem"][aria-label="清空标签数据"]')
   await page.waitForSelector('[role="dialog"] #confirm-modal-title')
   assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), '取消')
   assert.ok(await page.evaluate(() => document.querySelector('#confirm-modal-title').textContent.includes('3')))
@@ -226,7 +231,8 @@ export async function runActionFeedbackChecks(page, origin, directory, startAt =
   assert.equal(await count(), 0)
   await page.keyboard.press('Escape')
   await page.waitForFunction(() => !document.querySelector('.curator-hold-button'))
-  await activate('button[aria-label="清空全部书签标签数据"]')
+  await activate('button[aria-label="其他备份操作"]')
+  await activate('[role="menuitem"][aria-label="清空标签数据"]')
   await pointerDown('.curator-hold-button')
   await page.waitForFunction(() => document.querySelector('.curator-hold-button')?.dataset.holdPhase === 'ready')
   await shot('options-hold-dialog')
@@ -286,7 +292,8 @@ export async function runActionFeedbackChecks(page, origin, directory, startAt =
   await complete(true)
   await page.waitForSelector('.curator-action-icon[data-feedback-state="success"]')
   assert.equal(await width('.bookmark-edit-menu'), menuWidth)
-  assert.equal(await page.evaluate(() => document.querySelectorAll('.bookmark-menu-status').length), 0, 'no second success bubble')
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.bookmark-menu-status')].filter(node =>
+    node.textContent.trim() && getComputedStyle(node).visibility !== 'hidden').length), 0, 'no second visible success bubble')
   await shot('newtab-copy')
   await page.keyboard.press('ArrowDown')
   await page.keyboard.press('ArrowRight')

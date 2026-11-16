@@ -60,6 +60,7 @@ export class PopupActivityQueue {
   private entries = new Map<string, Entry>()
   private activeId: string | null = null
   private pauses = new Set<string>()
+  private preserveUnseen = new Map<string, number>()
   private timer: unknown = null
   private startedAt: number | null = null
 
@@ -131,11 +132,25 @@ export class PopupActivityQueue {
     this.commit()
   }
 
-  pause(reason: string, paused: boolean): void {
+  pause(reason: string, paused: boolean, keepUnseen = false): void {
     if (this.pauses.has(reason) === paused) return
     this.stopTimer()
-    if (paused) this.pauses.add(reason)
-    else this.pauses.delete(reason)
+    if (paused) {
+      this.pauses.add(reason)
+      if (keepUnseen) this.preserveUnseen.set(reason, this.clock.now())
+    } else {
+      this.pauses.delete(reason)
+      const since = this.preserveUnseen.get(reason)
+      if (since !== undefined) {
+        // A user-selected workspace postpones presentation, rather than aging
+        // an unseen result out while there is no way to read its full card.
+        const now = this.clock.now()
+        for (const entry of this.entries.values()) {
+          if (!entry.offered) entry.createdAt += now - Math.max(since, entry.createdAt)
+        }
+        this.preserveUnseen.delete(reason)
+      }
+    }
     if (!this.pauses.size) this.offerNext()
     this.commit()
   }
@@ -144,6 +159,7 @@ export class PopupActivityQueue {
     this.stopTimer()
     this.entries.clear()
     this.pauses.clear()
+    this.preserveUnseen.clear()
     this.activeId = null
     this.commit()
   }

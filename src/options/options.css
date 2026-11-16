@@ -54,7 +54,6 @@ body {
 .options-nav-disclosure {
   --acc-expand: var(--nav-expand-dur);
   --acc-collapse: var(--nav-collapse-dur);
-  --acc-chevron: var(--nav-select-dur);
 }
 
 .options-nav-disclosure .t-acc-panel .options-nav-content {

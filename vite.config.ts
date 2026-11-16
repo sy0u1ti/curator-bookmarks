@@ -1,11 +1,14 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import type { Plugin } from 'vite'
 import { crx } from '@crxjs/vite-plugin'
 import { build as buildEsbuild } from 'esbuild'
 import { readFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import manifest from './src/manifest.json' with { type: 'json' }
+import { buildSyncEngine } from './src/vendor/floccus/curator/build.mjs'
+import { resolveSyncOAuthBuild } from './scripts/sync-oauth-config.mjs'
 
 const INSTANT_WALLPAPER_BOOT_ROUTE = '/instant-wallpaper-boot.js'
 const INSTANT_WALLPAPER_BOOT_ENTRY = 'src/newtab/instant-wallpaper-boot.ts'
@@ -13,6 +16,8 @@ const NEWTAB_BOOKMARK_PREBOOT_ROUTE = '/newtab-bookmark-preboot.js'
 const NEWTAB_BOOKMARK_PREBOOT_ENTRY = 'src/newtab/newtab-bookmark-preboot-entry.ts'
 const POPUP_PREBOOT_ROUTE = '/popup-preboot.js'
 const POPUP_PREBOOT_ENTRY = 'src/popup/popup-preboot.ts'
+const SYNC_ENGINE_MODULE = 'virtual:curator-sync-engine'
+const RESOLVED_SYNC_ENGINE_MODULE = `\0${SYNC_ENGINE_MODULE}`
 const NEWTAB_MODULE_PRELOAD_TAG_PATTERN = /^[ \t]*<link\b(?=[^>]*\brel=(["'])modulepreload\1)[^>]*>[^\S\r\n]*(?:\r?\n)?/gim
 
 function removeCrossWorldNewtabModulePreloads(html: string): string {
@@ -21,6 +26,42 @@ function removeCrossWorldNewtabModulePreloads(html: string): string {
   // records one extension error per chunk, so they add work without warming the
   // module graph. Static imports from the entry module still load every chunk.
   return html.replace(NEWTAB_MODULE_PRELOAD_TAG_PATTERN, '')
+}
+
+function syncEnginePlugin(minify: boolean, buildId: string, oauth: ReturnType<typeof resolveSyncOAuthBuild>['oauth']): Plugin {
+  return {
+    name: 'curator-sync-engine',
+    resolveId(source) {
+      return source === SYNC_ENGINE_MODULE ? RESOLVED_SYNC_ENGINE_MODULE : undefined
+    },
+    async load(id) {
+      if (id !== RESOLVED_SYNC_ENGINE_MODULE) {
+        return undefined
+      }
+      // The service worker can load neither chunks nor scripts on demand, and
+      // the engine does; see src/vendor/floccus/curator/build.mjs.
+      const { code } = await buildSyncEngine({ minify, buildId, oauth })
+      return { code, moduleSideEffects: false }
+    },
+    async generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'build-info.json', source: JSON.stringify({ buildId }) })
+      this.emitFile({
+        type: 'asset',
+        fileName: 'licenses/floccus-MPL-2.0.txt',
+        source: await readFile(new URL('./src/vendor/floccus/LICENSE.txt', import.meta.url), 'utf8')
+      })
+      this.emitFile({
+        type: 'asset',
+        fileName: 'licenses/floccus-SOURCE.md',
+        source: await readFile(new URL('./src/vendor/floccus/README.md', import.meta.url), 'utf8')
+      })
+      this.emitFile({
+        type: 'asset',
+        fileName: 'licenses/OAUTH.md',
+        source: await readFile(new URL('./src/vendor/floccus/OAUTH.md', import.meta.url), 'utf8')
+      })
+    }
+  }
 }
 
 function instantWallpaperBootPlugin(minify: boolean): Plugin {
@@ -161,11 +202,15 @@ async function buildBrowserIifeScript(entryPoint: string, minify: boolean): Prom
 
 export default defineConfig(({ mode }) => {
   const debugSourcemap = mode === 'debug' || process.env.CURATOR_DEBUG_SOURCEMAP === '1'
+  const buildId = randomUUID()
+  const { publicKey, oauth } = resolveSyncOAuthBuild(loadEnv(mode, process.cwd(), 'CURATOR_'), { release: mode === 'release' })
+  const buildManifest = { ...manifest, ...(publicKey ? { key: publicKey } : {}) }
 
   return {
-    plugins: [react(), tailwindcss(), instantWallpaperBootPlugin(!debugSourcemap), popupPrebootPlugin(!debugSourcemap), crx({ manifest })],
+    define: { __CURATOR_BUILD_ID__: JSON.stringify(buildId) },
+    plugins: [react(), tailwindcss(), syncEnginePlugin(!debugSourcemap, buildId, oauth), instantWallpaperBootPlugin(!debugSourcemap), popupPrebootPlugin(!debugSourcemap), crx({ manifest: buildManifest })],
     build: {
-      outDir: 'dist',
+      outDir: mode === 'release' ? 'release/dist' : 'dist',
       emptyOutDir: true,
       modulePreload: false,
       sourcemap: debugSourcemap,

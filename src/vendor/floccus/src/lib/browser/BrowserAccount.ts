@@ -1,0 +1,196 @@
+import BrowserAccountStorage from './BrowserAccountStorage'
+import BrowserTree from './BrowserTree'
+import AdapterFactory from '../AdapterFactory'
+import Account from '../Account'
+import {
+  ClientsideAdditionFailsafeError, ClientsideDeletionFailsafeError,
+  CreateBookmarkError,
+  FloccusError, GitPushError,
+  HttpError,
+  InconsistentBookmarksExistenceError, InvalidUrlError, S3BucketNotFoundError, LocalFolderNotFoundError, LockFileError,
+  MissingItemOrderError,
+  ParseResponseError, ServersideAdditionFailsafeError, ServersideDeletionFailsafeError, UnexpectedFolderPathError,
+  UnexpectedServerFolder,
+  DropboxAmbiguousFileError,
+  UnknownFolderItemOrderError, UpdateBookmarkError
+} from '../../errors/Error'
+import {i18n} from '../native/I18n'
+import Resource, { OrderFolderResource } from '../interfaces/Resource'
+import { ItemLocation } from '../Tree'
+
+export default class BrowserAccount extends Account {
+
+  static async get(id:string):Promise<Account> {
+    const storage = new BrowserAccountStorage(id)
+    const data = await storage.getAccountData(null)
+    const tree = data.localRoot !== 'tabs' ? new BrowserTree(storage, data.localRoot) : null
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    return new BrowserAccount(id, storage, await AdapterFactory.factory(data), tree)
+  }
+
+  static async create(data):Promise<Account> {
+    const id = '' + Date.now() + Math.random()
+    const adapter = await AdapterFactory.factory(data)
+    const storage = new BrowserAccountStorage(id)
+
+    await storage.setAccountData(data, null)
+    const tree = data.localRoot !== 'tabs' ? new BrowserTree(storage, data.localRoot) : null
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    return new BrowserAccount(id, storage, adapter, tree)
+  }
+
+  async init():Promise<void> {
+    console.log('initializing account ' + this.id)
+    const accData = this.getData()
+    if (!(await this.isInitialized()) && accData.localRoot !== 'tabs') {
+      // The local folder this profile syncs is gone: it was deleted, or the
+      // profile was imported from another device, where bookmark ids mean
+      // something else entirely. We used to quietly create a replacement folder
+      // on the bookmarks bar and sync into that, which is rarely what people
+      // expect -- they want the bookmarks where they put them. Ask for a folder
+      // instead of guessing one.
+      throw new LocalFolderNotFoundError()
+    }
+    await this.setData({rootPath: await BrowserTree.getPathFromLocalId(accData.localRoot)})
+    await this.storage.initMappings()
+    await this.storage.initCache()
+    if (this.getData().localRoot !== 'tabs') {
+      this.localTree = new BrowserTree(this.storage, accData.localRoot)
+    }
+  }
+
+  async isInitialized():Promise<boolean> {
+    const localRoot = this.getData().localRoot
+    if (localRoot === 'tabs') {
+      return true
+    }
+    const exists = await BrowserTree.folderExists(localRoot)
+    if (!exists) {
+      console.log('Apparently not initialized, because local folder ' + localRoot + ' does not exist')
+    }
+    return exists
+  }
+
+  async getResource():Promise<OrderFolderResource<typeof ItemLocation.LOCAL>> {
+    if (this.getData().localRoot !== 'tabs') {
+      return this.localTree
+    } else {
+      // Keep the one instance: cancelSync() cancels whatever this returns, and a
+      // fresh LocalTabs wouldn't stop the queue of the one that is syncing
+      if (!this.localTabs) {
+        const LocalTabs = (await import('../LocalTabs')).default
+        this.localTabs = new LocalTabs(this.storage)
+      }
+      return this.localTabs
+    }
+  }
+
+  async updateFromStorage():Promise<void> {
+    const data = await this.storage.getAccountData(null)
+    this.server.setData(data)
+    if (this.getData().localRoot !== 'tabs') {
+      this.localTree = new BrowserTree(this.storage, data.localRoot)
+    }
+  }
+
+  static async stringifyError(er:any):Promise<string> {
+    if (er instanceof UnknownFolderItemOrderError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.item])
+    }
+    if (er instanceof MissingItemOrderError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.item])
+    }
+    if (er instanceof HttpError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.status, er.method, er.statusMessage])
+    }
+    if (er instanceof ParseResponseError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0')) + '\n' + er.response
+    }
+    if (er instanceof InconsistentBookmarksExistenceError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.folder, er.bookmark])
+    }
+    if (er instanceof S3BucketNotFoundError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.bucket])
+    }
+    if (er instanceof LockFileError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.status, er.lockFile])
+    }
+    if (er instanceof ServersideDeletionFailsafeError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.percent])
+    }
+    if (er instanceof ServersideAdditionFailsafeError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.percent])
+    }
+    if (er instanceof ClientsideDeletionFailsafeError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.percent])
+    }
+    if (er instanceof ClientsideAdditionFailsafeError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.percent])
+    }
+    if (er instanceof CreateBookmarkError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.bookmark.inspect()])
+    }
+    if (er instanceof UpdateBookmarkError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.bookmark.inspect()])
+    }
+    if (er instanceof GitPushError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.errorMessage])
+    }
+    if (er instanceof UnexpectedFolderPathError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.originalPath, er.newPath])
+    }
+    if (er instanceof InvalidUrlError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.url])
+    }
+    if (er instanceof UnexpectedServerFolder) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.serverFolder])
+    }
+    if (er instanceof DropboxAmbiguousFileError) {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'), [er.paths.join(', ')])
+    }
+    if (er instanceof FloccusError && typeof er.code !== 'undefined') {
+      return i18n.getMessage('Error' + String(er.code).padStart(3, '0'))
+    }
+    if (er.list) {
+      if (er.list[0].code === 26) {
+        // Do not spam log with E026 (cancelled sync)
+        return this.stringifyError(er.list[0])
+      }
+      return (await Promise.all(er.list
+        .map((e) => {
+          return this.stringifyError(e)
+        })))
+        .join('\n')
+    }
+    return er.message
+  }
+
+  static async getAllAccounts():Promise<Account[]> {
+    return Promise.all(
+      (await BrowserAccountStorage.getAllAccounts()).map((accountId) =>
+        Account.get(accountId)
+      )
+    )
+  }
+
+  static async getAccountsContainingLocalId(localId:string, ancestors:string[], allAccounts:Account[], withDisallowNested = false):Promise<Account[]> {
+    ancestors = ancestors || (await BrowserTree.getIdPathFromLocalId(localId))
+    allAccounts = allAccounts || (await this.getAllAccounts())
+
+    const accountsInvolved = allAccounts
+      .filter(acc => ancestors.includes(acc.getData().localRoot))
+      .sort((a, b) =>
+        ancestors.indexOf(a.getData().localRoot) - ancestors.indexOf(b.getData().localRoot)
+      )
+      .reverse()
+
+    if (!withDisallowNested) {
+      const lastNesterIdx = accountsInvolved.findIndex(acc => !acc.getData().nestedSync)
+      return accountsInvolved.slice(0, Math.max(1, lastNesterIdx))
+    } else {
+      return accountsInvolved
+    }
+  }
+}

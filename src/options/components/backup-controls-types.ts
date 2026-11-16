@@ -13,6 +13,7 @@ export type BackupAction =
   | 'import-backup'
   | 'import-tags'
   | 'restore'
+  | 'close-preview'
 
 export interface BackupActionDetail {
   action: BackupAction
@@ -29,10 +30,12 @@ export interface BackupControlsState {
   backup: {
     busy: boolean
     exportFeedback: ActionFeedback
+    exportStatus: string
     htmlExportFeedback: ActionFeedback
     hasBackup: boolean
     preview: BackupRestorePreview | null
     status: string
+    statusTone?: 'neutral' | 'error' | 'success'
   }
   tagData: {
     busy: boolean
@@ -40,6 +43,7 @@ export interface BackupControlsState {
     countLabel: string
     hasRecords: boolean
     status: string
+    statusTone?: 'neutral' | 'error' | 'success'
     updatedLabel: string
   }
 }

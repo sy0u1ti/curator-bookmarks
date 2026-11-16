@@ -248,6 +248,7 @@ export const aiNamingState = {
     records: {}
   },
   tagDataStatus: '',
+  tagDataStatusTone: 'neutral' as 'neutral' | 'error' | 'success',
   lastConnectivityTestAt: 0,
   lastConnectivityTestStatus: '',
   lastConnectivityTestMessage: '',
@@ -268,7 +269,9 @@ export const backupRestoreState = {
   preview: null,
   restoring: false,
   exporting: false,
+  exportStatus: '',
   status: '',
   operationKey: '',
+  statusTone: 'neutral' as 'neutral' | 'error' | 'success',
   operationId: ''
 }

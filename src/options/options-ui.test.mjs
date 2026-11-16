@@ -160,8 +160,9 @@ try {
   if (!before) {
     await page.goto(base + '#backup')
     const bookmarksBeforeExport = await worker.evaluate(() => chrome.bookmarks.getTree())
+    await page.getByRole('button', { name: '其他备份操作', exact: true }).click()
     const downloadPromise = page.waitForEvent('download')
-    await page.getByRole('button', { name: '导出通用 HTML 书签文件', exact: true }).click()
+    await page.getByRole('menuitem', { name: '导出 HTML 书签', exact: true }).click()
     const download = await downloadPromise
     assert.match(download.suggestedFilename(), /^curator-bookmarks-\d{4}-\d{2}-\d{2}\.html$/)
     assert.equal(await download.failure(), null)

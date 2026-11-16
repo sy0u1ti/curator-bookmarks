@@ -8,9 +8,10 @@ import './actions.css'
 type RevealInputProps = Omit<InputProps, 'type' | 'ref'> & {
   revealed: boolean
   onRevealChange: (revealed: boolean) => void
+  revealLabel?: string
 }
 
-export function RevealInput({ revealed, onRevealChange, className, disabled, id, ...props }: RevealInputProps) {
+export function RevealInput({ revealed, onRevealChange, revealLabel = 'API Key', className, disabled, id, ...props }: RevealInputProps) {
   const callback = useRef(onRevealChange)
   callback.current = onRevealChange
   useEffect(() => {
@@ -49,10 +50,10 @@ export function RevealInput({ revealed, onRevealChange, className, disabled, id,
         variant="ghost"
         size="icon-sm"
         disabled={disabled}
-        aria-label="显示 API Key"
+        aria-label={`显示 ${revealLabel}`}
         aria-pressed={revealed}
         aria-controls={id}
-        title={revealed ? '隐藏 API Key' : '显示 API Key'}
+        title={`${revealed ? '隐藏' : '显示'} ${revealLabel}`}
         onClick={() => onRevealChange(!revealed)}
       >
         <span className="t-icon-swap" data-state={revealed ? 'b' : 'a'} aria-hidden="true">

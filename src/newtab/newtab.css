@@ -1244,15 +1244,6 @@ body {
   background: rgba(248, 214, 109, 0.14);
 }
 
-.newtab-search-engine-caret {
-  transform: rotate(0deg);
-  transition: transform var(--ds-motion-state) var(--ds-ease-standard);
-}
-
-.newtab-search-engine[aria-expanded="true"] .newtab-search-engine-caret {
-  transform: rotate(180deg);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .folder-section-header {
     transition-duration: var(--duration-micro);
@@ -1267,9 +1258,6 @@ body {
     transition-duration: var(--duration-micro);
   }
 
-  .newtab-search-engine-caret {
-    transition: none;
-  }
 }
 
 /* One floating material carries both the field and its recommendations. The
@@ -1512,10 +1500,6 @@ body {
     min-width: 34px;
     width: 34px;
     padding-inline: 0;
-  }
-
-  .newtab-search-engine-caret {
-    display: none;
   }
 
   .newtab-search-panel-content {

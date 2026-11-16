@@ -27,7 +27,7 @@
     "http://*/*",
     "https://*/*"
   ],
-  "optional_permissions": ["pageCapture"],
+  "optional_permissions": ["pageCapture", "tabs", "tabGroups", "identity", "history"],
   "side_panel": { "default_path": "src/sidepanel/sidepanel.html" },
   "host_permissions": [],
   "background": {

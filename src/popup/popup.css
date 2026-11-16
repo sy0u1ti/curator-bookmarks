@@ -885,22 +885,6 @@ body::after {
   opacity: 1;
 }
 
-.popup-folder-picker-chevron {
-  opacity: 0;
-}
-
-.popup-folder-picker-row:hover .popup-folder-picker-chevron,
-.popup-folder-picker-row:focus-within .popup-folder-picker-chevron,
-.popup-folder-picker-toggle[aria-expanded="false"] .popup-folder-picker-chevron {
-  opacity: 1;
-}
-
-.popup-folder-picker-row:hover:has(.popup-folder-picker-toggle) .popup-folder-picker-branch,
-.popup-folder-picker-row:focus-within:has(.popup-folder-picker-toggle) .popup-folder-picker-branch,
-.popup-folder-picker-row:has(.popup-folder-picker-toggle[aria-expanded="false"]) .popup-folder-picker-branch {
-  opacity: 0;
-}
-
 #popup-app-shell[data-keyboard-nav="true"] .popup-row-actions:not([data-pinned="true"]):not(:focus-within) .popup-row-actions-menu {
   opacity: 0;
   pointer-events: none;

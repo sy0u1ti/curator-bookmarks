@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { actionFeedback, type ActionFeedback } from '../shared/action-feedback.js'
 import { closeTransientPopup, isSidePanelSurface } from '../shared/extension-surfaces.js'
 import { getPopupSearchResultId, isPopupKeyboardHelpOpen, publishPopupSearchAccessibility, setPopupKeyboardHelpOpen } from './popup-workspace-state.js'
+import { isPopupSyncOpen } from './popup-sync-state.js'
 import {
   AUTO_ANALYZE_STATUS_ACTIVE_EXPIRE_MS,
   AUTO_ANALYZE_STATUS_FINAL_EXPIRE_MS,
@@ -487,7 +488,7 @@ async function dismissAutoAnalyzeStatus() {
       const current = stored[STORAGE_KEYS.autoAnalyzeStatus] as typeof status
       if (!status || !current || current.bookmarkId !== status.bookmarkId || current.updatedAt !== status.updatedAt || current.status !== status.status) return
       await removeLocalStorage([STORAGE_KEYS.autoAnalyzeStatus, STORAGE_KEYS.pendingAutoAnalyzeNotice], { transaction })
-      await clearActionBadge()
+      // The worker owns the shared action badge and observes this storage change.
     })
   } catch (error) {
     showActivity({ type: 'error', message: error instanceof Error ? error.message : '提示关闭失败，请重试。' })
@@ -507,7 +508,7 @@ async function acknowledgeAutoAnalyzeBadge(status = state.autoAnalyzeStatus) {
           [STORAGE_KEYS.autoAnalyzeStatus]: { ...(stored[STORAGE_KEYS.autoAnalyzeStatus] as Record<string, unknown>), badgeVisible: false }
         }, { transaction })
       }
-      await clearActionBadge()
+      // Storage changes notify the worker, the sole owner of the action badge.
     })
   } catch {
   }
@@ -517,19 +518,8 @@ async function clearExpiredPopupAutoAnalyzeStatus(expected: unknown): Promise<vo
     const stored = await getLocalStorage(STORAGE_KEYS.autoAnalyzeStatus)
     if (JSON.stringify(stored[STORAGE_KEYS.autoAnalyzeStatus]) !== JSON.stringify(expected)) return
     await removeLocalStorage(STORAGE_KEYS.autoAnalyzeStatus, { transaction })
-    await clearActionBadge()
+    // The worker restores sync attention after this notice is removed.
   }).catch(() => {})
-}
-function clearActionBadge(): Promise<void> {
-  return new Promise<void>((resolve) => {
-    if (!chrome.action?.setBadgeText) {
-      resolve()
-      return
-    }
-    chrome.action.setBadgeText({ text: '' }, () => {
-      resolve()
-    })
-  })
 }
 function handlePopupStorageChanged(
   changes: Record<string, chrome.storage.StorageChange>,
@@ -1874,7 +1864,7 @@ function flushPendingSearchActivation(): void {
   if (!intent) return
   if (
     intent.query !== state.searchQuery.trim() || intent.query !== state.debouncedQuery ||
-    intent.folderId !== state.selectedFolderFilterId || hasOpenModal() || isPopupKeyboardHelpOpen() || hasBlockingPopupActionPending()
+    intent.folderId !== state.selectedFolderFilterId || hasOpenModal() || isPopupKeyboardHelpOpen() || isPopupSyncOpen() || hasBlockingPopupActionPending()
   ) {
     cancelPendingSearchActivation()
     return
@@ -2235,7 +2225,7 @@ function renderMainContent({ preserveScroll, navigation }: { preserveScroll?: bo
   // There is no scroll position to preserve until real content has appeared.
   // Reading scrollTop on the empty shell forces layout during controller boot.
   const shouldPreserveScroll = state.hasPresentedContent &&
-    (preserveScroll ?? (!hasQuery || Boolean(state.isLoading)))
+    (preserveScroll ?? (isPopupSyncOpen() || !hasQuery || Boolean(state.isLoading)))
   const hasSearchRows = hasQuery && !state.isLoading && !mainState
   const activeSearchResult = hasSearchRows ? state.searchResults[state.activeResultIndex] : null
   publishPopupSearchAccessibility({
@@ -3729,6 +3719,7 @@ function handleDocumentKeydown(event) {
   if (event.defaultPrevented) {
     return
   }
+  if (isPopupSyncOpen()) return
   if (isPopupKeyboardHelpOpen()) {
     if (event.key === 'Escape') { event.preventDefault(); setPopupKeyboardHelpOpen(false) }
     return

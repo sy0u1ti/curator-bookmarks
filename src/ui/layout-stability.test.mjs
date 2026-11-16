@@ -99,7 +99,7 @@ test('quiet states reuse existing copy and preserve the shared corner inset', ()
 })
 
 test('resting copy owns the status slot, so no blank fixed-height line appears at rest', () => {
-  const components = ['BackupControls', 'StorageManagement', 'AutoBackupPoints', 'AvailabilityControls', 'AiAnalysisProgressPanel', 'RecycleBin']
+  const components = ['BackupControls', 'SyncCard', 'StorageManagement', 'AutoBackupPoints', 'AvailabilityControls', 'AiAnalysisProgressPanel', 'RecycleBin']
   for (const name of components) {
     const file = source(`../options/components/${name}.tsx`)
     for (const [tag] of file.matchAll(/<StatusMessage\b[^>]*>/g)) {

@@ -6,7 +6,6 @@ import { MotionPanel } from '../../ui/motion/MotionPanel'
 import type { NewtabSearchWidgetView, SearchEngineMenuState } from '../newtab-search-widget-store'
 import {
   SEARCH_ENGINE_BUTTON_CLASS,
-  SEARCH_ENGINE_CARET_CLASS,
   SEARCH_ENGINE_ITEM_CLASS,
   SEARCH_ENGINE_ITEM_INDICATOR_CLASS,
   SEARCH_ENGINE_MENU_CLASS,
@@ -75,7 +74,6 @@ function SearchWidgetEngineButton({
       ref={buttonRef}
     >
       {engine.label}
-      <Icon name="ChevronDown" className={SEARCH_ENGINE_CARET_CLASS} size={12} aria-hidden="true" />
     </NewtabGlassSurface>
   )
 }

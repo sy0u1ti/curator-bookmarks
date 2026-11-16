@@ -162,6 +162,7 @@ try {
   await move.focus()
   await move.press('ArrowRight')
   await expect(move).toHaveAttribute('aria-expanded', 'true')
+  await page.waitForFunction(() => Boolean(document.activeElement?.closest('.curator-cascade-popup')))
   await page.keyboard.press('ArrowLeft')
   await expect(move).toHaveAttribute('aria-expanded', 'false')
   await expect(move).toBeFocused()

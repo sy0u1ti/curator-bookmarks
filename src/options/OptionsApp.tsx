@@ -386,9 +386,6 @@ function OptionsSidebar({
                   onClick={onNavigate}
                 >
                   <span className="options-nav-label">{group.collapsible.trigger}</span>
-                  <span className="t-acc-chevron text-ds-text-disabled" aria-hidden="true">
-                    <Icon name="ChevronDown" size={14} />
-                  </span>
                 </a>
                 <CollapsiblePanel
                   id={`${idPrefix}${group.collapsible.panelId}`}

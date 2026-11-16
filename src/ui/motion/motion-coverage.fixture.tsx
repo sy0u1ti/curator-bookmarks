@@ -46,11 +46,11 @@ function Fixture() {
         { value: 'one', label: 'One' }, { value: 'two', label: 'Two' }, { value: 'three', label: 'Three' }
       ]} />
       <CollapsibleRoot>
-        <CollapsibleTrigger id="outer-trigger" render={<Button />}>Outer <Icon className="t-acc-chevron" name="ChevronDown" /></CollapsibleTrigger>
+        <CollapsibleTrigger id="outer-trigger" render={<Button />}>Outer</CollapsibleTrigger>
         <CollapsiblePanel id="outer-panel">
           <p>Outer content</p>
           <CollapsibleRoot>
-            <CollapsibleTrigger id="inner-trigger" render={<Button />}>Inner <Icon className="t-acc-chevron" name="ChevronDown" /></CollapsibleTrigger>
+            <CollapsibleTrigger id="inner-trigger" render={<Button />}>Inner</CollapsibleTrigger>
             <CollapsiblePanel id="inner-panel"><p>Inner content</p><Button id="inner-action">Nested action</Button></CollapsiblePanel>
           </CollapsibleRoot>
         </CollapsiblePanel>

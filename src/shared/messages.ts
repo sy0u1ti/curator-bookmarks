@@ -6,6 +6,7 @@ import type {
   CuratorBackupFileV1
 } from './backup.js'
 import type { StorageUsage } from './storage-maintenance.js'
+import { ensureBackgroundReady } from './background-runtime.js'
 
 export const AVAILABILITY_NAVIGATION_CONCURRENCY_LIMIT = 6
 export const AVAILABILITY_NAVIGATION_TIMEOUT_MIN_MS = 1000
@@ -385,11 +386,12 @@ export function requestAvailabilityProbe(
   return sendAvailabilityRuntimeMessage<AvailabilityProbeResult>(message, availabilityMessageTimeout(timeoutMs, deadlineAtMs))
 }
 
-export function requestBackupRestore(
+export async function requestBackupRestore(
   operationId: string,
   backup: CuratorBackupFileV1,
   mode: BackupRestoreMode
 ): Promise<BackupRestoreResult> {
+  await ensureBackgroundReady()
   const message: BackupRestoreMessage = {
     type: 'backup:restore',
     operationId,
@@ -401,7 +403,8 @@ export function requestBackupRestore(
 
 // The inventory reads all of storage and the bookmark tree. The worker does it,
 // so opening the panel never blocks the page that is animating navigation.
-export function requestStorageUsage(): Promise<StorageUsage> {
+export async function requestStorageUsage(): Promise<StorageUsage> {
+  await ensureBackgroundReady()
   const message: StorageUsageMessage = { type: 'storage:usage' }
   return sendRuntimeMessage<StorageUsage>(message)
 }

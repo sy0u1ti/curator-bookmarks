@@ -133,6 +133,21 @@ test('a long workflow defers recovery but discards an obsolete success', () => {
   assert.equal(queue.get('saved'), undefined)
 })
 
+test('a user-selected sync workspace retains a success that has not been shown yet', () => {
+  const { queue, advance } = setup()
+  queue.pause('sync-workspace', true, true)
+  advance(10000)
+  queue.publish({ id: 'saved', type: 'success', message: '已保存' })
+  advance(60000)
+  assert.equal(queue.snapshot().activeId, null)
+  queue.pause('sync-workspace', false)
+  assert.equal(queue.snapshot().activeId, 'saved')
+  advance(2499)
+  assert.equal(queue.snapshot().activeId, 'saved')
+  advance(1)
+  assert.equal(queue.get('saved'), undefined)
+})
+
 test('re-rendering the same operation does not restart its lifetime', () => {
   const { queue, advance } = setup()
   queue.publish(deletion('a'))

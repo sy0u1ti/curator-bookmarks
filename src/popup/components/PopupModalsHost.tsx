@@ -557,7 +557,6 @@ function EditFolderDisclosure({
           >
             <span className="popup-edit-toggle-closed">更改</span>
             <span className="popup-edit-toggle-open">收起</span>
-            <Icon name="ChevronDown" className="t-acc-chevron size-3.5" aria-hidden="true" />
           </CollapsibleTrigger>
         </div>
       </div>

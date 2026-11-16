@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { createServer } from 'node:http'
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -20,10 +20,10 @@ if (pageIndex >= 0 && (!existingSpace || !/^p[1-9]\d*$/.test(existingPage ?? '')
 }
 const directory = path.resolve('.tmp', `motion-coverage-${Date.now()}`)
 await mkdir(directory, { recursive: true })
-const assets = await readdir(path.resolve('dist/assets'))
-const stylesheet = assets.find(name => /^ThemeProvider-.*\.css$/.test(name))
-const optionsStyle = assets.find(name => /^options-.*\.css$/.test(name))
-if (!stylesheet || !optionsStyle) throw new Error('Run npm run build before the motion coverage checks.')
+// The built options page lists its stylesheets; Rollup's shared chunk names are not stable.
+const optionsHtml = await readFile(path.resolve('dist/src/options/options.html'), 'utf8').catch(() => '')
+const optionsStyles = [...optionsHtml.matchAll(/<link\b(?=[^>]*\brel="stylesheet")[^>]*\bhref="([^"]+)"/g)].map(([, url]) => url)
+if (!optionsStyles.length) throw new Error('Run npm run build before the motion coverage checks.')
 const bundle = await build({
   entryPoints: ['src/ui/motion/motion-coverage.fixture.tsx'],
   bundle: true, write: false, format: 'esm', platform: 'browser', jsx: 'automatic',
@@ -32,8 +32,8 @@ const bundle = await build({
 })
 const responses = new Map([
   ['/', ['text/html', '<!doctype html><html><head><title>Curator motion fixture</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/shared.css"><link rel="stylesheet" href="/options.css"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>']],
-  ['/shared.css', ['text/css', await readFile(path.resolve('dist/assets', stylesheet))]],
-  ['/options.css', ['text/css', await readFile(path.resolve('dist/assets', optionsStyle))]]
+  ['/shared.css', ['text/css', (await Promise.all(optionsStyles.map(url => readFile(path.join('dist', url.replace(/^\/+/, '')), 'utf8')))).join('\n')]],
+  ['/options.css', ['text/css', '']]
 ])
 for (const output of bundle.outputFiles) {
   responses.set(`/${path.basename(output.path)}`, [output.path.endsWith('.css') ? 'text/css' : 'text/javascript', output.text])

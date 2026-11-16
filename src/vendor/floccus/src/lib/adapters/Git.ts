@@ -1,0 +1,542 @@
+import * as git from 'isomorphic-git'
+import webHttp from 'isomorphic-git/http/web'
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import FS from '@isomorphic-git/lightning-fs'
+import * as Parallel from 'async-parallel'
+import CachingAdapter from './Caching'
+import XbelSerializer from '../serializers/Xbel'
+import Logger from '../Logger'
+import Html from '../serializers/Html'
+import { IDeserializedFile } from '../interfaces/Serializer'
+import {
+  FileUnreadableError, GitPushError,
+  MissingPermissionsError,
+  ResourceLockedError,
+  SlashError
+} from '../../errors/Error'
+import Crypto from '../Crypto'
+import { Folder, TItemLocation } from '../Tree'
+import CapacitorGitHttp from '../native/CapacitorGitHttp'
+
+declare const IS_BROWSER: boolean
+
+// In the app, fetch can't reach git servers and can't carry packfiles
+const http = IS_BROWSER ? webHttp : CapacitorGitHttp
+
+const LOCK_INTERVAL = 2 * 60 * 1000 // Lock every 2mins while syncing
+const LOCK_TIMEOUT = 15 * 60 * 1000 // Override lock 0.25h after last time lock has been set
+// The name of a lightning-fs file system of ours: the sha256 of the account
+// config, followed by the millisecond the sync that created it started
+const FS_DB_NAME = /^[0-9a-f]{64}(\d{13})$/
+export default class GitAdapter extends CachingAdapter {
+  private lockingInterval: any
+  private lockingPromise: Promise<void>
+  private locked: string[]
+  private cancelCallback: () => void
+  private initialTreeHash: string
+  // Write the file even if the tree hash didn't change, see mustPersistDerivedIds
+  private alwaysUpload = false
+  private dir: string
+  private hash: string
+  private fs: FS|null
+
+  constructor(server) {
+    super(server)
+    this.server = server
+    this.locked = []
+    this.lockingInterval = null
+  }
+
+  static getDefaultValues() {
+    return {
+      type: 'git',
+      url: 'https://example.org/repo.git',
+      username: 'bob',
+      password: 's3cret',
+      branch: 'main',
+      bookmark_file: 'bookmarks.xbel',
+      bookmark_file_type: 'xbel',
+      includeCredentials: false,
+      allowRedirects: false,
+      allowNetwork: false,
+    }
+  }
+
+  getLabel():string {
+    const data = this.getData()
+    const url = new URL(data.url)
+    url.protocol = ''
+    return data.label || data.username + '@' + url.hostname + ':' + data.bookmark_file
+  }
+
+  getData() {
+    return { ...GitAdapter.getDefaultValues(), ...this.server }
+  }
+
+  cancel() {
+    this.cancelCallback && this.cancelCallback()
+  }
+
+  async getBookmarksTree(): Promise<Folder<TItemLocation>> {
+    // setHashSettings is called after onSyncStart only but before getBookmarksTree
+    // thus we get the hash here again
+    this.initialTreeHash = await this.bookmarksCache.hash(this.hashSettings)
+    return super.getBookmarksTree()
+  }
+
+  async onSyncStart(needLock = true, forceLock = false) {
+    Logger.log('onSyncStart: begin')
+
+    this.hash = await Crypto.sha256(JSON.stringify(this.server)) + Date.now()
+    this.dir = '/' + this.hash + '/'
+
+    if (IS_BROWSER) {
+      const browser = (await import('../browser-api')).default
+      let hasPermissions, error = false
+      try {
+        hasPermissions = await browser.permissions.contains({ origins: [this.server.url + '/'] })
+      } catch (e) {
+        error = true
+        console.warn(e)
+      }
+      const {isOrion} = await browser.storage.local.get({'isOrion': false})
+      if (!error && !hasPermissions && !isOrion) {
+        throw new MissingPermissionsError()
+      }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    this.fs = new FS(this.hash, {wipe: true})
+
+    Logger.log('(git) init')
+    await git.init({ fs: this.fs, dir: this.dir })
+    await git.addRemote({
+      fs: this.fs,
+      dir: this.dir,
+      url: this.server.url,
+      remote: 'origin',
+      force: true
+    })
+
+    try {
+      Logger.log('(git) fetch from remote')
+      await git.fetch({
+        http,
+        fs: this.fs,
+        dir: this.dir,
+        ref: this.server.branch,
+        remoteRef: this.server.branch,
+        singleBranch: true,
+        remote: 'origin',
+        depth: 10,
+        onAuth: () => this.onAuth()
+      })
+      Logger.log('(git) checkout branch ' + (this.server.branch))
+      await git.checkout({ fs: this.fs, dir: this.dir, ref: this.server.branch })
+    } catch (e) {
+      if (e && e.code === git.Errors.NotFoundError.code && (e.data.what === 'HEAD' || e.data.what === this.server.branch || e.data.what === 'origin/' + this.server.branch)) {
+        Logger.log('(git) writeFile ' + this.dir + '/README.md')
+        await this.fs.promises.writeFile(this.dir + '/README.md', 'This repository is used to synchronize bookmarks via [floccus](https://floccus.org).', {mode: 0o777, encoding: 'utf8'})
+        Logger.log('(git) add .')
+        await git.add({fs: this.fs, dir: this.dir, filepath: '.'})
+        Logger.log('(git) commit')
+        await git.commit({
+          fs: this.fs,
+          dir: this.dir,
+          message: 'Floccus bookmarks update',
+          author: {
+            name: 'Floccus bookmarks sync',
+          }
+        })
+        const currentBranch = await git.currentBranch({fs: this.fs, dir: this.dir})
+        if (currentBranch && currentBranch !== this.server.branch) {
+          await git.renameBranch({ fs: this.fs, dir: this.dir, ref: this.server.branch, oldref: currentBranch })
+        }
+        Logger.log('(git) push')
+        const result = await git.push({
+          fs: this.fs,
+          http,
+          dir: this.dir,
+          ref: this.server.branch,
+          remoteRef: this.server.branch,
+          remote: 'origin',
+          onAuth: () => this.onAuth()
+        })
+        if (result.error) {
+          throw new GitPushError(result.error)
+        }
+      } else {
+        throw e
+      }
+    }
+
+    if (this.server.bookmark_file[0] === '/') {
+      throw new SlashError()
+    }
+
+    if (this.lockingInterval) {
+      clearInterval(this.lockingInterval)
+    }
+    if (forceLock) {
+      await this.clearAllLocks()
+      await this.setLock()
+    } else if (needLock) {
+      await this.obtainLock()
+    }
+    if (needLock || forceLock) {
+      this.lockingInterval = setInterval(() => this.setLock(), LOCK_INTERVAL) // Set lock every minute
+    }
+
+    const status = await this.pullFromServer()
+
+    this.initialTreeHash = await this.bookmarksCache.hash(this.hashSettings)
+
+    Logger.log('onSyncStart: completed')
+
+    return status
+  }
+
+  async onSyncFail() {
+    Logger.log('onSyncFail')
+    clearInterval(this.lockingInterval)
+    await this.freeLock()
+    await this.cleanupIndexedDB()
+  }
+
+  async onSyncComplete() {
+    Logger.log('onSyncComplete')
+    clearInterval(this.lockingInterval)
+
+    this.bookmarksCache = this.bookmarksCache.clone(false)
+    const newTreeHash = await this.bookmarksCache.hash(this.hashSettings)
+    if (newTreeHash !== this.initialTreeHash || this.alwaysUpload) {
+      this.alwaysUpload = false
+      const fileContents = this.server.bookmark_file_type === 'xbel' ? createXBEL(this.bookmarksCache, this.highestId) : createHTML(this.bookmarksCache, this.highestId)
+      Logger.log('(git) writeFile ' + this.dir + '/' + this.server.bookmark_file)
+      await this.fs.promises.writeFile(this.dir + '/' + this.server.bookmark_file, fileContents, {mode: 0o777, encoding: 'utf8'})
+      Logger.log('(git) add .')
+      await git.add({fs: this.fs, dir: this.dir, filepath: '.'})
+      Logger.log('(git) commit')
+      await git.commit({
+        fs: this.fs,
+        dir: this.dir,
+        message: `Floccus update: ${this.getLabel()}`,
+        author: {
+          name: 'Floccus bookmarks sync',
+        }
+      })
+      try {
+        Logger.log('(git) push')
+        const result = await git.push({
+          fs: this.fs,
+          http,
+          dir: this.dir,
+          remote: 'origin',
+          onAuth: () => this.onAuth()
+        })
+        if (result.error) {
+          throw new GitPushError(result.error)
+        }
+      } catch (e) {
+        if (e.code && e.code === git.Errors.PushRejectedError.code) {
+          await this.freeLock() // Only clears the locks set in the current adapter instance
+          await this.cleanupIndexedDB()
+          throw new ResourceLockedError
+        }
+        throw e
+      }
+    } else {
+      Logger.log('No changes to the server version necessary')
+    }
+
+    await this.freeLock()
+    await this.cleanupIndexedDB()
+  }
+
+  async cleanupIndexedDB() {
+    try {
+      // Give the FS instance time to close connections
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      // Only our own file systems: the other databases of this origin belong
+      // to floccus itself -- the continuation store, say -- or to a sync of
+      // another account that is still running, and deleting one of those takes
+      // it down with it. A delete that an open connection blocks also stays
+      // pending for good, and while one is pending indexedDB.databases() never
+      // resolves again, so the next sync hangs before it has begun.
+      Logger.log('Cleaning up Lightning FS IndexedDB databases')
+      const databases = (await indexedDB.databases())
+        .filter(dbInfo => dbInfo.name && this.isDisposableFsDatabase(dbInfo.name))
+
+      await Parallel.map(databases, async(dbInfo) => {
+        try {
+          Logger.log('Deleting IndexedDB: ' + dbInfo.name)
+          const deleteRequest = indexedDB.deleteDatabase(dbInfo.name)
+
+          await new Promise<void>((resolve) => {
+            deleteRequest.onsuccess = () => {
+              Logger.log('IndexedDB cleanup successful: ' + dbInfo.name)
+              resolve()
+            }
+            deleteRequest.onerror = () => {
+              Logger.log('IndexedDB cleanup error for ' + dbInfo.name + ': ' + deleteRequest.error)
+              resolve() // Don't reject, just log and continue
+            }
+            deleteRequest.onblocked = () => {
+              Logger.log('IndexedDB cleanup blocked: ' + dbInfo.name)
+              // Still resolve after a timeout even if blocked
+              setTimeout(() => resolve(), 1000)
+            }
+          })
+        } catch (e) {
+          Logger.log('Error deleting IndexedDB ' + dbInfo.name + ': ' + e)
+        }
+      }, 4)
+      Logger.log('IndexedDB cleanup completed')
+    } catch (e) {
+      Logger.log('Error during IndexedDB cleanup: ' + e)
+    }
+
+    // Clear the reference
+    this.fs = null
+  }
+
+  /**
+   * Whether a database is a lightning-fs file system of ours that nobody has
+   * use for any more: the one this sync created, or one a sync that died
+   * before it could clean up left behind. A file system younger than the lock
+   * timeout may well belong to a sync that is still running.
+   */
+  private isDisposableFsDatabase(name: string): boolean {
+    if (name === this.hash) {
+      return true
+    }
+    const match = FS_DB_NAME.exec(name)
+    return Boolean(match) && Date.now() - Number(match[1]) > LOCK_TIMEOUT
+  }
+
+  async obtainLock() {
+    // Lock tags live on the remote. With a shallow singleBranch fetch they are
+    // not fetched locally, so query the server directly instead of listTags.
+    const tags = await this.listServerLockTags()
+    const lockTag = tags.sort().reverse()[0]
+    if (lockTag) {
+      const dateLocked = Number(lockTag.slice('floccus-lock-'.length))
+      if (Date.now() - dateLocked < LOCK_TIMEOUT) {
+        throw new ResourceLockedError()
+      }
+    }
+
+    await this.setLock()
+  }
+
+  async listServerLockTags(): Promise<string[]> {
+    const refs = await git.listServerRefs({
+      http,
+      url: this.server.url,
+      prefix: 'refs/tags/floccus-lock-',
+      onAuth: () => this.onAuth(),
+    })
+    return refs
+      .map((ref) => ref.ref.replace('refs/tags/', ''))
+      .filter((tag) => tag.startsWith('floccus-lock-'))
+  }
+
+  async setLock() {
+    this.lockingPromise = (async() => {
+      const tag = 'floccus-lock-' + Date.now()
+      Logger.log('(git) tag ' + tag)
+      await git.tag({ fs: this.fs, dir: this.dir, ref: tag })
+      Logger.log('(git) push tag ' + tag)
+      const result = await git.push({ fs: this.fs, http, dir: this.dir, ref: tag, remote: 'origin', onAuth: () => this.onAuth() })
+      if (result.error) {
+        throw new GitPushError(result.error)
+      }
+      this.locked.push(tag)
+    })()
+    await this.lockingPromise
+  }
+
+  async onAuth() {
+    return { username: this.server.username, password: this.server.password }
+  }
+
+  async freeLock() {
+    if (this.lockingPromise) {
+      await this.lockingPromise
+    }
+    if (!this.locked.length) {
+      return
+    }
+
+    try {
+      for (const tag of this.locked) {
+        Logger.log('(git) push: delete tag ' + tag)
+        // Ignoring result.error
+        await git.push({ fs: this.fs, http, dir: this.dir, ref: tag, delete: true, remote: 'origin', onAuth: () => this.onAuth() })
+      }
+      this.locked = []
+      return true
+    } catch (e) {
+      Logger.log('Error Caught')
+      Logger.log(e)
+      return false
+    }
+  }
+
+  async clearAllLocks(fs:FS = null): Promise<void> {
+    fs = fs || this.fs
+    // Lock tags are not necessarily fetched locally (shallow singleBranch fetch),
+    // so discover them on the remote and delete them there. For a delete, push
+    // forces a zero oid and sends no objects, so the tag need not exist locally:
+    // we pass the commit SHA as `ref` (expand accepts a raw SHA) and the tag's
+    // full ref name as `remoteRef`.
+    const refs = await git.listServerRefs({
+      http,
+      url: this.server.url,
+      prefix: 'refs/tags/floccus-lock-',
+      onAuth: () => this.onAuth(),
+    })
+    for (const { ref, oid } of refs) {
+      if (!ref.replace('refs/tags/', '').startsWith('floccus-lock-')) {
+        continue
+      }
+      Logger.log('(git) push: delete tag ' + ref)
+      // ignoring result.error
+      await git.push({ fs, http, dir: this.dir, ref: oid, remoteRef: ref, delete: true, remote: 'origin', onAuth: () => this.onAuth() })
+    }
+  }
+
+  async pullFromServer() {
+    let fileContents
+    try {
+      Logger.log('(git) readFile')
+      fileContents = await this.fs.promises.readFile(this.dir + '/' + this.server.bookmark_file, { encoding: 'utf8' })
+    } catch (e) {
+      this.resetCache()
+      // Could not find file
+      return false
+    }
+
+    if (!fileContents || (!fileContents.includes('<?xml version="1.0" encoding="UTF-8"?>') && !fileContents.includes('<!DOCTYPE NETSCAPE-Bookmark-file-1>'))) {
+      throw new FileUnreadableError()
+    }
+
+    /* let's get the highestId */
+    for (const line of fileContents.split('\n')) {
+      if (line.indexOf('<!--- highestId :') >= 0) {
+        const idxStart = line.indexOf(':') + 1
+        const idxEnd = line.lastIndexOf(':')
+
+        this.highestId = parseInt(line.substring(idxStart, idxEnd))
+        break
+      }
+    }
+
+    let file: IDeserializedFile
+    switch (this.server.bookmark_file_type) {
+      case 'xbel':
+        Logger.log('(git) parse XBEL')
+        file = XbelSerializer.deserializeFile(fileContents)
+        break
+      case 'html':
+        Logger.log('(git) parse HTML')
+        file = Html.deserializeFile(fileContents)
+        break
+      default:
+        throw new Error('Invalid bookmark file type')
+    }
+    this.bookmarksCache = file.tree
+    this.alwaysUpload = file.persistIds
+
+    // Found file, we can keep the cache from the previous run
+    return true
+  }
+
+  async clearServer() {
+    const hash = await Crypto.sha256(JSON.stringify(this.server)) + Date.now()
+    this.dir = '/' + hash + '/'
+
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    const fs = new FS(hash, {wipe: true})
+
+    Logger.log('(git) init')
+    await git.init({ fs, dir: this.dir, defaultBranch: this.server.branch })
+    await git.addRemote({
+      fs,
+      dir: this.dir,
+      url: this.server.url,
+      remote: 'origin',
+      force: true
+    })
+    await fs.promises.writeFile(this.dir + '/README.md', 'This repository is used to synchronize bookmarks via [floccus](https://floccus.org).', {mode: 0o777, encoding: 'utf8'})
+    await git.add({fs, dir: this.dir, filepath: '.'})
+    await git.commit({
+      fs,
+      dir: this.dir,
+      message: 'Floccus bookmarks update',
+      author: {
+        name: 'Floccus bookmarks sync',
+      }
+    })
+    const currentBranch = await git.currentBranch({fs, dir: this.dir})
+    if (currentBranch && currentBranch !== this.server.branch) {
+      await git.renameBranch({ fs, dir: this.dir, ref: this.server.branch, oldref: currentBranch })
+    }
+    const result = await git.push({
+      fs,
+      http,
+      dir: this.dir,
+      ref: this.server.branch,
+      remoteRef: this.server.branch,
+      remote: 'origin',
+      force: true,
+      onAuth: () => this.onAuth()
+    })
+    if (result.error) {
+      throw new GitPushError(result.error)
+    }
+    await this.clearAllLocks(fs)
+  }
+}
+
+function createXBEL(rootFolder, highestId) {
+  let output = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE xbel PUBLIC "+//IDN python.org//DTD XML Bookmark Exchange Language 1.0//EN//XML" "http://pyxml.sourceforge.net/topics/dtds/xbel.dtd">
+<xbel version="1.0">
+`
+
+  output +=
+    '<!--- highestId :' +
+    highestId +
+    `: for Floccus bookmark sync browser extension -->
+`
+
+  output += XbelSerializer.serialize(rootFolder)
+
+  output += `
+</xbel>`
+
+  return output
+}
+
+function createHTML(rootFolder, highestId) {
+  let output = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>Bookmarks</TITLE>`
+
+  output +=
+    '<!--- highestId :' +
+    highestId +
+    `: for Floccus bookmark sync browser extension -->
+`
+
+  output += Html.serialize(rootFolder)
+
+  output += '</html>'
+
+  return output
+}

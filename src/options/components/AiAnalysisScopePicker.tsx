@@ -1,5 +1,4 @@
 import { Button } from '../../ui/base/Button'
-import { Icon } from '../../ui/icons/Icon'
 import { handleAiAnalysisScopePickerOpen } from '../options-controller'
 import { useAiAnalysisScopePicker } from './ai-analysis-status-store.js'
 import {
@@ -27,7 +26,6 @@ export function AiAnalysisScopePickerButton({ className = '' }: { className?: st
     >
       <span className={SCOPE_PICKER_LABEL_CLASS}>{state.label}</span>
       {state.countLabel ? <span id="ai-scope-count" className="shrink-0 text-xs font-medium text-ds-text-secondary tabular-nums">{state.countLabel}</span> : null}
-      <Icon className="ml-auto shrink-0 text-ds-text-secondary" name="ChevronDown" size={14} aria-hidden="true" />
     </Button>
   )
 }

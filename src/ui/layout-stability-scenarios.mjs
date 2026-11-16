@@ -8,7 +8,7 @@ const cases = {
   duplicates: { selectors: ['[data-duplicate-group]', '[data-bookmark-id="copy"]', '#fixture-tail'], phases: ['selected', 'all-selected', 'idle'] },
   recycle: { selectors: ['#recycle', '#fixture-tail'], phases: ['selected', 'idle'] },
   redirects: { selectors: ['#redirects', '#fixture-tail'], phases: ['selected', 'idle'] },
-  backup: { selectors: ['#backup', '[aria-label="导入书签标签数据"]', '[aria-label="导出书签标签数据"]', '#fixture-tail'], phases: ['saving', 'error', 'long-error', 'success', 'idle'] },
+  backup: { selectors: ['#backup', '[aria-label="备份到文件"]', '[aria-label="从文件恢复"]', '#settings-recovery-points', '#fixture-tail'], phases: ['loading', 'pending', 'saving', 'error', 'long-error', 'success', 'idle'] },
   popup: { selectors: ['#popup-app-shell', '#search-input', '.popup-main-pane'], phases: ['running', 'collapsed', 'success', 'error', 'long-error', 'idle'] },
   sidepanel: { selectors: ['#popup-app-shell', '#search-input', '.popup-main-pane'], phases: ['running', 'collapsed', 'success', 'error', 'long-error', 'idle'] },
   'popup-dialog': { selectors: ['#smart-folder-modal', '#smart-folder-title-input', '#smart-folder-list', '#save-smart-folder-button'], phases: ['saving', 'error', 'long-error', 'success', 'idle'] },

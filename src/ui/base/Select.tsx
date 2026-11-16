@@ -195,23 +195,14 @@ export function Select({
           id={triggerId}
           aria-label={ariaLabel}
           ref={triggerRef}
-          className={unstyled ? cx('base-select-trigger inline-flex items-center gap-2', triggerClassName) : cx(
-            'base-select-trigger inline-flex h-9 min-w-36 items-center justify-start gap-2 rounded-ds-sm border border-ds-border bg-ds-surface-1 px-3 text-sm text-ds-text-primary outline-none transition-[background-color,border-color,color] duration-ds-fast ease-ds-standard data-[popup-open]:border-ds-border-hover focus-visible:shadow-ds-focus disabled:opacity-50 motion-reduce:transition-none',
+          className={unstyled ? cx('base-select-trigger inline-flex items-center', triggerClassName) : cx(
+            'base-select-trigger inline-flex h-9 min-w-36 items-center justify-start rounded-ds-sm border border-ds-border bg-ds-surface-1 px-3 text-sm text-ds-text-primary outline-none transition-[background-color,border-color,color] duration-ds-fast ease-ds-standard data-[popup-open]:border-ds-border-hover focus-visible:shadow-ds-focus disabled:opacity-50 motion-reduce:transition-none',
             triggerClassName
           )}
         >
           <BaseSelect.Value className={cx('base-select-value min-w-0 flex-1', valueClassName)} placeholder={placeholder}>
             {(selectedValue: string | null) => options.find((option) => option.value === selectedValue)?.label ?? placeholder}
           </BaseSelect.Value>
-          <BaseSelect.Icon
-            className={cx(
-              'pointer-events-none shrink-0 text-ds-text-secondary',
-              unstyled ? 'custom-select-trigger-arrow' : 'base-select-trigger-arrow'
-            )}
-            aria-hidden="true"
-          >
-            <Icon name="ChevronDown" size={14} aria-hidden="true" />
-          </BaseSelect.Icon>
         </BaseSelect.Trigger>
       </div>
       <BaseSelect.Portal container={portalContainer}>

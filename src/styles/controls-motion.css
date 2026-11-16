@@ -24,7 +24,7 @@
 }
 
 /* Full-width fields and rows should not squeeze their text on every press.
-   Their highlight, chevron or background layer supplies the feedback. */
+   Their highlight or background layer supplies the feedback. */
 :is(
   .base-select-trigger,
   .model-selector-trigger,
@@ -71,25 +71,6 @@
     background-color var(--ds-motion-fast) var(--ds-ease-standard),
     color var(--ds-motion-fast) var(--ds-ease-standard),
     opacity var(--ds-motion-fast) var(--ds-ease-standard);
-}
-
-.base-menu-trigger-arrow,
-.curator-menu-chevron {
-  transform: none;
-  transition: transform var(--ds-motion-state) var(--ds-ease-standard);
-}
-
-[data-popup-open] > .base-menu-trigger-arrow {
-  transform: rotate(180deg);
-}
-
-.curator-cascade-item[data-popup-open] > .curator-menu-chevron {
-  transform: translateX(2px);
-}
-
-.folder-picker-toggle-icon,
-.popup-folder-picker-chevron {
-  transition: rotate var(--ds-motion-state) var(--ds-ease-standard);
 }
 
 .base-select-indicator,
@@ -230,11 +211,7 @@
   }
 
   .options-switch-thumb,
-  .base-slider-thumb,
-  .base-menu-trigger-arrow,
-  .curator-menu-chevron,
-  .folder-picker-toggle-icon,
-  .popup-folder-picker-chevron {
+  .base-slider-thumb {
     transition: none !important;
   }
 

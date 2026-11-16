@@ -62,6 +62,7 @@ export type DangerousOperationKind =
   | 'batch-tag-update'
   | 'tag-import'
   | 'restore'
+  | 'sync-download'
 
 export type BackupRestoreMode = 'bookmarksOnly' | 'tagsOnly' | 'newTabOnly' | 'safeFull'
 

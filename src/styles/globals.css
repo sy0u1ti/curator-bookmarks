@@ -518,19 +518,8 @@ body {
 .t-acc-panel[data-motion-initial] > .t-acc-panel-inner {
   transition: none;
 }
-.t-acc-chevron {
-  display: inline-flex;
-  transform: scaleY(1);
-  transform-origin: center;
-  transition: transform var(--acc-chevron) var(--acc-ease);
-}
-.t-acc-chevron path { vector-effect: non-scaling-stroke; }
-.t-acc-head[data-panel-open] .t-acc-chevron {
-  transform: scaleY(-1);
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .t-acc-panel, .t-acc-panel-inner, .t-acc-chevron {
+  .t-acc-panel, .t-acc-panel-inner {
     transition: none !important;
   }
 }
@@ -586,22 +575,6 @@ body {
   .t-dropdown {
     transform: none !important;
     transition: opacity 80ms linear !important;
-  }
-}
-
-.base-select-trigger-arrow,
-.custom-select-trigger-arrow {
-  transition: transform var(--dropdown-open-dur) var(--dropdown-open-ease);
-}
-.base-select-trigger[data-popup-open] .base-select-trigger-arrow,
-.base-select-trigger[data-popup-open] .custom-select-trigger-arrow {
-  transform: rotate(180deg);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .base-select-trigger-arrow,
-  .custom-select-trigger-arrow {
-    transition: none !important;
   }
 }
 

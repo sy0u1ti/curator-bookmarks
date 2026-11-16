@@ -236,6 +236,15 @@ export function createMenuIntent({
     publish({ openPath: [], hovered: null, pointer: false })
   }
 
+  function reconcile(depth: number, rows: readonly { id: string; submenu: boolean; disabled?: boolean }[]) {
+    const available = (row: MenuIntentRow) => rows.some(candidate =>
+      candidate.id === row.id && !candidate.disabled && candidate.submenu === row.submenu)
+    if (pending?.row.depth === depth && !available(pending.row)) cancelHover()
+    if (snapshot.hovered?.depth === depth && !available(snapshot.hovered)) publish({ hovered: null })
+    const id = snapshot.openPath[depth]
+    if (id && !rows.some(row => row.id === id && row.submenu && !row.disabled)) setOpen(depth, id, false)
+  }
+
   return {
     getSnapshot: () => snapshot,
     move,
@@ -246,6 +255,7 @@ export function createMenuIntent({
     leave,
     keyboard,
     setOpen,
+    reconcile,
     cancelPending: cancelHover,
     reset,
     dispose() {

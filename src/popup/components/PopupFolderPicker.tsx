@@ -23,8 +23,6 @@ const toggleButtonClass = [
   'hover:text-ds-text-primary focus-visible:text-ds-text-primary',
   'disabled:pointer-events-none disabled:opacity-50'
 ].join(' ')
-const toggleIconClass =
-  'popup-folder-picker-chevron transition-transform duration-ds-fast ease-ds-standard motion-reduce:transition-none'
 const pickerCardClass = [
   folderCardClass,
   'popup-folder-picker-card disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
@@ -106,7 +104,7 @@ function PopupTreeFolderOption({
         {...selectAttrs}
         onClick={() => onFolderSelect?.(option.id)}
       >
-        <span className={cx(folderBranchClass, 'popup-folder-picker-branch')} aria-hidden="true"></span>
+        <span className={cx(folderBranchClass, option.hasChildren && 'invisible')} aria-hidden="true"></span>
         <span className={folderMainClass}>
           <span className={folderTitleClass}>
             <HighlightedText terms={getHighlightTerms(normalizeQuery(query))} text={option.title} />
@@ -129,6 +127,7 @@ function PopupTreeFolderOption({
           type="button"
           aria-expanded={option.expanded}
           aria-label={option.toggleLabel}
+          title={option.toggleLabel}
           style={{ left: `calc(${style.paddingLeft} - 2px)` }}
           disabled={option.disabled}
           unstyled
@@ -136,8 +135,7 @@ function PopupTreeFolderOption({
           onClick={() => onFolderToggle?.(option.id)}
         >
           <Icon
-            name="ChevronDown"
-            className={cx(toggleIconClass, option.expanded ? 'rotate-0' : '-rotate-90')}
+            name={option.expanded ? 'FolderOpen' : 'Folder'}
             size={14}
             aria-hidden="true"
           />

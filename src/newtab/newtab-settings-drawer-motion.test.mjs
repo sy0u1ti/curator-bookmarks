@@ -1908,14 +1908,11 @@ async function verifyOptionsBorderIntegrity(page, extensionId) {
     await page.goto(`chrome-extension://${extensionId}/src/options/options.html#${scopeCase.hash}`, { waitUntil: 'domcontentloaded' })
     const trigger = page.getByRole('button', { name: scopeCase.label, exact: true })
     await trigger.waitFor({ state: 'visible' })
-    const affordance = await trigger.evaluate((element) => ({
-      iconCount: element.querySelectorAll('svg').length,
-      trailingElement: element.lastElementChild?.tagName || ''
-    }))
-    assert.deepEqual(
-      affordance,
-      { iconCount: 1, trailingElement: 'svg' },
-      `${scopeCase.label} should use one trailing chevron so every scope selector reads as an interactive picker`
+    const iconCount = await trigger.evaluate((element) => element.querySelectorAll('svg').length)
+    assert.equal(
+      iconCount,
+      0,
+      `${scopeCase.label} should show its selection without a decorative dropdown arrow`
     )
   }
 

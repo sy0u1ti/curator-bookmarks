@@ -29,10 +29,11 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   setting('ai-settings', 'api-key', 'API Key', 'ai-api-key', 'AI 密钥 令牌 token key'),
   setting('ai-settings', 'model', 'AI 模型', 'settings-ai-model', '推理强度 模型列表 自定义 models reasoning'),
   setting('ai-settings', 'requests', '接口与请求设置', 'ai-advanced-settings', '每批 并发 接口类型 请求数 batch api style'),
-  setting('backup', 'full-backup', '完整备份', 'settings-full-backup', '导出 导入 恢复 数据 迁移 backup restore'),
+  setting('backup', 'sync', '同步', 'settings-sync', '书签同步 WebDAV Nextcloud S3 Git Google Drive Dropbox Linkwarden Karakeep 标签页 多设备 floccus sync'),
+  setting('backup', 'full-backup', '备份与恢复', 'settings-full-backup', '完整备份 备份到文件 从文件恢复 导出 HTML 数据 迁移 backup export'),
   setting('backup', 'tag-data', '标签数据', 'settings-tag-data', '摘要 别名 导出 导入 清空 tags'),
-  setting('backup', 'recovery', '自动恢复点', 'settings-recovery-points', '备份 撤销 回滚 恢复 snapshots rollback'),
-  setting('backup', 'storage', '本地存储空间', 'settings-storage', '缓存 清理 图标 正文 用量 storage cache'),
+  setting('backup', 'recovery', '自动恢复点', 'settings-recovery-points', '恢复 导入备份 撤销 回滚 snapshots restore rollback'),
+  setting('backup', 'storage', '存储空间', 'settings-storage', '本地 缓存 清理 图标 正文 用量 storage cache'),
   setting('availability', 'settings', '检测设置', 'settings-availability', '并发数 超时时长 站点权限 检测 timeout concurrency'),
   ...Object.entries(SECTION_META).filter(([key]) => key !== 'ai-settings').map(([key, { title }]) =>
     setting(key as OptionsSectionKey, 'section', title, `${key}-title`, ({

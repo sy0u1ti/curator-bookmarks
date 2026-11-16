@@ -1,4 +1,4 @@
-import { ChevronDownIcon, ChevronRightIcon, ZapIcon } from 'lucide-react'
+import { ZapIcon } from 'lucide-react'
 import {
   useCallback,
   useEffect,
@@ -450,10 +450,6 @@ export function ReasoningEffortSelector({
           {currentLevel?.label ?? '—'}
         </span>
       </span>
-      <ChevronDownIcon
-        className="ml-2 size-3.5 flex-none text-ds-text-muted transition-transform duration-[var(--ds-motion-state)] ease-ds-standard group-aria-expanded:rotate-180 motion-reduce:transition-none"
-        aria-hidden="true"
-      />
     </Button>
   )
 
@@ -512,7 +508,6 @@ export function ReasoningEffortSelector({
                   onClick={() => setView('advanced')}
                 >
                   高级设置
-                  <ChevronDownIcon className="size-3" aria-hidden="true" />
                 </Button>
               </div>
             </div>
@@ -546,7 +541,6 @@ export function ReasoningEffortSelector({
                     onClick={() => setView('menu')}
                   >
                     高级设置
-                    <ChevronRightIcon className="size-3 text-ds-text-muted" aria-hidden="true" />
                   </Button>
                   <ZapIcon className="size-4 fill-current text-[#47a8ff]" aria-hidden="true" />
                 </div>

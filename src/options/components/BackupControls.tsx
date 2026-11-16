@@ -1,311 +1,125 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
+import { AiProviderCard } from '../../ui/ai/AiProviderCard'
 import { Button } from '../../ui/base/Button'
 import { StatusButton } from '../../ui/actions/StatusButton'
 import { StatusMessage } from '../../ui/base/StatusMessage'
 import { Input } from '../../ui/base/Input'
+import { Popover } from '../../ui/base/Popover'
+import { Icon } from '../../ui/icons/Icon'
 import { handleBackupAction } from '../options-controller'
 import { useBackupControlsState } from './backup-controls-store.js'
-import type { BackupControlsState, BackupPreviewState } from './backup-controls-types.js'
-import { OPTION_VALUE_CLASS, OPTION_SURFACE_CLASS, OPTION_INSET_CLASS } from './option-layout-classes.js'
-import { OptionEmptyState } from './OptionEmptyState.js'
+import type { BackupActionDetail, BackupControlsState } from './backup-controls-types.js'
+import {
+  AI_SETTINGS_CARD_CLASS,
+  AI_SETTINGS_HEADER_CLASS,
+  AI_SETTINGS_SUBTITLE_CLASS,
+  AI_SETTINGS_TITLE_CLASS
+} from './ai-settings-card-classes.js'
+import { BACKUP_CARD_COPY_CLASS } from './BackupRow.js'
+import { OptionActionsMenu } from './OptionActionsMenu.js'
 import { AutoBackupPoints } from './AutoBackupPoints.js'
-import { BackupBookmarkPreview } from './BackupBookmarkPreview.js'
+import { BackupRestoreDialog } from './BackupRestoreDialog.js'
 import { StorageManagement } from './StorageManagement.js'
+import { SyncCard } from './SyncCard.js'
 
-const BACKUP_CARD_CLASS =
-  `mt-7 ${OPTION_SURFACE_CLASS} p-[18px_20px_16px]`
-const BACKUP_HEADER_CLASS =
-  'flex flex-wrap items-start justify-between gap-4'
-const BACKUP_HEAD_CLASS = `${BACKUP_HEADER_CLASS} border-b border-ds-border-subtle pb-[14px]`
-const BACKUP_ROW_CLASS =
-  'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-4 pt-4 max-[760px]:grid-cols-1'
-const BACKUP_COPY_COLUMN_CLASS = 'min-w-0'
-const BACKUP_TITLE_CLASS =
-  'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
-const BACKUP_COPY_CLASS =
-  'mt-2 mb-0 max-w-[680px] text-[13px] leading-[1.55] text-ds-text-secondary'
-const BACKUP_STATUS_CLASS =
-  'mt-2 mb-0 max-w-[680px] text-[13px] leading-[1.55] text-ds-text-secondary'
-const BACKUP_ROW_ACTIONS_CLASS =
-  'flex min-w-0 flex-wrap items-center justify-end gap-2.5 self-end max-[760px]:justify-start'
-const BACKUP_PREVIEW_LIST_CLASS = 'mt-4 flex flex-col gap-3'
-const BACKUP_EMPTY_CLASS =
-  `${OPTION_INSET_CLASS} p-[14px_16px] text-[13px] leading-[1.55] text-ds-text-secondary`
-const BACKUP_PREVIEW_CARD_CLASS =
-  `${OPTION_INSET_CLASS} p-[14px_16px]`
-const BACKUP_PREVIEW_COPY_CLASS = 'mt-0 min-w-0'
-const BACKUP_PREVIEW_TITLE_CLASS =
-  'block min-w-0 text-[15px] font-semibold leading-[1.4] text-ds-text-primary [overflow-wrap:anywhere]'
-const BACKUP_PREVIEW_DETAIL_CLASS =
-  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
-const BACKUP_WARNING_LIST_CLASS =
-  'mt-[10px] mb-0 pl-[18px] text-[13px] leading-[1.65] text-ds-text-secondary [&_li+li]:mt-1'
-const BACKUP_SCOPE_COPY =
-  '包含自定义书签图标。正文索引内容、本地壁纸图片和视频、已下载的 MHTML 存档不在备份内；迁移时请另行保留这些文件，正文索引需重新采集。'
+const BACKUP_SCOPE = '书签、标签、规则和设置'
+const BACKUP_LABELS = { idle: '备份到文件', pending: '正在备份', success: '已备份', error: '重试备份' }
 
 export function BackupControls() {
   const state = useBackupControlsState()
-
-  return <BackupControlsContent state={state} />
-}
-
-function BackupControlsContent({ state }: { state: BackupControlsState }) {
-  const tagImportInputRef = useRef<HTMLInputElement | null>(null)
-  const backupImportInputRef = useRef<HTMLInputElement | null>(null)
-
   return (
     <>
-      <div id="settings-tag-data" className={BACKUP_CARD_CLASS}>
-        <div className={BACKUP_HEAD_CLASS}>
-          <div className={BACKUP_COPY_COLUMN_CLASS}>
-            <strong className={BACKUP_TITLE_CLASS}>标签数据</strong>
-            <p className={BACKUP_COPY_CLASS}>
-              保存 AI 摘要、别名和标签；清空不会删除 Chrome 书签。
-            </p>
-          </div>
-          <span className={OPTION_VALUE_CLASS}>{state.tagData.countLabel}</span>
-        </div>
-        <div className={BACKUP_ROW_CLASS}>
-          <div className={BACKUP_COPY_COLUMN_CLASS}>
-            <StatusMessage className={BACKUP_STATUS_CLASS} reserve={[state.tagData.updatedLabel]}>{state.tagData.status || state.tagData.updatedLabel}</StatusMessage>
-          </div>
-          <div className={BACKUP_ROW_ACTIONS_CLASS}>
-            {state.tagData.hasRecords ? (
-              <StatusButton
-                size="sm"
-                type="button"
-                variant="secondary"
-                aria-label="导出书签标签数据"
-                feedback={state.tagData.exportFeedback}
-                icon="Download"
-                labels={{ idle: '导出标签数据', pending: '正在导出', success: '已导出', error: '导出失败' }}
-                disabled={state.tagData.busy}
-                focusableWhenDisabled={state.tagData.busy}
-                onClick={() => handleBackupAction({ action: 'export-tags' })}
-              />
-            ) : null}
-            <Button
-              size="sm"
-              type="button"
-              variant="secondary"
-              aria-label="导入书签标签数据"
-              disabled={state.tagData.busy}
-              focusableWhenDisabled={state.tagData.busy}
-              onClick={() => tagImportInputRef.current?.click()}
-            >
-              导入标签数据
-            </Button>
-            {state.tagData.hasRecords ? (
-              <Button
-                size="sm"
-                type="button"
-                variant="danger"
-                aria-label="清空全部书签标签数据"
-                disabled={state.tagData.busy}
-                focusableWhenDisabled={state.tagData.busy}
-                onClick={() => handleBackupAction({ action: 'clear-tags' })}
-              >
-                清空标签数据
-              </Button>
-            ) : null}
-          </div>
-          <Input
-            ref={tagImportInputRef}
-            aria-label="导入书签标签数据文件"
-            type="file"
-            accept="application/json,.json"
-            hidden
-            onChange={(event) => {
-              handleBackupAction({ action: 'import-tags', file: event.currentTarget.files?.[0] })
-              event.currentTarget.value = ''
-            }}
-          />
-        </div>
-      </div>
-
-      <div id="settings-full-backup" className={BACKUP_CARD_CLASS}>
-        <div className={BACKUP_HEAD_CLASS}>
-          <div className={BACKUP_COPY_COLUMN_CLASS}>
-            <strong className={BACKUP_TITLE_CLASS}>完整备份</strong>
-            <p className={BACKUP_COPY_CLASS}>
-              导出书签、标签、规则和设置；不包含 API Key、密码或 Cookie。
-            </p>
-            <StatusMessage className={BACKUP_COPY_CLASS} reserve={[BACKUP_SCOPE_COPY]}>
-              {state.backup.status || BACKUP_SCOPE_COPY}
-            </StatusMessage>
-          </div>
-          <div className={BACKUP_ROW_ACTIONS_CLASS}>
-            <StatusButton
-              size="sm"
-              type="button"
-              variant="secondary"
-              aria-label="导出完整书签备份"
-              feedback={state.backup.exportFeedback}
-              icon="Download"
-              labels={{ idle: '导出完整备份', pending: '正在导出', success: '已导出', error: '导出失败' }}
-              disabled={state.backup.busy}
-              focusableWhenDisabled={state.backup.busy}
-              onClick={() => handleBackupAction({ action: 'export-backup' })}
-            />
-            <Button
-              size="sm"
-              type="button"
-              variant="primary"
-              aria-label="导入完整备份并预览"
-              disabled={state.backup.busy}
-              focusableWhenDisabled={state.backup.busy}
-              onClick={() => backupImportInputRef.current?.click()}
-            >
-              导入并预览
-            </Button>
-          </div>
-          <Input
-            ref={backupImportInputRef}
-            aria-label="导入完整备份文件"
-            type="file"
-            accept="application/json,.json"
-            hidden
-            onChange={(event) => {
-              handleBackupAction({ action: 'import-backup', file: event.currentTarget.files?.[0] })
-              event.currentTarget.value = ''
-            }}
-          />
-        </div>
-        <div className={BACKUP_ROW_CLASS}>
-          <div className={BACKUP_COPY_COLUMN_CLASS}>
-            <strong className={BACKUP_TITLE_CLASS}>跨浏览器导出</strong>
-            <p className={BACKUP_COPY_CLASS}>
-              将书签、文件夹和添加时间保存为通用 HTML 文件，可导入 Chrome、Edge 或 Firefox。标签与设置请使用上方的完整备份。
-            </p>
-          </div>
-          <div className={BACKUP_ROW_ACTIONS_CLASS}>
-            <StatusButton
-              size="sm"
-              type="button"
-              variant="secondary"
-              aria-label="导出通用 HTML 书签文件"
-              feedback={state.backup.htmlExportFeedback}
-              icon="Download"
-              labels={{ idle: '导出 HTML 书签', pending: '正在导出', success: '已导出', error: '导出失败' }}
-              disabled={state.backup.busy}
-              focusableWhenDisabled={state.backup.busy}
-              onClick={() => handleBackupAction({ action: 'export-html' })}
-            />
-          </div>
-        </div>
-      </div>
-
-      <AutoBackupPoints busy={state.backup.busy} />
+      <SyncCard />
+      <BackupCard state={state} />
       <StorageManagement />
-
-      <div className={BACKUP_CARD_CLASS} id="backup-restore-preview">
-        <div className={BACKUP_ROW_CLASS}>
-          <div className={BACKUP_COPY_COLUMN_CLASS}>
-            <strong className={BACKUP_TITLE_CLASS}>恢复预览</strong>
-            <p className={BACKUP_COPY_CLASS}>
-              先查看差异，再选择恢复范围；完整恢复只补齐缺失书签。
-            </p>
-          </div>
-          {state.backup.hasBackup ? (
-            <div className={BACKUP_ROW_ACTIONS_CLASS}>
-              <Button size="sm" type="button" variant="secondary" disabled={state.backup.busy}
-                aria-label="从备份预览恢复书签与标签，保留当前设置"
-                onClick={() => handleBackupAction({ action: 'restore', mode: 'bookmarksOnly' })}>
-                恢复书签与标签
-              </Button>
-              <Button
-                size="sm"
-                type="button"
-                variant="secondary"
-                aria-label="从备份预览只恢复书签标签数据"
-                disabled={state.backup.busy}
-                focusableWhenDisabled={state.backup.busy}
-                onClick={() => handleBackupAction({ action: 'restore', mode: 'tagsOnly' })}
-              >
-                只恢复标签数据
-              </Button>
-              <Button
-                size="sm"
-                type="button"
-                variant="secondary"
-                aria-label="从备份预览只恢复新标签页设置"
-                disabled={state.backup.busy}
-                focusableWhenDisabled={state.backup.busy}
-                onClick={() => handleBackupAction({ action: 'restore', mode: 'newTabOnly' })}
-              >
-                只恢复新标签页设置
-              </Button>
-              <Button
-                size="sm"
-                type="button"
-                variant="primary"
-                aria-label="从备份预览恢复全部可安全恢复的数据"
-                disabled={state.backup.busy}
-                focusableWhenDisabled={state.backup.busy}
-                onClick={() => handleBackupAction({ action: 'restore', mode: 'safeFull' })}
-              >
-                安全恢复全部
-              </Button>
-            </div>
-          ) : null}
-        </div>
-        <div className={BACKUP_PREVIEW_LIST_CLASS}>
-          <BackupPreview
-            state={{ preview: state.backup.preview }}
-            onImportPreview={() => backupImportInputRef.current?.click()}
-          />
-        </div>
-      </div>
     </>
   )
 }
 
-function BackupPreview({
-  onImportPreview,
-  state
-}: {
-  onImportPreview: () => void
-  state: BackupPreviewState
-}) {
-  if (!state.preview) {
-    return (
-      <OptionEmptyState
-        title="先选择恢复点或导入备份"
-        description="预览保存时的书签与当前差异，再选择需要恢复的数据。"
-        actions={[{ label: '导入并预览', onClick: onImportPreview, variant: 'primary' }]}
-        className={BACKUP_EMPTY_CLASS}
-      />
-    )
+function BackupCard({ state }: { state: BackupControlsState }) {
+  const tagImportInput = useRef<HTMLInputElement | null>(null)
+  const backupImportInput = useRef<HTMLInputElement | null>(null)
+  const [activity, setActivity] = useState<BackupActionDetail['action']>('export-backup')
+  const { backup, tagData } = state
+  const busy = backup.busy || tagData.busy
+  const dispatch = (detail: BackupActionDetail) => {
+    setActivity(detail.action)
+    handleBackupAction(detail)
   }
-
-  const { counts } = state.preview
+  const tagAction = ['export-tags', 'import-tags', 'clear-tags'].includes(activity)
+  const exporting = activity === 'export-backup' || activity === 'export-html'
+  const feedback = activity === 'export-html' ? backup.htmlExportFeedback : backup.exportFeedback
+  const message = tagAction ? tagData.status : exporting ? backup.exportStatus : backup.status
+  const tone = tagAction ? tagData.statusTone || (tagData.exportFeedback.status === 'error' ? 'error' : 'neutral')
+    : exporting ? feedback.status === 'error' ? 'error' : 'neutral' : backup.statusTone || 'neutral'
 
   return (
-    <article className={BACKUP_PREVIEW_CARD_CLASS}>
-      <div className={BACKUP_PREVIEW_COPY_CLASS}>
-        <strong className={BACKUP_PREVIEW_TITLE_CLASS}>{state.preview.fileName || '已导入备份文件'}</strong>
-        <div className={BACKUP_PREVIEW_DETAIL_CLASS}>
-          导出时间：{state.preview.exportedAt || '未知'}，扩展版本：{state.preview.extensionVersion || '未知'}
-        </div>
-        <div className={BACKUP_PREVIEW_DETAIL_CLASS}>
-          书签 URL：{counts.bookmarkUrls}，当前缺失：{counts.missingBookmarkUrls}；标签记录：
-          {counts.tagRecords}，可匹配：{counts.tagMatched}，无法匹配：{counts.tagUnmatched}
-        </div>
-        <div className={BACKUP_PREVIEW_DETAIL_CLASS}>
-          回收站：{counts.recycleEntries}；忽略规则：{counts.ignoreRules}；重定向历史：
-          {counts.redirectEntries}；新标签页配置：{counts.newTabSections}
-        </div>
-        {state.preview.warnings.length ? (
-          <ul className={BACKUP_WARNING_LIST_CLASS}>
-            {state.preview.warnings.map((warning, index) => (
-              <li key={`${index}:${warning}`}>{warning}</li>
-            ))}
-          </ul>
-        ) : (
-          <p className={BACKUP_PREVIEW_DETAIL_CLASS}>未发现阻塞恢复的问题。</p>
-        )}
-      </div>
-      <BackupBookmarkPreview key={`${state.preview.fileName}:${state.preview.exportedAt}`} bookmarks={state.preview.bookmarks} />
-    </article>
+    <>
+      <AiProviderCard
+        as="section"
+        id="settings-full-backup"
+        aria-labelledby="backup-export-title"
+        className={AI_SETTINGS_CARD_CLASS}
+        title={
+          <div className="flex min-w-0 items-center gap-1.5">
+            <h2 id="backup-export-title" className={AI_SETTINGS_TITLE_CLASS}>备份与恢复</h2>
+            <Popover title="备份范围" align="start" showArrow={false} collisionPadding={16}
+              trigger={<Button variant="ghost" size="icon-xs" aria-label="查看备份范围">
+                <Icon name="CircleHelp" size={14} aria-hidden="true" />
+              </Button>}>
+              <p className="m-0 text-[13px] leading-relaxed text-ds-text-secondary">
+                保存全部书签、标签、整理规则和设置，包括自定义图标。
+              </p>
+              <p className="m-0 text-[13px] leading-relaxed text-ds-text-secondary">
+                不包含 API Key、密码、Cookie、同步配置、正文索引、本地壁纸和 MHTML 存档。同步配置可在上方“同步”的菜单中导出。
+              </p>
+            </Popover>
+          </div>
+        }
+        description={
+          <StatusMessage id="backup-action-status" className={AI_SETTINGS_SUBTITLE_CLASS} reserve={[BACKUP_SCOPE]} tone={tone}>
+            {backup.preview ? BACKUP_SCOPE : message || BACKUP_SCOPE}
+          </StatusMessage>
+        }
+        status={
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <StatusButton size="sm" variant="primary" aria-label="备份到文件" feedback={backup.exportFeedback}
+              icon="Download" labels={BACKUP_LABELS} disabled={busy} focusableWhenDisabled={busy}
+              onClick={() => dispatch({ action: 'export-backup' })} />
+            <Button size="sm" variant="secondary" aria-label="从文件恢复" disabled={busy} focusableWhenDisabled={busy}
+              onClick={() => backupImportInput.current?.click()}>
+              <Icon name="Upload" size={14} aria-hidden="true" /> 从文件恢复
+            </Button>
+            <span id="settings-tag-data">
+              <OptionActionsMenu label="其他备份操作" iconOnly disabled={busy} actions={[
+                { id: 'html', label: '导出 HTML 书签', icon: 'Globe', onSelect: () => dispatch({ action: 'export-html' }) },
+                { id: 'tags-export', label: '导出标签数据', icon: 'Tag', disabled: !tagData.hasRecords, separatorBefore: true,
+                  onSelect: () => dispatch({ action: 'export-tags' }) },
+                { id: 'tags-import', label: '导入标签数据', icon: 'Upload', onSelect: () => tagImportInput.current?.click() },
+                { id: 'tags-clear', label: '清空标签数据', icon: 'Trash2', danger: true, disabled: !tagData.hasRecords, separatorBefore: true,
+                  onSelect: () => dispatch({ action: 'clear-tags' }) }
+              ]} />
+            </span>
+            <Input ref={backupImportInput} aria-label="导入完整备份文件" type="file" accept="application/json,.json" hidden
+              onChange={event => {
+                dispatch({ action: 'import-backup', file: event.currentTarget.files?.[0] })
+                event.currentTarget.value = ''
+              }} />
+            <Input ref={tagImportInput} aria-label="导入书签标签数据文件" type="file" accept="application/json,.json" hidden
+              onChange={event => {
+                dispatch({ action: 'import-tags', file: event.currentTarget.files?.[0] })
+                event.currentTarget.value = ''
+              }} />
+          </div>
+        }
+        headerClassName={AI_SETTINGS_HEADER_CLASS}
+        copyClassName={BACKUP_CARD_COPY_CLASS}
+        iconName="Save"
+        bodyClassName="p-4"
+      >
+        <AutoBackupPoints busy={busy} onPreview={backupId => dispatch({ action: 'preview-auto-backup', backupId })} />
+      </AiProviderCard>
+      <BackupRestoreDialog state={state} onAction={dispatch} />
+    </>
   )
 }

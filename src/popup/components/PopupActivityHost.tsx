@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '../../ui/base/Button'
 import { Popover } from '../../ui/base/Popover'
 import { Icon } from '../../ui/icons/Icon'
@@ -35,10 +35,12 @@ function ActivityGlyph({ item, size }: { item: PopupActivity; size: number }) {
   )
 }
 
-export function PopupActivityHost({ state, handlers, suspended }: {
+export function PopupActivityHost({ state, handlers, suspended, covered = false, pageActionAccessory }: {
   state: PopupSmartClassifierViewModel
   handlers: PopupSmartClassifierActionHandlers
   suspended: boolean
+  covered?: boolean
+  pageActionAccessory?: ReactNode
 }) {
   const snapshot = usePopupActivity()
   const chromeView = usePopupChromeView()
@@ -57,12 +59,12 @@ export function PopupActivityHost({ state, handlers, suspended }: {
   useLayoutEffect(() => {
     popupActivities.pause('workflow', suspended)
     popupActivities.pause('modal', modals.open)
-    if (suspended || modals.open) {
+    if (suspended || covered || modals.open) {
       // Making the card inert/unmounting it does not reliably emit blur/leave.
       popupActivities.pause('pointer', false)
       popupActivities.pause('focus', false)
     }
-  }, [suspended, modals.open])
+  }, [suspended, covered, modals.open])
 
   useEffect(() => {
     const visibility = () => popupActivities.pause('hidden', document.hidden)
@@ -117,11 +119,11 @@ export function PopupActivityHost({ state, handlers, suspended }: {
     const finished = old && (!active || (old.id === active.id && old.type === 'pending' && active.type === 'success'))
     const ownsFocus = root.current?.contains(document.activeElement) ||
       (document.activeElement === document.body && actionFocusId.current === old?.id)
-    if (finished && !modals.open && !suspended && ownsFocus) {
+    if (finished && !modals.open && !suspended && !covered && ownsFocus) {
       actionFocusId.current = null
       focusSearch()
     }
-  }, [active, modals.open, suspended])
+  }, [active, modals.open, suspended, covered])
 
   const others = snapshot.items.filter(item => item.id !== active?.id)
   const recordMorph = usePopupActivityMorph(root, `${active?.id ?? ''}|${others.map(item => item.id).join(',')}`)
@@ -197,14 +199,15 @@ export function PopupActivityHost({ state, handlers, suspended }: {
               >
                 <Icon name="X" size={14} aria-hidden="true" />
               </Button>
+              {pageActionAccessory}
             </div>
           </article>
         ) : (
-          <PopupSmartClassifier state={state} handlers={handlers} pageStatusAccessory={dots} />
+          <PopupSmartClassifier state={state} handlers={handlers} pageStatusAccessory={dots} pageActionAccessory={pageActionAccessory} />
         )}
       </PopupActivityTransition>
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        {modals.open ? '' : active ? `${active.message}${active.detail ? `。${active.detail}` : ''}` : ''}
+        {modals.open || covered ? '' : active ? `${active.message}${active.detail ? `。${active.detail}` : ''}` : ''}
       </span>
     </section>
   )

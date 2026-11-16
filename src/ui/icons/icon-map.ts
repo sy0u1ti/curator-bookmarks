@@ -1,12 +1,13 @@
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   ArchiveRestore,
   Bot,
   Bookmark,
   BookmarkPlus,
   Check,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   CircleHelp,
   Clock,
@@ -20,6 +21,7 @@ import {
   FolderOpen,
   Gauge,
   GripVertical,
+  HardDrive,
   Heart,
   Pin,
   Inbox,
@@ -40,19 +42,21 @@ import {
   Sparkles,
   Tag,
   Trash2,
+  Upload,
   X,
   type LucideIcon
 } from 'lucide-react'
 
 export const iconMap = {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   ArchiveRestore,
   Bot,
   Bookmark,
   BookmarkPlus,
   Check,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   CircleHelp,
   Clock,
@@ -66,6 +70,7 @@ export const iconMap = {
   FolderOpen,
   Gauge,
   GripVertical,
+  HardDrive,
   Heart,
   Pin,
   Inbox,
@@ -86,6 +91,7 @@ export const iconMap = {
   Sparkles,
   Tag,
   Trash2,
+  Upload,
   X
 } satisfies Record<string, LucideIcon>
 

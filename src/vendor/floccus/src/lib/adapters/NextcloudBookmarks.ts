@@ -1,0 +1,1363 @@
+// Nextcloud ADAPTER
+import { CapacitorHttp as Http } from '@capacitor/core'
+import Adapter from '../interfaces/Adapter'
+import HtmlSerializer from '../serializers/Html'
+import Logger from '../Logger'
+import { Bookmark, Folder, ItemLocation, TItem, TItemLocation } from '../Tree'
+import { Base64 } from 'js-base64'
+import AsyncLock from 'async-lock'
+import * as Parallel from 'async-parallel'
+import PQueue from 'p-queue'
+import flatten from 'lodash/flatten'
+import {
+  BulkImportResource,
+  ClickCountResource, ICapabilities, IHashSettings,
+  LoadFolderChildrenResource,
+  OrderFolderResource, THashFunction
+} from '../interfaces/Resource'
+import Ordering from '../interfaces/Ordering'
+import {
+  AuthenticationError, CreateBookmarkError,
+  HttpError, CancelledSyncError,
+  MissingPermissionsError,
+  NetworkError,
+  ParseResponseError,
+  RedirectError,
+  RequestTimeoutError, ResourceLockedError,
+  UnexpectedServerResponseError,
+  UnknownCreateTargetError,
+  UnknownFolderUpdateError,
+  UnknownMoveTargetError, UpdateBookmarkError, InvalidUrlError
+} from '../../errors/Error'
+
+declare const IS_BROWSER: boolean
+
+const PAGE_SIZE = 300
+const TIMEOUT = 300000
+
+export interface NextcloudBookmarksConfig {
+  type: 'nextcloud-folders'|'nextcloud-bookmarks'
+  url: string
+  username: string
+  password: string
+  serverRoot?: string
+  includeCredentials?: boolean
+  allowRedirects?: boolean
+  allowNetwork?: boolean
+  label?: string
+}
+
+interface IChildFolder {
+  id: string|number
+  title: string
+  parentId?: string|number
+  children?: IChildFolder[]
+}
+
+interface IChildOrderItem {
+  type: 'bookmark' | 'folder'
+  id: string|number
+  children?: IChildOrderItem[]
+}
+
+const LOCK_INTERVAL = 2 * 60 * 1000 // Set lock every two minutes while syncing
+
+/**
+ * The form in which CapacitorHttp takes a multipart body (dataType 'formData'),
+ * the same its patched fetch hands the native side: files as base64
+ */
+async function serializeFormDataForNative(formData: FormData): Promise<Record<string, string>[]> {
+  const pairs: [string, string | File][] = []
+  formData.forEach((value, key) => pairs.push([key, value]))
+  const entries = []
+  for (const [key, value] of pairs) {
+    if (typeof value === 'string') {
+      entries.push({ key, value, type: 'string' })
+    } else {
+      entries.push({
+        key,
+        value: Base64.fromUint8Array(new Uint8Array(await value.arrayBuffer())),
+        type: 'base64File',
+        contentType: value.type || 'application/octet-stream',
+        fileName: value.name || 'blob',
+      })
+    }
+  }
+  return entries
+}
+
+export default class NextcloudBookmarksAdapter implements Adapter, BulkImportResource<typeof ItemLocation.SERVER>, LoadFolderChildrenResource<typeof ItemLocation.SERVER>, OrderFolderResource<typeof ItemLocation.SERVER>, ClickCountResource<typeof ItemLocation.SERVER> {
+  private server: NextcloudBookmarksConfig
+  private fetchQueue: PQueue<{ concurrency: 12 }>
+  private bookmarkLock: AsyncLock
+  private importLock: AsyncLock
+  private list: Bookmark<typeof ItemLocation.SERVER>[]
+  private tree: Folder<typeof ItemLocation.SERVER>
+  private canceled = false
+  private cancelGeneration = 0
+  private inflightReads = new Set<() => void>()
+  private lockingInterval: any
+  private lockingPromise: Promise<boolean>
+  private ended = false
+  private locked = false
+  private hasFeatureJavascriptLinks: boolean = null
+  private hashSettings: IHashSettings
+  // The folder children endpoint doesn't return tags (they live in a separate
+  // table server-side), so we pull them from the flat bookmark list -- once per
+  // sync -- and stitch them onto the tree.
+  private tagsByBookmarkId: Record<string, string[]> = null
+  private capabilities: any
+  private ticket: string
+  private ticketTimestamp: number
+
+  constructor(server: NextcloudBookmarksConfig) {
+    this.server = server
+    this.fetchQueue = new PQueue({ concurrency: 5 })
+    this.bookmarkLock = new AsyncLock()
+    this.importLock = new AsyncLock()
+  }
+
+  static getDefaultValues(): NextcloudBookmarksConfig {
+    return {
+      type: 'nextcloud-bookmarks',
+      url: 'https://example.org',
+      username: 'bob',
+      password: 's3cret',
+      serverRoot: '',
+      includeCredentials: false,
+      allowRedirects: false,
+      allowNetwork: false,
+    }
+  }
+
+  setData(data:NextcloudBookmarksConfig):void {
+    this.server = { ...data }
+    this.ticket = null
+    this.ticketTimestamp = 0
+  }
+
+  getData():NextcloudBookmarksConfig {
+    return { ...NextcloudBookmarksAdapter.getDefaultValues(), ...this.server }
+  }
+
+  getLabel():string {
+    const data = this.getData()
+    return data.label || (data.username.includes('@') ? data.username + ' on ' + new URL(data.url).hostname : data.username + '@' + new URL(data.url).hostname)
+  }
+
+  acceptsBookmark(bm: Bookmark<typeof ItemLocation.SERVER>):boolean {
+    try {
+      return Boolean(~['https:', 'http:', 'ftp:'].concat(this.hasFeatureJavascriptLinks ? ['javascript:'] : []).indexOf(new URL(bm.url).protocol))
+    } catch (e) {
+      return false
+    }
+  }
+
+  normalizeServerURL(input:string):string {
+    let serverURL
+    try {
+      serverURL = new URL(input)
+    } catch (e) {
+      throw new InvalidUrlError(input)
+    }
+    const indexLoc = serverURL.pathname.indexOf('index.php')
+    if (!serverURL.pathname) serverURL.pathname = ''
+    serverURL.search = ''
+    serverURL.hash = ''
+    serverURL.pathname = serverURL.pathname.substring(0, ~indexLoc ? indexLoc : undefined)
+    const output = serverURL.toString()
+    return output + (output[output.length - 1] !== '/' ? '/' : '')
+  }
+
+  async onSyncStart(needLock = true, forceLock = false): Promise<void> {
+    if (IS_BROWSER) {
+      const browser = (await import('../browser-api')).default
+      let hasPermissions, error = false
+      try {
+        hasPermissions = await browser.permissions.contains({ origins: [this.server.url + '/'] })
+      } catch (e) {
+        error = true
+        console.warn(e)
+      }
+      const {isOrion} = await browser.storage.local.get({'isOrion': false})
+      if (!error && !hasPermissions && !isOrion) {
+        throw new MissingPermissionsError()
+      }
+    }
+
+    this.canceled = false
+    this.ended = false
+    // Those of the previous sync: getBookmarksTree builds new ones, and until
+    // then the javascript-links probe must not look for its folder in a stale
+    // tree (e.g. one rooted at the serverRoot, which doesn't contain -1)
+    this.tree = null
+    this.list = null
+
+    this.capabilities = await this.getNextcloudCapabilities()
+    await this.checkFeatureJavascriptLinks()
+
+    if (this.lockingInterval) {
+      clearInterval(this.lockingInterval)
+    }
+
+    // if needLock -- we always need it
+    // Not the state of the previous sync: if acquiring throws, onSyncFail must
+    // not release a lock we don't hold
+    this.locked = false
+    this.locked = await this.acquireLock()
+    if (forceLock) {
+      this.locked = true
+    } else if (!this.locked) {
+      throw new ResourceLockedError()
+    }
+    this.lockingInterval = setInterval(() => {
+      if (!this.ended) {
+        this.acquireLock()
+          .catch(() => { /* pass */ })
+      }
+    }, LOCK_INTERVAL)
+  }
+
+  async onSyncComplete(): Promise<void> {
+    this.ended = true
+    clearInterval(this.lockingInterval)
+    await this.releaseLock()
+  }
+
+  async onSyncFail(): Promise<void> {
+    this.ended = true
+    clearInterval(this.lockingInterval)
+    await this.releaseLock()
+  }
+
+  cancel() {
+    this.canceled = true
+    // Don't clear the fetchQueue: p-queue drops cleared tasks without settling
+    // their promises, and the sync waits for in-flight mutations after a cancel
+    // (Default#raceWithCancellation). Requests queued so far reject instead once
+    // they're dequeued; the ones sent after this (releasing the lock) still go out
+    this.cancelGeneration++
+    // Reads in flight are given up on, too. Writes aren't: whether they landed
+    // on the server is what the sync waits to find out
+    this.inflightReads.forEach((abort) => abort())
+  }
+
+  /**
+   * Queue a request, rejecting it without sending anything if the sync is
+   * cancelled before it gets its turn. A read (GET/HEAD) is also given up on
+   * if the sync is cancelled while it's in flight: `abort` stops the request,
+   * where the platform allows that
+   */
+  private enqueueRequest<T>(verb: string, send: () => Promise<T>, abort: () => void = () => { /* pass */ }): Promise<T> {
+    const generation = this.cancelGeneration
+    return this.fetchQueue.add(() => {
+      if (generation !== this.cancelGeneration) {
+        return Promise.reject(new CancelledSyncError())
+      }
+      if (!['get', 'head'].includes(verb.toLowerCase())) {
+        return send()
+      }
+      let giveUp: () => void
+      const cancelled = new Promise<T>((resolve, reject) => {
+        giveUp = () => {
+          abort()
+          reject(new CancelledSyncError())
+        }
+      })
+      this.inflightReads.add(giveUp)
+      return Promise.race([send(), cancelled])
+        .finally(() => this.inflightReads.delete(giveUp))
+    })
+  }
+
+  async getBookmarksList():Promise<Bookmark<typeof ItemLocation.SERVER>[]> {
+    return this.bookmarkLock.acquire('list', async() => {
+      if (this.list) {
+        return this.list
+      }
+
+      Logger.log('Fetching bookmarks')
+      let i = 0
+      let data = []
+      let json
+      do {
+        json = await this.sendRequest(
+          'GET',
+          `index.php/apps/bookmarks/public/rest/v2/bookmark?page=${i}&limit=${PAGE_SIZE}`
+        )
+        if (!Array.isArray(json.data)) {
+          throw new UnexpectedServerResponseError()
+        }
+        data = data.concat(json.data)
+        i++
+      } while (json.data.length === PAGE_SIZE)
+
+      const bookmarks = flatten(
+        data.map((bm) => {
+          const bookmark = {
+            id: bm.id as number | string,
+            url: (bm.target || bm.url) as string,
+            title: bm.title as string,
+            tags: bm.tags as string[],
+            parentId: null,
+            location: ItemLocation.SERVER,
+          }
+
+          return bm.folders.map((parentId) => {
+            const b = { ...bookmark }
+            b.parentId = parentId
+            return new Bookmark(b)
+          })
+        })
+      )
+
+      Logger.log('Received bookmarks from server', bookmarks)
+      this.list = bookmarks
+      return bookmarks
+    })
+  }
+
+  /**
+   * Map of upstream bookmark id -> tag names, lazily fetched once per sync.
+   * Only ever called when tag syncing is negotiated, so accounts that don't use
+   * tags don't pay for the extra listing.
+   */
+  async getTagsByBookmarkId():Promise<Record<string, string[]>> {
+    if (this.tagsByBookmarkId) {
+      return this.tagsByBookmarkId
+    }
+    const list = await this.getBookmarksList()
+    const tagsByBookmarkId = {}
+    for (const bookmark of list) {
+      // list ids are the plain upstream ids, no ';parentId' suffix
+      tagsByBookmarkId[String(bookmark.id)] = bookmark.tags || []
+    }
+    this.tagsByBookmarkId = tagsByBookmarkId
+    return tagsByBookmarkId
+  }
+
+  async getBookmarksTree(loadAll = false):Promise<Folder<typeof ItemLocation.SERVER>> {
+    this.list = null // clear cache before starting a new sync
+    this.tagsByBookmarkId = null
+
+    if (!loadAll) {
+      return this.getSparseBookmarksTree()
+    } else {
+      return this.getCompleteBookmarksTree()
+    }
+  }
+
+  async _getChildFolders(folderId:string|number, layers = 0):Promise<IChildFolder[]> {
+    const folderJson = await this.sendRequest(
+      'GET',
+      `index.php/apps/bookmarks/public/rest/v2/folder?root=${folderId}&layers=${layers}`
+    )
+    if (!Array.isArray(folderJson.data)) {
+      throw new UnexpectedServerResponseError()
+    }
+    return folderJson.data
+  }
+
+  async _findServerRoot():Promise<Folder<typeof ItemLocation.SERVER>> {
+    let tree = new Folder({ id: -1, location: ItemLocation.SERVER })
+    let childFolders
+    await Parallel.each(
+      this.server.serverRoot.split('/').slice(1),
+      async(segment) => {
+        childFolders = (tree.children && tree.children.length) ? tree.children : (await this._getChildFolders(tree.id))
+        let currentChild = childFolders.find(
+          (folder) => folder.title === segment
+        )
+        if (!currentChild) {
+          // create folder
+          const body = {
+            parent_folder: tree.id,
+            title: segment,
+          }
+          const json = await this.sendRequest(
+            'POST',
+            'index.php/apps/bookmarks/public/rest/v2/folder',
+            'application/json',
+            body
+          )
+          if (typeof json.item !== 'object') {
+            throw new UnexpectedServerResponseError()
+          }
+          currentChild = { id: json.item.id, children: [], title: json.item.title }
+        }
+        tree = new Folder({ id: currentChild.id, title: currentChild.title, location: ItemLocation.SERVER })
+      },
+      1
+    )
+    return tree
+  }
+
+  async getCompleteBookmarksTree():Promise<Folder<typeof ItemLocation.SERVER>> {
+    let tree = new Folder({ id: -1, location: ItemLocation.SERVER })
+    if (this.server.serverRoot) {
+      tree = await this._findServerRoot()
+    }
+
+    tree.children = await this._getChildren(tree.id, -1)
+    this.tree = tree
+    return tree.copy()
+  }
+
+  async getSparseBookmarksTree() :Promise<Folder<typeof ItemLocation.SERVER>> {
+    let tree = new Folder({ id: -1, location: ItemLocation.SERVER })
+
+    if (this.server.serverRoot) {
+      tree = await this._findServerRoot()
+    }
+
+    this.list = null
+    tree.loaded = false
+    const treeHash = await this._getFolderHash(tree.id)
+    tree.setHashCacheValue(this.hashSettings, treeHash)
+    this.tree = tree.copy(true) // we clone (withHash), so we can mess with our own version
+    return tree
+  }
+
+  async _getFolderHash(folderId:string|number):Promise<string> {
+    const hashFn = {'sha256': 'sha256', 'murmur3': 'murmur3a', 'xxhash3': 'xxh32'}[this.hashSettings.hashFn]
+    const supportedHashFns = this.capabilities?.bookmarks?.['hash-functions']
+    if (Array.isArray(supportedHashFns) && !supportedHashFns.includes(hashFn)) {
+      throw new Error('Selected hash function is not supported by server')
+    }
+    // The server hashes bookmarks as json_encode of the requested fields, in the
+    // requested order -- Bookmark#hash builds the very same JSON. Without
+    // fields[] the server defaults to title+url, which is what we want when tags
+    // aren't synced.
+    const fields = this.hashSettings.syncTags
+      ? '&fields[]=title&fields[]=url&fields[]=tags'
+      : ''
+    return this.sendRequest(
+      'GET',
+      `index.php/apps/bookmarks/public/rest/v2/folder/${folderId}/hash?hashFn=${hashFn}${fields}`
+    )
+      .catch(() => {
+        return { data: '0' } // fallback
+      })
+      .then((json) => {
+        return json.data
+      })
+  }
+
+  async _getChildren(folderId:string|number, layers:number):Promise<TItem<typeof ItemLocation.SERVER>[]> {
+    const childrenJson = await this.sendRequest(
+      'GET',
+      `index.php/apps/bookmarks/public/rest/v2/folder/${folderId}/children?layers=${layers}`
+    )
+    const tagsByBookmarkId = this.hashSettings?.syncTags ? await this.getTagsByBookmarkId() : null
+    const children = childrenJson.data
+    const recurseChildren = (folderId, children) => {
+      return children.map((item) => {
+        if (item.type === 'bookmark') {
+          if ('target' in item && this.hasFeatureJavascriptLinks === null) {
+            this.hasFeatureJavascriptLinks = true
+          }
+          return new Bookmark({
+            id: item.id + ';' + folderId,
+            title: item.title,
+            parentId: folderId,
+            url: item.target || item.url,
+            ...(tagsByBookmarkId && { tags: tagsByBookmarkId[String(item.id)] || [] }),
+            location: ItemLocation.SERVER,
+          })
+        } else if (item.type === 'folder') {
+          const childFolder = new Folder({
+            id: item.id,
+            parentId: folderId,
+            title: item.title,
+            location: ItemLocation.SERVER,
+          })
+          childFolder.loaded = Boolean(item.children) // not children.length but whether the whole children field exists
+          childFolder.children = recurseChildren(item.id, item.children || [])
+          return childFolder
+        }
+      })
+    }
+    return recurseChildren(folderId, children)
+  }
+
+  async loadFolderChildren(folderId:string|number, all?: boolean): Promise<TItem<typeof ItemLocation.SERVER>[]> {
+    const folder = this.tree.findFolder(folderId)
+    if (!folder) {
+      throw new Error('Could not find folder for loadFolderChildren')
+    }
+    if (folder.loaded) {
+      return folder.copy(true).children
+    }
+    let children
+    if (all) {
+      children = await this._getChildren(folderId, -1)
+    } else {
+      children = await this._getChildren(folderId, 1)
+      const recurse = async(children) => {
+        return Parallel.each(children, async(child) => {
+          if (!(child instanceof Folder)) {
+            return
+          }
+          if (!child.loaded) {
+            const folderHash = await this._getFolderHash(child.id)
+            child.setHashCacheValue(this.hashSettings, folderHash)
+          }
+          await recurse(child.children)
+        }, 5)
+      }
+      await recurse(children)
+    }
+    const oldChildren = folder.children
+    folder.children = children
+    folder.loaded = true
+    // Whatever was listed here before has to leave the index of the folders
+    // above, which still know about it
+    oldChildren.forEach((child) => this.tree.removeFromIndex(child))
+    folder.createIndex()
+    this.tree.updateIndex(folder)
+    return folder.copy(true).children
+  }
+
+  async createFolder(folder:Folder<typeof ItemLocation.SERVER>):Promise<string|number> {
+    Logger.log('(nextcloud-folders)CREATEFOLDER', {folder})
+    const parentId = folder.parentId
+    const title = folder.title
+
+    const parentFolder = this.tree.findFolder(parentId)
+    if (!parentFolder) {
+      throw new UnknownCreateTargetError()
+    }
+    const body = {
+      parent_folder: parentId,
+      title: title,
+    }
+    const json = await this.sendRequest(
+      'POST',
+      'index.php/apps/bookmarks/public/rest/v2/folder',
+      'application/json',
+      body,
+      undefined,
+      undefined,
+      folder,
+    )
+    if (typeof json.item !== 'object') {
+      throw new UnexpectedServerResponseError()
+    }
+
+    const newFolder = new Folder({
+      id: json.item.id,
+      title,
+      parentId,
+      location: ItemLocation.SERVER,
+    })
+    parentFolder.children.push(newFolder)
+    this.tree.updateIndex(newFolder)
+    return json.item.id
+  }
+
+  // The import endpoint adds to the folder, so a subtree too large for one
+  // request can be imported in chunks
+  bulkImportAppendsChildren = true
+
+  async bulkImportFolder(parentId:string|number, folder:Folder<typeof ItemLocation.SERVER>):Promise<Folder<typeof ItemLocation.SERVER>> {
+    if (folder.count() > 75) {
+      throw new Error('Refusing to bulk import more than 75 bookmarks')
+    }
+    Logger.log('(nextcloud-folders)BULKIMPORT', { parentId, folder })
+    const parentFolder = this.tree.findFolder(parentId)
+    if (!parentFolder) {
+      throw new UnknownCreateTargetError()
+    }
+    const blob = new Blob(
+      [
+        '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n',
+        '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n',
+        HtmlSerializer.serialize(folder),
+      ],
+      {
+        type: 'text/html',
+      }
+    )
+
+    const body = new FormData()
+    body.append('bm_import', blob, 'upload.html')
+
+    const json = await this.importLock.acquire('import', async() => {
+      return this.sendRequest(
+        'POST',
+        `index.php/apps/bookmarks/public/rest/v2/folder/${parentId}/import`,
+        'multipart/form-data',
+        body,
+        undefined,
+        undefined,
+        folder
+      )
+    })
+
+    const recurseChildren = (children, id, title, parentId) => {
+      return new Folder({
+        id,
+        title,
+        parentId,
+        location: ItemLocation.SERVER,
+        children: children.map((item) => {
+          if (item.type === 'bookmark') {
+            return new Bookmark({
+              id: item.id + ';' + id,
+              title: item.title,
+              url: item.target || item.url,
+              parentId: id,
+              location: ItemLocation.SERVER,
+            })
+          } else if (item.type === 'folder') {
+            return recurseChildren(item.children, item.id, item.title, id)
+          } else {
+            console.log('PEBCAK', item)
+            throw new Error('PEBKAC')
+          }
+        }),
+      })
+    }
+    const imported = recurseChildren(json.data, parentId, folder.title, folder.parentId)
+    // The endpoint adds to the folder and answers with just what it imported, so
+    // keep what the folder held already -- Default#executeCreate imports large
+    // subtrees in several chunks. A bookmark the folder contained before the
+    // import comes back under the id it already has there.
+    const existingIds = new Set(parentFolder.children.map((child) => child.type + ':' + child.id))
+    imported.copy(true).children
+      .filter((child) => !existingIds.has(child.type + ':' + child.id))
+      .forEach((child) => {
+        parentFolder.children.push(child)
+        this.tree.updateIndex(child)
+      })
+    return imported
+  }
+
+  async updateFolder(folder:Folder<typeof ItemLocation.SERVER>):Promise<void> {
+    Logger.log('(nextcloud-folders)UPDATEFOLDER', { folder })
+    const id = folder.id
+    const oldFolder = this.tree.findFolder(folder.id)
+    if (!oldFolder) {
+      throw new UnknownFolderUpdateError()
+    }
+    if (oldFolder.findFolder(folder.parentId)) {
+      throw new Error('Detected folder loop creation')
+    }
+    // Check the target before sending anything: once the server has moved the
+    // folder, failing here would only fail a sync over a change that went through
+    const newParentFolder = this.tree.findFolder(folder.parentId)
+    if (!newParentFolder) {
+      throw new UnknownMoveTargetError()
+    }
+    const body = {
+      parent_folder: folder.parentId,
+      title: folder.title,
+    }
+    await this.sendRequest(
+      'PUT',
+      `index.php/apps/bookmarks/public/rest/v2/folder/${id}`,
+      'application/json',
+      body,
+      undefined,
+      undefined,
+      folder
+    )
+    if (String(oldFolder.parentId) === String(folder.parentId)) {
+      // A rename: taking the folder out and appending it again would move it
+      // to the end of its parent
+      oldFolder.title = folder.title
+      return
+    }
+    this.tree.removeFromIndex(oldFolder)
+    // An old parent we don't know (any more) holds nothing to take the folder
+    // out of in our tree
+    const oldParentFolder = this.tree.findFolder(oldFolder.parentId)
+    if (oldParentFolder) {
+      oldParentFolder.children = oldParentFolder.children.filter(
+        (child) => String(child.id) !== String(id)
+      )
+    } else {
+      Logger.log('(nextcloud-folders)UPDATEFOLDER: old parent folder ' + oldFolder.parentId + ' is not in the tree, nothing to remove the folder from')
+    }
+    newParentFolder.children.push(oldFolder)
+    oldFolder.title = folder.title
+    oldFolder.parentId = folder.parentId
+    this.tree.updateIndex(oldFolder)
+  }
+
+  async orderFolder(id:string|number, order:Ordering<typeof ItemLocation.SERVER>):Promise<void> {
+    Logger.log('(nextcloud-folders)ORDERFOLDER', { id, order })
+    const body = {
+      data: order.map((item) => ({
+        id: String(item.id).split(';')[0],
+        type: item.type,
+      })),
+    }
+    await this.sendRequest(
+      'PATCH',
+      `index.php/apps/bookmarks/public/rest/v2/folder/${id}/childorder`,
+      'application/json',
+      body
+    )
+  }
+
+  async removeFolder(folder:Folder<typeof ItemLocation.SERVER>):Promise<void> {
+    Logger.log('(nextcloud-folders)REMOVEFOLDER', { folder })
+    const id = folder.id
+    const oldFolder = this.tree.findFolder(id)
+    if (!oldFolder) {
+      return
+    }
+    await this.sendRequest(
+      'DELETE',
+      `index.php/apps/bookmarks/public/rest/v2/folder/${id}`,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      folder,
+    )
+    const parent = this.tree.findFolder(oldFolder.parentId)
+    if (parent) {
+      parent.children = parent.children.filter(
+        (child) => String(child.id) !== String(id)
+      )
+      this.tree.removeFromIndex(oldFolder)
+    }
+  }
+
+  async _getBookmark(id:string|number):Promise<Bookmark<typeof ItemLocation.SERVER>[]> {
+    Logger.log('Fetching single bookmark')
+
+    const json = await this.sendRequest(
+      'GET',
+      'index.php/apps/bookmarks/public/rest/v2/bookmark/' + id
+    )
+    if (typeof json.item !== 'object') {
+      throw new UnexpectedServerResponseError()
+    }
+
+    const bm = json.item
+    if (!bm.folders.length) {
+      bm.folders = [null]
+    }
+    return bm.folders.map((parentId) => {
+      return new Bookmark({
+        id: bm.id + ';' + parentId,
+        url: bm.target || bm.url,
+        title: bm.title,
+        parentId: parentId,
+        tags: bm.tags,
+        location: ItemLocation.SERVER,
+      })
+    })
+  }
+
+  async getExistingBookmark(url:string):Promise<false|Bookmark<typeof ItemLocation.SERVER>> {
+    if (url.toLowerCase().startsWith('javascript:')) {
+      if (!this.hasFeatureJavascriptLinks) {
+        return false
+      }
+      const json = await this.sendRequest(
+        'GET',
+        `index.php/apps/bookmarks/public/rest/v2/bookmark?page=-1&search[]=${encodeURIComponent(
+          'javascript:'
+        )}`
+      )
+      if (json.data.length) {
+        const bookmark = json.data.find(bookmark => bookmark.target === url)
+        if (bookmark) {
+          return {...bookmark, parentId: bookmark.folders[0], url}
+        } else {
+          return false
+        }
+      } else {
+        return false
+      }
+    }
+    const json = await this.sendRequest(
+      'GET',
+      `index.php/apps/bookmarks/public/rest/v2/bookmark?url=${encodeURIComponent(
+        url
+      )}`
+    )
+    if (json.data.length) {
+      return {...json.data[0], parentId: json.data[0].folders[0], url}
+    } else {
+      return false
+    }
+  }
+
+  async createBookmark(bm:Bookmark<typeof ItemLocation.SERVER>):Promise<string|number> {
+    Logger.log('(nextcloud-folders)CREATE', bm)
+
+    // We need this lock to avoid creating two boomarks with the same url
+    // in parallel
+    return this.bookmarkLock.acquire(bm.url, async() => {
+      let newParentFolder
+      if (this.tree) {
+        newParentFolder = this.tree.findFolder(bm.parentId)
+        if (!newParentFolder) {
+          throw new UnknownCreateTargetError()
+        }
+      }
+
+      const existingBookmark = await this.getExistingBookmark(bm.url)
+      if (existingBookmark) {
+        bm.id = existingBookmark.id + ';' + bm.parentId // We already use the new parentId here, to avoid moving it away from the old location
+        const updatedBookmark = bm.copy()
+        updatedBookmark.title = existingBookmark.title
+        await this.updateBookmark(updatedBookmark)
+      } else {
+        const body = {
+          url: bm.url,
+          title: bm.title,
+          folders: [bm.parentId],
+          ...(this.hashSettings?.syncTags && { tags: bm.tags || [] }),
+        }
+
+        let json
+        try {
+          json = await this.sendRequest(
+            'POST',
+            'index.php/apps/bookmarks/public/rest/v2/bookmark',
+            'application/json',
+            body,
+            undefined,
+            undefined,
+            bm
+          )
+        } catch (e) {
+          if (e instanceof HttpError) {
+            throw new CreateBookmarkError(bm)
+          }
+          throw e
+        }
+        if (typeof json.item !== 'object') {
+          throw new UnexpectedServerResponseError()
+        }
+        bm.id = json.item.id + ';' + bm.parentId
+        // The tree uses the '<id>;<folderId>' ids of the children endpoint. An
+        // existing bookmark was put into the folder by updateBookmark already
+        if (this.tree) {
+          const treeMark = bm.copy()
+          newParentFolder.children.push(treeMark)
+          this.tree.updateIndex(treeMark)
+        }
+      }
+      // add bookmark to cached list, which uses the plain upstream ids
+      const upstreamMark = bm.copy()
+      upstreamMark.id = bm.id.split(';')[0]
+      if (this.list && !this.list.some((item) =>
+        String(item.id) === String(upstreamMark.id) && String(item.parentId) === String(upstreamMark.parentId))) {
+        this.list.push(upstreamMark)
+      }
+
+      return bm.id
+    })
+  }
+
+  async updateBookmark(newBm:Bookmark<typeof ItemLocation.SERVER>):Promise<void> {
+    Logger.log('(nextcloud-folders)UPDATE', newBm)
+
+    const [upstreamId, oldParentId] = String(newBm.id).split(';')
+
+    // We need this lock to avoid updating bookmarks which are in two places at Once
+    // in parallel
+    return this.bookmarkLock.acquire(upstreamId, async() => {
+      const bms = await this._getBookmark(upstreamId)
+
+      const newFolder = this.tree.findFolder(newBm.parentId)
+      if (!newFolder) {
+        throw new UnknownCreateTargetError()
+      }
+
+      const body = {
+        url: newBm.url,
+        title: newBm.title,
+        folders: bms
+          .map((bm) => bm.parentId)
+          .filter(
+            (parentId) =>
+              parentId && String(parentId) !== String(oldParentId) &&
+              // make sure this is not an outdated oldParentId (can happen due to canMergeWith in Scanner)
+              (!this.tree.findFolder(parentId) || this.tree.findFolder(parentId).findItemFilter('bookmark', i => i.canMergeWith(newBm)) || !this.tree.findFolder(parentId).loaded)
+          )
+          .concat([newBm.parentId]),
+        // When we don't sync tags we still have to send the ones the server
+        // already has, since the endpoint replaces the whole tag list.
+        tags: this.hashSettings?.syncTags ? (newBm.tags || []) : bms[0].tags,
+      }
+
+      try {
+        await this.sendRequest(
+          'PUT',
+          `index.php/apps/bookmarks/public/rest/v2/bookmark/${upstreamId}`,
+          'application/json',
+          body,
+          undefined,
+          undefined,
+          newBm,
+        )
+      } catch (e) {
+        if (e instanceof HttpError) {
+          throw new UpdateBookmarkError(newBm)
+        }
+        throw e
+      }
+
+      // The server has the update already. An old folder we don't know (any
+      // more) holds nothing to take the bookmark out of in our tree, so failing
+      // here would only fail a sync over a change that went through.
+      // A bookmark that stays in its folder is replaced in place below instead,
+      // so it keeps its position
+      if (String(oldParentId) !== String(newBm.parentId)) {
+        const oldParentFolder = this.tree.findFolder(oldParentId)
+        if (oldParentFolder) {
+          const oldBm = oldParentFolder.findBookmark(newBm.id)
+          oldParentFolder.children = oldParentFolder.children.filter(
+            (item) => !(item.type === 'bookmark' && item.id === newBm.id)
+          )
+          if (oldBm && this.tree) {
+            this.tree.removeFromIndex(oldBm)
+          }
+        } else {
+          Logger.log('(nextcloud-folders)UPDATE: old parent folder ' + oldParentId + ' is not in the tree, nothing to remove the bookmark from')
+        }
+      }
+      const newId = upstreamId + ';' + newBm.parentId
+      // Look for the id the bookmark will have in its new folder, too: it may
+      // be listed there already, under an id our stale one doesn't match
+      const existing = newFolder.children.find(item =>
+        item.type === 'bookmark' && (String(item.id) === String(newBm.id) || String(item.id) === newId))
+      if (existing && existing !== newBm) {
+        newFolder.children.splice(newFolder.children.indexOf(existing), 1, newBm)
+        this.tree.removeFromIndex(existing)
+      } else if (!existing) {
+        newFolder.children.push(newBm)
+      }
+      newBm.id = newId
+      this.tree.updateIndex(newBm)
+
+      return newBm.id
+    })
+  }
+
+  async removeBookmark(bookmark:Bookmark<typeof ItemLocation.SERVER>):Promise<void> {
+    Logger.log('(nextcloud-folders)REMOVE', { bookmark })
+    const id = bookmark.id
+    const [upstreamId, parentId] = String(id).split(';')
+
+    // Just to be safe
+    return this.bookmarkLock.acquire(upstreamId, async() => {
+      try {
+        await this.sendRequest(
+          'DELETE',
+          `index.php/apps/bookmarks/public/rest/v2/folder/${parentId}/bookmarks/${upstreamId}`,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          bookmark,
+        )
+      } catch (e) {
+        // Move on only if the bookmark is gone already (404) or we may not
+        // remove it (403, e.g. a read-only shared folder -- the next sync brings
+        // it back). Anything else (network error, cancellation, 5xx) would have
+        // the sync record a removal that never happened
+        if (!(e instanceof HttpError && e.status === 404) && !(e instanceof AuthenticationError)) {
+          throw e
+        }
+        Logger.log('Error removing bookmark from folder: ' + e.message + '\n Moving on.')
+      }
+      // Remove the bookmark from the cached list -- but only if we have one
+      // already: fetching it here would page through every bookmark in the
+      // account for the sake of a single splice (cf. createBookmark)
+      if (this.list) {
+        const listIndex = this.list.findIndex(
+          (bookmark) =>
+            String(bookmark.id) === String(upstreamId) &&
+            String(bookmark.parentId) === String(parentId)
+        )
+        // The list holds one entry per folder the bookmark sits in, so the
+        // entry to drop is the one for the folder we just removed it from
+        if (listIndex !== -1) {
+          this.list.splice(listIndex, 1)
+        }
+      }
+      const parentFolder = this.tree && this.tree.findFolder(parentId)
+      if (parentFolder) {
+        const treeId = upstreamId + ';' + parentId
+        const oldBm = parentFolder.children.find(
+          (item) => item.type === 'bookmark' && String(item.id) === treeId
+        )
+        if (oldBm) {
+          this.tree.removeFromIndex(oldBm)
+          parentFolder.children = parentFolder.children.filter((item) => item !== oldBm)
+        }
+      }
+    })
+  }
+
+  async getNextcloudCapabilities(): Promise<any> {
+    const data = await this.sendOCSRequest(
+      'GET',
+      `ocs/v2.php/cloud/capabilities?format=json`,
+    )
+    return data.capabilities
+  }
+
+  async checkFeatureJavascriptLinks(): Promise<void> {
+    if (this.capabilities && this.capabilities.bookmarks && typeof this.capabilities.bookmarks['javascript-bookmarks'] !== 'undefined') {
+      this.hasFeatureJavascriptLinks = this.capabilities.bookmarks['javascript-bookmarks']
+      return
+    }
+    try {
+      const json = await this.sendRequest(
+        'GET',
+        `index.php/apps/bookmarks/public/rest/v2/bookmark?page=0&limit=1`
+      )
+      if (!json.data.length) {
+        this.hasFeatureJavascriptLinks = true
+        try {
+          const url = `javascript:void(${Math.random()})`
+          const id = await this.createBookmark(new Bookmark({id: null, parentId: '-1', title: 'floccus', url, location: ItemLocation.SERVER}))
+          // The server took the link, so a failing clean-up says nothing about the feature
+          await this.removeBookmark(new Bookmark({id, parentId: '-1', title: 'floccus', url, location: ItemLocation.SERVER}))
+            .catch((e) => Logger.log('Failed to remove javascript link probe: ' + e.message))
+        } catch (e) {
+          this.hasFeatureJavascriptLinks = false
+        }
+        return
+      }
+      this.hasFeatureJavascriptLinks = 'target' in json.data[0]
+    } catch (e) {
+      this.hasFeatureJavascriptLinks = false
+    }
+  }
+
+  async sendOCSRequest(verb: string, relUrl: string, type: string = null, body: any = null) {
+    const res = await this.sendRequest(verb, relUrl, type, body, true, {
+      'OCS-APIRequest': 'true',
+    })
+
+    if (res.status === 401 || res.status === 403) {
+      throw new AuthenticationError()
+    }
+    if (res.status === 503 || res.status >= 400) {
+      const url = this.normalizeServerURL(this.server.url) + relUrl
+      Logger.log(`${verb} ${url}: Server responded with ${res.status}: ` + (await res.text()).substring(0, 250))
+      throw new HttpError(res.status, verb)
+    }
+    let json
+    try {
+      json = await res.json()
+    } catch (e) {
+      throw new ParseResponseError(e.message)
+    }
+    if (!json || typeof json.ocs !== 'object') {
+      throw new UnexpectedServerResponseError()
+    }
+    return json.ocs.data
+  }
+
+  async sendRequest(verb:string, relUrl:string, type:string = null, originalBody:any = null, returnRawResponse = false, headers = {}, item: TItem<TItemLocation> = null):Promise<any> {
+    const url = this.normalizeServerURL(this.server.url) + relUrl
+    let res
+    let timedOut = false
+
+    let body = originalBody
+    if (type && type.includes('application/json')) {
+      body = JSON.stringify(body)
+    } else if (type && type.includes('application/x-www-form-urlencoded')) {
+      const params = new URLSearchParams()
+      for (const [key, value] of Object.entries(body || {})) {
+        params.set(key, value as any)
+      }
+      body = params.toString()
+    }
+
+    Logger.log(`QUEUING ${verb} ${url}`)
+
+    if (!IS_BROWSER) {
+      return this.sendRequestNative(verb, url, type, body, returnRawResponse, headers, item)
+    }
+
+    const authString = !this.ticket || this.ticketTimestamp + 60 * 60 * 1000 < Date.now()
+      ? 'Basic ' + Base64.encode(this.server.username + ':' + this.server.password)
+      : 'Bearer ' + this.ticket
+
+    const abortController = new AbortController()
+    const abortSignal = abortController.signal
+
+    try {
+      res = await this.enqueueRequest(verb, () => {
+        Logger.log(`FETCHING ${verb} ${url}`)
+        return Promise.race([
+          fetch(url, {
+            method: verb,
+            credentials: this.server.includeCredentials ? 'include' : 'omit',
+            headers: {
+              ...(type && type !== 'multipart/form-data' && { 'Content-type': type }),
+              Authorization: authString,
+              ...headers
+            },
+            signal: abortSignal,
+            ...(body && !['get', 'head'].includes(verb.toLowerCase()) && { body }),
+          }),
+          new Promise((resolve, reject) =>
+            setTimeout(() => {
+              timedOut = true
+              reject(new RequestTimeoutError())
+              abortController.abort()
+            }, TIMEOUT)
+          ),
+        ])
+      }, () => abortController.abort())
+    } catch (e) {
+      if (timedOut) throw e
+      if (this.canceled) throw new CancelledSyncError()
+      console.log(e)
+      throw new NetworkError()
+    }
+
+    Logger.log(`Receiving response for ${verb} ${url}`)
+
+    if (res.redirected && !this.server.allowRedirects) {
+      throw new RedirectError()
+    }
+
+    if ((res.status === 401 || res.status === 403 || res.status === 404) && authString.startsWith('Bearer')) {
+      this.ticket = null
+      this.ticketTimestamp = 0
+      return this.sendRequest(verb, relUrl, type, originalBody, returnRawResponse, headers, item)
+    }
+
+    if (returnRawResponse) {
+      return res
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      throw new AuthenticationError()
+    }
+    if (res.status === 503 || res.status >= 400) {
+      Logger.log(`${verb} ${url}: Server responded with ${res.status}: ` + (await res.text()).substring(0, 250))
+      throw new HttpError(res.status, verb, item)
+    }
+    let json
+    try {
+      json = await res.json()
+    } catch (e) {
+      throw new ParseResponseError(e.message)
+    }
+    if (json.status !== 'success') {
+      throw new Error('Nextcloud API error for request ' + verb + ' ' + relUrl + ' : \n' + JSON.stringify(json))
+    }
+
+    if (json.ticket) {
+      this.ticket = json.ticket
+      this.ticketTimestamp = Date.now()
+    }
+
+    return json
+  }
+
+  private async acquireLock():Promise<boolean> {
+    this.lockingPromise = (async() => {
+      const res = await this.sendRequest(
+        'POST',
+        'index.php/apps/bookmarks/public/rest/v2/lock',
+        null,
+        null,
+        true
+      )
+
+      if (res.status === 401 || res.status === 403) {
+        throw new AuthenticationError()
+      }
+      if (res.status !== 200 && res.status !== 405 && res.status !== 423) {
+        throw new HttpError(res.status, 'POST')
+      }
+
+      return res.status === 200 || res.status === 405
+    })()
+    return this.lockingPromise
+  }
+
+  private async releaseLock():Promise<boolean> {
+    if (this.lockingPromise) {
+      // The periodic refresh swallows its errors, but this is the same promise:
+      // a refresh that failed mid-sync must not fail the sync now that it's over
+      await this.lockingPromise.catch(() => { /* pass */ })
+    }
+    if (!this.locked) {
+      return false
+    }
+    this.locked = false
+    try {
+      const res = await this.sendRequest(
+        'DELETE',
+        'index.php/apps/bookmarks/public/rest/v2/lock',
+        null,
+        null,
+        true
+      )
+      return res.status === 200
+    } catch (e) {
+      // The server lets the lock expire on its own
+      Logger.log('Failed to release the lock: ' + e.message)
+      return false
+    }
+  }
+
+  private async sendRequestNative(verb: string, url: string, type: string, body: any, returnRawResponse: boolean, headers = {}, item: TItem<TItemLocation> = null) {
+    let res
+    let timedOut = false
+    const authString = !this.ticket || this.ticketTimestamp + 60 * 60 * 1000 < Date.now()
+      ? 'Basic ' + Base64.encode(this.server.username + ':' + this.server.password)
+      : 'Bearer ' + this.ticket
+    // CapacitorHttp only takes strings and JSON: a FormData would go out as an
+    // empty JSON object (the import endpoint then answers "No file provided for
+    // import"), so hand it the multipart entries the native side assembles
+    let data = body
+    let dataType: 'formData' | undefined
+    let contentType = type
+    if (typeof FormData !== 'undefined' && body instanceof FormData) {
+      data = await serializeFormDataForNative(body)
+      dataType = 'formData'
+      // Android reads the boundary from the header, it doesn't make one up
+      contentType = 'multipart/form-data; boundary=----floccus' + Math.random().toString(36).slice(2)
+    }
+    try {
+      // CapacitorHttp can't abort a request, so a cancelled read only stops
+      // being waited for
+      res = await this.enqueueRequest(verb, () => {
+        Logger.log(`FETCHING ${verb} ${url}`)
+        return Promise.race([
+          Http.request({
+            url,
+            method: verb,
+            disableRedirects: !this.server.allowRedirects,
+            headers: {
+              ...(contentType && contentType !== 'multipart/form-data' && { 'Content-type': contentType }),
+              Authorization: authString,
+              ...headers,
+            },
+            responseType: 'json',
+            ...(data && !['get', 'head'].includes(verb.toLowerCase()) && { data }),
+            ...(dataType && { dataType }),
+          }),
+          new Promise((resolve, reject) =>
+            setTimeout(() => {
+              timedOut = true
+              reject(new RequestTimeoutError())
+            }, TIMEOUT)
+          ),
+        ])
+      })
+    } catch (e) {
+      if (timedOut) throw e
+      if (this.canceled) throw new CancelledSyncError()
+      console.log(e)
+      throw new NetworkError()
+    }
+
+    Logger.log(`Receiving response for ${verb} ${url}`)
+
+    if (res.status < 400 && res.status >= 300) {
+      throw new RedirectError()
+    }
+
+    if ((res.status === 401 || res.status === 403 || res.status === 404) && authString.startsWith('Bearer')) {
+      this.ticket = null
+      this.ticketTimestamp = 0
+      return this.sendRequestNative(verb, url, type, body, returnRawResponse, headers, item)
+    }
+
+    if (returnRawResponse) {
+      // Behave like a fetch Response: with responseType 'json' the plugin hands
+      // us a parsed object, or the raw string if the body wasn't JSON
+      return {
+        status: res.status,
+        text: () => typeof res.data === 'string' ? res.data : JSON.stringify(res.data),
+        json: () => typeof res.data === 'string' ? JSON.parse(res.data) : res.data,
+      }
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      throw new AuthenticationError()
+    }
+    if (res.status === 503 || res.status >= 400) {
+      let responseData: string
+      try {
+        responseData = typeof res.data === 'string' ? res.data : JSON.stringify(res.data)
+      } catch (e) {
+        responseData = String(res.data)
+      }
+      Logger.log(
+        `${verb} ${url}: Server responded with ${res.status}: ` +
+          responseData.substring(0, 250)
+      )
+      throw new HttpError(res.status, verb, item)
+    }
+    const json = res.data
+    if (json.status !== 'success') {
+      throw new Error('Nextcloud API error for request ' + verb + ' ' + url + ' : \n' + JSON.stringify(json))
+    }
+
+    if (json.ticket) {
+      this.ticket = json.ticket
+      this.ticketTimestamp = Date.now()
+    }
+
+    return json
+  }
+
+  isAvailable(): Promise<boolean> {
+    return Promise.resolve(true)
+  }
+
+  async getCapabilities(): Promise<ICapabilities> {
+    let hashFn : THashFunction[] = ['sha256']
+    if (this.capabilities && this.capabilities.bookmarks && typeof this.capabilities.bookmarks['hash-functions'] !== 'undefined') {
+      const supported = this.capabilities.bookmarks['hash-functions'].map(hashFn => ({
+        'sha256': 'sha256',
+        'xxh32': 'xxhash3',
+        'murmur3a': 'murmur3',
+      }[hashFn]))
+        // Hash functions the server knows and we don't
+        .filter(Boolean)
+      if (supported.length) {
+        hashFn = supported
+      }
+    }
+    return {
+      preserveOrder: true,
+      hashFn,
+      supportsTags: true,
+    }
+  }
+
+  async countClick(url: string): Promise<void> {
+    try {
+      await this.sendRequest(
+        'POST',
+        'index.php/apps/bookmarks/public/rest/v2/bookmark/click',
+        'application/json',
+        {
+          url,
+        }
+      )
+    } catch (e) {
+      console.warn(e)
+    }
+  }
+
+  isAtomic(): boolean {
+    return false
+  }
+
+  setHashSettings(hashSettings: IHashSettings): void {
+    this.hashSettings = hashSettings
+  }
+}

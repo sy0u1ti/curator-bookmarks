@@ -1,5 +1,5 @@
 import { Menu as BaseMenu } from '@base-ui/react/menu'
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Icon } from '../icons/Icon'
 import { MotionPanel } from '../motion/MotionPanel'
 import type { InlineMenuAction } from './InlineMenu.js'
@@ -93,7 +93,16 @@ export function useMenuCascade({
     }
   }, [anchor, enabled, intent, open])
 
-  return { active: open, enabled, intent, levels, snapshot }
+  const containsEventTarget = (
+    event: { type?: string; target?: EventTarget | null; relatedTarget?: EventTarget | null } | undefined,
+    prefix: readonly string[] = []
+  ) => {
+    const target = event?.type === 'focusout' ? event.relatedTarget : event?.target
+    return target instanceof Node && [...levels.current.values()].some(({ element, path }) =>
+      prefix.every((id, index) => path[index] === id) && element.contains(target))
+  }
+
+  return { active: open, enabled, intent, levels, snapshot, containsEventTarget }
 }
 
 type MenuCascade = ReturnType<typeof useMenuCascade>
@@ -127,12 +136,22 @@ export function InlineMenuItems({
   useEffect(() => {
     const activePath = intent.getSnapshot().openPath
     if (!(JSON.parse(key) as string[]).every((id, index) => activePath[index] === id)) return
-    intent.cancelPending()
-    const activeId = activePath[depth]
-    if (activeId && !actions.some(action => action.id === activeId && !action.disabled)) {
-      intent.setOpen(depth, activeId, false)
-    }
+    // Rendering new action objects does not invalidate a pending hover. Only a
+    // removed/disabled row or changed submenu capability should cancel it.
+    intent.reconcile(depth, actions.map(action => ({ id: action.id, disabled: action.disabled, submenu: hasChildren(action) })))
   }, [actions, depth, intent, key])
+  const focusState = useRef({ live: false, pointer: true })
+  useLayoutEffect(() => {
+    const previous = focusState.current
+    focusState.current = { live, pointer: snapshot.pointer }
+    if (previous.live && previous.pointer === snapshot.pointer) return
+    if (!live || !depth || snapshot.pointer || depth !== snapshot.openPath.length) return
+    const menu = cascade.levels.current.get(key)?.element
+    if (!menu || menu.contains(document.activeElement)) return
+    // A controlled cascade opens outside Base UI's hover handler. When the
+    // keyboard opens it, put focus in that level so Left/Escape reach the child.
+    menu.querySelector<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"]):not(:disabled)')?.focus()
+  }, [cascade.levels, depth, key, live, snapshot.openPath.length, snapshot.pointer])
   const items = actions.map(action => {
     const submenu = hasChildren(action)
     const row = { depth, id: action.id, submenu }
@@ -147,7 +166,6 @@ export function InlineMenuItems({
           <Icon name={action.icon === 'Folder' && open ? 'FolderOpen' : action.icon} size={17} aria-hidden="true" />
         ) : null}
         {action.label}
-        {submenu ? <Icon name="ChevronRight" size={16} className="curator-menu-chevron" aria-hidden="true" /> : null}
       </>
     )
     const pointerHandlers = cascade.enabled ? {
@@ -222,7 +240,19 @@ export function InlineMenuItems({
         highlightItemOnHover={false}
         closeParentOnEsc
         onOpenChange={(nextOpen, details) => {
+          if (!nextOpen && (details.reason === 'outside-press' || details.reason === 'focus-out') &&
+            cascade.containsEventTarget(details.event, [...path, action.id])) {
+            // Descendant menus are portalled outside this popup's DOM bounds.
+            details.cancel()
+            return
+          }
           if (details.reason === 'trigger-hover' || details.reason === 'sibling-open') {
+            details.cancel()
+            return
+          }
+          if (!nextOpen && snapshot.pointer && details.reason === 'trigger-press') {
+            // A mouse click confirms a submenu that opened during hover; it
+            // must not toggle that newly opened branch closed.
             details.cancel()
             return
           }

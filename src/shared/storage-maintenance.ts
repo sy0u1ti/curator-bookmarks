@@ -5,6 +5,9 @@ import { STORAGE_KEYS } from './constants.js'
 import { clearContentSnapshotFullTexts, getContentFullTextStorageUsage, loadContentSnapshotIndex } from './content-snapshots.js'
 import { collectCustomIconReferences, inspectCustomIconStorage, normalizeCustomIconEntries, resolveCustomIconState } from './repositories/custom-icon-repository.js'
 import { getLocalStorage, removeLocalStorage, setLocalStorage, withLocalStorageTransaction } from './storage.js'
+import { SYNC_ACCOUNTS_STORAGE_KEY, SYNC_STORAGE_PREFIX } from './sync/sync-contract.js'
+import { summarizeStoredSyncProfiles } from './sync/sync-profile-summary.js'
+import { requestSync } from './sync/sync-messages.js'
 
 const PREVIEW_KEYS = [STORAGE_KEYS.newTabFeaturedBackgroundPreviewCache]
 const byteLength = (value: unknown) => new TextEncoder().encode(JSON.stringify(value) || '').byteLength
@@ -28,6 +31,12 @@ export async function getStorageUsage() {
   return {
     localBytes: byteLength(local), originBytes: estimate?.usage ?? null,
     icons, missingIcons: resolved.missingIds.length,
+    sync: {
+      profiles: summarizeStoredSyncProfiles(local[SYNC_ACCOUNTS_STORAGE_KEY]).count,
+      bytes: Object.entries(local).filter(([key]) => key.startsWith(SYNC_STORAGE_PREFIX)).reduce((sum, [, value]) => sum + byteLength(value), 0),
+      logBytes: byteLength(local[`${SYNC_STORAGE_PREFIX}logs`] || []),
+      logLines: Array.isArray(local[`${SYNC_STORAGE_PREFIX}logs`]) ? (local[`${SYNC_STORAGE_PREFIX}logs`] as unknown[]).length : 0
+    },
     fullText: { count: fullText.count + inlineRecords.length, bytes: fullText.bytes + inlineRecords.reduce((sum, record) => sum + new TextEncoder().encode(record.fullText || '').byteLength, 0) },
     previewBytes: PREVIEW_KEYS.reduce((sum, key) => sum + (local[key] ? byteLength(local[key]) : 0), 0)
   }
@@ -35,9 +44,13 @@ export async function getStorageUsage() {
 
 export type StorageUsage = Awaited<ReturnType<typeof getStorageUsage>>
 
-export type StorageCleanupCategory = 'icons' | 'missing-icons' | 'full-text' | 'previews'
+export type StorageCleanupCategory = 'icons' | 'missing-icons' | 'full-text' | 'previews' | 'sync-logs'
 
 export async function cleanStorageCategory(category: StorageCleanupCategory): Promise<string> {
+  if (category === 'sync-logs') {
+    await requestSync({ type: 'sync:clear-logs' })
+    return '已清除同步日志，配置、密码和书签仍保留。'
+  }
   if (category === 'full-text') {
     await clearContentSnapshotFullTexts()
     return '已清除本地正文，摘要与书签仍保留。之后采集的正文仍按当前设置保存。'

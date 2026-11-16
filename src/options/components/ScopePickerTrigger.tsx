@@ -1,5 +1,4 @@
 import { Button } from '../../ui/base/Button'
-import { Icon } from '../../ui/icons/Icon'
 import {
   OPTION_GROUP_CLASS,
   OPTION_COPY_CLASS,
@@ -68,7 +67,6 @@ export function ScopePickerTriggerButton({
     >
       <span className={SCOPE_PICKER_LABEL_CLASS}>{state.label}</span>
       {state.countLabel ? <span id={`${prefix}-scope-count`} className="shrink-0 text-xs font-medium text-ds-text-secondary tabular-nums">{state.countLabel}</span> : null}
-      <Icon className="ml-auto shrink-0 text-ds-text-secondary" name="ChevronDown" size={14} aria-hidden="true" />
     </Button>
   )
 }

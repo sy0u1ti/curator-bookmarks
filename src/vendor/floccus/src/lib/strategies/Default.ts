@@ -1,0 +1,2651 @@
+import {
+  Bookmark,
+  Folder,
+  TItem,
+  ItemType,
+  TItemType,
+  ItemLocation,
+  TItemLocation,
+  TOppositeLocation,
+} from '../Tree'
+import Logger from '../Logger'
+import { filterUnacceptedBookmarks } from '../CacheTree'
+import Diff, {
+  Action,
+  ActionType,
+  CreateAction,
+  MoveAction,
+  PlanStage1, PlanStage2, PlanStage3,
+  RemoveAction,
+  ReorderAction,
+  UpdateAction
+} from '../Diff'
+import Scanner, { ScanResult } from '../Scanner'
+import * as Parallel from 'async-parallel'
+import throttle, { CanceledError } from '@jcoreio/async-throttle'
+import type { ThrottledFunction } from '@jcoreio/async-throttle'
+import Mappings, { MappingSnapshot } from '../Mappings'
+import TResource, { IHashSettings, OrderFolderResource, TLocalTree } from '../interfaces/Resource'
+import { TAdapter } from '../interfaces/Adapter'
+import {
+  CancelledSyncError, ClientsideAdditionFailsafeError,
+  ClientsideDeletionFailsafeError, FloccusError, ServersideAdditionFailsafeError,
+  ServersideDeletionFailsafeError, UnsupportedItemError
+} from '../../errors/Error'
+
+import NextcloudBookmarksAdapter from '../adapters/NextcloudBookmarks'
+import { yieldToEventLoop } from '../yieldToEventLoop'
+import { isTest } from '../isTest'
+import type { IContinuationDiffUpdate, IContinuationUpdate, TContinuationMember } from '../Continuation'
+
+// Tests have to be reproducible
+export const ACTION_CONCURRENCY = isTest ? 1 : 5
+
+/**
+ * How often the sync may persist its progress, in milliseconds.
+ *
+ * A tick writes the whole sync cache and the whole mappings table (see
+ * Account#progressCallback) -- work proportional to the account rather than to
+ * what has happened since the last tick. At 80k bookmarks that is a
+ * multi-megabyte serialization and storage write each time, so at a fixed 1.5s
+ * the checkpointing takes a sizeable bite out of the very sync it is
+ * checkpointing.
+ *
+ * What is bought with a longer interval is paid for in interrupt granularity:
+ * a sync that dies between two ticks resumes from the last one and re-executes
+ * what it did in between. Hence a cap rather than unbounded growth, and hence
+ * small accounts -- where a tick is cheap anyway -- keep the old 1.5s.
+ */
+export const PROGRESS_INTERVAL_MIN = 1500
+export const PROGRESS_INTERVAL_MAX = 10000
+export const PROGRESS_INTERVAL_PER_ITEM = 0.2
+
+export function progressInterval(itemCount: number): number {
+  if (!Number.isFinite(itemCount) || itemCount <= 0) {
+    return PROGRESS_INTERVAL_MIN
+  }
+  return Math.min(
+    PROGRESS_INTERVAL_MAX,
+    Math.max(PROGRESS_INTERVAL_MIN, Math.round(itemCount * PROGRESS_INTERVAL_PER_ITEM))
+  )
+}
+
+/**
+ * Every item of a tree by id -- what Folder#createIndex builds, except that it
+ * is handed to the caller instead of being hung onto the tree, so that nothing
+ * afterwards has to keep it up to date.
+ */
+export interface ITreeIndex<L extends TItemLocation> {
+  folder: Map<string, Folder<L>>
+  bookmark: Map<string, TItem<L>>
+}
+
+export default class SyncProcess {
+  protected mappings: Mappings
+  protected localTree: TLocalTree
+  protected server: TAdapter
+  protected cacheTreeRoot: Folder<typeof ItemLocation.LOCAL>|null
+  protected canceled: boolean
+  protected throttledProgressCb: ThrottledFunction<[progress: number, actionsDone: number | undefined], void>
+  /** The interval throttledProgressCb was built with, see #retuneProgressInterval */
+  private progressIntervalMs: number = PROGRESS_INTERVAL_MIN
+  // Un-throttled progress callback, used to persist the continuation synchronously at the
+  // exact interrupt point (see updateProgress) so a resumed sync continues from there.
+  protected progressCb: (progress: number, actionsDone?: number) => Promise<void>
+
+  // Stage -1
+  protected localTreeRoot: Folder<typeof ItemLocation.LOCAL> = null
+  protected serverTreeRoot: Folder<typeof ItemLocation.SERVER> = null
+
+  // Stage 0
+  protected localScanResult: ScanResult<typeof ItemLocation.LOCAL, TItemLocation> = null
+  protected serverScanResult: ScanResult<typeof ItemLocation.SERVER, TItemLocation> = null
+
+  // Stage 1
+  private localPlanStage1: PlanStage1<typeof ItemLocation.SERVER, TItemLocation> = null
+  private serverPlanStage1: PlanStage1<typeof ItemLocation.LOCAL, TItemLocation> = null
+
+  // Stage 2
+  private localPlanStage2: PlanStage2<typeof ItemLocation.SERVER, TItemLocation, typeof ItemLocation.LOCAL> = null
+  private serverPlanStage2: PlanStage2<typeof ItemLocation.LOCAL, TItemLocation, typeof ItemLocation.SERVER>
+
+  // Stage 3
+  private planStage3Local: PlanStage3<typeof ItemLocation.SERVER, TItemLocation, typeof ItemLocation.LOCAL> = null
+  private planStage3Server: PlanStage3<typeof ItemLocation.LOCAL, TItemLocation, typeof ItemLocation.SERVER> = null
+  private localDonePlan: PlanStage3<typeof ItemLocation.SERVER, TItemLocation, typeof ItemLocation.LOCAL> = null
+  private serverDonePlan: PlanStage3<typeof ItemLocation.LOCAL, TItemLocation, typeof ItemLocation.SERVER> = null
+  private prelimLocalReorders: Diff<typeof ItemLocation.SERVER, TItemLocation, ReorderAction<typeof ItemLocation.SERVER, TItemLocation>> = null
+  private prelimServerReorders: Diff<typeof ItemLocation.LOCAL, TItemLocation, ReorderAction<typeof ItemLocation.LOCAL, TItemLocation>> = null
+
+  // Stage 4
+  private localReorders: Diff<typeof ItemLocation.LOCAL, TItemLocation, ReorderAction<typeof ItemLocation.LOCAL, TItemLocation>> = null
+  private serverReorders: Diff<typeof ItemLocation.SERVER, TItemLocation, ReorderAction<typeof ItemLocation.SERVER, TItemLocation>> = null
+
+  protected actionsDone = 0
+  protected actionsPlanned = 0
+
+  // Test-only: when set, the sync self-cancels deterministically once this many
+  // actions have been executed, instead of relying on a wall-clock timer.
+  protected interruptAfterActions: number | null = null
+
+  protected isFirefox: boolean
+
+  protected staticContinuation: any = null
+  /** The diffs the last continuation update was built from, by diff id */
+  private continuationDiffs: Map<string, Diff<TItemLocation, TItemLocation, Action<TItemLocation, TItemLocation>>> = new Map()
+
+  // The location that has precedence in case of conflicts
+  protected masterLocation: TItemLocation
+  protected hashSettings: IHashSettings
+
+  protected cancelPromise: Promise<void>
+  protected cancelCb: (error: any) => void
+
+  // We're counting the number of calls to addMappings so we can conditionally yieldToEventLoop every 1000th call
+  protected mappingIterations = 0
+  protected executeIterations = 0
+
+  // A check for pending changes (#2403) stops as soon as it knows what the
+  // sync would do -- see setPlanOnly
+  protected planOnly = false
+
+  constructor(
+    mappings:Mappings,
+    localTree:TLocalTree,
+    server:TAdapter,
+    progressCb:(progress:number, actionsDone?:number)=>Promise<void>
+  ) {
+    this.mappings = mappings
+    this.localTree = localTree
+    this.server = server
+
+    this.progressCb = progressCb
+    this.throttledProgressCb = throttle(progressCb, this.progressIntervalMs)
+    this.cancelPromise = new Promise<void>((resolve, reject) => {
+      this.cancelCb = reject
+    })
+    this.canceled = false
+    this.isFirefox = self.location.protocol === 'moz-extension:'
+  }
+
+  /**
+   * Every item of a tree by id, each folder before the folders inside it.
+   *
+   * The trees the repairs below run on carry no index of their own at this
+   * point -- a hydrated cache, a CachingAdapter's copy(), the browser's local
+   * tree -- and Folder#findItem falls back to walking the whole tree when there
+   * is none. Looking every mapping up one by one would be one such walk per
+   * mapping; this is one walk, and a Map lookup per mapping.
+   */
+  protected static indexTree<L extends TItemLocation>(tree: Folder<L>): ITreeIndex<L> {
+    const index: ITreeIndex<L> = { folder: new Map(), bookmark: new Map() }
+    const stack: TItem<L>[] = [tree]
+    while (stack.length) {
+      const item = stack.pop()
+      if (item instanceof Folder) {
+        // Set before its children are even queued, so that the folder order of
+        // the index is parent-first -- repairServerMappings relies on it
+        index.folder.set(String(item.id), item)
+        for (const child of item.children) {
+          stack.push(child as TItem<L>)
+        }
+      } else {
+        index.bookmark.set(String(item.id), item)
+      }
+    }
+    return index
+  }
+
+  /**
+   * Forget the mappings of local items that are gone for good.
+   *
+   * A mapping outlives the item it names: nothing removes it when an item
+   * disappears from the local tree without its deletion being synced -- an
+   * interrupted sync that had already removed it locally, say, while the
+   * server side was rolled back. It then still claims its server counterpart,
+   * and that claim is taken seriously: the sub scanner that records what a bulk
+   * import created refuses to bind an item that already maps elsewhere
+   * (Mappings#wouldEvictUnrelatedMapping). So the server item gets re-created
+   * locally but stays unmapped, the dead mapping survives, and everything that
+   * maps into it afterwards aims at the deleted item -- a MOVE into it fails
+   * the whole sync with 'Folder to move into doesn't exist'.
+   *
+   * An item that is only missing from the *tree* is a different matter: it was
+   * deleted locally since the last sync, and this sync still needs its mapping
+   * to find the server item to delete. Hence the cache: only what is in neither
+   * is past being of use to anyone.
+   */
+  async dropDeadMappings(): Promise<void> {
+    const snapshot = this.mappings.getSnapshot()
+    const localIndex = SyncProcess.indexTree(this.localTreeRoot)
+    const cacheIndex = this.cacheTreeRoot ? SyncProcess.indexTree(this.cacheTreeRoot) : null
+    let dropped = 0
+
+    for (const [localId, remoteId] of Object.entries(snapshot.LocalToServer.folder)) {
+      if (this.localItemIsSpokenFor(ItemType.FOLDER, localId, localIndex, cacheIndex)) {
+        continue
+      }
+      dropped++
+      await this.mappings.removeFolder({ localId, remoteId })
+    }
+    for (const [localId, remoteId] of Object.entries(snapshot.LocalToServer.bookmark)) {
+      if (this.localItemIsSpokenFor(ItemType.BOOKMARK, localId, localIndex, cacheIndex)) {
+        continue
+      }
+      dropped++
+      await this.mappings.removeBookmark({ localId, remoteId })
+    }
+
+    Logger.log('Dropped ' + dropped + ' mappings of local items that no longer exist')
+  }
+
+  /**
+   * Point mappings whose server item is gone at the item that took its place.
+   *
+   * A server id is not always the stable thing it looks like: on Nextcloud
+   * Bookmarks a bookmark's id carries the folder it sits in
+   * ("<bookmarkId>;<folderId>"), so re-creating a folder renames every bookmark
+   * inside it. Our mappings then name ids the server doesn't know any more, and
+   * the scan is no help: it compares the two sides by content hash, which the
+   * rename doesn't touch, so it skips the subtree as unchanged and never looks
+   * at the ids. The first action that maps such an item fails the whole sync
+   * with 'Bookmark to update doesn't exist anymore'.
+   *
+   * So look the counterpart up where it must be -- in the server folder the
+   * item's parent maps to -- and re-map it. An item that isn't there any more
+   * loses its mapping instead; keeping one that names nothing only misdirects
+   * whatever maps through it next.
+   */
+  async repairServerMappings(): Promise<void> {
+    if ('loadFolderChildren' in this.server) {
+      // The server tree is loaded sparsely: an item that isn't in it may well
+      // be sitting in a folder we haven't loaded, and a live mapping must not
+      // be mistaken for a dead one
+      return
+    }
+
+    const serverIndex = SyncProcess.indexTree(this.serverTreeRoot)
+    const localIndex = SyncProcess.indexTree(this.localTreeRoot)
+    const cacheIndex = this.cacheTreeRoot ? SyncProcess.indexTree(this.cacheTreeRoot) : null
+    // Every repair changes what the lookups after it have to go through, so this
+    // one snapshot is kept in step as we go instead of being re-read: an item is
+    // found in the folder its parent maps to, and for the items below a repaired
+    // folder that is the folder it maps to *now*. Hence a snapshot of our own --
+    // the one #getSnapshot hands out is shared and must not be written to.
+    const snapshot = this.mappings.getMutableSnapshot()
+
+    let repaired = 0
+    let dropped = 0
+
+    // Folders first, and each folder before the ones inside it, for the same
+    // reason -- indexTree hands out its folders in that order
+    for (const type of [ItemType.FOLDER, ItemType.BOOKMARK] as TItemType[]) {
+      const mapped = snapshot.LocalToServer[type]
+      const spokenFor = snapshot.ServerToLocal[type]
+      for (const localId of SyncProcess.mappedIdsInTreeOrder(mapped, localIndex[type], cacheIndex && cacheIndex[type])) {
+        const remoteId = mapped[localId]
+        if (serverIndex[type].has(String(remoteId))) {
+          continue
+        }
+        const localItem = (localIndex[type].get(localId) ||
+          cacheIndex?.[type].get(localId)) as TItem<typeof ItemLocation.LOCAL>
+        const counterpart = localItem && this.findServerCounterpart(localItem, snapshot, serverIndex, localId)
+        delete spokenFor[remoteId]
+        if (counterpart) {
+          repaired++
+          await (type === ItemType.FOLDER
+            ? this.mappings.addFolder({ localId, remoteId: counterpart.id })
+            : this.mappings.addBookmark({ localId, remoteId: counterpart.id }))
+          mapped[localId] = counterpart.id
+          spokenFor[counterpart.id] = localId
+        } else {
+          dropped++
+          await (type === ItemType.FOLDER
+            ? this.mappings.removeFolder({ localId, remoteId })
+            : this.mappings.removeBookmark({ localId, remoteId }))
+          delete mapped[localId]
+        }
+      }
+    }
+
+    Logger.log('Re-mapped ' + repaired + ' and dropped ' + dropped + ' mappings naming server items that are gone')
+  }
+
+  /**
+   * The local ids of `mapped`, ordered by where their items sit: a folder
+   * before the folders inside it, and whatever is in none of the trees last --
+   * that one can't be looked up anyway, so it can only be dropped.
+   *
+   * Object.keys() would hand them out in insertion order instead, which says
+   * nothing about the tree, and a child repaired before its parent is looked up
+   * through a mapping that is still the stale one.
+   */
+  private static mappedIdsInTreeOrder(
+    mapped: Record<string, string|number>,
+    ...trees: (ReadonlyMap<string, unknown>|null)[]
+  ): string[] {
+    const order: string[] = []
+    const seen = new Set<string>()
+    const take = (id: string) => {
+      if (seen.has(id) || !(id in mapped)) {
+        return
+      }
+      seen.add(id)
+      order.push(id)
+    }
+    for (const tree of trees) {
+      tree && tree.forEach((item, id) => take(id))
+    }
+    Object.keys(mapped).forEach((id) => take(id))
+    return order
+  }
+
+  /**
+   * The server item a local item stands for, found by where it sits rather than
+   * by the id we have on file: in the folder its parent maps to, the item it
+   * can be merged with. Only an item that isn't spoken for by another local
+   * item counts -- taking one that is would trade a wrong mapping for another.
+   */
+  private findServerCounterpart(
+    localItem: TItem<typeof ItemLocation.LOCAL>,
+    snapshot: MappingSnapshot,
+    serverIndex: ITreeIndex<typeof ItemLocation.SERVER>,
+    localId: string
+  ): TItem<typeof ItemLocation.SERVER>|null {
+    const serverParentId = Mappings.mapParentId(snapshot, localItem, ItemLocation.SERVER)
+    if (typeof serverParentId === 'undefined' || serverParentId === null) {
+      return null
+    }
+    const serverParent = serverIndex.folder.get(String(serverParentId))
+    if (!serverParent) {
+      return null
+    }
+    const candidates = serverParent.children.filter((child) => {
+      if (child.type !== localItem.type || !child.canMergeWith(localItem)) {
+        return false
+      }
+      const spokenFor = Mappings.mapId(snapshot, child, ItemLocation.LOCAL)
+      return typeof spokenFor === 'undefined' || String(spokenFor) === String(localId)
+    })
+    // Only when it is unambiguous: two same-titled folders side by side say
+    // nothing about which one used to be ours
+    return candidates.length === 1 ? candidates[0] as TItem<typeof ItemLocation.SERVER> : null
+  }
+
+  /** Whether anything in this sync can still have use for a local item's mapping */
+  protected localItemIsSpokenFor(
+    type: TItemType,
+    id: string|number,
+    localIndex: ITreeIndex<typeof ItemLocation.LOCAL>,
+    cacheIndex: ITreeIndex<typeof ItemLocation.LOCAL>|null
+  ): boolean {
+    if (localIndex[type].has(String(id))) {
+      return true
+    }
+    // Deleted locally, with the deletion still to be taken to the server
+    return Boolean(cacheIndex && cacheIndex[type].has(String(id)))
+  }
+
+  getMembersToPersist() {
+    const members = []
+    // Stage 0
+    if (
+      (!this.serverPlanStage1 || !this.localPlanStage1) &&
+        (!this.serverPlanStage2 || !this.localPlanStage2) &&
+        (!this.planStage3Local || !this.planStage3Server) &&
+          this.actionsPlanned === 0
+    ) {
+      members.push('localScanResult')
+      members.push('serverScanResult')
+    }
+
+    // Stage 1
+    if (
+      (!this.serverPlanStage2 || !this.localPlanStage2) &&
+      (!this.planStage3Local || !this.planStage3Server) && this.actionsPlanned === 0
+    ) {
+      members.push('localPlanStage1')
+      members.push('serverPlanStage1')
+    }
+
+    // Stage 2 — keep persisting the stage 2 plans as long as either stage 3 plan hasn't
+    // been built yet. The stage 3 plans are built lazily (planStage3Local only after the
+    // server stage has run), so an interrupt during execution needs the stage 2 plans to
+    // rebuild the missing stage 3 plan on resume. Dropping them here (the old
+    // `actionsPlanned === 0` gate did) made such continuations unresumable.
+    if (!this.planStage3Local || !this.planStage3Server) {
+      members.push('localPlanStage2')
+      members.push('serverPlanStage2')
+    }
+
+    // Stage 3 -- needed until the reorders have been reconciled from the done
+    // plans. Not `actionsDone < actionsPlanned`: that counter restarts with every
+    // resumed run and lags behind the plans (a bulk import is done() before its
+    // REORDERs are counted), so it would drop these members for a tick and bring
+    // them back, and a diff that comes back only writes what changed since.
+    if (!this.localReorders || !this.serverReorders) {
+      members.push('planStage3Local')
+      members.push('planStage3Server')
+      members.push('localDonePlan')
+      members.push('serverDonePlan')
+      members.push('prelimLocalReorders')
+      members.push('prelimServerReorders')
+      // actionsPlanned must be restored so sync() doesn't recompute it from plans that may
+      // not exist yet on resume (Object.values(null)); actionsDone is intentionally not
+      // persisted so progress/interrupt counting restarts per resumed run.
+      members.push('actionsPlanned')
+    }
+
+    // Stage 4
+    members.push('localReorders')
+    members.push('serverReorders')
+
+    return members
+  }
+
+  /** How many actions this run has executed -- a resumed run counts from 0 again */
+  getActionsDone(): number {
+    return this.actionsDone || 0
+  }
+
+  getMappingsInstance(): Mappings {
+    return this.mappings
+  }
+
+  setCacheTree(cacheTree: Folder<typeof ItemLocation.LOCAL>) {
+    this.cacheTreeRoot = cacheTree
+  }
+
+  getCacheTree(): Folder<typeof ItemLocation.LOCAL> {
+    return this.cacheTreeRoot
+  }
+
+  public getTargetTree<L1 extends TItemLocation>(targetLocation: L1): Folder<L1> {
+    return (targetLocation === ItemLocation.SERVER ? this.serverTreeRoot : this.localTreeRoot) as Folder<L1>
+  }
+
+  async cancel() :Promise<void> {
+    this.canceled = true
+    this.cancelCb(new CancelledSyncError())
+    this.server.cancel()
+    this.localTree.cancel()
+    this.throttledProgressCb.cancel()
+  }
+
+  /**
+   * Await a resource mutation (create/update/move/remove) while honouring cancellation.
+   *
+   * Previously the executors did `Promise.race([op, this.cancelPromise])` directly. When
+   * the sync was cancelled mid-flight (e.g. a concurrent action triggered an interrupt),
+   * the race rejected and the executor threw *before* recording the action as done — yet
+   * on a non-atomic server (e.g. Nextcloud Bookmarks) the mutation had already been
+   * applied. A resumed sync then re-issued the same action, producing duplicates and
+   * other divergence.
+   *
+   * Instead we wait for the in-flight mutation to settle when cancelled: if it completed,
+   * `completed` is true and the caller records it (mapping/retract/donePlan) before the
+   * sync stops at the next cancellation checkpoint; if it failed/aborted with no side
+   * effect, `completed` is false and the action can be safely retried on resume.
+   */
+  protected async raceWithCancellation<T>(op: Promise<T>): Promise<{ completed: boolean, result?: T }> {
+    try {
+      const result = await Promise.race([op, this.cancelPromise]) as T
+      return { completed: true, result }
+    } catch (e) {
+      if (!this.canceled) {
+        // A genuine operation error (not a cancellation): propagate as before.
+        throw e
+      }
+      // Cancelled while the mutation was in flight: wait for it to settle so we know
+      // whether its side effect landed on the (possibly non-atomic) server.
+      try {
+        const result = await op
+        return { completed: true, result }
+      } catch (opErr) {
+        return { completed: false }
+      }
+    }
+  }
+
+  /**
+   * Set the progress interval for the size of the trees we have just loaded.
+   *
+   * @jcoreio/async-throttle captures its interval when the throttled function is
+   * built, so this replaces the function rather than retuning it in place.
+   * Everything reads this.throttledProgressCb at call time, so the swap is only
+   * a matter of not leaving the old one's pending tick behind on its own
+   * schedule -- hence the cancel.
+   */
+  protected async retuneProgressInterval(): Promise<void> {
+    if (!this.localTreeRoot) {
+      return
+    }
+    const items = this.localTreeRoot.count() + this.localTreeRoot.countFolders()
+    const interval = progressInterval(items)
+    if (interval === this.progressIntervalMs) {
+      return
+    }
+    Logger.log(`Persisting sync progress every ${interval}ms (${items} local items)`)
+    this.progressIntervalMs = interval
+    const previous = this.throttledProgressCb
+    this.throttledProgressCb = throttle(this.progressCb, interval)
+    // Rejects whatever the old one still had pending with a CanceledError,
+    // which queueProgressUpdate swallows
+    await previous.cancel()
+  }
+
+  protected queueProgressUpdate(progress: number, actionsDone?: number): void {
+    // Diagnostic: skip throttled progress callback under test so timer-driven
+    // cache/mappings persistence doesn't race with in-flight sync mutations.
+    if (isTest) return
+    void this.throttledProgressCb(progress, actionsDone).catch((er) => {
+      if (er instanceof CanceledError) {
+        return
+      }
+      throw er
+    })
+  }
+
+  setInterruptAfterActions(actions: number | null): void {
+    this.interruptAfterActions = actions
+  }
+
+  async updateProgress():Promise<void> {
+    if (typeof this.actionsDone === 'undefined' || this.actionsDone === null) {
+      this.actionsDone = 0
+    }
+    this.actionsDone++
+    if (this.interruptAfterActions !== null && this.actionsDone >= this.interruptAfterActions) {
+      // Deterministic, count-based interrupt for benchmark tests: cancel exactly
+      // after the Nth executed action rather than after a wall-clock timeout, so the
+      // interrupt point is reproducible regardless of machine speed.
+      this.interruptAfterActions = null
+      Logger.log(`INTERRUPT! (after ${this.actionsDone} actions)`)
+      // Persist the continuation at the exact interrupt point *before* cancelling, so the
+      // resumed sync continues from here. Without this, the interrupted sync leaves no
+      // continuation (cancel() discards the pending throttled persistence and, under test,
+      // queueProgressUpdate is a no-op), so the retry restarts from scratch and re-applies
+      // actions that already committed to a non-atomic server — producing duplicates.
+      const progress = Math.min(1, 0.5 + (this.actionsDone / (this.actionsPlanned + 1)) * 0.5)
+      await this.progressCb(progress, this.actionsDone)
+      await this.cancel()
+    }
+    this.queueProgressUpdate(
+      Math.min(
+        1,
+        0.5 + (this.actionsDone / (this.actionsPlanned + 1)) * 0.5
+      ),
+      this.actionsDone
+    )
+    Logger.log(`Executed ${this.actionsDone} actions from ${this.actionsPlanned} actions`)
+  }
+
+  async setProgress(json: any) {
+    if (json.serverTreeRoot) {
+      this.serverTreeRoot = Folder.hydrate(json.serverTreeRoot)
+      delete json.serverTreeRoot
+    }
+    if (json.localTreeRoot) {
+      this.localTreeRoot = Folder.hydrate(json.localTreeRoot)
+      delete json.localTreeRoot
+    }
+    if (json.cacheTreeRoot) {
+      this.cacheTreeRoot = Folder.hydrate(json.cacheTreeRoot)
+      delete json.cacheTreeRoot
+    }
+    for (const member of Object.keys(json)) {
+      if (json[member] === null || typeof json[member] === 'undefined') {
+        // The member was persisted as null because that stage hadn't been computed yet at
+        // the interrupt point (e.g. planStage3Local when the sync was interrupted during the
+        // server stage). Restore it as null so sync() recomputes it on resume — don't try to
+        // read .CREATE off it, which previously threw and made the whole continuation
+        // unloadable, forcing a from-scratch restart that re-applies already-committed
+        // actions (duplicates on non-atomic servers).
+        this[member] = json[member]
+      } else if (member.toLowerCase().includes('scanresult') || member.toLowerCase().includes('plan')) {
+        this[member] = {
+          CREATE: await Diff.fromJSONAsync(json[member].CREATE),
+          UPDATE: await Diff.fromJSONAsync(json[member].UPDATE),
+          MOVE: await Diff.fromJSONAsync(json[member].MOVE),
+          REMOVE: await Diff.fromJSONAsync(json[member].REMOVE),
+          REORDER: await Diff.fromJSONAsync(json[member].REORDER),
+        }
+      } else if (member.toLowerCase().includes('reorders')) {
+        this[member] = await Diff.fromJSONAsync(json[member])
+      } else {
+        this[member] = json[member]
+      }
+    }
+  }
+
+  setDirection(direction:TItemLocation):void {
+    throw new Error('Unsupported method')
+  }
+
+  /**
+   * Makes sync() stop once it has planned what to do, before the failsafes and
+   * before executing anything, for a profile that only wants to know whether
+   * it has changes to sync. It leaves the trees alone then, but not the
+   * in-memory mappings (pre-scan prunes, concurrent creations), so whoever
+   * calls this must not persist them -- nor the cache, nor a continuation.
+   * getPendingChanges() tells what was planned.
+   */
+  setPlanOnly(planOnly = true): void {
+    this.planOnly = planOnly
+  }
+
+  /**
+   * How many items the planned sync would change on either side. Reorders
+   * don't count -- they come with nearly every other change -- and a created
+   * or removed folder counts with everything in it.
+   */
+  getPendingChanges(): { local: number, server: number } {
+    return {
+      local: SyncProcess.countPlannedChanges(this.localPlanStage2),
+      server: SyncProcess.countPlannedChanges(this.serverPlanStage2),
+    }
+  }
+
+  protected static countPlannedChanges(plan: Partial<Record<'CREATE'|'UPDATE'|'MOVE'|'REMOVE', Diff<TItemLocation, TItemLocation, Action<TItemLocation, TItemLocation>>>> | null): number {
+    if (!plan) {
+      return 0
+    }
+    let count = 0
+    for (const type of [ActionType.CREATE, ActionType.REMOVE]) {
+      for (const action of plan[type]?.peekActions() || []) {
+        const item = action.payload
+        count += item.type === ItemType.FOLDER ? (item as Folder<TItemLocation>).count() + (item as Folder<TItemLocation>).countFolders() : 1
+      }
+    }
+    for (const type of [ActionType.UPDATE, ActionType.MOVE]) {
+      count += plan[type]?.peekActions().length || 0
+    }
+    return count
+  }
+
+  async sync(): Promise<void> {
+    // onSyncStart is already executed at this point
+    this.queueProgressUpdate(0.15, 0)
+
+    this.masterLocation = ItemLocation.LOCAL
+    await this.prepareSync()
+
+    // trees are loaded at this point
+    this.queueProgressUpdate(0.35, 0)
+
+    if (this.canceled) {
+      throw new CancelledSyncError()
+    }
+
+    if (this.localReorders && this.serverReorders) {
+      // Resumed from a continuation persisted while the reorderings were being
+      // executed: everything before them is done, and the continuation holds
+      // nothing else any more (see getMembersToPersist). Scanning and planning
+      // again from here would execute a sync of its own -- whose reorders then
+      // lose out to the stored ones, which are only ever computed once.
+      Logger.log('Resuming with the reorderings, everything before them has been executed')
+      await this.executeReorderingStage()
+      return
+    }
+
+    Logger.log({localTreeRoot: this.localTreeRoot, serverTreeRoot: this.serverTreeRoot, cacheTreeRoot: this.cacheTreeRoot})
+
+    if (!this.localScanResult && !this.serverScanResult && !this.localPlanStage1 && !this.serverPlanStage1 && !this.localPlanStage2 && !this.serverPlanStage2 && !this.planStage3Local && !this.planStage3Server) {
+      await this.dropDeadMappings()
+      await this.repairServerMappings()
+      const { localScanResult, serverScanResult } = await this.getDiffs()
+      Logger.log({ localScanResult, serverScanResult })
+      this.localScanResult = localScanResult
+      this.serverScanResult = serverScanResult
+      this.queueProgressUpdate(0.45, 0)
+    }
+
+    if (this.canceled) {
+      throw new CancelledSyncError()
+    }
+
+    if (!this.serverPlanStage1 && !this.localPlanStage1 && !this.serverPlanStage2 && !this.localPlanStage2 && !this.planStage3Local && !this.planStage3Server) {
+      this.serverPlanStage1 = await this.reconcileDiffs(this.localScanResult, this.serverScanResult, ItemLocation.SERVER)
+      this.localPlanStage1 = await this.reconcileDiffs(this.serverScanResult, this.localScanResult, ItemLocation.LOCAL)
+    }
+
+    let mappingsSnapshot: MappingSnapshot
+    // Whether the plans that are about to be executed were made by this run,
+    // rather than restored from a continuation
+    let plannedInThisRun = false
+
+    if (!this.serverPlanStage2 && !this.localPlanStage2 && !this.planStage3Local && !this.planStage3Server) {
+      plannedInThisRun = true
+      // have to get snapshot after reconciliation, because of concurrent creation reconciliation
+      mappingsSnapshot = this.mappings.getSnapshot()
+      Logger.log('Mapping server plan')
+
+      this.serverPlanStage2 = {
+        CREATE: this.serverPlanStage1.CREATE.map(mappingsSnapshot, ItemLocation.SERVER),
+        UPDATE: this.serverPlanStage1.UPDATE.map(mappingsSnapshot, ItemLocation.SERVER),
+        MOVE: this.serverPlanStage1.MOVE,
+        REMOVE: this.serverPlanStage1.REMOVE.map(mappingsSnapshot, ItemLocation.SERVER),
+        REORDER: this.serverPlanStage1.REORDER,
+      }
+
+      Logger.log('Mapping local plan')
+
+      this.localPlanStage2 = {
+        CREATE: this.localPlanStage1.CREATE.map(mappingsSnapshot, ItemLocation.LOCAL),
+        UPDATE: this.localPlanStage1.UPDATE.map(mappingsSnapshot, ItemLocation.LOCAL),
+        MOVE: this.localPlanStage1.MOVE,
+        REMOVE: this.localPlanStage1.REMOVE.map(mappingsSnapshot, ItemLocation.LOCAL),
+        REORDER: this.localPlanStage1.REORDER,
+      }
+    }
+
+    if (this.canceled) {
+      throw new CancelledSyncError()
+    }
+
+    Logger.log({localPlan: this.localPlanStage2, serverPlan: this.serverPlanStage2})
+
+    if (this.planOnly) {
+      Logger.log('Only checking for changes, stopping before executing anything')
+      return
+    }
+
+    // Only for plans made by this run. A continuation's plans have passed the
+    // failsafes already: they run before anything is executed, and progress is
+    // only persisted once something has been. Checking them again isn't just
+    // redundant, it can be wrong -- a resumed sync restores diffs that were
+    // shared as separate copies (serverPlanStage2.REMOVE and
+    // planStage3Server.REMOVE, say) and drains only one of them, so the other
+    // counts removals that have already been executed against the tree they
+    // have already shrunk.
+    if (plannedInThisRun) {
+      await this.applyDeletionFailsafe(ItemLocation.SERVER, this.serverTreeRoot, this.serverPlanStage2.REMOVE)
+      await this.applyAdditionFailsafe(ItemLocation.SERVER, this.serverTreeRoot, this.serverPlanStage2.CREATE)
+      await this.applyDeletionFailsafe(ItemLocation.LOCAL, this.localTreeRoot, this.localPlanStage2.REMOVE)
+      await this.applyAdditionFailsafe(ItemLocation.LOCAL, this.localTreeRoot, this.localPlanStage2.CREATE)
+    }
+
+    if (!this.localDonePlan) {
+      this.localDonePlan = {
+        CREATE: new Diff(),
+        UPDATE: new Diff(),
+        MOVE: new Diff(),
+        REMOVE: new Diff(),
+        REORDER: new Diff(),
+      }
+
+      this.serverDonePlan = {
+        CREATE: new Diff(),
+        UPDATE: new Diff(),
+        MOVE: new Diff(),
+        REMOVE: new Diff(),
+        REORDER: new Diff(),
+      }
+    }
+
+    if (!this.prelimLocalReorders && this.localPlanStage2) {
+      this.prelimLocalReorders = this.localPlanStage2.REORDER
+      this.prelimServerReorders = this.serverPlanStage2.REORDER
+    }
+
+    if (!this.actionsPlanned) {
+      this.actionsPlanned = Object.values(this.serverPlanStage2 || this.planStage3Server).reduce((acc, diff) => diff.peekActions().length + acc, 0) +
+        Object.values(this.localPlanStage2 || this.planStage3Local).reduce((acc, diff) => diff.peekActions().length + acc, 0)
+    }
+
+    if (this.serverPlanStage2) {
+      Logger.log('Executing server stage2 plan')
+      await this.executeStage2(this.server, this.serverPlanStage2, ItemLocation.SERVER, this.serverDonePlan, this.prelimServerReorders)
+    }
+
+    if (!this.planStage3Server) {
+      if (this.canceled) {
+        throw new CancelledSyncError()
+      }
+
+      Logger.log('Mapping server MOVEs:')
+      mappingsSnapshot = this.mappings.getSnapshot()
+      this.planStage3Server = {
+        CREATE: this.serverPlanStage2.CREATE,
+        UPDATE: this.serverPlanStage2.UPDATE,
+        // skipErroneousActions: a MOVE whose item can no longer be mapped to the target is
+        // unapplyable; drop it instead of throwing MappingFailureError (which would force a
+        // cache reset + from-scratch resync that duplicates on non-atomic servers).
+        MOVE: this.serverPlanStage2.MOVE.map(mappingsSnapshot, ItemLocation.SERVER, () => true, true),
+        REMOVE: this.serverPlanStage2.REMOVE,
+        REORDER: this.serverPlanStage2.REORDER,
+      }
+
+      if (this.canceled) {
+        throw new CancelledSyncError()
+      }
+    }
+
+    if (this.planStage3Server) {
+      Logger.log('Executing server stage 3 plan')
+      await this.executeStage3(this.server, this.planStage3Server, ItemLocation.SERVER, this.serverDonePlan)
+    }
+
+    if (this.canceled) {
+      throw new CancelledSyncError()
+    }
+
+    if (this.localPlanStage2) {
+      Logger.log('Executing local stage 2 plan')
+      await this.executeStage2(this.localTree, this.localPlanStage2, ItemLocation.LOCAL, this.localDonePlan, this.prelimLocalReorders)
+    }
+
+    if (!this.planStage3Local) {
+      if (this.canceled) {
+        throw new CancelledSyncError()
+      }
+
+      Logger.log('Mapping local MOVEs:')
+      mappingsSnapshot = this.mappings.getSnapshot()
+      this.planStage3Local = {
+        CREATE: this.localPlanStage2.CREATE,
+        UPDATE: this.localPlanStage2.UPDATE,
+        // skipErroneousActions: see the server stage 3 plan above.
+        MOVE: this.localPlanStage2.MOVE.map(mappingsSnapshot, ItemLocation.LOCAL, () => true, true),
+        REMOVE: this.localPlanStage2.REMOVE,
+        REORDER: this.localPlanStage2.REORDER,
+      }
+
+      if (this.canceled) {
+        throw new CancelledSyncError()
+      }
+    }
+
+    if (this.planStage3Local) {
+      Logger.log('Executing local stage 3 plan')
+      await this.executeStage3(this.localTree, this.planStage3Local, ItemLocation.LOCAL, this.localDonePlan)
+    }
+
+    // Remove mappings only after both plans have been executed
+    await Parallel.map(this.localDonePlan.REMOVE.getActions(), async(action) =>
+      this.removeMapping(this.localTree, action.payload), 1)
+    await Parallel.map(this.serverDonePlan.REMOVE.getActions(), async(action) =>
+      this.removeMapping(this.server, action.payload), 1)
+
+    if (this.canceled) {
+      throw new CancelledSyncError()
+    }
+
+    if ('orderFolder' in this.server && !this.localReorders) {
+      // mappings have been updated, reload
+      mappingsSnapshot = this.mappings.getSnapshot()
+
+      const localReorders1 = this.reconcileReorderings(
+        this.prelimLocalReorders,
+        this.localDonePlan,
+        ItemLocation.LOCAL,
+        mappingsSnapshot
+      )
+      const serverReorders1 = this.reconcileReorderings(
+        this.prelimServerReorders,
+        this.serverDonePlan,
+        ItemLocation.SERVER,
+        mappingsSnapshot
+      )
+
+      const localReorders2 = this.reconcileReorderings(
+        localReorders1,
+        this.serverDonePlan,
+        ItemLocation.LOCAL,
+        mappingsSnapshot
+      )
+      const serverReorders2 = this.reconcileReorderings(
+        serverReorders1,
+        this.localDonePlan,
+        ItemLocation.SERVER,
+        mappingsSnapshot
+      )
+
+      const localReorders3 = this.reconcileConcurrentReorderings(
+        localReorders2,
+        serverReorders2,
+        ItemLocation.LOCAL,
+        mappingsSnapshot
+      )
+      const serverReorders3 = this.reconcileConcurrentReorderings(
+        serverReorders2,
+        localReorders2,
+        ItemLocation.SERVER,
+        mappingsSnapshot
+      )
+
+      // skipErroneousActions: a REORDER targeting a folder that can no longer be mapped is
+      // moot (the folder was moved/removed); drop it instead of throwing MappingFailureError,
+      // which would force a cache reset + from-scratch resync that duplicates on non-atomic
+      // servers.
+      this.localReorders = localReorders3.map(
+        mappingsSnapshot,
+        ItemLocation.LOCAL,
+        () => true,
+        true
+      )
+      this.serverReorders = serverReorders3.map(
+        mappingsSnapshot,
+        ItemLocation.SERVER,
+        () => true,
+        true
+      )
+    }
+
+    await this.executeReorderingStage()
+  }
+
+  /** Stage 4: execute the reorders computed from the done plans */
+  protected async executeReorderingStage(): Promise<void> {
+    if (this.canceled) {
+      throw new CancelledSyncError()
+    }
+
+    if ('orderFolder' in this.server) {
+      Logger.log('Executing reorderings')
+      if (isTest) {
+        // Sequential under test so the two trees' mutations don't interleave
+        // through microtask order.
+        await this.executeReorderings(this.server, this.serverReorders)
+        await this.executeReorderings(this.localTree, this.localReorders)
+      } else {
+        await Promise.all([
+          this.executeReorderings(this.server, this.serverReorders),
+          this.executeReorderings(this.localTree, this.localReorders),
+        ])
+      }
+    }
+
+    this.throttledProgressCb.cancel()
+  }
+
+  protected async prepareSync() {
+    if (!this.localTree) {
+      throw new Error('localTree is not initialized. Cannot prepare sync.')
+    }
+    if (!this.server) {
+      throw new Error('server is not initialized. Cannot prepare sync.')
+    }
+
+    // Negotiate capabilities
+    const localCapabilities = await this.localTree.getCapabilities()
+    const serverCapabilities = await this.server.getCapabilities()
+    this.hashSettings = {
+      preserveOrder: localCapabilities.preserveOrder && serverCapabilities.preserveOrder,
+      // Find the first hFn that localTree supports as well, ie order matters
+      hashFn: serverCapabilities.hashFn.find(hashFn => localCapabilities.hashFn.includes(hashFn)),
+      // Only sync tags if both ends can actually store them. If one side can't,
+      // the other side's tags are left alone rather than being wiped.
+      syncTags: Boolean(localCapabilities.supportsTags && serverCapabilities.supportsTags),
+    }
+    Logger.log(`using the following HashSettings: ${JSON.stringify(this.hashSettings)}`)
+    this.localTree.setHashSettings(this.hashSettings)
+    this.server.setHashSettings(this.hashSettings)
+
+    if (!this.localTreeRoot || typeof this.localTreeRoot.children === 'undefined') {
+      Logger.log('Retrieving local tree')
+      const localTreeRoot = await this.localTree.getBookmarksTree()
+      Logger.log('Filtering out unaccepted local bookmarks')
+      this.filterOutUnacceptedBookmarks(localTreeRoot)
+      if (this.server instanceof NextcloudBookmarksAdapter) {
+        Logger.log('Filtering out duplicate bookmarks')
+        await this.filterOutDuplicatesInTheSameFolder(localTreeRoot)
+      }
+      this.localTreeRoot = localTreeRoot
+    }
+
+    // Cache tree might not have been initialized and thus have no id
+    this.cacheTreeRoot.id = this.localTreeRoot.id
+
+    if (this.canceled) {
+      throw new CancelledSyncError()
+    }
+
+    if (!this.serverTreeRoot) {
+      Logger.log('Retrieving server tree')
+      const serverTreeRoot = await this.server.getBookmarksTree()
+      Logger.log('Filtering out invalid server bookmarks')
+      this.filterOutInvalidBookmarks(serverTreeRoot)
+
+      if (this.canceled) {
+        throw new CancelledSyncError()
+      }
+
+      await this.mappings.addFolder({ localId: this.localTreeRoot.id, remoteId: serverTreeRoot.id })
+      const mappingsSnapshot = this.mappings.getSnapshot()
+
+      if ('loadFolderChildren' in this.server) {
+        Logger.log('Loading sparse tree as necessary')
+        // Load sparse tree
+        await this.loadChildren(serverTreeRoot, mappingsSnapshot, true)
+      }
+      this.serverTreeRoot = serverTreeRoot
+    }
+
+    // generate hash tables to find items faster
+    Logger.log('Generating indices for local tree')
+    this.localTreeRoot.createIndex()
+    Logger.log('Generating indices for cache tree')
+    this.cacheTreeRoot.createIndex()
+    Logger.log('Generating indices for server tree')
+    this.serverTreeRoot.createIndex()
+
+    // Now that we know how big this account is, how often we can afford to
+    // persist our progress
+    await this.retuneProgressInterval()
+  }
+
+  /**
+   * Open tabs are few and churn a lot -- closing one window out of three
+   * already removes a third of the tree -- so the percentage thresholds that
+   * guard bookmarks would trip on everyday use. For tabs the failsafe only
+   * catches wholesale wipes/floods of a sizeable set.
+   */
+  protected async getFailsafeThresholds(): Promise<{minTotal: number, minChanged: number, ratio: number, maxChanged: number}> {
+    if (await this.localTree.isUsingBrowserTabs?.()) {
+      return { minTotal: 5, minChanged: 50, ratio: 0.5, maxChanged: 1000 }
+    }
+    return { minTotal: 5, minChanged: 0, ratio: 0.2, maxChanged: 1000 }
+  }
+
+  protected async applyDeletionFailsafe(direction: TItemLocation, tree: Folder<TItemLocation>, removals: Diff<TItemLocation, TItemLocation, RemoveAction<TItemLocation, TItemLocation>>) {
+    const countTotal = tree.count()
+    const countDeleted = removals.peekActions().reduce((count, action) => count + action.payload.count(), 0)
+    const { minTotal, minChanged, ratio, maxChanged } = await this.getFailsafeThresholds()
+
+    Logger.log('Checking deletion failsafe: ' + countDeleted + '/' + countTotal + '=' + (countDeleted / countTotal))
+    // Failsafe kicks in if more than 20% (tabs: 50% and at least 50 items) is deleted or more than 1k items
+    if ((countTotal > minTotal && countDeleted >= minChanged && countDeleted / countTotal > ratio) || countDeleted > maxChanged) {
+      const failsafe = this.server.getData().failsafe
+      if (
+        failsafe !== false ||
+        typeof failsafe === 'undefined' ||
+        failsafe === null
+      ) {
+        const percentage = Math.ceil((countDeleted / countTotal) * 100)
+        if (direction === ItemLocation.LOCAL) {
+          throw new ClientsideDeletionFailsafeError(percentage)
+        } else {
+          throw new ServersideDeletionFailsafeError(percentage)
+        }
+      }
+    }
+  }
+
+  protected async applyAdditionFailsafe(direction: TItemLocation, tree: Folder<TItemLocation>, creations: Diff<TItemLocation, TItemLocation, CreateAction<TItemLocation, TItemLocation>>) {
+    const countTotal = tree.count()
+    const countAdded = creations.peekActions().reduce((count, action) => count + action.payload.count(), 0)
+    const { minTotal, minChanged, ratio, maxChanged } = await this.getFailsafeThresholds()
+
+    Logger.log('Checking addition failsafe: ' + countAdded + '/' + countTotal + '=' + (countAdded / countTotal))
+    // Failsafe kicks in if more than 20% (tabs: 50%) is added, at least 20 (tabs: 50) items, or more than 1k items
+    if (countTotal > minTotal && ((countAdded >= Math.max(20, minChanged) && countAdded / countTotal > ratio) || countAdded > maxChanged)) {
+      const failsafe = this.server.getData().failsafe
+      if (failsafe !== false || typeof failsafe === 'undefined' || failsafe === null) {
+        const percentage = Math.ceil((countAdded / countTotal) * 100)
+        if (direction === ItemLocation.LOCAL) {
+          throw new ClientsideAdditionFailsafeError(percentage)
+        } else {
+          throw new ServersideAdditionFailsafeError(percentage)
+        }
+      }
+    }
+  }
+
+  /**
+   * Returns whether anything was actually filtered out, so that the cached
+   * hashes of the folders above can be dropped -- these trees carry their
+   * hashes with them now (see CachingAdapter#invalidateHashes).
+   */
+  filterOutUnacceptedBookmarks(tree: Folder<TItemLocation>): boolean {
+    return filterUnacceptedBookmarks(tree, (bm) => this.server.acceptsBookmark(bm))
+  }
+
+  filterOutInvalidBookmarks(tree: Folder<TItemLocation>): boolean {
+    let changed = false
+    const invalidBookmarks = []
+    tree.children = tree.children.filter(child => {
+      if (child instanceof Bookmark) {
+        // Chrome URLs cannot be added in firefox
+        if (this.isFirefox && child.url.startsWith('chrome')) {
+          invalidBookmarks.push(child)
+          return false
+        }
+        // Moz-extension URLs cannot be added in chrome
+        if (!this.isFirefox && child.url.startsWith('moz-')) {
+          invalidBookmarks.push(child)
+          return false
+        }
+        // Linkwarden supports bookmarks that have no URL eg. for directly uploaded files
+        if (child.url === null) {
+          invalidBookmarks.push(child)
+          return false
+        }
+      } else {
+        changed = this.filterOutInvalidBookmarks(child) || changed
+      }
+      return true
+    })
+    changed = changed || Boolean(invalidBookmarks.length)
+    if (changed) {
+      tree.invalidateHash()
+    }
+    invalidBookmarks.length &&
+    Logger.log(
+      'Filtered out the following invalid bookmarks before syncing',
+      invalidBookmarks
+    )
+    return changed
+  }
+
+  async filterOutDuplicatesInTheSameFolder(tree: Folder<TItemLocation>): Promise<boolean> {
+    const seenUrl = {}
+    const duplicates = []
+    const subFolders: Folder<TItemLocation>[] = []
+    let changed = false
+    tree.children = tree.children.filter(child => {
+      if (child.type === ItemType.BOOKMARK) {
+        if (seenUrl[child.url]) {
+          duplicates.push(child)
+          return false
+        }
+        seenUrl[child.url] = child
+      } else {
+        subFolders.push(child as Folder<TItemLocation>)
+      }
+      return true
+    })
+    // Recurse after filtering: the recursion is async, so it can't happen
+    // inside the filter callback
+    for (const subFolder of subFolders) {
+      changed = (await this.filterOutDuplicatesInTheSameFolder(subFolder)) || changed
+    }
+    changed = changed || Boolean(duplicates.length)
+    if (changed) {
+      tree.invalidateHash()
+    }
+    duplicates.length &&
+      Logger.log(
+        'Filtered out the following duplicates before syncing',
+        duplicates
+      )
+    return changed
+  }
+
+  async getDiffs():Promise<{localScanResult:ScanResult<typeof ItemLocation.LOCAL, TItemLocation>, serverScanResult:ScanResult<typeof ItemLocation.SERVER, TItemLocation>}> {
+    const mappingsSnapshot = this.mappings.getSnapshot()
+
+    const isUsingTabs = await this.localTree.isUsingBrowserTabs?.()
+
+    // Since we have the cache available, Diff cache and both trees..
+    const localScanner = new Scanner(
+      this.mappings,
+      this.cacheTreeRoot,
+      this.localTreeRoot,
+      (oldItem, newItem) => {
+        if (oldItem.type !== newItem.type) {
+          return false
+        }
+
+        // If a bookmark's URL has changed we want to recreate it instead of updating it, because of Nextcloud Bookmarks' uniqueness constraints
+        if (oldItem.type === 'bookmark' && newItem.type === 'bookmark' && oldItem.url !== newItem.url) {
+          return false
+        }
+
+        // The two are mappable, no-brainer...
+        if (Mappings.mappable(mappingsSnapshot, oldItem, newItem)) {
+          return true
+        }
+
+        // We also allow canMergeWith for folders here, if we're dealing with tabs, because Window IDs are not stable
+        if (isUsingTabs && oldItem.type === 'folder' && oldItem.canMergeWith(newItem)) {
+          return true
+        }
+        return false
+      },
+      this.hashSettings,
+      true,
+      true,
+    )
+    const serverScanner = new Scanner(
+      this.mappings,
+      this.cacheTreeRoot,
+      this.serverTreeRoot,
+      (oldItem, newItem) => {
+        if (oldItem.type !== newItem.type) {
+          return false
+        }
+        // If a bookmark's URL has changed we want to recreate it instead of updating it, because of Nextcloud Bookmarks' uniqueness constraints
+        if (oldItem.type === 'bookmark' && newItem.type === 'bookmark' && oldItem.url !== newItem.url) {
+          return false
+        }
+
+        // The two are mappable, no-brainer...
+        if (Mappings.mappable(mappingsSnapshot, oldItem, newItem)) {
+          return true
+        }
+
+        //  We also allow canMergeWith here for bookmarks, because e.g. for NextcloudFolders the id of moved bookmarks changes (because their id is "<bookmarkID>;<folderId>")
+        if (oldItem.type === 'bookmark' && newItem.type === 'bookmark' && oldItem.canMergeWith(newItem)) {
+          return true
+        }
+
+        // We also allow canMergeWith here for folders, if we're dealing with tabs, because Window IDs are not stable
+        if (isUsingTabs && oldItem.type === 'folder' && newItem.type === 'folder' && oldItem.canMergeWith(newItem)) {
+          return true
+        }
+
+        return false
+      },
+      this.hashSettings,
+      true,
+      true,
+    )
+    Logger.log('Calculating diffs for local and server trees relative to cache tree')
+    const localScanResult = await localScanner.run()
+    const serverScanResult = await serverScanner.run()
+    return {localScanResult, serverScanResult}
+  }
+
+  // Note: Parts of this are duplicated to MergeSyncProcess!
+  async reconcileDiffs<L1 extends TItemLocation, L2 extends TItemLocation, L3 extends TItemLocation>(
+    sourceScanResult:ScanResult<L1, L2>,
+    targetScanResult:ScanResult<TOppositeLocation<L1>, L3>,
+    targetLocation: TOppositeLocation<L1>
+  ): Promise<PlanStage1<L1, L2>> {
+    Logger.log('Reconciling diffs to prepare a plan for ' + targetLocation)
+    const mappingsSnapshot = this.mappings.getSnapshot()
+
+    const targetCreations = targetScanResult.CREATE.getActions()
+    const targetRemovals = targetScanResult.REMOVE.getActions()
+    const targetMoves = targetScanResult.MOVE.getActions()
+    const targetUpdates = targetScanResult.UPDATE.getActions()
+
+    const sourceCreations = sourceScanResult.CREATE.getActions()
+    const sourceRemovals = sourceScanResult.REMOVE.getActions()
+    const sourceMoves = sourceScanResult.MOVE.getActions()
+
+    const targetTree : Folder<TOppositeLocation<L1>> = (targetLocation === ItemLocation.LOCAL ? this.localTreeRoot : this.serverTreeRoot) as Folder<TOppositeLocation<L1>>
+    const sourceTree : Folder<L1> = (targetLocation === ItemLocation.LOCAL ? this.serverTreeRoot : this.localTreeRoot) as Folder<L1>
+
+    const allCreateAndMoveActions = (sourceScanResult.CREATE.getActions() as Array<CreateAction<L1, L2> | MoveAction<L1, L2> | CreateAction<TOppositeLocation<L1>, L3> | MoveAction<TOppositeLocation<L1>, L3>>)
+      .concat(sourceScanResult.MOVE.getActions())
+      .concat(targetScanResult.CREATE.getActions())
+      .concat(targetScanResult.MOVE.getActions())
+
+    const avoidTargetReorders = {}
+
+    // Prepare target plan
+    const targetPlan: PlanStage1<L1, L2> = {
+      CREATE: new Diff(),
+      UPDATE: new Diff(),
+      MOVE: new Diff(),
+      REMOVE: new Diff(),
+      REORDER: new Diff(),
+    }
+
+    const findChainCacheForRemovals = {}
+    await Parallel.each(sourceScanResult.REMOVE.getActions(), async(action) => {
+      const concurrentRemoval = targetRemovals.find(targetRemoval =>
+        (action.payload.type === targetRemoval.payload.type && Mappings.mappable(mappingsSnapshot, action.payload, targetRemoval.payload)) ||
+        Diff.findChain(mappingsSnapshot, allCreateAndMoveActions, targetTree, action.payload, targetRemoval, findChainCacheForRemovals))
+      if (concurrentRemoval) {
+        // Already deleted on target, do nothing.
+        return
+      }
+
+      const concurrentMove = targetMoves.find(targetMove =>
+        action.payload.type === targetMove.payload.type && Mappings.mappable(mappingsSnapshot, action.payload, targetMove.payload)
+      )
+      if (concurrentMove && targetLocation === this.masterLocation) {
+        // moved on the target, moves from master take precedence, do nothing (i.e. leave target version intact)
+        return
+      }
+
+      targetPlan.REMOVE.commit(action)
+    }, ACTION_CONCURRENCY)
+
+    const findChainCacheForCreations = {}
+    await Parallel.each(sourceScanResult.CREATE.getActions(), async(action) => {
+      const concurrentCreation = targetCreations.find(a => (
+        action.payload.parentId === Mappings.mapParentId(mappingsSnapshot, a.payload, action.payload.location) &&
+        action.payload.canMergeWith(a.payload)
+      ))
+      if (concurrentCreation) {
+        // created on both the target and sourcely, try to reconcile
+        const subScanner = new Scanner(
+          this.mappings,
+          concurrentCreation.payload, // target tree
+          action.payload, // source tree
+          (oldItem, newItem) => {
+            if (
+              oldItem.type === newItem.type &&
+              oldItem.canMergeWith(newItem) &&
+              !Mappings.wouldEvictUnrelatedMapping(mappingsSnapshot, oldItem, newItem)
+            ) {
+              return true
+            }
+            return false
+          },
+          this.hashSettings,
+          false,
+          true,
+          true,
+        )
+        const scanResult = await subScanner.run()
+        await this.addMapping(
+          action.payload.location === ItemLocation.LOCAL
+            ? this.localTree
+            : this.server,
+          concurrentCreation.payload,
+          action.payload.id
+        )
+
+        // SubScanner may reveal residual CREATE/REMOVE actions that we add to the plan here
+        // We do not act on REMOVEs, only on CREATEs as we merge the two sides
+        scanResult.CREATE.getActions().forEach(action =>
+          targetPlan.CREATE.commit({type: action.type, payload: action.payload})
+        )
+        return
+      }
+
+      const concurrentRemoval = targetScanResult.REMOVE.getActions().find(targetRemoval =>
+        // target removal removed this creation's target (via some chain)
+        Diff.findChain(mappingsSnapshot, allCreateAndMoveActions, sourceTree, action.payload, targetRemoval, findChainCacheForCreations)
+      )
+      if (concurrentRemoval) {
+        avoidTargetReorders[action.payload.parentId] = true
+        // Already deleted on target, do nothing.
+        return
+      }
+
+      targetPlan.CREATE.commit(action)
+    }, ACTION_CONCURRENCY)
+
+    await Parallel.each(sourceScanResult.MOVE.getActions(), async(action) => {
+      if (targetLocation === this.masterLocation) {
+        const concurrentMove = targetMoves.find(a =>
+          action.payload.type === a.payload.type && Mappings.mappable(mappingsSnapshot, action.payload, a.payload))
+        if (concurrentMove) {
+          // Moved both on target and sourcely, master has precedence: do nothing on master
+          return
+        }
+      }
+      let findChainCache = {}
+      // FInd out if there's a removal in the target diff which already deletes this item (via some chain of MOVE|CREATEs)
+      const complexTargetTargetRemoval = targetRemovals.find(targetRemoval => {
+        return Diff.findChain(mappingsSnapshot, allCreateAndMoveActions, sourceTree, action.payload, targetRemoval, findChainCache)
+      })
+      findChainCache = {}
+      // The item still being on the target means it was moved out of the
+      // removed folder there before the removal -- typically the very move we
+      // have here, done on both sides when an interrupted sync had already
+      // applied it locally. Recreating it would leave it on the target twice.
+      const survivesOnTarget = Boolean(targetTree.findItem(action.payload.type, Mappings.mapId(mappingsSnapshot, action.payload, targetLocation)))
+      const concurrentTargetOriginRemoval = !survivesOnTarget && targetRemovals.find(targetRemoval =>
+        (action.payload.type === targetRemoval.payload.type && Mappings.mappable(mappingsSnapshot, action.payload, targetRemoval.payload)) ||
+        Diff.findChain(mappingsSnapshot, allCreateAndMoveActions, sourceTree, action.oldItem, targetRemoval, findChainCache)
+      )
+      findChainCache = {}
+      const concurrentSourceOriginRemoval = sourceRemovals.find(sourceRemoval => {
+        return Diff.findChain(mappingsSnapshot, allCreateAndMoveActions, targetTree, action.oldItem, sourceRemoval, findChainCache)
+      })
+      findChainCache = {}
+      const concurrentSourceTargetRemoval = sourceRemovals.find(sourceRemoval =>
+        // We pass an empty folder here, because we don't want direct deletions of the moved folder's parent to count, as it's moved away anyway
+        Diff.findChain(mappingsSnapshot, allCreateAndMoveActions, new Folder({id: 0, location: targetLocation}), action.payload, sourceRemoval, findChainCache)
+      )
+      if (complexTargetTargetRemoval) {
+        // target already deleted by a target|source REMOVE (connected via source MOVE|CREATEs)
+        if (!concurrentTargetOriginRemoval && !concurrentSourceOriginRemoval) {
+          // make sure this item is not already being removed, when it's no longer moved
+          // if (targetLocation === this.masterLocation) {
+          targetPlan.REMOVE.commit({ type: ActionType.REMOVE, payload: action.oldItem, oldItem: null })
+          SyncProcess.removeItemFromReorders(mappingsSnapshot, sourceScanResult.REORDER, action.oldItem)
+          avoidTargetReorders[action.payload.id] = true
+          // }
+        }
+        return
+      }
+      if (concurrentSourceTargetRemoval) {
+        // target already deleted by a source REMOVE (connected via source MOVE|CREATEs)
+        if (targetLocation !== this.masterLocation) {
+          targetPlan.REMOVE.commit({ type: ActionType.REMOVE, payload: action.oldItem, oldItem: null })
+        }
+        SyncProcess.removeItemFromReorders(mappingsSnapshot, sourceScanResult.REORDER, action.oldItem)
+        avoidTargetReorders[action.payload.id] = true
+        return
+      }
+      if (concurrentTargetOriginRemoval) {
+        // moved sourcely but removed on the target, recreate it on the target
+        if (targetLocation !== this.masterLocation) {
+          // only when coming from master do we recreate
+          // check sourceCreations and targetPlan.CREATE, since we may have created an item along the way in this method already
+          const originalCreation = targetPlan.CREATE.peekActions().find(creation =>
+            creation.payload.type === ItemType.FOLDER && creation.payload.findItem(ItemType.FOLDER, action.payload.parentId)
+          ) || sourceCreations.find(creation =>
+            creation.payload.type === ItemType.FOLDER && creation.payload.findItem(ItemType.FOLDER, action.payload.parentId)
+          )
+
+          // Remove subitems that have been (re)moved already by other actions
+          const newPayload = action.payload.copy()
+          if (newPayload.type === ItemType.FOLDER) {
+            await newPayload.traverse((item, folder) => {
+              const removed = sourceRemovals.find(a => Mappings.mappable(mappingsSnapshot, item, a.payload))
+              const movedAway = sourceMoves.find(a => Mappings.mappable(mappingsSnapshot, item, a.payload))
+              if (removed || (movedAway && Mappings.mapParentId(mappingsSnapshot, movedAway.payload, item.location) !== item.parentId)) {
+                folder.children.splice(folder.children.indexOf(item), 1)
+              }
+            })
+
+            const pendingCreations = sourceCreations
+              .filter(creation => creation !== originalCreation)
+              .map(creation => creation.payload)
+
+            let insertedCreation = true
+            while (insertedCreation) {
+              insertedCreation = false
+              pendingCreations.forEach((creationPayload, index) => {
+                const parentFolder = newPayload.findFolder(creationPayload.parentId)
+                if (!parentFolder || parentFolder.findItem(creationPayload.type, creationPayload.id)) {
+                  return
+                }
+                parentFolder.children.splice(index, 0, creationPayload.copy())
+                insertedCreation = true
+              })
+            }
+
+            const pendingMoves = sourceMoves.filter(move => move !== action)
+
+            let insertedMove = true
+            while (insertedMove) {
+              insertedMove = false
+              pendingMoves.forEach((move) => {
+                const parentFolder = newPayload.findFolder(move.payload.parentId)
+                if (!parentFolder || parentFolder.findItem(move.payload.type, move.payload.id)) {
+                  return
+                }
+                parentFolder.children.splice(move.index, 0, move.payload.copy())
+                insertedMove = true
+              })
+            }
+          }
+
+          if (originalCreation && originalCreation.payload.type === ItemType.FOLDER) {
+            // in case the new parent is already a newly created item, merge it into that creation
+            const folder = originalCreation.payload.findFolder(action.payload.parentId)
+            folder.children.splice(action.index, 0, newPayload)
+          } else {
+            targetPlan.CREATE.commit({ type: ActionType.CREATE, oldItem: null, payload: newPayload })
+          }
+        }
+        return
+      }
+      let findChainCache1 = {}, findChainCache2 = {}
+      // Find concurrent moves that form a hierarchy reversal together with this one
+      const concurrentHierarchyReversals = targetMoves.filter(targetMove => {
+        return Diff.findChain(mappingsSnapshot, allCreateAndMoveActions, sourceTree, action.payload, targetMove, findChainCache1) &&
+          Diff.findChain(mappingsSnapshot, allCreateAndMoveActions, targetTree, targetMove.payload, action, findChainCache2)
+      })
+      if (concurrentHierarchyReversals.length) {
+        if (targetLocation !== this.masterLocation) {
+          targetPlan.MOVE.commit(action)
+
+          findChainCache1 = {}
+          findChainCache2 = {}
+          concurrentHierarchyReversals.forEach(a => {
+            // moved sourcely but moved in reverse hierarchical order on target
+            const payload = a.oldItem.restampRoot(false, action.payload.location)
+            payload.id = Mappings.mapId(
+              mappingsSnapshot,
+              a.oldItem,
+              action.payload.location
+            )
+            payload.parentId = Mappings.mapParentId(
+              mappingsSnapshot,
+              a.oldItem,
+              action.payload.location
+            )
+            const oldItem = a.payload.restampRoot(false, action.oldItem.location)
+            oldItem.id = Mappings.mapId(mappingsSnapshot, a.payload, action.oldItem.location)
+            oldItem.parentId = Mappings.mapParentId(mappingsSnapshot, a.payload, action.oldItem.location)
+
+            if (
+              // Don't create duplicates!
+              targetPlan.MOVE.peekActions().find(move => String(move.payload.id) === String(payload.id)) ||
+              sourceMoves.find(move => String(move.payload.id) === String(payload.id)) ||
+              // Don't move back into removed territory
+              targetRemovals.find(remove => Diff.findChain(mappingsSnapshot, allCreateAndMoveActions, sourceTree, action.payload, remove, findChainCache1)) ||
+              sourceRemovals.find(remove => Diff.findChain(mappingsSnapshot, allCreateAndMoveActions, targetTree, action.payload, remove, findChainCache2))
+            ) {
+              return
+            }
+
+            // revert target move
+            targetPlan.MOVE.commit({ ...a, payload, oldItem })
+            SyncProcess.removeItemFromReorders(mappingsSnapshot, sourceScanResult.REORDER, payload)
+            SyncProcess.removeItemFromReorders(mappingsSnapshot, sourceScanResult.REORDER, oldItem)
+          })
+        } else {
+          SyncProcess.removeItemFromReorders(mappingsSnapshot, sourceScanResult.REORDER, action.oldItem)
+          SyncProcess.removeItemFromReorders(mappingsSnapshot, sourceScanResult.REORDER, action.payload)
+        }
+        return
+      }
+
+      targetPlan.MOVE.commit(action)
+    }, 1)
+
+    const findChainCacheForUpdates = {}
+    await Parallel.each(sourceScanResult.UPDATE.getActions(), async(action) => {
+      const concurrentUpdate = targetUpdates.find(a =>
+        action.payload.type === a.payload.type && Mappings.mappable(mappingsSnapshot, action.payload, a.payload))
+      if (concurrentUpdate && targetLocation === this.masterLocation) {
+        // Updated both on target and sourcely, source has precedence: do nothing sourcely
+        return
+      }
+      const concurrentRemoval = targetRemovals.find(a =>
+        a.payload.findItem(action.payload.type, Mappings.mapId(mappingsSnapshot, action.payload, a.payload.location)) ||
+        a.payload.findItem(ItemType.FOLDER, Mappings.mapParentId(mappingsSnapshot, action.payload, a.payload.location)) ||
+        // The findItem checks above only catch direct containment in the captured REMOVE subtree.
+        // findChain follows source-side MOVE|CREATE chains so an item moved into a deleted target folder
+        // is recognised as transitively removed and the UPDATE is skipped (avoids E002 at execution).
+        Diff.findChain(mappingsSnapshot, allCreateAndMoveActions, targetTree, action.payload, a, findChainCacheForUpdates))
+      if (concurrentRemoval) {
+        // Already deleted on target, do nothing.
+        return
+      }
+
+      targetPlan.UPDATE.commit(action)
+    }, ACTION_CONCURRENCY)
+
+    const findChainCacheForReorders = {}
+    await Parallel.each(sourceScanResult.REORDER.getActions(), async(action) => {
+      if (avoidTargetReorders[action.payload.id]) {
+        return
+      }
+
+      const concurrentRemoval = targetRemovals.find(a =>
+        a.payload.findItem(action.payload.type, Mappings.mapId(mappingsSnapshot, action.payload, a.payload.location)) ||
+        a.payload.findItem(ItemType.FOLDER, Mappings.mapParentId(mappingsSnapshot, action.payload, a.payload.location)) ||
+        Diff.findChain(mappingsSnapshot, allCreateAndMoveActions, sourceTree, action.payload, a, findChainCacheForReorders)
+      )
+      if (concurrentRemoval) {
+        // Already deleted on target, do nothing.
+        return
+      }
+
+      targetPlan.REORDER.commit(action)
+    }, ACTION_CONCURRENCY)
+
+    return targetPlan
+  }
+
+  async executeStage2<L1 extends TItemLocation>(
+    resource:TResource<L1>,
+    planStage2:PlanStage2<TOppositeLocation<L1>, TItemLocation, L1>,
+    targetLocation:L1,
+    donePlan: PlanStage3<TOppositeLocation<L1>, TItemLocation, L1>,
+    reorders: Diff<TOppositeLocation<L1>, TItemLocation, ReorderAction<TOppositeLocation<L1>, TItemLocation>>): Promise<void> {
+    Logger.log('Executing ' + targetLocation + ' plan for stage 2')
+
+    let createActions = planStage2.CREATE.getActions()
+    while (createActions.length > 0) {
+      Logger.log(targetLocation + ': executing CREATEs')
+      await Parallel.each(
+        createActions,
+        (action) => this.executeCreate(resource, action, targetLocation, planStage2.CREATE, reorders, donePlan),
+        ACTION_CONCURRENCY
+      )
+      createActions = planStage2.CREATE.getActions()
+
+      if (this.canceled) {
+        throw new CancelledSyncError()
+      }
+    }
+
+    Logger.log(targetLocation + ': executing UPDATEs')
+
+    await Parallel.each(
+      planStage2.UPDATE.getActions(),
+      (action) => this.executeUpdate(resource, action, targetLocation, planStage2.UPDATE, donePlan),
+      ACTION_CONCURRENCY
+    )
+  }
+
+  async executeStage3<L1 extends TItemLocation>(
+    resource:TResource<L1>,
+    planStage3: PlanStage3<TOppositeLocation<L1>, TItemLocation, L1>,
+    targetLocation: L1,
+    donePlan: PlanStage3<TOppositeLocation<L1>, TItemLocation, L1>) {
+    const batches = Diff.sortMoves(planStage3.MOVE.getActions(), this.getTargetTree(targetLocation))
+
+    if (this.canceled) {
+      throw new CancelledSyncError()
+    }
+
+    Logger.log(targetLocation + ': executing MOVEs')
+    await Parallel.each(
+      batches,
+      async(batch) => {
+        Logger.log('Starting new batch of concurrent MOVEs with size ' + batch.length)
+        return Parallel.each(batch, (action) => {
+          return this.executeUpdate(resource, action, targetLocation, planStage3.MOVE, donePlan)
+        }, ACTION_CONCURRENCY)
+      },
+      1
+    )
+
+    if (this.canceled) {
+      throw new CancelledSyncError()
+    }
+
+    Logger.log(targetLocation + ': executing REMOVEs')
+    await Parallel.each(planStage3.REMOVE.getActions(), (action) => {
+      return this.executeRemove(resource, action, targetLocation, planStage3.REMOVE, donePlan)
+    }, ACTION_CONCURRENCY)
+  }
+
+  /**
+   * Whether the scan after a bulk import may map `oldItem` to its imported copy
+   * `newItem`.
+   *
+   * Not if that evicts a mapping of either of them: a copy merely matching by
+   * url must not orphan the item something else is mapped to. There is one
+   * exception. When the import re-creates a folder, the old counterparts of its
+   * contents sit in the folder's old copy, which the folder itself no longer
+   * maps to, and which is going away. Refusing to map them would keep the
+   * contents mapped to items that are gone -- on Nextcloud Bookmarks an update
+   * then fails over the missing folder in the old id -- or leave them unmapped
+   * once the removal cleans up after itself.
+   */
+  static mayMapImportedItem<L1 extends TItemLocation, L2 extends TItemLocation>(
+    snapshot: MappingSnapshot,
+    supersededFolder: Folder<L2> | undefined,
+    oldItem: TItem<L1>,
+    newItem: TItem<L2>
+  ): boolean {
+    if (!Mappings.wouldEvictUnrelatedMapping(snapshot, oldItem, newItem)) {
+      return true
+    }
+    if (!supersededFolder) {
+      return false
+    }
+    const newItemCounterpart = Mappings.mapId(snapshot, newItem, oldItem.location)
+    if (typeof newItemCounterpart !== 'undefined' && String(newItemCounterpart) !== String(oldItem.id)) {
+      return false
+    }
+    const oldCounterpart = Mappings.mapId(snapshot, oldItem, newItem.location)
+    return typeof oldCounterpart !== 'undefined' &&
+      Boolean(supersededFolder.findItem(oldItem.type, oldCounterpart))
+  }
+
+  async executeCreate<L1 extends TItemLocation>(
+    resource: TResource<L1>,
+    action: CreateAction<L1, TOppositeLocation<L1>>,
+    targetLocation: L1,
+    diff: Diff<L1, TOppositeLocation<L1>, CreateAction<L1, TOppositeLocation<L1>>>,
+    reorders: Diff<TOppositeLocation<L1>, TItemLocation, ReorderAction<TOppositeLocation<L1>, TItemLocation>>,
+    donePlan: PlanStage3<TOppositeLocation<L1>, TItemLocation, L1>
+  ): Promise<void> {
+    // defer execution of actions to allow the this.canceled check below to work when cancelling in interrupt tests
+    if (++this.executeIterations % 1000 === 0) {
+      await yieldToEventLoop()
+    }
+    Logger.log('Executing action ', action)
+
+    if (this.canceled) {
+      throw new CancelledSyncError()
+    }
+
+    const done = async() => {
+      diff.retract(action)
+      donePlan.CREATE.commit(action)
+      await this.updateProgress()
+    }
+
+    let completed: boolean, id: string | number
+    try {
+      ({ completed, result: id } = await this.raceWithCancellation(action.payload.visitCreate(resource)))
+    } catch (e) {
+      if (!(e instanceof UnsupportedItemError)) {
+        throw e
+      }
+      // Left out on purpose: unmapped and uncached, so the next sync offers it again
+      Logger.log('Skipping item the ' + targetLocation + ' tree cannot hold: ' + e.message)
+      diff.retract(action)
+      await this.updateProgress()
+      return
+    }
+    if (!completed) {
+      // The create was cancelled before its side effect landed: let a resumed sync retry it.
+      throw new CancelledSyncError()
+    }
+    if (typeof id === 'undefined' || id === null) {
+      // undefined means we couldn't create the item
+      throw new FloccusError('Failed to create item on ' + targetLocation + ' : ' + action.payload.inspect())
+    }
+
+    // An item that is created although it's mapped already is being re-created,
+    // because its old counterpart goes away with a removed ancestor (see
+    // reconcileDiffs). The mapping below moves the item itself over to the new
+    // copy; what it contains is still mapped into the old one.
+    const supersededId = action.oldItem && Mappings.mapId(this.mappings.getSnapshot(), action.oldItem, targetLocation)
+    const supersededFolder = action.oldItem instanceof Folder && typeof supersededId !== 'undefined' && String(supersededId) !== String(id)
+      ? this.getTargetTree(targetLocation)?.findFolder(supersededId) as Folder<L1> | undefined
+      : undefined
+
+    action.payload = action.payload.copy()
+    action.payload.id = id
+
+    if (action.oldItem) {
+      await this.addMapping(resource, action.oldItem, id)
+    }
+
+    if (action.payload instanceof Bookmark || action.oldItem instanceof Bookmark) {
+      await done()
+      return
+    }
+
+    if (action.payload.children.length === 0) {
+      await done()
+      return
+    }
+
+    // Now, Insert folder children
+
+    // Fix for Unidirectional reverted REMOVEs, for all other strategies this should be a noop
+    action.payload.children.forEach((item) => {
+      item.parentId = id
+    })
+    // We *know* that oldItem exists here, because actions are mapped before being executed
+    if ('bulkImportFolder' in resource) {
+      let doneCalled = false
+      // Chunking spreads the subtree over several bulkImportFolder calls, which
+      // only holds together where the import adds to the folder. A resource that
+      // replaces the folder's children instead -- NativeTree, via
+      // CachingTreeWrapper -- would keep nothing but the last chunk, so hand it
+      // the whole subtree in one go no matter how large.
+      if (action.payload.count() < 75 || !resource.bulkImportAppendsChildren) {
+        Logger.log('Attempting full bulk import')
+        try {
+          // Try bulk import with sub folders
+          const imported = await resource.bulkImportFolder(id, action.oldItem.restampTree(false, action.payload.location)) as Folder<typeof targetLocation>
+          await done()
+          doneCalled = true
+          const bulkImportMappingsSnapshot = this.mappings.getSnapshot()
+          const subScanner = new Scanner(
+            this.mappings,
+            action.oldItem,
+            imported,
+            (oldItem, newItem) => {
+              if (
+                oldItem.type === newItem.type &&
+                oldItem.canMergeWith(newItem) &&
+                SyncProcess.mayMapImportedItem(bulkImportMappingsSnapshot, supersededFolder, oldItem, newItem)
+              ) {
+                return true
+              }
+              return false
+            },
+            this.hashSettings,
+            false,
+            true,
+            true,
+          )
+          await subScanner.run()
+
+          if ('orderFolder' in resource) {
+            const mappingsSnapshot = this.mappings.getSnapshot()
+            this.actionsPlanned++
+            reorders.commit({
+              type: ActionType.REORDER,
+              oldItem: imported,
+              payload: action.oldItem,
+              // payload children's IDs are not mapped
+              order: action.oldItem.children.map(i => ({ type: i.type, id: i.id }))
+            })
+            await action.oldItem.traverse((oldChildItem) => {
+              if (oldChildItem instanceof Folder && oldChildItem.children.length > 1) {
+                // Correct the order after bulk import. Usually we expect bulk import to do the order correctly
+                // on its own, but Nextcloud Bookmarks pre v14.2.0 does not
+                const payload = imported.findFolder(Mappings.mapId(mappingsSnapshot, oldChildItem, targetLocation))
+                // Order created items after the fact, as they've been created concurrently
+                this.actionsPlanned++
+                reorders.commit({
+                  type: ActionType.REORDER,
+                  oldItem: payload,
+                  payload: oldChildItem,
+                  order: oldChildItem.children.map(i => ({ type: i.type, id: i.id }))
+                })
+              }
+            })
+          }
+          return
+        } catch (e) {
+          Logger.log('Bulk import failed, continuing with normal creation', e)
+          if (doneCalled) {
+            // Bulk import already committed the subtree to the target; the failure is
+            // in post-import bookkeeping. Falling through to per-child creation would
+            // re-create the same items and produce duplicates on the target.
+            return
+          }
+        }
+      } else {
+        const importedBookmarkIds = new Set<string>()
+        try {
+          // Try bulk import without sub folders
+          const tempItem = action.oldItem.restampTree(false, action.payload.location)
+          const bookmarks = tempItem.children.filter(child => child instanceof Bookmark)
+          while (bookmarks.length > 0) {
+            Logger.log('Attempting chunked bulk import')
+            const chunk = bookmarks.splice(0, 70)
+            tempItem.children = chunk
+            const imported = await resource.bulkImportFolder(action.payload.id, tempItem)
+            const chunkedBulkImportMappingsSnapshot = this.mappings.getSnapshot()
+            const subScanner = new Scanner(
+              this.mappings,
+              // tempItem carries the target's location, but Scanner#addMapping only maps
+              // a pair of items from opposite locations -- scan the chunk under its own
+              tempItem.restampTree(false, action.oldItem.location),
+              imported,
+              (oldItem, newItem) => {
+                if (
+                  oldItem.type === newItem.type &&
+                  oldItem.canMergeWith(newItem) &&
+                  SyncProcess.mayMapImportedItem(chunkedBulkImportMappingsSnapshot, supersededFolder, oldItem, newItem)
+                ) {
+                  // if two items can be merged, we'll add mappings here directly
+                  return true
+                }
+                return false
+              },
+              this.hashSettings,
+              false,
+              true,
+              true,
+            )
+            await subScanner.run()
+            chunk.forEach(b => importedBookmarkIds.add(String(b.id)))
+          }
+
+          // create sub plan for the folders
+
+          const mappingsSnapshot = this.mappings.getSnapshot()
+
+          const folders = action.payload.children
+            .filter(item => item instanceof Folder)
+            .filter(item => item as Folder<L1>)
+
+          folders
+            .forEach((child) => {
+              // Necessary for Unidirectional reverted REMOVEs
+              const payload = child
+              payload.parentId = Mappings.mapParentId(mappingsSnapshot, child, targetLocation)
+              const oldItem = action.oldItem.findItem(child.type, child.id)
+              const newAction = { type: ActionType.CREATE, payload, oldItem }
+              this.actionsPlanned++
+              diff.commit(newAction)
+            })
+
+          if (!doneCalled) {
+            await done()
+            doneCalled = true
+          }
+
+          if ('orderFolder' in resource) {
+            // Order created items after the fact, as they've been created concurrently
+            this.actionsPlanned++
+            reorders.commit({
+              type: ActionType.REORDER,
+              oldItem: action.payload,
+              payload: action.oldItem,
+              // payload children's IDs are not mapped
+              order: action.payload.children.map(i => ({ type: i.type, id: i.id }))
+            })
+          }
+          return
+        } catch (e) {
+          Logger.log('Bulk import failed, continuing with normal creation', e)
+          if (doneCalled) {
+            // Bookmarks were committed and the action retracted; the failure is in
+            // post-import bookkeeping. Falling through would re-commit CREATEs for
+            // the folders we already planned via diff.commit above.
+            return
+          }
+          if (importedBookmarkIds.size > 0) {
+            // A later chunk threw after earlier chunks had already imported their bookmarks. The per-child
+            // fallback below would otherwise re-create those imported bookmarks and produce duplicates on the target.
+            action.payload.children = action.payload.children.filter(
+              c => !(c instanceof Bookmark) || !importedBookmarkIds.has(String(c.id))
+            )
+          }
+        }
+      }
+    }
+
+    // Create a sub plan and create each child individually (worst performance)
+    const mappingsSnapshot = this.mappings.getSnapshot()
+    action.payload.children
+      .forEach((child) => {
+        // Necessary for Unidirectional reverted REMOVEs
+        child.parentId = Mappings.mapParentId(mappingsSnapshot, child, targetLocation)
+        const oldItem = action.oldItem.findItem(child.type, child.id)
+        const newAction = { type: ActionType.CREATE, payload: child, oldItem }
+        this.actionsPlanned++
+        diff.commit(newAction)
+      })
+
+    await done()
+
+    if ('orderFolder' in resource) {
+      // Order created items after the fact, as they've been created concurrently
+      this.actionsPlanned++
+      reorders.commit({
+        type: ActionType.REORDER,
+        oldItem: action.payload,
+        payload: action.oldItem,
+        order: action.oldItem.children.map(i => ({ type: i.type, id: i.id }))
+      })
+    }
+  }
+
+  async executeRemove<L1 extends TItemLocation>(
+    resource: TResource<L1>,
+    action: RemoveAction<L1, TItemLocation>,
+    targetLocation: L1,
+    diff: Diff<L1, TItemLocation, RemoveAction<L1, TItemLocation>>,
+    donePlan: PlanStage3<TOppositeLocation<L1>, TItemLocation, L1>
+  ): Promise<void> {
+    // defer execution of actions to allow the this.canceled check below to work when cancelling in interrupt tests
+    if (++this.executeIterations % 1000 === 0) {
+      await yieldToEventLoop()
+    }
+    Logger.log('Executing action ', action)
+
+    if (this.canceled) {
+      throw new CancelledSyncError()
+    }
+
+    const { completed } = await this.raceWithCancellation(action.payload.visitRemove(resource))
+    if (!completed) {
+      // The remove was cancelled before it took effect: let a resumed sync retry it.
+      throw new CancelledSyncError()
+    }
+    diff.retract(action)
+    donePlan.REMOVE.commit(action)
+    await this.updateProgress()
+  }
+
+  async executeUpdate<L1 extends TItemLocation>(
+    resource: TResource<L1>,
+    action: UpdateAction<L1, TItemLocation> | MoveAction<L1, TItemLocation>,
+    targetLocation: L1,
+    diff: Diff<L1, TItemLocation, UpdateAction<L1, TItemLocation> | MoveAction<L1, TItemLocation>>,
+    donePlan: PlanStage3<TItemLocation, TItemLocation, L1>): Promise<void> {
+    // defer execution of actions to allow the this.canceled check below to work when cancelling in interrupt tests
+    if (++this.executeIterations % 1000 === 0) {
+      await yieldToEventLoop()
+    }
+    Logger.log('Executing action ', action)
+
+    if (this.canceled) {
+      throw new CancelledSyncError()
+    }
+
+    const { completed } = await this.raceWithCancellation(action.payload.visitUpdate(resource))
+    if (!completed) {
+      // The update/move was cancelled before it took effect: let a resumed sync retry it.
+      throw new CancelledSyncError()
+    }
+
+    await this.addMapping(resource, action.oldItem, action.payload.id)
+    diff.retract(action)
+    if (action.type === ActionType.UPDATE) {
+      donePlan.UPDATE.commit(action)
+    } else {
+      donePlan.MOVE.commit(action)
+    }
+    await this.updateProgress()
+  }
+
+  /**
+   * Whether the folder a REORDER is for has left the subtree a REMOVE takes with
+   * it. Diff#map only maps the root of a REMOVE's payload; below it is the
+   * source's picture from before this sync, so a folder moved out of the removed
+   * one is still listed there -- e.g. a folder re-created elsewhere because its
+   * old parent went away, whose REORDER would otherwise be dropped silently and
+   * leave the re-created children in whatever order their CREATEs finished in.
+   */
+  private hasLeftRemovedSubtree(
+    reorderAction: ReorderAction<TItemLocation, TItemLocation>,
+    removal: Action<TItemLocation, TItemLocation>,
+    mappingSnapshot: MappingSnapshot
+  ): boolean {
+    const location = reorderAction.payload.location
+    const tree = location === ItemLocation.LOCAL ? this.localTreeRoot : this.serverTreeRoot
+    // The mappings of executed removals are gone by now, but a mapped REMOVE
+    // keeps the item it was mapped from in oldItem
+    const removedItem = [removal.payload, removal.oldItem].find((item) => item && item.location === location)
+    const removedId = removedItem ? removedItem.id : Mappings.mapId(mappingSnapshot, removal.payload, location)
+    let current: Folder<TItemLocation> = tree && tree.findFolder(reorderAction.payload.id)
+    if (!current || typeof removedId === 'undefined') {
+      // We can't tell where the folder is now, so believe the removal
+      return false
+    }
+    while (current) {
+      if (String(current.id) === String(removedId)) {
+        return false
+      }
+      current = current.parentId !== null && typeof current.parentId !== 'undefined'
+        ? tree.findFolder(current.parentId)
+        : null
+    }
+    return true
+  }
+
+  reconcileReorderings<L1 extends TItemLocation, L2 extends TItemLocation>(
+    targetReorders: Diff<L2, TItemLocation, ReorderAction<L2, TItemLocation>>,
+    targetOrSourceDonePlan: PlanStage3<TItemLocation, TItemLocation, TItemLocation>,
+    targetLocation: L1,
+    mappingSnapshot: MappingSnapshot
+  ) : Diff<L2, TItemLocation, ReorderAction<L2, TItemLocation>> {
+    Logger.log('Reconciling reorders to create a plan')
+
+    const targetCreations = targetOrSourceDonePlan.CREATE.getActions()
+    const targetRemovals = targetOrSourceDonePlan.REMOVE.getActions()
+    const targetMoves = targetOrSourceDonePlan.MOVE.getActions()
+    const targetCreationsAndMoves : Action<TItemLocation, TItemLocation>[] = (targetCreations as Action<TItemLocation, TItemLocation>[]).concat(targetMoves)
+    const targetTree = targetLocation === ItemLocation.LOCAL ? this.localTreeRoot : this.serverTreeRoot
+
+    const newReorders = new Diff<L2, TItemLocation, ReorderAction<L2, TItemLocation>>
+
+    const findChainCache = {}
+
+    targetReorders
+      .getActions()
+    // MOVEs have oldItem from cacheTree and payload now mapped to their corresponding target tree
+    // REORDERs have payload in source tree
+      .forEach(oldReorderAction => {
+        // clone action
+        const reorderAction = {...oldReorderAction, order: oldReorderAction.order.slice()}
+
+        // Find removals of the main payload
+        const removed = targetRemovals
+          .filter(removal =>
+            (removal.payload.findItem(reorderAction.payload.type, reorderAction.payload.id) ||
+              Diff.findChain(mappingSnapshot, targetCreationsAndMoves, targetTree, reorderAction.payload, removal, findChainCache)) &&
+            // Both checks look at the removal's subtree, which (except for its
+            // root) holds the unmapped ids of an older picture of it
+            !this.hasLeftRemovedSubtree(reorderAction, removal, mappingSnapshot))
+        if (removed.length) {
+          return
+        }
+
+        // Find Away-moves
+        const childAwayMoves = targetMoves
+          .filter(move =>
+            String(Mappings.mapId(mappingSnapshot, reorderAction.payload, move.payload.location)) !== String(move.payload.parentId) &&
+                reorderAction.order.find(item =>
+                  String(Mappings.mapRawId(mappingSnapshot, item.id, item.type, reorderAction.payload.location, move.payload.location)) === String(move.payload.id) && item.type === move.payload.type)
+          )
+
+        // Find removals of sub items that are being reordered, we need to remove those from the order
+        const concurrentRemovals = targetRemovals
+          .filter(removal =>
+            reorderAction.order.find(item =>
+              String(Mappings.mapRawId(mappingSnapshot, item.id, item.type, reorderAction.payload.location, removal.payload.location)) === String(removal.payload.id) && item.type === removal.payload.type))
+
+        // Remove away-moves and removals
+        reorderAction.order = reorderAction.order.filter(item => {
+          let action
+          if (
+            // eslint-disable-next-line no-cond-assign
+            action = childAwayMoves.find(move =>
+              String(Mappings.mapRawId(mappingSnapshot, item.id, item.type, reorderAction.payload.location, move.payload.location)) === String(move.payload.id) && move.payload.type === item.type)) {
+            Logger.log('ReconcileReorders: Removing moved item from order', {move: action, reorder: reorderAction})
+            return false
+          }
+
+          if (
+            // eslint-disable-next-line no-cond-assign
+            action = concurrentRemovals.find(removal =>
+              String(Mappings.mapRawId(mappingSnapshot, item.id, item.type, reorderAction.payload.location, removal.payload.location)) === String(removal.payload.id) && removal.payload.type === item.type)
+          ) {
+            Logger.log('ReconcileReorders: Removing removed item from order', {item, reorder: reorderAction, removal: action})
+            return false
+          }
+          return true
+        })
+
+        // Find and insert creations
+        const concurrentCreations = targetCreations.filter(
+          (creation) =>
+            String(reorderAction.payload.id) ===
+              String(creation.payload.parentId) &&
+            !reorderAction.order.find(
+              ({ type, id }) =>
+                type === creation.payload.type &&
+                String(id) === String(Mappings.mapId(mappingSnapshot, creation.payload, reorderAction.payload.location))
+            )
+        )
+        concurrentCreations
+          .forEach(a => {
+            Logger.log('ReconcileReorders: Inserting created item into order', {creation: a, reorder: reorderAction})
+            reorderAction.order.splice(a.index, 0, { type: a.payload.type, id: Mappings.mapId(mappingSnapshot, a.payload, reorderAction.payload.location) })
+          })
+
+        // Find and insert moves at move target
+        const moves = targetMoves.filter(
+          (move) =>
+            String(reorderAction.payload.id) ===
+              String(move.payload.parentId) &&
+            !reorderAction.order.find(
+              (item) =>
+                (item.type === move.payload.type &&
+                  String(item.id) === String(Mappings.mapId(mappingSnapshot, move.payload, reorderAction.payload.location)))
+            )
+        )
+        moves.forEach(a => {
+          Logger.log('ReconcileReorders: Inserting moved item into order', {move: a, reorder: reorderAction})
+          reorderAction.order.splice(a.index, 0, {
+            type: a.payload.type,
+            id: Mappings.mapId(
+              mappingSnapshot,
+              a.payload,
+              reorderAction.payload.location
+            ),
+          })
+        })
+
+        newReorders.commit(reorderAction)
+      })
+
+    return newReorders
+  }
+
+  reconcileConcurrentReorderings<L1 extends TItemLocation, L2 extends TItemLocation>(
+    targetReorders: Diff<L2, TItemLocation, ReorderAction<L2, TItemLocation>>,
+    sourceReorders: Diff<L1, TItemLocation, ReorderAction<L1, TItemLocation>>,
+    targetLocation: L1,
+    mappingSnapshot: MappingSnapshot
+  ) : Diff<L2, TItemLocation, ReorderAction<L2, TItemLocation>> {
+    Logger.log('Reconciling concurrent reorders from both reorder plans')
+    const sourceReorderActions = sourceReorders.getActions()
+
+    const newReorders = new Diff<L2, TItemLocation, ReorderAction<L2, TItemLocation>>
+
+    targetReorders
+      .getActions()
+      // MOVEs have oldItem from cacheTree and payload now mapped to their corresponding target tree
+      // REORDERs have payload in source tree
+      .forEach(oldReorderAction => {
+        // clone action
+        const reorderAction = {...oldReorderAction, order: oldReorderAction.order.slice()}
+
+        const concurrentSourceReorder = sourceReorderActions
+          .find(a => Mappings.mappable(mappingSnapshot, a.payload, reorderAction.payload))
+        if (concurrentSourceReorder) {
+          // if the target location is master, then the reorder comes from non-master location and we need to reconcile
+          const newOrder = []
+          const targetOrder = reorderAction.order.slice()
+          const sourceOrder = concurrentSourceReorder.order.slice()
+          while (targetOrder.length || sourceOrder.length) {
+            if (!targetOrder.length) {
+              let sourceItem = sourceOrder.shift()
+              sourceItem = {
+                ...sourceItem,
+                id: Mappings.mapRawId(
+                  mappingSnapshot,
+                  sourceItem.id,
+                  sourceItem.type,
+                  concurrentSourceReorder.payload.location,
+                  reorderAction.payload.location
+                )
+              }
+              if (newOrder.find(({type, id}) => type === sourceItem.type && id === sourceItem.id)) {
+                continue
+              }
+              newOrder.push(sourceItem)
+              continue
+            }
+            if (!sourceOrder.length) {
+              const targetItem = targetOrder.shift()
+              if (
+                newOrder.find(
+                  ({ type, id }) =>
+                    type === targetItem.type && id === targetItem.id
+                )
+              ) {
+                continue
+              }
+              newOrder.push(targetItem)
+              continue
+            }
+            if (
+              String(targetOrder[0].id) ===
+              String(Mappings.mapRawId(
+                mappingSnapshot,
+                sourceOrder[0].id,
+                sourceOrder[0].type,
+                concurrentSourceReorder.payload.location,
+                reorderAction.payload.location
+              ))
+            ) {
+              const targetItem = targetOrder.shift()
+              if (
+                newOrder.find(
+                  ({ type, id }) =>
+                    type === targetItem.type && id === targetItem.id
+                )
+              ) {
+                continue
+              }
+              newOrder.push(targetItem)
+              sourceOrder.shift()
+              continue
+            } else {
+              // first take the target item
+              const targetItem = targetOrder.shift()
+              if (
+                newOrder.find(
+                  ({ type, id }) =>
+                    type === targetItem.type && id === targetItem.id
+                )
+              ) {
+                continue
+              }
+              newOrder.push(targetItem)
+            }
+          }
+          reorderAction.order = newOrder
+        }
+
+        newReorders.commit(reorderAction)
+      })
+
+    return newReorders
+  }
+
+  async executeReorderings(resource:OrderFolderResource<TItemLocation>, reorderings:Diff<TItemLocation, TItemLocation, ReorderAction<TItemLocation, TItemLocation>>):Promise<void> {
+    Logger.log('Executing reorderings')
+    Logger.log({ reorderings })
+
+    const isUsingTabs = await this.localTree.isUsingBrowserTabs?.()
+
+    let iterations = 0
+    await Parallel.each(reorderings.getActions(), async(action) => {
+      if (++iterations % 1000 === 0) {
+        await yieldToEventLoop()
+      }
+      Logger.log('Executing reorder action', `${action.type} Payload: #${action.payload.id}[${action.payload.title}]${'url' in action.payload ? `(${action.payload.url})` : ''} parentId: ${action.payload.parentId}`)
+      const item = action.payload
+
+      if (this.canceled) {
+        throw new CancelledSyncError()
+      }
+
+      if (action.order.length <= 1) {
+        reorderings.retract(action)
+        return
+      }
+
+      const items = {}
+      try {
+        await Promise.race([
+          resource.orderFolder(item.id, action.order
+            // in rare situations the diff generates a REMOVE for an item that is still in the tree,
+            // make sure to sort out those failed mapings (value: undefined)
+            // also make sure that items are unique
+            .filter(item => {
+              if (items[item.type + '' + item.id]) {
+                return false
+              }
+              items[item.type + '' + item.id] = true
+              return item.id
+            })
+          ),
+          this.cancelPromise,
+        ])
+      } catch (e) {
+        Logger.log('Failed to execute REORDER: ' + e.message + '\nMoving on.')
+        Logger.log(e)
+      }
+      reorderings.retract(action)
+      await this.updateProgress()
+    }, isUsingTabs ? 1 : ACTION_CONCURRENCY)
+  }
+
+  async addMapping(resource:TResource<TItemLocation>, item:TItem<TItemLocation>, newId:string|number):Promise<void> {
+    if (++this.mappingIterations % 1000 === 0) {
+      await yieldToEventLoop()
+    }
+    let localId, remoteId
+    if (resource === this.server) {
+      localId = item.id
+      remoteId = newId
+    } else {
+      localId = newId
+      remoteId = item.id
+    }
+    if (item.type === 'folder') {
+      await this.mappings.addFolder({ localId, remoteId })
+    } else {
+      await this.mappings.addBookmark({ localId, remoteId })
+    }
+  }
+
+  async removeMapping(resource:TResource<TItemLocation>, item:TItem<TItemLocation>):Promise<void> {
+    let localId, remoteId
+    if (resource === this.server) {
+      remoteId = item.id
+    } else {
+      localId = item.id
+    }
+    if (!this.server.isAtomic()) {
+      if (item.type === 'folder') {
+        await this.mappings.removeFolder({ localId, remoteId })
+      } else {
+        await this.mappings.removeBookmark({ localId, remoteId })
+      }
+    } else {
+      // We don't remove from mappings immediately anymore, but wait for GC
+    }
+  }
+
+  async loadChildren(
+    serverItem:TItem<typeof ItemLocation.SERVER>,
+    mappingsSnapshot:MappingSnapshot,
+    isRoot = false
+  ):Promise<void> {
+    if (this.canceled) {
+      throw new CancelledSyncError()
+    }
+    if (!(serverItem instanceof Folder)) return
+    if (!('loadFolderChildren' in this.server)) return
+    let localItem, cacheItem
+    if (isRoot) {
+      localItem = this.localTreeRoot
+      cacheItem = this.cacheTreeRoot
+    } else {
+      const localId = mappingsSnapshot.ServerToLocal.folder[serverItem.id]
+      localItem = this.localTreeRoot.findFolder(localId)
+      cacheItem = this.cacheTreeRoot.findFolder(localId)
+    }
+    if (
+      localItem &&
+      !(await this.folderHasChanged(localItem, cacheItem, serverItem))
+    ) {
+      return
+    }
+    // A parent's load may have pulled in this folder's children already -- but
+    // not necessarily those of its own children: the sparse listing marks a
+    // folder as loaded as soon as its children arrived, one layer at a time. So
+    // we skip the request here, not the descent below.
+    if (!serverItem.loaded) {
+      Logger.log('LOADCHILDREN', serverItem)
+      // If we don't know this folder, yet, load the whole subtree (!localItem)
+
+      const children = await this.server.loadFolderChildren(serverItem.id, !localItem )
+      if (!children) {
+        return
+      }
+      serverItem.children = children
+      serverItem.loaded = true
+    }
+
+    // recurse
+    await Parallel.each(
+      serverItem.children,
+      child => this.loadChildren(child, mappingsSnapshot),
+      10
+    )
+  }
+
+  async folderHasChanged(localItem: TItem<typeof ItemLocation.LOCAL>, cacheItem: TItem<typeof ItemLocation.LOCAL>, serverItem: TItem<typeof ItemLocation.SERVER>):Promise<boolean> {
+    const mappingsSnapshot = this.mappings.getSnapshot()
+    const localHash = localItem
+      ? await localItem.hash(this.hashSettings)
+      : null
+    const cacheHash = cacheItem
+      ? await cacheItem.hash(this.hashSettings)
+      : null
+    const serverHash = serverItem
+      ? await serverItem.hash(this.hashSettings)
+      : null
+    const reconciled = !cacheItem
+    const changedLocally =
+      (localHash !== cacheHash) ||
+      (cacheItem && String(localItem.parentId) !== String(cacheItem.parentId))
+    const changedUpstream =
+      (cacheHash !== serverHash) ||
+      (cacheItem &&
+        String(cacheItem.parentId) !==
+        String(mappingsSnapshot.ServerToLocal.folder[serverItem.parentId]))
+    return changedLocally || changedUpstream || reconciled
+  }
+
+  filterOutUnmappedItems(tree: Folder<TItemLocation>, mapping: MappingSnapshot) {
+    tree.children = tree.children.filter(child => {
+      if (child instanceof Bookmark) {
+        return child.id in mapping.LocalToServer.bookmark
+      } else {
+        if (child.id in mapping.LocalToServer.folder) {
+          this.filterOutUnmappedItems(child, mapping)
+          return true
+        } else {
+          return false
+        }
+      }
+    })
+  }
+
+  static removeItemFromReorders(
+    mappingsSnapshot: MappingSnapshot,
+    sourceReorders:Diff<TItemLocation, TItemLocation, ReorderAction<TItemLocation, TItemLocation>>,
+    oldItem: TItem<TItemLocation>) {
+    const parentReorder = sourceReorders.peekActions().find(action => String(Mappings.mapId(mappingsSnapshot, action.payload, oldItem.location)) === String(oldItem.parentId))
+    if (!parentReorder) {
+      return
+    }
+    parentReorder.order = parentReorder.order.filter(item => !(item.type === oldItem.type && String(Mappings.mapId(mappingsSnapshot, oldItem, parentReorder.payload.location)) === String(item.id)))
+    // The action stays in the diff, so the continuation store has no other way
+    // of knowing that its row is stale now
+    sourceReorders.markChanged(parentReorder)
+  }
+
+  async toJSONAsync(): Promise<ISerializedSyncProcess> {
+    if (!this.staticContinuation) {
+      this.staticContinuation = {
+        // Do not store these as the continuation size can get huge otherwise
+        localTreeRoot: null,
+        cacheTreeRoot: null,
+        serverTreeRoot: null,
+      }
+    }
+    const membersToPersist = this.getMembersToPersist()
+    let iterations = 0
+    return {
+      strategy: 'default',
+      ...this.staticContinuation,
+      ...(Object.fromEntries(
+        await Parallel.map(
+          membersToPersist,
+          async(key) => {
+            const value = this[key]
+            if (
+              value &&
+                value.CREATE &&
+                value.REMOVE &&
+                value.UPDATE &&
+                value.MOVE &&
+                value.REORDER
+            ) {
+              // property holds a Plan
+              return [
+                key,
+                Object.fromEntries(
+                  await Parallel.map(
+                    Object.entries(value),
+                    async([key, diff]: [
+                        string,
+                        Diff<
+                          TItemLocation,
+                          TItemLocation,
+                          Action<TItemLocation, TItemLocation>
+                        >
+                      ]) => {
+                      if (diff && diff.toJSONAsync) {
+                        return [key, await diff.toJSONAsync()]
+                      }
+                      if (diff && diff.toJSON) {
+                        if (++iterations % 1000 === 0) {
+                          await yieldToEventLoop()
+                        }
+                        return [key, diff.toJSON()]
+                      }
+                      return [key, diff]
+                    }
+                  )
+                ),
+              ]
+            }
+            if (value && value.toJSONAsync) {
+              return [key, await value.toJSONAsync()]
+            }
+            if (value && value.toJSON) {
+              if (++iterations % 1000 === 0) {
+                await yieldToEventLoop()
+              }
+              return [key, value.toJSON()]
+            }
+            return [key, value]
+          },
+          1
+        )
+      )
+      ),
+    }
+  }
+
+  /** The name this strategy is persisted and restored under */
+  protected getStrategyName(): ISerializedSyncProcess['strategy'] {
+    return 'default'
+  }
+
+  /**
+   * What the continuation store has to write to catch up with this sync process.
+   *
+   * Unlike toJSONAsync() this doesn't serialize the whole process: the actions
+   * live in the store as rows, and all that is handed over here are the ones
+   * that changed since the last persist -- during execution that is the couple
+   * of actions that moved from their plan to the done plan, instead of every
+   * action of the sync. See Continuation.ts.
+   *
+   * `full` gives every action of every member, for a store that can't apply
+   * changes incrementally.
+   */
+  async toContinuationUpdateAsync({ full = false }: { full?: boolean } = {}): Promise<IContinuationUpdate> {
+    if (!this.staticContinuation) {
+      this.staticContinuation = {
+        // Do not store these as the continuation size can get huge otherwise
+        localTreeRoot: null,
+        cacheTreeRoot: null,
+        serverTreeRoot: null,
+      }
+    }
+    const diffs: IContinuationDiffUpdate[] = []
+    this.continuationDiffs = new Map()
+
+    const collect = async(value: any): Promise<TContinuationMember> => {
+      if (value === null || typeof value === 'undefined') {
+        return { kind: 'null' }
+      }
+      if (value instanceof Diff) {
+        // Diffs are shared between members -- planStage3Server.CREATE is the
+        // very same diff as serverPlanStage2.CREATE -- so their rows are keyed
+        // by the diff, and each one is only collected once
+        if (!this.continuationDiffs.has(value.id)) {
+          this.continuationDiffs.set(value.id, value)
+          diffs.push(await value.getPendingChangesAsync(full))
+        }
+        return { kind: 'diff', diff: value.id }
+      }
+      if (value.CREATE && value.REMOVE && value.UPDATE && value.MOVE && value.REORDER) {
+        // property holds a Plan
+        const slots: Record<string, TContinuationMember> = {}
+        for (const [slot, diff] of Object.entries(value)) {
+          slots[slot] = await collect(diff)
+        }
+        return { kind: 'plan', slots }
+      }
+      return { kind: 'value', value }
+    }
+
+    const members: Record<string, TContinuationMember> = {}
+    for (const key of this.getMembersToPersist()) {
+      members[key] = await collect(this[key])
+    }
+
+    return {
+      strategy: this.getStrategyName(),
+      meta: { ...this.staticContinuation },
+      members,
+      diffs: diffs.filter(diff => diff.replace || diff.added.length || diff.removed.length),
+      diffIds: [...this.continuationDiffs.keys()],
+    }
+  }
+
+  /**
+   * Take note that the store has written this update, so that the next one only
+   * carries what changed after it. Only to be called once the write went
+   * through -- what isn't acknowledged here is simply written again.
+   */
+  markContinuationPersisted(update: IContinuationUpdate): void {
+    for (const diff of update.diffs) {
+      this.continuationDiffs.get(diff.id)?.markPersisted(diff)
+    }
+  }
+
+  static async fromJSON(mappings:Mappings,
+    localTree:TLocalTree,
+    server:TAdapter,
+    progressCb:(progress:number, actionsDone:number)=>Promise<void>,
+    json: any) {
+    if (!localTree) {
+      throw new Error('localTree cannot be null when restoring sync process')
+    }
+    if (!server) {
+      throw new Error('server cannot be null when restoring sync process')
+    }
+    if (!mappings) {
+      throw new Error('mappings cannot be null when restoring sync process')
+    }
+
+    let strategy: SyncProcess
+    switch (json.strategy) {
+      case 'default':
+        strategy = new SyncProcess(mappings, localTree, server, progressCb)
+        break
+      case 'merge':
+        // eslint-disable-next-line no-case-declarations
+        const MergeSyncProcess = (await import('./Merge')).default
+        strategy = new MergeSyncProcess(mappings, localTree, server, progressCb)
+        break
+      case 'unidirectional':
+        // eslint-disable-next-line no-case-declarations
+        const UnidirectionalSyncProcess = (await import('./Unidirectional')).default
+        strategy = new UnidirectionalSyncProcess(mappings, localTree, server, progressCb)
+        break
+      default:
+        throw new Error('Unknown strategy: ' + json.strategy)
+    }
+    await strategy.setProgress(json)
+    return strategy
+  }
+}
+
+export interface ISerializedSyncProcess {
+  strategy: 'default' | 'merge' | 'unidirectional'
+  [k: string]: any
+}

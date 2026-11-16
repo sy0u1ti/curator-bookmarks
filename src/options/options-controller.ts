@@ -4359,26 +4359,29 @@ function renderBackupControls() {
     backup: {
       busy: backupBusy,
       exportFeedback: exportFeedback.backup,
+      exportStatus: backupRestoreState.exportStatus || '',
       htmlExportFeedback: exportFeedback.html,
       hasBackup,
       preview: backupRestoreState.preview,
-      status: backupRestoreState.status || ''
+      status: backupRestoreState.status || '',
+      statusTone: backupRestoreState.statusTone
     },
     tagData: {
       busy: tagBusy,
       exportFeedback: exportFeedback.tags,
-      countLabel: `${records.length} 条记录`,
+      countLabel: `${records.length} 条`,
       hasRecords: records.length > 0,
       status: aiNamingState.tagDataStatus || '',
-      updatedLabel: latestUpdatedAt
-        ? `最近更新于 ${formatDateTime(latestUpdatedAt)}。`
-        : '尚未保存标签数据。'
+      statusTone: aiNamingState.tagDataStatusTone,
+      updatedLabel: latestUpdatedAt ? `更新于 ${formatDateTime(latestUpdatedAt)}` : ''
     }
   })
 }
 
 async function handleBookmarkTagExport() {
   exportFeedback.tags = actionFeedback('pending')
+  aiNamingState.tagDataStatus = '正在导出标签数据…'
+  aiNamingState.tagDataStatusTone = 'neutral'
   renderBackupControls()
   try {
     const bookmarks = await getCurrentBookmarksForTagData()
@@ -4388,6 +4391,7 @@ async function handleBookmarkTagExport() {
     if (!payload.records.length) {
       exportFeedback.tags = actionFeedback('error')
       aiNamingState.tagDataStatus = '没有可导出的标签记录。'
+      aiNamingState.tagDataStatusTone = 'error'
       renderAiNamingSection()
       return
     }
@@ -4397,10 +4401,12 @@ async function handleBookmarkTagExport() {
       payload
     )
     aiNamingState.tagDataStatus = `已导出 ${payload.records.length} 条标签记录。`
+    aiNamingState.tagDataStatusTone = 'success'
     exportFeedback.tags = actionFeedback('success')
     renderActiveOptionsSection()
   } catch (error) {
     aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签数据导出失败。'
+    aiNamingState.tagDataStatusTone = 'error'
     exportFeedback.tags = actionFeedback('error')
     renderActiveOptionsSection()
   }
@@ -4411,6 +4417,9 @@ async function handleBookmarkTagImport(file?: File) {
     return
   }
 
+  aiNamingState.tagDataStatus = '正在读取标签数据…'
+  aiNamingState.tagDataStatusTone = 'neutral'
+  renderBackupControls()
   try {
     const rawText = await readTextFile(file)
     const payload = JSON.parse(rawText)
@@ -4441,8 +4450,10 @@ async function handleBookmarkTagImport(file?: File) {
     aiNamingState.tagIndex = committed.index
     aiNamingState.tagDataStatus =
       `导入完成：新增 ${committed.added}，覆盖 ${committed.overwritten}，跳过 ${committed.skipped}，无法匹配 ${committed.unmatched}。`
+    aiNamingState.tagDataStatusTone = 'success'
   } catch (error) {
     aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签数据导入失败。'
+    aiNamingState.tagDataStatusTone = 'error'
   } finally {
     renderActiveOptionsSection()
   }
@@ -4467,14 +4478,26 @@ async function handleBookmarkTagClear() {
     await clearBookmarkTagIndex()
     aiNamingState.tagIndex = normalizeBookmarkTagIndex(null)
     aiNamingState.tagDataStatus = '已清空标签数据。'
+    aiNamingState.tagDataStatusTone = 'success'
     renderActiveOptionsSection()
   } catch (error) {
     aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签数据清空失败。'
+    aiNamingState.tagDataStatusTone = 'error'
     renderActiveOptionsSection()
   }
 }
 
 export function handleBackupAction(detail: BackupActionDetail): void {
+  if (detail?.action === 'close-preview') {
+    if (backupRestoreState.reading || backupRestoreState.restoring) return
+    backupRestoreState.preview = null
+    backupRestoreState.backup = null
+    backupRestoreState.status = ''
+    backupRestoreState.statusTone = 'neutral'
+    renderBackupControls()
+    return
+  }
+  if (backupRestoreState.reading || backupRestoreState.restoring || backupRestoreState.exporting || tagDataOperationPending) return
   if (detail && ['export-tags', 'import-tags', 'clear-tags'].includes(detail.action)) {
     if (tagDataOperationPending || isInteractionLocked() || backupRestoreState.restoring) return
     tagDataOperationPending = true
@@ -4483,6 +4506,7 @@ export function handleBackupAction(detail: BackupActionDetail): void {
       : detail.action === 'import-tags' ? handleBookmarkTagImport(detail.file) : handleBookmarkTagClear()
     void operation.catch(error => {
       aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签操作失败，请重试。'
+      aiNamingState.tagDataStatusTone = 'error'
     }).finally(() => { tagDataOperationPending = false; renderBackupControls() })
     return
   }
@@ -4666,7 +4690,7 @@ async function handleFullBackupExport() {
   if (backupRestoreState.restoring || backupRestoreState.exporting) return
   backupRestoreState.exporting = true
   exportFeedback.backup = actionFeedback('pending')
-  backupRestoreState.status = '正在生成完整备份...'
+  backupRestoreState.exportStatus = '正在生成完整备份...'
   renderBackupRestoreSection()
 
   try {
@@ -4674,10 +4698,12 @@ async function handleFullBackupExport() {
     const payload = await createCuratorBackupFile('manual', now)
     downloadJsonFile(getBackupFileName(now), payload)
     const iconWarnings = (payload.notes || []).filter(note => note.includes('图标无法读取'))
-    backupRestoreState.status = ['完整备份已导出，文件不包含 API Key。', ...iconWarnings].join(' ')
+    // The primary button already announces completion; only extra recovery
+    // information belongs in the shared status slot.
+    backupRestoreState.exportStatus = iconWarnings.join(' ')
     exportFeedback.backup = actionFeedback('success')
   } catch (error) {
-    backupRestoreState.status = error instanceof Error ? error.message : '完整备份导出失败。'
+    backupRestoreState.exportStatus = error instanceof Error ? error.message : '完整备份导出失败。'
     exportFeedback.backup = actionFeedback('error')
   } finally {
     backupRestoreState.exporting = false
@@ -4689,7 +4715,7 @@ async function handleBookmarkHtmlExport() {
   if (backupRestoreState.restoring || backupRestoreState.exporting) return
   backupRestoreState.exporting = true
   exportFeedback.html = actionFeedback('pending')
-  backupRestoreState.status = '正在生成通用书签文件...'
+  backupRestoreState.exportStatus = '正在生成通用书签文件...'
   renderBackupRestoreSection()
   try {
     const tree = await getBookmarkTree()
@@ -4697,10 +4723,10 @@ async function handleBookmarkHtmlExport() {
     downloadBlobFile(`curator-bookmarks-${new Date().toISOString().slice(0, 10)}.html`, new Blob([html], {
       type: 'text/html;charset=utf-8'
     }))
-    backupRestoreState.status = 'HTML 书签已导出，可在其他浏览器的书签管理器中导入。'
+    backupRestoreState.exportStatus = 'HTML 书签已导出，可在其他浏览器的书签管理器中导入。'
     exportFeedback.html = actionFeedback('success')
   } catch (error) {
-    backupRestoreState.status = error instanceof Error ? error.message : 'HTML 书签导出失败，请重试。'
+    backupRestoreState.exportStatus = error instanceof Error ? error.message : 'HTML 书签导出失败，请重试。'
     exportFeedback.html = actionFeedback('error')
   } finally {
     backupRestoreState.exporting = false
@@ -4714,11 +4740,8 @@ async function handleFullBackupImport(file?: File) {
   }
 
   backupRestoreState.reading = true
-  backupRestoreState.status = '正在读取备份文件...'
-  backupRestoreState.backup = null
-  backupRestoreState.preview = null
-  backupRestoreState.operationKey = ''
-  backupRestoreState.operationId = ''
+  backupRestoreState.status = '正在读取备份文件…'
+  backupRestoreState.statusTone = 'neutral'
   renderBackupRestoreSection()
 
   try {
@@ -4728,9 +4751,14 @@ async function handleFullBackupImport(file?: File) {
     backupRestoreState.fileName = file.name
     backupRestoreState.backup = backup
     backupRestoreState.preview = preview
-    backupRestoreState.status = '已生成恢复预览，请选择恢复范围。'
+    // A failed read leaves the previous preview retryable with the same
+    // journal receipt, including when its earlier response was lost.
+    backupRestoreState.operationKey = ''
+    backupRestoreState.operationId = ''
+    backupRestoreState.status = ''
   } catch (error) {
     backupRestoreState.status = error instanceof Error ? error.message : '备份文件导入失败。'
+    backupRestoreState.statusTone = 'error'
   } finally {
     backupRestoreState.reading = false
     renderBackupRestoreSection()
@@ -4740,26 +4768,25 @@ async function handleFullBackupImport(file?: File) {
 async function handleAutoBackupPreview(backupId: string) {
   if (backupRestoreState.reading || backupRestoreState.restoring || backupRestoreState.exporting) return
   backupRestoreState.reading = true
-  backupRestoreState.backup = null
-  backupRestoreState.preview = null
-  backupRestoreState.operationKey = ''
-  backupRestoreState.operationId = ''
-  backupRestoreState.status = '正在读取恢复点并比较当前书签...'
+  backupRestoreState.status = '正在读取恢复点…'
+  backupRestoreState.statusTone = 'neutral'
   renderBackupRestoreSection()
   try {
     const { point, backup } = await readAutoBackupPoint(backupId)
-    const name = `${point.operationReason || '自动恢复点'}（${formatDateTime(point.createdAt)}）`
+    const name = point.operationReason || '自动恢复点'
     const preview = await buildBackupRestorePreview(backup, name)
     backupRestoreState.fileName = name
     backupRestoreState.backup = backup
     backupRestoreState.preview = preview
-    backupRestoreState.status = '恢复点已载入下方预览，请选择恢复范围。'
+    backupRestoreState.operationKey = ''
+    backupRestoreState.operationId = ''
+    backupRestoreState.status = ''
   } catch (error) {
     backupRestoreState.status = error instanceof Error ? error.message : '恢复点读取失败，请重试。'
+    backupRestoreState.statusTone = 'error'
   } finally {
     backupRestoreState.reading = false
     renderBackupRestoreSection()
-    document.getElementById('backup-restore-preview')?.scrollIntoView({ block: 'nearest' })
   }
 }
 
@@ -4793,6 +4820,7 @@ async function handleFullBackupRestore(mode: BackupRestoreMode) {
 
   backupRestoreState.restoring = true
   backupRestoreState.status = '正在交由后台安全恢复...'
+  backupRestoreState.statusTone = 'neutral'
   renderBackupRestoreSection()
 
   let operationId = ''
@@ -4800,6 +4828,10 @@ async function handleFullBackupRestore(mode: BackupRestoreMode) {
     operationId = getOrCreateBackupRestoreOperationId(backup, mode)
     const result = await requestBackupRestore(operationId, backup, mode)
     clearBackupRestoreOperationIdentity(operationId)
+    // Keep the completed preview readable without offering the same restore
+    // again against the snapshot of the tree from before the operation.
+    backupRestoreState.backup = null
+    backupRestoreState.statusTone = 'success'
     const completedStatus =
       `恢复完成：标签 ${result.restored.tags} 条，新标签页配置 ${result.restored.newTabSections} 项，本地数据 ${result.restored.storageSections} 项，复制缺失书签 ${result.restored.copiedBookmarks} 条；无法匹配标签 ${result.unmatchedTags} 条。`
     let releaseRefreshLock: (() => void) | null = null
@@ -4836,6 +4868,7 @@ async function handleFullBackupRestore(mode: BackupRestoreMode) {
       clearBackupRestoreOperationIdentity(operationId)
     }
     backupRestoreState.status = error instanceof Error ? error.message : '备份恢复失败。'
+    backupRestoreState.statusTone = 'error'
   } finally {
     backupRestoreState.restoring = false
     renderBackupRestoreSection()

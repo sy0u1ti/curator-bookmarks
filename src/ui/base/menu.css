@@ -4,12 +4,6 @@
   gap: inherit;
 }
 
-.curator-menu-chevron {
-  margin-left: auto;
-  flex-shrink: 0;
-  color: var(--ds-text-muted);
-}
-
 .curator-cascade-positioner {
   z-index: 10040;
 }

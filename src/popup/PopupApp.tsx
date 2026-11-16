@@ -14,7 +14,8 @@ import {
 import { cancelPendingSearchActivation, refreshPopupBookmarks, usePopupController } from './popup-controller'
 import { subscribeToSidePanelContext } from '../sidepanel/sidepanel-context'
 import { PopupChromeHost } from './components/PopupChromeHost'
-import { PopupContentHost } from './components/PopupContentHost'
+import { PopupSyncIsland } from './components/PopupSyncIsland'
+import { usePopupSyncMonitor } from './popup-sync-state'
 import { PopupSmartClassifierHost } from './components/PopupSmartClassifierHost'
 import { InputCaretHost } from '../ui/input-caret/InputCaretHost'
 
@@ -24,8 +25,6 @@ const appShellBaseClass = [
 ].join(' ')
 const appShellDefaultClass = 'gap-2'
 const appShellSmartClass = 'gap-2'
-const contentShellClass =
-  'relative z-[1] grid min-h-0 flex-[1_1_auto] overflow-hidden border-0 bg-transparent [height:auto]'
 
 type PopupModalLayerComponent = (typeof import('./components/PopupModalLayer'))['PopupModalLayer']
 
@@ -90,6 +89,7 @@ function subscribeToPopupBookmarkChanges(): () => void {
 }
 
 function PopupShell({ portalContainer }: { portalContainer?: HTMLElement | null }) {
+  usePopupSyncMonitor()
   const modalsView = usePopupModalsView()
   const smartClassifierView = usePopupSmartClassifierView()
   const modalOpen = modalsView.open
@@ -126,12 +126,10 @@ function PopupShell({ portalContainer }: { portalContainer?: HTMLElement | null 
         inert={modalOpen}
       >
         <PopupChromeHost smartActive={smartActive}>
-          <PopupSmartClassifierHost />
+          {smartActive ? <PopupSmartClassifierHost mode="workflow" /> : null}
         </PopupChromeHost>
 
-        <section className={contentShellClass} hidden={smartActive}>
-          <PopupContentHost />
-        </section>
+        <PopupSyncIsland hidden={smartActive} />
 
       </main>
 

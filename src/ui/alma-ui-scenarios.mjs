@@ -52,8 +52,8 @@ export async function runAlmaUiChecks(page, origin, directory) {
       await page.waitForFunction(() => document.activeElement?.id === 'options-settings-search', undefined, { timeout: 2000 })
       check(`${width}/shortcut-focuses-search`, await page.evaluate(() => document.activeElement?.id === 'options-settings-search'))
       await page.fill('#options-settings-search', '完整备份')
-      await page.waitForSelector('loc=role:option[name*="完整备份"]')
-      await page.click('loc=role:option[name*="完整备份"]', { label: 'Open backup setting' })
+      await page.waitForSelector('loc=role:option[name*="备份与恢复"]')
+      await page.click('loc=role:option[name*="备份与恢复"]', { label: 'Open backup setting' })
       await page.waitForFunction(() => location.hash === '#backup:full-backup' && document.activeElement?.id === 'settings-full-backup', undefined, { timeout: 10000 })
       check(`${width}/lazy-panel-focus`, true)
       check(`${width}/no-horizontal-overflow`, await page.evaluate(() =>

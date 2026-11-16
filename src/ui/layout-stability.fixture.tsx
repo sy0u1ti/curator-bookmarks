@@ -165,8 +165,10 @@ function phase(name: string) {
   }
   if (surface === 'backup') {
     const view = structuredClone(initialBackup)
-    view.tagData = { ...view.tagData, hasRecords: true, countLabel: '21 条记录', status: message, busy }
-    view.backup = { ...view.backup, hasBackup: false, status: message, busy }
+    const preparing = name === 'loading' || name === 'pending'
+    view.tagData = { ...view.tagData, hasRecords: true, countLabel: '21 条', status: message, busy }
+    view.backup = { ...view.backup, hasBackup: false, exportStatus: message || (preparing ? '正在读取备份文件…' : ''),
+      status: message, busy: busy || preparing }
     store('backup-controls').setState(view)
   }
   if (scope === 'popup') {

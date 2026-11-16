@@ -22,7 +22,6 @@ const SEARCH_NATURAL_FALLBACK_CLASS = 'text-[var(--ui-warning)] enabled:hover:te
 
 export const SEARCH_NATURAL_PENDING_DOT_CLASS = 'newtab-search-natural-pending-dot h-1.5 w-1.5 rounded-full bg-current animate-[cb-search-pulse_1s_var(--ui-ease-standard)_infinite] motion-reduce:animate-none'
 export const SEARCH_ENGINE_BUTTON_CLASS = cx('newtab-search-engine', SEARCH_CHIP_BUTTON_BASE_CLASS, 'min-w-13 disabled:cursor-default disabled:opacity-40')
-export const SEARCH_ENGINE_CARET_CLASS = 'newtab-search-engine-caret shrink-0 opacity-60'
 export const SEARCH_ENGINE_MENU_POSITIONER_CLASS = 'newtab-search-engine-menu-positioner z-[3] outline-none'
 export const SEARCH_ENGINE_MENU_CLASS = 'newtab-search-engine-menu grid w-44 gap-1 rounded-ds-menu border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-popup)] ds-inset-menu shadow-none [filter:var(--newtab-glass-drop)] motion-reduce:transform-none motion-reduce:transition-none [-webkit-backdrop-filter:var(--newtab-glass-filter-popup)] [backdrop-filter:var(--newtab-glass-filter-popup)]'
 export const SEARCH_ENGINE_MENU_ITEMS_CLASS = 'newtab-search-engine-menu-items grid gap-1'

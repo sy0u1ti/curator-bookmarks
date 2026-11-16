@@ -11,7 +11,8 @@ const argument = name => {
   const index = process.argv.indexOf(name)
   return index < 0 ? null : process.argv[index + 1]
 }
-const space = argument('--space') === null ? null : Number(argument('--space'))
+const spaceValue = argument('--space') ?? process.env.CURATOR_EGO_SPACE ?? null
+const space = spaceValue === null ? null : Number(spaceValue)
 if (space !== null && (!Number.isSafeInteger(space) || space < 1)) throw new Error('Invalid --space')
 const directory = path.resolve('.tmp', `layout-stability-${Date.now()}`)
 await mkdir(directory, { recursive: true })
@@ -57,7 +58,13 @@ const values = {};
 const result = (value, callback) => { if (callback) queueMicrotask(() => callback(value)); return Promise.resolve(value); };
 window.__archiveIO = { denied: false, failed: false, downloads: 0, release: null, hold: false };
 window.chrome = {
-  runtime: { id: 'curator-isolated-stability', getURL: value => '/' + value, onMessage: event(), sendMessage: async () => ({ ok: true }) },
+  runtime: { id: 'curator-isolated-stability', getURL: value => '/' + value, onMessage: event(),
+    sendMessage: (message, callback) => result({ ok: true, result: message.type === 'sync:list' ? []
+      : message.type === 'storage:usage' ? {
+        localBytes: 768, originBytes: 1024, icons: { count: 0, bytes: 0, unused: 0, removed: 0 }, missingIcons: 0,
+        sync: { profiles: 0, bytes: 0, logBytes: 0, logLines: 0 }, fullText: { count: 0, bytes: 0 }, previewBytes: 0
+      } : undefined }, callback)
+  },
   storage: { onChanged: event(), local: {
     get: (keys, callback) => result(keys === null ? values : Object.fromEntries((Array.isArray(keys) ? keys : [keys]).map(key => [key, values[key]])), callback),
     set: (data, callback) => { Object.assign(values, data); return result(undefined, callback); },
@@ -97,7 +104,7 @@ const options = { surfaces: argument('--surfaces')?.split(','), widths: argument
 const script = `
 const { runLayoutStabilityChecks } = await import(${JSON.stringify(pathToFileURL(path.resolve('src/ui/layout-stability-scenarios.mjs')).href)});
 const task = await taskSpace(${space ?? JSON.stringify(`Curator layout stability ${Date.now()}`)});
-const page = task.page("p1");
+const page = (await task.pages())[0] ?? await task.newPage();
 console.log({ spaceId: task.spaceId, page: page.label });
 await page.info();
 const windowInfo = await task.cdp("Browser.getWindowForTarget", { targetId: page.targetId });

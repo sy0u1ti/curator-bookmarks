@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { Button } from '../../ui/base/Button'
 import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../../ui/base/Collapsible'
-import { Icon } from '../../ui/icons/Icon'
 
 export function OptionDetails({ actions, ariaLabel, children, className = '', label = '查看详情' }: {
   actions?: ReactNode
@@ -16,11 +15,10 @@ export function OptionDetails({ actions, ariaLabel, children, className = '', la
         {actions}
         <CollapsibleTrigger
           aria-label={ariaLabel || label}
-          className="group ml-auto w-auto shrink-0 gap-1.5 max-[760px]:ml-0"
+          className="ml-auto w-auto shrink-0 max-[760px]:ml-0"
           render={<Button size="sm" variant="secondary" />}
         >
           {label}
-          <Icon name="ChevronDown" size={14} aria-hidden="true" className="t-acc-chevron" />
         </CollapsibleTrigger>
       </div>
       <CollapsiblePanel keepMounted={false} className="mt-3 border-t border-ds-border-subtle pt-3">

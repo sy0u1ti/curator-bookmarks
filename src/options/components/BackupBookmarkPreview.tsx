@@ -19,20 +19,17 @@ export function BackupBookmarkPreview({ bookmarks }: { bookmarks: BackupRestoreP
   const currentPage = Math.min(page, pageCount - 1)
 
   return (
-    <section className="mt-5 border-t border-ds-border-subtle pt-4" aria-label="备份中的书签">
-      <h3 className="text-sm font-semibold text-ds-text-primary">备份中的书签</h3>
-      <p className="mt-2 text-xs leading-relaxed text-ds-text-secondary">查看保存时的标题和文件夹路径。书签恢复会补齐缺失项，保留当前已有书签。</p>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+    <section className="border-t border-ds-border-subtle pt-4" aria-label="备份中的书签">
+      <div className="flex flex-wrap items-center gap-2">
         <Input
           aria-label="搜索备份中的书签"
-          placeholder="搜索标题、网址或文件夹"
+          placeholder="搜索备份中的书签"
           value={query}
           onChange={event => { setQuery(event.currentTarget.value); setPage(0) }}
           className="min-w-0 flex-1 basis-60"
         />
         <Button size="sm" variant="secondary" aria-pressed={missingOnly} onClick={() => { setMissingOnly(!missingOnly); setPage(0) }}>只看当前缺失</Button>
       </div>
-      <p className="mt-3 text-xs text-ds-text-secondary" role="status">第 {currentPage + 1} / {pageCount} 页，共 {filtered.length} 条</p>
       {filtered.length ? (
         <ul className="mt-3 grid max-h-96 list-none gap-2 overflow-y-auto p-0" aria-label="备份书签预览列表">
           {filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map(bookmark => (
@@ -47,10 +44,13 @@ export function BackupBookmarkPreview({ bookmarks }: { bookmarks: BackupRestoreP
           ))}
         </ul>
       ) : <p className="mt-3 text-sm text-ds-text-secondary">没有符合条件的书签。</p>}
-      {pageCount > 1 && <div className="mt-3 flex justify-end gap-2">
-        <Button size="sm" variant="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</Button>
-        <Button size="sm" variant="secondary" disabled={currentPage === pageCount - 1} onClick={() => setPage(currentPage + 1)}>下一页</Button>
-      </div>}
+      <div className="mt-3 flex min-h-8 flex-wrap items-center justify-end gap-2 text-xs text-ds-text-secondary">
+        <span role="status" className="tabular-nums">共 {filtered.length} 条{pageCount > 1 ? ` · ${currentPage + 1} / ${pageCount}` : ''}</span>
+        {pageCount > 1 ? <>
+          <Button size="sm" variant="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</Button>
+          <Button size="sm" variant="secondary" disabled={currentPage === pageCount - 1} onClick={() => setPage(currentPage + 1)}>下一页</Button>
+        </> : null}
+      </div>
     </section>
   )
 }

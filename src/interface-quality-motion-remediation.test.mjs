@@ -84,7 +84,7 @@ assert.ok(
     !popupActivity.includes('will-change-transform') &&
     popupModals.includes('CollapsibleRoot') &&
     popupModals.includes('CollapsiblePanel') &&
-    popupModals.includes('t-acc-chevron') &&
+    popupModals.includes('CollapsibleTrigger') &&
     !popupModals.includes('hiddenUntilFound') &&
     popupModals.includes("hidden={false}") &&
     popupModals.includes('panel.inert = true') &&
@@ -140,7 +140,7 @@ assert.ok(
     !aiProviderSettingsClasses.includes('backdrop-blur-') &&
     !aiProviderSettingsClasses.includes('data-starting-style:') &&
     aiProviderSettingsClasses.includes('ai-provider-advanced-trigger') &&
-    optionsModalClasses.includes('folder-picker-toggle-icon') &&
+    optionsModalClasses.includes('folder-picker-toggle') &&
     optionsModalClasses.includes('folder-picker-card') &&
     optionsCss.includes('.ai-provider-dialog-panel[data-starting-style]') &&
     optionsCss.includes('scale: 1 !important') &&

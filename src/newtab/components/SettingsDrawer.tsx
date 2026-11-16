@@ -429,7 +429,6 @@ function SettingsDetails({ id, title, children }: { id: string; title: string; c
         aria-controls={`${id}-panel`}
       >
         <span>{title}</span>
-        <span className="t-acc-chevron"><Icon name="ChevronDown" size={14} aria-hidden="true" /></span>
       </CollapsibleTrigger>
       <CollapsiblePanel id={`${id}-panel`} className={SETTINGS_LIST_CLASS} keepMounted={false}>
         {children}
@@ -469,7 +468,7 @@ function SettingsDrawerHeader({ closeButtonRef }: { closeButtonRef: Ref<HTMLButt
             showArrow={false}
             popupClassName="w-[min(320px,calc(100vw_-_32px))] max-h-[min(320px,var(--available-height))] overflow-auto"
             trigger={<Button size="sm" variant="ghost" className="w-full px-1 text-ds-danger-text" aria-label="查看保存失败详情">
-              保存失败 <Icon name="ChevronDown" size={12} aria-hidden="true" />
+              保存失败
             </Button>}
           >
             <p className="m-0 text-sm leading-relaxed [overflow-wrap:anywhere]">{view.saveMessage}</p>
@@ -1265,7 +1264,6 @@ const GlassSettingsSection = memo(function GlassSettingsSection({
             <span>精细调整</span>
             <span className={SETTINGS_DESCRIPTION_CLASS}>模糊 {settings.blur}px，底色 {settings.tint}%</span>
           </span>
-          <span className="t-acc-chevron"><Icon name="ChevronDown" size={14} aria-hidden="true" /></span>
         </CollapsibleTrigger>
         <CollapsiblePanel className="grid gap-2.5">
           <div className="newtab-glass-preview-scene" aria-label="玻璃效果实时预览">

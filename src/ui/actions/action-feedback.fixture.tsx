@@ -90,8 +90,8 @@ let ai: AiProviderSettingsState = {
   }
 }
 let backup: BackupControlsState = {
-  backup: { busy: false, exportFeedback: IDLE_ACTION_FEEDBACK, htmlExportFeedback: IDLE_ACTION_FEEDBACK, hasBackup: false, preview: null, status: '' },
-  tagData: { busy: false, exportFeedback: IDLE_ACTION_FEEDBACK, hasRecords: true, countLabel: '3 条记录', status: '', updatedLabel: '隔离测试数据' }
+  backup: { busy: false, exportFeedback: IDLE_ACTION_FEEDBACK, exportStatus: '', htmlExportFeedback: IDLE_ACTION_FEEDBACK, hasBackup: false, preview: null, status: '' },
+  tagData: { busy: false, exportFeedback: IDLE_ACTION_FEEDBACK, hasRecords: true, countLabel: '3 条', status: '', updatedLabel: '隔离测试数据' }
 }
 let confirmationId = 0
 function showConfirmation(open = true) {
@@ -139,7 +139,7 @@ fixtureActions.backup = detail => {
     const status = busy ? '正在生成导出文件。' : success ? '文件已导出。' : '导出失败：存储暂时不可用。'
     backup = detail.action === 'export-tags'
       ? { ...backup, tagData: { ...backup.tagData, busy, status, exportFeedback: feedback } }
-      : { ...backup, backup: { ...backup.backup, busy, status,
+      : { ...backup, backup: { ...backup.backup, busy, exportStatus: status,
           [detail.action === 'export-html' ? 'htmlExportFeedback' : 'exportFeedback']: feedback } }
     publishBackupControls(backup)
   }

@@ -19,7 +19,6 @@ import {
   FOLDER_PICKER_META_CLASS,
   FOLDER_PICKER_TITLE_CLASS,
   FOLDER_PICKER_TOGGLE_CLASS,
-  FOLDER_PICKER_TOGGLE_ICON_CLASS,
   FOLDER_PICKER_TREE_ROW_CLASS
 } from './options-modal-classes.js'
 import type {
@@ -125,37 +124,37 @@ function FolderPickerTreeOption({
 }) {
   const folderId = String(option.id || '')
   const style = getTreeDepthStyle(option.depth)
+  const folderIcon = (
+    <Icon
+      name={folderId ? option.hasChildren && option.expanded ? 'FolderOpen' : 'Folder' : 'Bookmark'}
+      className={FOLDER_PICKER_ICON_CLASS}
+      size={16}
+      aria-hidden="true"
+    />
+  )
 
   return (
     <div className={FOLDER_PICKER_TREE_ROW_CLASS} style={style} role="presentation">
-      <Button
+      {option.hasChildren ? <Button
         className={FOLDER_PICKER_TOGGLE_CLASS}
         type="button"
         tabIndex={-1}
         aria-label={option.toggleLabel}
+        aria-expanded={option.expanded}
+        title={option.toggleLabel}
         unstyled
-        {...(!option.hasChildren ? { 'data-disabled': 'true' } : {})}
         onClick={(event) => {
           event.preventDefault()
           event.stopPropagation()
-          if (option.hasChildren) {
-            handleFolderPickerAction({
-              action: 'toggle',
-              folderId,
-              kind
-            })
-          }
+          handleFolderPickerAction({
+            action: 'toggle',
+            folderId,
+            kind
+          })
         }}
       >
-        {option.hasChildren ? (
-          <Icon
-            name="ChevronDown"
-            className={cx(FOLDER_PICKER_TOGGLE_ICON_CLASS, option.expanded ? 'rotate-0' : '-rotate-90')}
-            size={14}
-            aria-hidden="true"
-          />
-        ) : null}
-      </Button>
+        {folderIcon}
+      </Button> : <span className="inline-flex h-8 w-6 items-center justify-center">{folderIcon}</span>}
       <Button
         ref={(button) => setOptionRef(folderId, button)}
         className={cx(FOLDER_PICKER_CARD_CLASS, option.rowCurrent ? FOLDER_PICKER_CARD_CURRENT_CLASS : '')}
@@ -195,12 +194,6 @@ function FolderPickerTreeOption({
         }}
         unstyled
       >
-        <Icon
-          name={folderId ? 'Folder' : 'Bookmark'}
-          className={FOLDER_PICKER_ICON_CLASS}
-          size={16}
-          aria-hidden="true"
-        />
         <span className={FOLDER_PICKER_MAIN_CLASS}>
           <span className={FOLDER_PICKER_TITLE_CLASS}>
             <HighlightedText terms={getHighlightTerms(normalizeText(query))} text={option.title} />

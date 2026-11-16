@@ -6,6 +6,7 @@ const defaultBackupControlsState: BackupControlsState = {
   backup: {
     busy: false,
     exportFeedback: IDLE_ACTION_FEEDBACK,
+    exportStatus: '',
     htmlExportFeedback: IDLE_ACTION_FEEDBACK,
     hasBackup: false,
     preview: null,
@@ -14,10 +15,10 @@ const defaultBackupControlsState: BackupControlsState = {
   tagData: {
     busy: false,
     exportFeedback: IDLE_ACTION_FEEDBACK,
-    countLabel: '0 条记录',
+    countLabel: '0 条',
     hasRecords: false,
     status: '',
-    updatedLabel: '尚未保存标签数据。'
+    updatedLabel: ''
   }
 }
 

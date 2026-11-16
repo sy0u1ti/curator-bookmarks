@@ -55,7 +55,7 @@ number. Durations below are milliseconds.
 
 The long surface tail must not delay content or input: opacity has its own
 shorter clock. Only the dialog entrance uses the sampled overshooting curve;
-chevrons, switches, exits and layout interpolation are monotonic.
+switches, exits and layout interpolation are monotonic.
 
 The popup's existing 240 ms symmetric skeleton crossfade is deliberately
 retained. It is a data handoff, not a surface entrance. Its user-tuned selection

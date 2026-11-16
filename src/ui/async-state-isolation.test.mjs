@@ -24,6 +24,57 @@ const deferred = () => {
 const optionsFile = 'src/options/options-controller.ts'
 const newtabFile = 'src/newtab/newtab-controller.ts'
 
+for (const name of ['handleFullBackupImport', 'handleAutoBackupPreview']) {
+  for (const succeeds of [false, true]) {
+    test(`${name}: ${succeeds ? 'a validated replacement' : 'a failed replacement'} preserves the previous restore identity until commit`, async () => {
+      const work = deferred()
+      const originalBackup = { exportedAt: 'previous-backup' }
+      const originalPreview = { fileName: 'previous.json' }
+      const candidateBackup = { exportedAt: 'next-backup' }
+      const candidatePreview = { fileName: 'next.json' }
+      const state = {
+        reading: false, restoring: false, exporting: false,
+        fileName: 'previous.json', backup: originalBackup, preview: originalPreview,
+        operationKey: 'existing-backup-and-mode', operationId: 'restore-response-not-yet-confirmed',
+        status: '', statusTone: 'neutral'
+      }
+      const context = await handler(optionsFile, name, {
+        backupRestoreState: state,
+        readTextFile: async () => '{"valid":true}',
+        parseCuratorBackupFile: () => candidateBackup,
+        readAutoBackupPoint: async () => ({ point: { operationReason: 'next.json' }, backup: candidateBackup }),
+        buildBackupRestorePreview: () => work.promise,
+        renderBackupRestoreSection: noop
+      })
+      const running = context.subject(name === 'handleFullBackupImport' ? { name: 'next.json' } : 'auto-fixture')
+      await Promise.resolve()
+      assert.equal(state.reading, true)
+      assert.equal(state.backup, originalBackup)
+      assert.equal(state.preview, originalPreview)
+      assert.equal(state.operationId, 'restore-response-not-yet-confirmed',
+        'reading must not discard an identity needed to retry a restore whose response was lost')
+      if (succeeds) work.resolve(candidatePreview)
+      else work.reject(new Error('Cannot read the replacement'))
+      await running
+      assert.equal(state.reading, false)
+      if (succeeds) {
+        assert.equal(state.backup, candidateBackup)
+        assert.equal(state.preview, candidatePreview)
+        assert.equal(state.fileName, 'next.json')
+        assert.equal(state.operationKey, '')
+        assert.equal(state.operationId, '')
+      } else {
+        assert.equal(state.backup, originalBackup)
+        assert.equal(state.preview, originalPreview)
+        assert.equal(state.fileName, 'previous.json')
+        assert.equal(state.operationKey, 'existing-backup-and-mode')
+        assert.equal(state.operationId, 'restore-response-not-yet-confirmed')
+        assert.equal(state.statusTone, 'error')
+      }
+    })
+  }
+}
+
 test('an unrelated New Tab settings save cannot hide an unresolved write failure', async () => {
   const service = deferred()
   let pending = true

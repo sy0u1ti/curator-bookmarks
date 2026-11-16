@@ -178,18 +178,20 @@ export interface PopupSmartClassifierActionHandlers {
 export function PopupSmartClassifier({
   handlers,
   state,
-  pageStatusAccessory
+  pageStatusAccessory,
+  pageActionAccessory
 }: {
   handlers?: PopupSmartClassifierActionHandlers
   state: PopupSmartClassifierViewModel
   pageStatusAccessory?: ReactNode
+  pageActionAccessory?: ReactNode
 }) {
   if (state.status === 'hidden') {
     return null
   }
 
   if (state.status === 'page-loading') {
-    return <PopupSmartPageRevealCard handlers={handlers} page={state.page} loading accessory={pageStatusAccessory} />
+    return <PopupSmartPageRevealCard handlers={handlers} page={state.page} loading accessory={pageStatusAccessory} actionAccessory={pageActionAccessory} />
   }
 
   if (state.status === 'loading') {
@@ -246,7 +248,7 @@ export function PopupSmartClassifier({
     return <PopupSmartPermission handlers={handlers} state={state} />
   }
 
-  return <PopupSmartPageRevealCard handlers={handlers} page={state.page} loading={false} accessory={pageStatusAccessory} />
+  return <PopupSmartPageRevealCard handlers={handlers} page={state.page} loading={false} accessory={pageStatusAccessory} actionAccessory={pageActionAccessory} />
 }
 
 function PopupSmartPageCard({
@@ -267,12 +269,14 @@ function PopupSmartPageRevealCard({
   handlers,
   loading,
   page,
-  accessory
+  accessory,
+  actionAccessory
 }: {
   handlers?: PopupSmartClassifierActionHandlers
   loading: boolean
   page: PopupSmartPageViewModel | null
   accessory?: ReactNode
+  actionAccessory?: ReactNode
 }) {
   return (
     <div
@@ -285,7 +289,7 @@ function PopupSmartPageRevealCard({
         <PopupSmartPageSkeletonContent />
       </div>
       <article className={cx(getPopupSmartPageCardClassName(page), pageContentLayerClass, loading ? 'pointer-events-none' : '')}>
-        <PopupSmartPageCardContent handlers={handlers} page={page} accessory={accessory} />
+        <PopupSmartPageCardContent handlers={handlers} page={page} accessory={accessory} actionAccessory={actionAccessory} />
       </article>
     </div>
   )
@@ -298,14 +302,16 @@ function getPopupSmartPageCardClassName(page: PopupSmartPageViewModel | null) {
 function PopupSmartPageCardContent({
   handlers,
   page,
-  accessory
+  accessory,
+  actionAccessory
 }: {
   handlers?: PopupSmartClassifierActionHandlers
   page: PopupSmartPageViewModel | null
   accessory?: ReactNode
+  actionAccessory?: ReactNode
 }) {
   if (!page) {
-    return <PopupSmartPagePlaceholderContent accessory={accessory} />
+    return <PopupSmartPagePlaceholderContent accessory={accessory} actionAccessory={actionAccessory} />
   }
 
   return (
@@ -322,8 +328,20 @@ function PopupSmartPageCardContent({
           </div>
         </div>
       </div>
+      <div className="popup-page-actions">
       {page.bookmarked ? (
         <Toolbar className={savedPageActionsClass} aria-label="当前页快捷操作" unstyled>
+          <Button
+            className={currentPageActionClass}
+            type="button"
+            data-current-page-action="edit"
+            onClick={(event) => handlers?.onCurrentPageAction?.('edit', event.currentTarget)}
+            unstyled
+          >
+            <Icon name="Pencil" size={14} className={currentPageActionIconClass} aria-hidden="true" />
+            编辑
+          </Button>
+          <span className={currentPageActionDividerClass} aria-hidden="true"></span>
           <Button
             className={page.pinned ? currentPagePinnedActionClass : currentPageActionClass}
             type="button"
@@ -336,17 +354,6 @@ function PopupSmartPageCardContent({
           >
             <Icon name="Pin" size={14} className={currentPageActionIconClass} aria-hidden="true" />
             {page.pinLabel}
-          </Button>
-          <span className={currentPageActionDividerClass} aria-hidden="true"></span>
-          <Button
-            className={currentPageActionClass}
-            type="button"
-            data-current-page-action="edit"
-            onClick={(event) => handlers?.onCurrentPageAction?.('edit', event.currentTarget)}
-            unstyled
-          >
-            <Icon name="Pencil" size={14} className={currentPageActionIconClass} aria-hidden="true" />
-            编辑
           </Button>
         </Toolbar>
       ) : (
@@ -377,6 +384,8 @@ function PopupSmartPageCardContent({
           </Button>
         </Toolbar>
       )}
+      {actionAccessory}
+      </div>
     </>
   )
 }
@@ -402,7 +411,7 @@ function PopupSmartPageSkeletonContent() {
   )
 }
 
-function PopupSmartPagePlaceholderContent({ accessory }: { accessory?: ReactNode }) {
+function PopupSmartPagePlaceholderContent({ accessory, actionAccessory }: { accessory?: ReactNode; actionAccessory?: ReactNode }) {
   const hint = isSidePanelSurface() ? '点击工具栏图标，启用当前页操作' : '打开网页后可快速保存或智能分类'
   const hintTitle = isSidePanelSurface() ? '切换普通网页后，点击浏览器工具栏中的 Curator 图标，启用该网页的保存与分类操作。' : hint
   return (
@@ -419,6 +428,7 @@ function PopupSmartPagePlaceholderContent({ accessory }: { accessory?: ReactNode
           </div>
         </div>
       </div>
+      <div className="popup-page-actions">
       <Toolbar className={placeholderPageActionsClass} aria-label="当前页快捷操作" unstyled>
         <Button className={placeholderPageActionClass} type="button" disabled unstyled>
           <Icon name="BookmarkPlus" size={14} className={currentPageActionIconClass} aria-hidden="true" />
@@ -430,6 +440,8 @@ function PopupSmartPagePlaceholderContent({ accessory }: { accessory?: ReactNode
           智能
         </Button>
       </Toolbar>
+      {actionAccessory}
+      </div>
     </>
   )
 }

@@ -28,7 +28,6 @@ import {
   SEARCH_CHIPS_CLASS,
   SEARCH_CLEAR_BUTTON_CLASS,
   SEARCH_ENGINE_BUTTON_CLASS,
-  SEARCH_ENGINE_CARET_CLASS,
   SEARCH_FORM_CLASS,
   SEARCH_FORM_PANEL_OPEN_CLASS,
   SEARCH_HINT_CLASS,
@@ -324,7 +323,6 @@ function SearchWidgetEngineButtonFallback({
       unstyled
     >
       {engine.label}
-      <Icon name="ChevronDown" className={SEARCH_ENGINE_CARET_CLASS} size={12} aria-hidden="true" />
     </NewtabGlassSurface>
   )
 }

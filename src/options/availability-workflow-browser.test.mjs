@@ -7,7 +7,8 @@ import { pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
 
 const arg = name => { const index = process.argv.indexOf(name); return index < 0 ? null : process.argv[index + 1] }
-const space = arg('--space') === null ? null : Number(arg('--space'))
+const spaceValue = arg('--space') ?? process.env.CURATOR_EGO_SPACE ?? null
+const space = spaceValue === null ? null : Number(spaceValue)
 if (space !== null && (!Number.isSafeInteger(space) || space < 1)) throw Error('Invalid --space')
 const pageLabel = arg('--page') || 'p1'
 const output = path.resolve('.tmp', 'availability-workflow-' + Date.now())

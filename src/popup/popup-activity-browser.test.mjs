@@ -47,7 +47,7 @@ if (!process.argv.includes('--serve')) {
   const script = path.join(directory, `round-${Date.now()}.mjs`)
   await writeFile(script, `
 const task=await taskSpace(${space ?? JSON.stringify(`Curator activity ${Date.now()}`)});
-const page=task.page('p1');
+const page=(await task.pages())[0] ?? await task.newPage();
 console.log({spaceId:task.spaceId,page:page.label});
 const {runPopupActivityChecks}=await import(${JSON.stringify(pathToFileURL(path.resolve('src/popup/popup-activity-scenarios.mjs')).href)});
 const report=await runPopupActivityChecks(page,${JSON.stringify(origin)},${JSON.stringify(directory.replaceAll('\\', '/'))},${JSON.stringify({ cases: option('--cases')?.split(',') })});

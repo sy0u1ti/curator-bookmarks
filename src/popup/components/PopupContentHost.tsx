@@ -28,6 +28,7 @@ import type {
   PopupContentRowViewModel,
   PopupContentViewModel
 } from './PopupViewModels'
+import { isPopupSyncOpen, usePopupSyncOpen } from '../popup-sync-state'
 
 const contentHostClass = 'relative z-0 block h-full min-h-0 overflow-hidden'
 
@@ -56,6 +57,8 @@ const HIDDEN_ACTIVE_RESULT_INDICATOR: ActiveResultIndicatorGeometry = {
 }
 
 export function PopupContentHost() {
+  const syncOpen = usePopupSyncOpen()
+  const syncGeometryPaused = useRef(false)
   const contentRef = useRef<HTMLDivElement | null>(null)
   const mainListRef = useRef<HTMLDivElement | null>(null)
   const activeResultRef = useRef<HTMLLIElement | null>(null)
@@ -235,6 +238,7 @@ export function PopupContentHost() {
   }, [commitActiveResultIndicator, readScrollTop])
 
   const getPaneMetrics = useCallback((): PaneMetrics | null => {
+    if (isPopupSyncOpen() || syncGeometryPaused.current) return null
     const view = stateRef.current
     const folders = view.keyboardPane === 'folders'
     const pane = folders ? 'folders' : 'bookmarks'
@@ -380,6 +384,7 @@ export function PopupContentHost() {
   }, [navigationStore, readScrollTop, releasePinnedEdge])
 
   const revealSelection = useCallback(() => {
+    if (isPopupSyncOpen() || syncGeometryPaused.current) return
     const scrollContainer = mainListRef.current
     if (!scrollContainer) {
       commitActiveResultIndicator(HIDDEN_ACTIVE_RESULT_INDICATOR)
@@ -600,6 +605,37 @@ export function PopupContentHost() {
       indicatorScrollFrameRef.current = 0
     }
   }, [paintIndicatorScroll, releasePinnedEdge, state.keyboardPane])
+
+  useLayoutEffect(() => {
+    const surface = contentRef.current?.closest<HTMLElement>('.popup-sync-bookmarks')
+    if (!surface) return
+    if (syncOpen) {
+      syncGeometryPaused.current = true
+      scrollFollowRef.current?.follow.cancel()
+      releasePinnedEdge()
+      return
+    }
+    if (!syncGeometryPaused.current) return
+    const restoreGeometry = () => {
+      if (isPopupSyncOpen()) return
+      syncGeometryPaused.current = false
+      paneMetricsRef.current.clear()
+      indicatorMeasurementRef.current = null
+      if (keyboardRevealIntentRef.current) revealSelectionRef.current()
+      else remeasureRef.current()
+    }
+    if (prefersReducedMotion()) { restoreGeometry(); return }
+    const settled = (event: TransitionEvent) => {
+      if (event.target === surface && event.propertyName === 'transform') restoreGeometry()
+    }
+    surface.addEventListener('transitionend', settled)
+    // Hidden smart workflows do not dispatch transitionend. This also covers
+    // an interrupted close without measuring the compressed bookmark rows.
+    const duration = Math.max(...getComputedStyle(surface).transitionDuration.split(',').map(value =>
+      parseFloat(value) * (value.trim().endsWith('ms') ? 1 : 1000)))
+    const timer = setTimeout(restoreGeometry, duration + 50)
+    return () => { surface.removeEventListener('transitionend', settled); clearTimeout(timer) }
+  }, [syncOpen, releasePinnedEdge])
 
   return (
     <div

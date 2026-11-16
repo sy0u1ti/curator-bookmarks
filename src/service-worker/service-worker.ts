@@ -114,9 +114,27 @@ import { reviewInboxItem } from './inbox-review.js'
 import { isInboxItemPending, settleRemovedInboxItems } from '../shared/inbox.js'
 import { shouldAnalyzeInbox } from '../shared/inbox-workflow.js'
 import { registerModelsDevSync } from './models-dev-service.js'
+import { registerBookmarkSync } from './bookmark-sync-service.js'
+import { SYNC_RUN_LOCK, SYNC_ACCOUNTS_STORAGE_KEY, SYNC_CHECK_ALARM } from '../shared/sync/sync-contract.js'
+import { getSyncToolbarState } from '../shared/sync/sync-toolbar-state.js'
+import designTokens from '../styles/tokens.css?raw'
 import { getStorageUsage } from '../shared/storage-maintenance.js'
+import { BACKGROUND_INFO_MESSAGE, CURATOR_BUILD_ID, type BackgroundInfoMessage } from '../shared/background-runtime.js'
 
 registerModelsDevSync()
+const bookmarkSync = registerBookmarkSync({
+  whenBookmarksSettled: async () => {
+    await backupRestoreRecoveryReady
+    if (backupRestoreRecoveryError) throw backupRestoreRecoveryError
+  },
+  beforeLocalOverwrite: async (profileLabel) => {
+    await createAutoBackupBeforeDangerousOperation({
+      kind: 'sync-download',
+      source: 'service-worker',
+      reason: `同步前：以服务器为准（${profileLabel}）`
+    })
+  }
+})
 
 interface PendingCheckState {
   tabId: number
@@ -331,6 +349,7 @@ const INBOX_CLASSIFIED_NOTIFICATION_PREFIX = 'curator-inbox-classified-'
 
 
 type RuntimeMessage =
+  | BackgroundInfoMessage
   | AvailabilityEngineMessage
   | AvailabilityProbeMessage
   | BackupRestoreMessage
@@ -434,6 +453,11 @@ let backupRestoreRecoveryError: Error | null = null
 const backupRestoreRecoveryReady = runBackupRestoreRecovery().catch(() => {})
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendResponse) => {
+  if (message?.type === BACKGROUND_INFO_MESSAGE) {
+    if (sender.id !== chrome.runtime.id) return undefined
+    sendResponse({ ok: true, result: { buildId: CURATOR_BUILD_ID } })
+    return undefined
+  }
   if (message?.type === 'inbox:review') {
     void backupRestoreRecoveryReady.then(() => {
       if (backupRestoreRecoveryError) throw backupRestoreRecoveryError
@@ -701,7 +725,19 @@ async function runBackupRestoreRecovery(): Promise<void> {
 function withAvailabilityRestoreMutationLock<T>(
   task: () => Promise<T>
 ): Promise<T> {
-  return withAvailabilityMutationLock(task, {
+  // A sync holds this lock shared while it rewrites bookmarks; a restore that
+  // ran beside it could not be rolled back to a known tree.
+  const withoutSync = (): Promise<T> => navigator.locks.request(
+    SYNC_RUN_LOCK,
+    { ifAvailable: true, mode: 'exclusive' },
+    async (lock) => {
+      if (!lock) {
+        throw new Error('书签同步正在进行，已取消恢复。请等同步结束后重试。')
+      }
+      return task()
+    }
+  )
+  return withAvailabilityMutationLock(withoutSync, {
     unavailableMessage: '当前浏览器无法锁定可用性数据，已取消恢复。',
     busyMessage: '可用性数据正在被其他页面使用，已取消恢复。'
   })
@@ -835,7 +871,7 @@ async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
       message: '“保存到待整理”未开启，请先在通用设置中启用。',
       tone: 'warning'
     })
-    await showTransientCommandBadge('!', '#5f3432')
+    await showTransientCommandBadge('!', badgeToken('danger'))
     return
   }
 
@@ -848,7 +884,7 @@ async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
       message: '当前页面不是可保存的普通网页。',
       tone: 'warning'
     })
-    await showTransientCommandBadge('!', '#5f3432')
+    await showTransientCommandBadge('!', badgeToken('danger'))
     return
   }
 
@@ -917,7 +953,7 @@ async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
         }).catch((error) => {
           console.warn('[Curator] Inbox 自动分析队列已满状态写入失败', error)
         }),
-        showTransientCommandBadge('!', '#5f3432'),
+        showTransientCommandBadge('!', badgeToken('danger')),
         showInboxNotification({
           notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}${bookmarkId}`,
           title: '已保存，自动分析未排队',
@@ -940,7 +976,7 @@ async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
       }).catch((error) => {
         console.warn('[Curator] Inbox 自动分析排队状态写入失败', error)
       }),
-      showTransientCommandBadge('IN', '#2f5f80'),
+      showTransientCommandBadge('IN', badgeToken('accent')),
       showInboxNotification({
         notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}${bookmarkId}`,
         title: '已保存到待整理',
@@ -961,7 +997,7 @@ async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
       message: '已保存到待整理，未分析。',
       tone: 'success'
     }),
-    showTransientCommandBadge('IN', '#365f45'),
+    showTransientCommandBadge('IN', badgeToken('success')),
     showInboxNotification({
       notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}${bookmarkId}`,
       title: '已保存到待整理',
@@ -1014,7 +1050,7 @@ async function toggleAutoAnalyzeFromCommand(sourceCommand: string): Promise<void
         message: '自动分析已关闭。',
         tone: 'success'
       }),
-      showTransientCommandBadge('OFF', '#5f3432')
+      showTransientCommandBadge('OFF', badgeToken('danger'))
     ])
     return
   }
@@ -1028,7 +1064,7 @@ async function toggleAutoAnalyzeFromCommand(sourceCommand: string): Promise<void
         message: readiness.message,
         tone: 'warning'
       }),
-      showTransientCommandBadge('!', '#5f3432')
+      showTransientCommandBadge('!', badgeToken('danger'))
     ])
     return
   }
@@ -1044,7 +1080,7 @@ async function toggleAutoAnalyzeFromCommand(sourceCommand: string): Promise<void
       message: '自动分析已开启。',
       tone: 'success'
     }),
-    showTransientCommandBadge('ON', '#365f45')
+    showTransientCommandBadge('ON', badgeToken('success'))
   ])
 }
 
@@ -1091,9 +1127,14 @@ async function showTransientCommandBadge(text: string, color: string): Promise<v
     return
   }
 
-  await setActionBadgeText(text)
-  await setActionBadgeBackgroundColor(color)
+  commandBadgeUntil = Date.now() + COMMAND_FEEDBACK_BADGE_TTL_MS
+  badgeRefresh = badgeRefresh.catch(() => {}).then(async () => {
+    await setActionBadgeText(text)
+    await setActionBadgeBackgroundColor(color)
+  })
+  await badgeRefresh
   scheduleCommandFeedbackBadgeClear()
+  setTimeout(() => void refreshRestingActionBadge(), COMMAND_FEEDBACK_BADGE_TTL_MS)
 }
 
 function scheduleCommandFeedbackBadgeClear(): void {
@@ -1109,6 +1150,10 @@ function scheduleCommandFeedbackBadgeClear(): void {
 chrome.bookmarks.onCreated.addListener((bookmarkId, node) => {
   invalidateAutoAnalyzeTreeContext()
   if (!node.url || !/^https?:\/\//i.test(node.url)) {
+    return
+  }
+  // Bookmarks that arrive through a sync were filed on another device.
+  if (bookmarkSync.consumeSyncCreatedBookmark(node)) {
     return
   }
 
@@ -3290,30 +3335,23 @@ async function clearExpiredAutoAnalyzeStatus(): Promise<void> {
 }
 
 async function applyAutoAnalyzeStatusBadge(status: AutoAnalyzeStatusSnapshot): Promise<void> {
-  if (!status.badgeVisible || !chrome.action?.setBadgeText) {
-    await clearActionBadge()
-    return
-  }
-
-  const badge = getAutoAnalyzeStatusBadge(status.status)
-  await setActionBadgeText(badge.text)
-  await setActionBadgeBackgroundColor(badge.color)
+  await refreshRestingActionBadge()
 }
 
 function getAutoAnalyzeStatusBadge(status: AutoAnalyzeStatusKind): { text: string; color: string } {
   if (status === 'completed') {
-    return { text: 'OK', color: '#365f45' }
+    return { text: 'OK', color: badgeToken('success') }
   }
 
   if (status === 'failed') {
-    return { text: '!', color: '#5f3432' }
+    return { text: '!', color: badgeToken('danger') }
   }
 
   if (status === 'processing') {
-    return { text: 'AI', color: '#2f5f80' }
+    return { text: 'AI', color: badgeToken('accent') }
   }
 
-  return { text: 'AI', color: '#6b5b2f' }
+  return { text: 'AI', color: badgeToken('warning') }
 }
 
 function scheduleAutoAnalyzeStatusClear(expiresAt: number): void {
@@ -3338,25 +3376,41 @@ function clearAutoAnalyzeStatusAlarm(): void {
 
 let lastAppliedBadgeText: string | null = null
 let lastAppliedBadgeColor: string | null = null
+let commandBadgeUntil = 0
+let badgeRefresh = Promise.resolve()
+
+// The action lives outside any document. Read the same semantic CSS tokens at
+// build time instead of inventing a second color palette for browser chrome.
+const badgeToken = (name: string) => designTokens.match(new RegExp(`--ds-${name}:\\s*(#[0-9a-fA-F]+)`))?.[1] || 'transparent'
 
 function clearActionBadge(): Promise<void> {
-  return new Promise((resolve) => {
-    if (!chrome.action?.setBadgeText) {
-      resolve()
-      return
-    }
-
-    if (lastAppliedBadgeText === '') {
-      resolve()
-      return
-    }
-
-    chrome.action.setBadgeText({ text: '' }, () => {
-      lastAppliedBadgeText = ''
-      resolve()
-    })
-  })
+  return refreshRestingActionBadge()
 }
+
+function refreshRestingActionBadge(): Promise<void> {
+  badgeRefresh = badgeRefresh.catch(() => {}).then(async () => {
+    if (!chrome.action?.setBadgeText || Date.now() < commandBadgeUntil) return
+    const stored = await getLocalStorage([SYNC_ACCOUNTS_STORAGE_KEY, STORAGE_KEYS.autoAnalyzeStatus])
+    if (Date.now() < commandBadgeUntil) return
+    const sync = getSyncToolbarState(stored[SYNC_ACCOUNTS_STORAGE_KEY])
+    const status = normalizeAutoAnalyzeStatus(stored[STORAGE_KEYS.autoAnalyzeStatus])
+    const auto = status?.badgeVisible && status.expiresAt > Date.now() ? getAutoAnalyzeStatusBadge(status.status) : null
+    await setActionBadgeText(auto?.text ?? sync.text)
+    await setActionBadgeBackgroundColor(auto?.color ?? badgeToken(sync.tone))
+    await chrome.action.setTitle({ title: sync.title })
+    await chrome.action.setBadgeTextColor?.({ color: badgeToken('accent-contrast') })
+  })
+  return badgeRefresh
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && (changes[SYNC_ACCOUNTS_STORAGE_KEY] || changes[STORAGE_KEYS.autoAnalyzeStatus])) {
+    void refreshRestingActionBadge().catch(() => {})
+  }
+})
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === SYNC_CHECK_ALARM) void refreshRestingActionBadge().catch(() => {})
+})
 
 function setActionBadgeText(text: string): Promise<void> {
   return new Promise((resolve, reject) => {

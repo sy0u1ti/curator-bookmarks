@@ -1,0 +1,497 @@
+import * as Parallel from 'async-parallel'
+import Diff, { ActionType, CreateAction, MoveAction, RemoveAction, ReorderAction, UpdateAction } from './Diff'
+import { Bookmark, Folder, ItemLocation, ItemType, tagsEqual, TItem, TItemLocation } from './Tree'
+import Logger from './Logger'
+import { IHashSettings } from './interfaces/Resource'
+import { yieldToEventLoop } from './yieldToEventLoop'
+import Mappings from './Mappings'
+
+export interface ScanResult<L1 extends TItemLocation, L2 extends TItemLocation> {
+  CREATE: Diff<L1, L2, CreateAction<L1, L2>>
+  UPDATE: Diff<L1, L2, UpdateAction<L1, L2>>
+  MOVE: Diff<L1, L2, MoveAction<L1, L2>>
+  REMOVE: Diff<L2, L1, RemoveAction<L2, L1>>
+  REORDER: Diff<L1, L2, ReorderAction<L1, L2>>
+}
+
+export default class Scanner<L1 extends TItemLocation, L2 extends TItemLocation> {
+  private mappings: Mappings
+  private oldTree: TItem<L1>
+  private newTree: TItem<L2>
+  private mergeable: (i1: TItem<TItemLocation>, i2: TItem<TItemLocation>) => boolean
+  private hashSettings: IHashSettings
+  private checkHashes: boolean
+  private hasCache: boolean
+  private createMappings: boolean
+  private iterations = 0
+
+  private result: ScanResult<L2, L1>
+
+  constructor(
+    mappings: Mappings,
+    oldTree:TItem<L1>,
+    newTree:TItem<L2>,
+    mergeable:(i1:TItem<TItemLocation>, i2:TItem<TItemLocation>)=>boolean,
+    hashSettings: IHashSettings,
+    checkHashes = true,
+    hasCache = true,
+    createMappings = true,
+  ) {
+    this.mappings = mappings
+    this.oldTree = oldTree
+    this.newTree = newTree
+    this.mergeable = mergeable
+    this.hashSettings = hashSettings
+    this.checkHashes = typeof checkHashes === 'undefined' ? true : checkHashes
+    this.hasCache = hasCache
+    this.createMappings = createMappings
+    this.result = {
+      CREATE: new Diff(),
+      UPDATE: new Diff(),
+      MOVE: new Diff(),
+      REMOVE: new Diff(),
+      REORDER: new Diff(),
+    }
+  }
+
+  getDiffs(): ScanResult<L2, L1> {
+    return this.result
+  }
+
+  async run():Promise<ScanResult<L2, L1>> {
+    await this.diffItem(this.oldTree, this.newTree)
+    await this.findMoves()
+    await this.addReorders()
+    return this.result
+  }
+
+  async diffItem(oldItem:TItem<L1>, newItem:TItem<L2>):Promise<void> {
+    if (oldItem.type === 'folder' && newItem.type === 'folder') {
+      if (this.createMappings) {
+        await this.addMapping(oldItem, newItem)
+      }
+      return this.diffFolder(oldItem, newItem)
+    } else if (oldItem.type === 'bookmark' && newItem.type === 'bookmark') {
+      if (this.createMappings) {
+        await this.addMapping(oldItem, newItem)
+      }
+      return this.diffBookmark(oldItem, newItem)
+    } else {
+      throw new Error('Mismatched diff items: ' + oldItem.type + ', ' + newItem.type)
+    }
+  }
+
+  async diffFolder(oldFolder:Folder<L1>, newFolder:Folder<L2>):Promise<void> {
+    // give the browser time to breathe
+    if (++this.iterations % 1000 === 0) {
+      await yieldToEventLoop()
+    }
+    if (this.checkHashes) {
+      const hasChanged = await this.folderHasChanged(oldFolder, newFolder)
+      if (!hasChanged) {
+        return
+      }
+    }
+
+    if (oldFolder.title !== newFolder.title && typeof oldFolder.parentId !== 'undefined' && typeof newFolder.parentId !== 'undefined') {
+      // folder title changed and it's not the root folder
+      this.result.UPDATE.commit({type: ActionType.UPDATE, payload: newFolder, oldItem: oldFolder})
+    }
+
+    // Generate REORDERS before diffing anything to make sure REORDERS are from top to bottom (necessary for tab sync)
+    if (newFolder.children.length > 1) {
+      let needReorder = false
+      for (let i = 0; i < Math.max(newFolder.children.length, oldFolder.children.length); i++) {
+        if (!oldFolder.children[i] || !newFolder.children[i] || !this.mergeable(oldFolder.children[i], newFolder.children[i])) {
+          needReorder = true
+          break
+        }
+      }
+      if (needReorder) {
+        this.result.REORDER.commit({
+          type: ActionType.REORDER,
+          payload: newFolder,
+          order: newFolder.children.map(i => ({ type: i.type, id: i.id })),
+        })
+      }
+    }
+
+    // Preserved Items and removed Items
+    // (using map here, because 'each' doesn't provide indices)
+    const unmatchedChildren = newFolder.children.slice(0)
+    await Parallel.map(oldFolder.children, async(old, index) => {
+      const newItem = unmatchedChildren.find((child) => old.type === child.type && this.mergeable(old, child))
+      // we found an item in the new folder that matches the one in the old folder
+      if (newItem) {
+        await this.diffItem(old, newItem)
+        unmatchedChildren.splice(unmatchedChildren.indexOf(newItem), 1)
+        return
+      }
+
+      if (newFolder.isRoot && newFolder.location === ItemLocation.LOCAL) {
+        // We can't remove root folders locally
+        return
+      }
+
+      this.result.REMOVE.commit({type: ActionType.REMOVE, payload: old, index})
+    }, 1)
+
+    // created Items
+    // (using map here, because 'each' doesn't provide indices)
+    await Parallel.map(unmatchedChildren, async(newChild) => {
+      if (oldFolder.isRoot && oldFolder.location === ItemLocation.LOCAL) {
+        // We can't create root folders locally
+        return
+      }
+      this.result.CREATE.commit({type: ActionType.CREATE, payload: newChild, index: newFolder.children.findIndex(child => child === newChild)})
+    }, 1)
+  }
+
+  async diffBookmark(oldBookmark:Bookmark<L1>, newBookmark:Bookmark<L2>):Promise<void> {
+    let hasChanged
+    if (this.checkHashes) {
+      // With tag syncing on, the hash covers tags as well
+      hasChanged = await this.bookmarkHasChanged(oldBookmark, newBookmark)
+    } else {
+      hasChanged =
+        oldBookmark.title !== newBookmark.title ||
+        oldBookmark.url !== newBookmark.url ||
+        Boolean(this.hashSettings?.syncTags && !tagsEqual(oldBookmark.tags, newBookmark.tags))
+    }
+    if (hasChanged) {
+      this.result.UPDATE.commit({ type: ActionType.UPDATE, payload: newBookmark, oldItem: oldBookmark })
+    }
+  }
+
+  async bookmarkHasChanged(oldBookmark:Bookmark<L1>, newBookmark:Bookmark<L2>):Promise<boolean> {
+    const oldHash = await oldBookmark.hash(this.hashSettings)
+    const newHash = await newBookmark.hash(this.hashSettings)
+    return oldHash !== newHash
+  }
+
+  async folderHasChanged(oldFolder:Folder<L1>, newFolder:Folder<L2>):Promise<boolean> {
+    const oldHash = await oldFolder.hash(this.hashSettings)
+    const newHash = await newFolder.hash(this.hashSettings)
+    return oldHash !== newHash
+  }
+
+  async findMoves():Promise<void> {
+    Logger.log('Scanner: Finding moves')
+    let createActions
+    let removeActions
+    let reconciled = true
+    let iterations = 0
+
+    // As soon as one match is found, action list is updated and search is started with the new list
+    // repeat until no rewrites happen anymore
+    while (reconciled) {
+      reconciled = false
+      let createAction: CreateAction<L2, L1>, removeAction: RemoveAction<L1,L2>
+
+      // First find direct matches (avoids glitches when folders and their contents have been moved)
+      createActions = this.result.CREATE.getActions()
+      while (!reconciled && (createAction = createActions.shift())) {
+        if (++iterations % 1000 === 0) {
+          // give the browser time to breathe
+          await yieldToEventLoop()
+        }
+        const createdItem = createAction.payload
+        removeActions = this.result.REMOVE.getActions()
+        while (!reconciled && (removeAction = removeActions.shift())) {
+          const removedItem = removeAction.payload
+
+          if (
+            this.mergeable(removedItem, createdItem) &&
+            !this.createsFolderLoop(removedItem, createdItem)
+          ) {
+            if (
+              this.hasCache ||
+              (!this.hasCache && removedItem.type === ItemType.BOOKMARK) ||
+              (!this.hasCache && removedItem.type === ItemType.FOLDER && removedItem.childrenSimilarity(createdItem) >= 0.8)
+            ) {
+              this.result.CREATE.retract(createAction)
+              this.result.REMOVE.retract(removeAction)
+              this.result.MOVE.commit({
+                type: ActionType.MOVE,
+                payload: createdItem,
+                oldItem: removedItem,
+                index: createAction.index,
+                oldIndex: removeAction.index,
+              })
+              reconciled = true
+              // Don't use the items from the action, but the ones in the actual tree to avoid using tree parts mutated by this algorithm (see below)
+              await this.diffItem(removedItem, createdItem)
+            }
+          }
+        }
+      }
+
+      // Then find descendant matches
+      createActions = this.result.CREATE.getActions()
+      while (!reconciled && (createAction = createActions.shift())) {
+        if (++iterations % 1000 === 0) {
+          // give the browser time to breathe
+          await yieldToEventLoop()
+        }
+        const createdItem = createAction.payload
+        removeActions = this.result.REMOVE.getActions()
+        while (!reconciled && (removeAction = removeActions.shift())) {
+          const removedItem = removeAction.payload
+          const oldItem = removedItem.findItemFilter(
+            createdItem.type,
+            item => this.mergeable(item, createdItem),
+            item => item.childrenSimilarity(createdItem)
+          )
+          if (oldItem) {
+            let oldIndex
+            if (this.createsFolderLoop(oldItem, createdItem)) {
+              continue
+            }
+            this.result.CREATE.retract(createAction)
+            if (oldItem === removedItem) {
+              this.result.REMOVE.retract(removeAction)
+            } else {
+              // We clone the item here, because we don't want to mutate all copies of this tree (item)
+              const removedItemClone = removedItem.copy(true)
+              const oldParentClone = removedItemClone.findItem(ItemType.FOLDER, oldItem.parentId) as Folder<L1>
+              const oldItemClone = removedItemClone.findItem(oldItem.type, oldItem.id)
+              if (!oldParentClone || !oldItemClone) {
+                continue
+              }
+              oldIndex = oldParentClone.children.indexOf(oldItemClone)
+              oldParentClone.children.splice(oldIndex, 1)
+              ;(removedItemClone as Folder<L1>).invalidateHashUpwards(oldParentClone.id)
+              removeAction.payload = removedItemClone
+              removeAction.payload.createIndex()
+            }
+            this.result.MOVE.commit({
+              type: ActionType.MOVE,
+              payload: createdItem,
+              oldItem,
+              index: createAction.index,
+              oldIndex: typeof oldIndex !== 'undefined' ? oldIndex : removeAction.index,
+            })
+            reconciled = true
+            if (oldItem.type === ItemType.FOLDER) {
+              await this.diffItem(oldItem, createdItem)
+            } else if (this.createMappings) {
+              // Usually we let diffItem handle mapping creation but here we need to do it ourselves
+              await this.addMapping(oldItem, createdItem)
+            }
+          } else {
+            const newItem = createdItem.findItemFilter(
+              removedItem.type,
+              item => this.mergeable(removedItem, item),
+              item => item.childrenSimilarity(removedItem)
+            )
+            let index
+            if (newItem) {
+              if (this.createsFolderLoop(removedItem, newItem)) {
+                continue
+              }
+              this.result.REMOVE.retract(removeAction)
+              if (newItem === createdItem) {
+                this.result.CREATE.retract(createAction)
+              } else {
+                // We clone the item here, because we don't want to mutate all copies of this tree (item)
+                const createdItemClone = createdItem.copy(true)
+                const newParentClone = createdItemClone.findItem(ItemType.FOLDER, newItem.parentId) as Folder<L2>
+                const newClonedItem = createdItemClone.findItem(newItem.type, newItem.id)
+                if (!newParentClone || !newClonedItem) {
+                  continue
+                }
+                index = newParentClone.children.indexOf(newClonedItem)
+                newParentClone.children.splice(index, 1)
+                ;(createdItemClone as Folder<L2>).invalidateHashUpwards(newParentClone.id)
+                createAction.payload = createdItemClone
+                createAction.payload.createIndex()
+              }
+              this.result.MOVE.commit({
+                type: ActionType.MOVE,
+                payload: newItem,
+                oldItem: removedItem,
+                index: typeof index !== 'undefined' ? index : createAction.index,
+                oldIndex: removeAction.index
+              })
+              reconciled = true
+              if (removedItem.type === ItemType.FOLDER) {
+                await this.diffItem(removedItem, newItem)
+              } else if (this.createMappings) {
+                // Usually we let diffItem handle mapping creation but here we need to do it ourselves
+                await this.addMapping(removedItem, newItem)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Remove all UPDATEs that have already been handled by a MOVE
+    const moves = this.result.MOVE.peekActions()
+    // A copy, because the loop below retracts from the very diff it walks
+    const updates = this.result.UPDATE.getActions()
+    updates.forEach(update => {
+      if (moves.find(move => String(move.payload.id) === String(update.payload.id))) {
+        this.result.UPDATE.retract(update)
+      }
+    })
+  }
+
+  async addMapping(oldItem: TItem<L1>, newItem: TItem<L2>): Promise<void> {
+    let localId, remoteId
+    if (
+      newItem.location === ItemLocation.SERVER &&
+      oldItem.location === ItemLocation.LOCAL
+    ) {
+      localId = oldItem.id
+      remoteId = newItem.id
+    } else if (
+      oldItem.location === ItemLocation.SERVER &&
+      newItem.location === ItemLocation.LOCAL
+    ) {
+      localId = newItem.id
+      remoteId = oldItem.id
+    } else {
+      return
+    }
+    if (newItem.type === 'folder') {
+      await this.mappings.addFolder({ localId, remoteId })
+    } else {
+      await this.mappings.addBookmark({ localId, remoteId })
+    }
+  }
+
+  async addReorders(): Promise<void> {
+    Logger.log('Scanner: Generate reorders')
+    const targets = {}
+    const sources = {}
+
+    // Collect folders to reorder
+
+    this.result.CREATE.getActions()
+      .forEach(action => {
+        targets[action.payload.parentId] = true
+      })
+    // Give the browser time to breathe
+    await yieldToEventLoop()
+    this.result.REMOVE.getActions()
+      .forEach(action => {
+        sources[action.payload.parentId] = true
+      })
+    // Give the browser time to breathe
+    await yieldToEventLoop()
+    this.result.MOVE.getActions()
+      .forEach(action => {
+        targets[action.payload.parentId] = true
+        sources[action.oldItem.parentId] = true
+      })
+
+    let iterations = 0
+    for (const folderId in sources) {
+      // Give the browser time to breathe
+      if (++iterations % 1000 === 0) {
+        await yieldToEventLoop()
+      }
+      const oldFolder = this.oldTree.findItem(ItemType.FOLDER, folderId) as Folder<L1>
+      if (!oldFolder) {
+        // In case a MOVE's old parent was removed
+        continue
+      }
+      const newFolder = this.newTree.findItemFilter(ItemType.FOLDER, (item) => this.mergeable(oldFolder, item)) as Folder<L2>
+      if (newFolder) {
+        targets[newFolder.id] = true
+      }
+    }
+
+    for (const folderId in targets) {
+      // Give the browser time to breathe
+      if (++iterations % 1000 === 0) {
+        await yieldToEventLoop()
+      }
+      const newFolder = this.newTree.findItem(ItemType.FOLDER, folderId) as Folder<L2>
+      if (!newFolder) {
+        continue
+      }
+      const duplicate = this.result.REORDER.peekActions().find(a => String(a.payload.id) === String(newFolder.id))
+      if (duplicate) {
+        this.result.REORDER.retract(duplicate)
+      }
+      if (newFolder.children.length > 10000) {
+        continue
+      }
+      this.result.REORDER.commit({
+        type: ActionType.REORDER,
+        payload: newFolder,
+        order: newFolder.children.map(i => ({ type: i.type, id: i.id })),
+      })
+    }
+  }
+
+  private createsFolderLoop(oldItem: TItem<L1>, newItem: TItem<L2>): boolean {
+    if (oldItem.type !== ItemType.FOLDER) {
+      return false
+    }
+
+    if (typeof newItem.parentId === 'undefined') {
+      return false
+    }
+
+    // newItem.parentId lives in newItem's namespace; oldItem.findFolder searches
+    // in oldItem's namespace. When the two trees are in different locations the
+    // ids are not comparable, so map newItem.parentId into oldItem's namespace
+    // first. Without a mapping we can't decide, so assume no loop.
+    const parentIdInOldSpace = Mappings.mapParentId(
+      this.mappings.getSnapshot(),
+      newItem,
+      oldItem.location
+    )
+    if (typeof parentIdInOldSpace === 'undefined') {
+      return false
+    }
+
+    const newParentInOldTree = oldItem.findFolder(parentIdInOldSpace)
+    if (!newParentInOldTree) {
+      return false
+    }
+    return this.nestingSurvives(oldItem as Folder<L1>, newItem, newParentInOldTree)
+  }
+
+  /**
+   * Whether `descendant`, which sits inside oldItem in the old tree, still sits
+   * inside it in the new tree.
+   *
+   * A new parent inside oldItem only makes a loop as long as it stays there. One
+   * of the folders in between may have moved out, taking the new parent along
+   * (a > b > c becomes n > b > c > a): the new tree is a tree, so as soon as one
+   * link on the old path from the new parent up to oldItem is gone from it, the
+   * moves can be carried out one after the other (Diff.sortMoves sees to the
+   * order). Refusing to pair them would instead leave a REMOVE of oldItem and a
+   * CREATE of its new ancestor, which the planner reads as a deletion -- taking
+   * everything that was moved into oldItem down with it.
+   */
+  private nestingSurvives(oldItem: Folder<L1>, newItem: TItem<L2>, descendant: Folder<L1>): boolean {
+    const snapshot = this.mappings.getSnapshot()
+    const newTree = this.newTree as Folder<L2>
+    let item = descendant
+    while (String(item.id) !== String(oldItem.id)) {
+      const counterpartId = Mappings.mapId(snapshot, item, newItem.location)
+      const parentCounterpartId = String(item.parentId) === String(oldItem.id)
+        ? newItem.id
+        : Mappings.mapParentId(snapshot, item, newItem.location)
+      if (typeof counterpartId === 'undefined' || typeof parentCounterpartId === 'undefined') {
+        // Without a mapping we can't tell, so assume the nesting holds
+        return true
+      }
+      const counterpart = newTree.findFolder(counterpartId)
+      if (!counterpart || String(counterpart.parentId) !== String(parentCounterpartId)) {
+        return false
+      }
+      const parent = oldItem.findFolder(item.parentId)
+      if (!parent) {
+        return true
+      }
+      item = parent
+    }
+    return true
+  }
+}

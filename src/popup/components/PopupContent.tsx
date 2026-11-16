@@ -671,22 +671,25 @@ function PopupFolderPane({
         (event.key === 'ArrowDown' || event.key === 'ArrowUp')) setCollapsed(false)
     }}>
       <header className={paneHeaderClass}>
-        <span className="shrink-0">全部文件夹</span>
+        {sidePanel ? (
+          <Button
+            className="shrink-0 rounded-ds-sm bg-transparent p-0 text-left font-[inherit] text-inherit outline-none hover:text-ds-text-primary focus-visible:shadow-ds-focus"
+            aria-label={collapsed ? '展开文件夹列表' : '收起文件夹列表'}
+            aria-expanded={!collapsed}
+            aria-controls="sidepanel-folder-tree"
+            onClick={() => {
+              previousActiveIndexRef.current = navigation?.getSnapshot().state.activeFolderIndex ?? activeIndex
+              setCollapsed(value => !value)
+            }}
+            unstyled
+          >全部文件夹</Button>
+        ) : <span className="shrink-0">全部文件夹</span>}
         <PopupFolderFilterField filter={filter} handlers={handlers} />
         {/* The tree may only contain treeitems, so the result count is
             announced from the header instead of from inside the list. */}
         <span className="sr-only" aria-live="polite" aria-atomic="true">
           {filter?.query ? `${filter.resultCount} 个匹配文件夹` : ''}
         </span>
-        {sidePanel && (
-          <Button size="sm" variant="ghost" aria-label={collapsed ? '展开文件夹列表' : '收起文件夹列表'}
-            aria-expanded={!collapsed} aria-controls="sidepanel-folder-tree" onClick={() => {
-              previousActiveIndexRef.current = navigation?.getSnapshot().state.activeFolderIndex ?? activeIndex
-              setCollapsed(value => !value)
-            }}>
-            <Icon name="ChevronDown" className={collapsed ? 'sidepanel-folder-chevron' : 'sidepanel-folder-chevron rotate-180'} size={14} />
-          </Button>
-        )}
       </header>
       <div className={folderTreeClass} role="tree" ref={folderTreeRef}
         id={sidePanel ? 'sidepanel-folder-tree' : undefined} hidden={sidePanel && collapsed}

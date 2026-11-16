@@ -113,7 +113,7 @@ try {
 
   await ui.goto(origin + '/src/options/options.html#backup')
   const downloadPromise = ui.waitForEvent('download')
-  await ui.getByRole('button', { name: '导出完整书签备份', exact: true }).click()
+  await ui.getByRole('button', { name: '备份到文件', exact: true }).click()
   const download = await downloadPromise
   const backupPath = path.join(output, 'backup.json')
   await download.saveAs(backupPath)
