@@ -23,8 +23,8 @@ import { Icon } from '../../ui/icons/Icon'
 import { Input } from '../../ui/base/Input'
 import { Select } from '../../ui/base/Select'
 import { SliderControl } from '../../ui/base/Slider'
-import { DEFAULT_GLASS_SETTINGS, GLASS_PRESETS, getGlassPresetId, GLASS_SETTING_LIMITS, type NewtabGlassSettingKey } from '../glass-settings'
-import { applyNewtabGlassPreset, beginNewtabGlassEditSession, undoNewtabGlassEditSession, changeNewtabGlassSetting, resetNewtabGlassSettings, useNewtabGlassSettings } from '../newtab-glass-settings-store'
+import { DEFAULT_GLASS_SETTINGS, GLASS_SETTING_LIMITS, type NewtabGlassSettingKey } from '../glass-settings'
+import { beginNewtabGlassEditSession, undoNewtabGlassEditSession, changeNewtabGlassSetting, resetNewtabGlassSettings, useNewtabGlassSettings } from '../newtab-glass-settings-store'
 import { NewtabGlassSurface } from './NewtabGlassSurface'
 import { Surface } from '../../ui/base/Surface'
 import { SwitchControl } from '../../ui/base/Switch'
@@ -61,11 +61,9 @@ import {
   dispatchNewtabSearchLayoutReset,
   dispatchNewtabSearchSettingFieldChange,
   dispatchNewtabSearchSettingToggle,
-  dispatchNewtabSearchWebEngineChange,
   useNewtabSearchSettingsView
 } from '../newtab-search-settings-store'
-import { getSearchSizePreset, SEARCH_SIZE_PRESETS, type SearchSizePreset } from '../search-layout'
-import { SEARCH_MULTI_OPEN_LIMIT } from '../search-engines'
+import { DEFAULT_SEARCH_LAYOUT, SEARCH_HEIGHT_MIN, SEARCH_HEIGHT_MAX } from '../search-layout'
 import {
   dispatchNewtabBackgroundFileSelect,
   dispatchNewtabBackgroundSettingFieldChange,
@@ -203,10 +201,6 @@ const ICON_PRESET_PREVIEW_CELL_CLASS = 'block rounded-ds-xs bg-ds-surface-2'
 const ICON_PRESET_NAME_CLASS = 'min-w-0 overflow-hidden text-ellipsis px-1 pb-1 text-xs font-semibold leading-5 text-ds-text-primary'
 const SETTINGS_SEGMENTED_CLASS = 'inline-flex min-h-9 items-center gap-1 rounded-ds-menu border border-ds-border bg-ds-surface-2 ds-inset-menu @max-[440px]/settings:w-full'
 const ICON_CONTROL_ROW_CLASS = 'grid-cols-[minmax(0,1fr)_auto]'
-const SEARCH_ENGINE_ROW_CLASS = 'items-start'
-const SEARCH_ENGINE_GRID_CLASS = 'grid min-w-0 grid-cols-3 gap-1.5'
-const SEARCH_ENGINE_TOGGLE_CLASS = 'search-engine-toggle relative inline-flex min-h-8 min-w-0 items-center justify-center px-2 text-xs font-semibold'
-const SEARCH_ENGINE_HIDDEN_SWITCH_CLASS = 'pointer-events-none absolute h-px w-px opacity-0'
 const SETTINGS_SCROLLBAR_MIN_THUMB_HEIGHT = 40
 
 function settingsControlClassName(...classNames: Array<string | false | null | undefined>): string {
@@ -218,6 +212,19 @@ function settingsInputClassName(...classNames: Array<string | false | null | und
 }
 
 type SettingsSectionRef = (element: HTMLElement | null) => void
+
+function SettingsSectionHeader({ id, title, children }: {
+  id: string
+  title: ReactNode
+  children?: ReactNode
+}) {
+  return (
+    <div className="settings-section-header flex min-h-8 items-center justify-between gap-3">
+      <h2 id={id} className={SETTINGS_SECTION_TITLE_CLASS}>{title}</h2>
+      {children ? <div className="flex shrink-0 items-center gap-1">{children}</div> : null}
+    </div>
+  )
+}
 
 function settingRowClassName(...classNames: Array<string | false | null | undefined>): string {
   return cx(SETTINGS_ROW_CLASS, SETTINGS_PSEUDO_SHADOW_RESET_CLASS, ...classNames)
@@ -241,18 +248,6 @@ function SettingLabelStack({
     </span>
   )
 }
-
-const searchEngines = [
-  ['google', 'Google', true],
-  ['bing', 'Bing', true],
-  ['baidu', '百度', true],
-  ['duckduckgo', 'DuckDuckGo', true],
-  ['perplexity', 'Perplexity', false],
-  ['chatgpt', 'ChatGPT', false],
-  ['you', 'You.com', false],
-  ['kagi', 'Kagi', false],
-  ['brave', 'Brave', false]
-] as const
 
 function SwitchRow({
   id,
@@ -1238,50 +1233,31 @@ const GlassSettingsSection = memo(function GlassSettingsSection({
   useEffect(() => {
     if (view.ready && drawer.open) beginNewtabGlassEditSession()
   }, [view.ready, drawer.open])
-  const presetId = getGlassPresetId(settings)
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="glass" aria-labelledby="settings-glass-title">
-      <h2 id="settings-glass-title" className={SETTINGS_SECTION_TITLE_CLASS}>液态玻璃</h2>
-      <div className="mb-3 grid grid-cols-3 gap-2" role="group" aria-label="玻璃材质预设">
-        {GLASS_PRESETS.map(preset => <Button key={preset.id} size="sm" variant={presetId === preset.id ? 'primary' : 'secondary'}
-          disabled={!view.ready} aria-pressed={presetId === preset.id} title={preset.description}
-          onClick={() => applyNewtabGlassPreset({ ...preset.settings })}>{preset.label}</Button>)}
-      </div>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="secondary" disabled={!view.ready || !view.canUndo} onClick={undoNewtabGlassEditSession}>撤销本次调整</Button>
-        <Button size="sm" variant="secondary" onClick={resetNewtabGlassSettings} disabled={!view.ready}>恢复玻璃默认值</Button>
-      </div>
+      <SettingsSectionHeader id="settings-glass-title" title="液态玻璃">
+        <Button size="sm" variant="ghost" disabled={!view.ready || !view.canUndo} onClick={undoNewtabGlassEditSession}>撤销本次调整</Button>
+        <Button id="glass-reset-defaults" ref={firstControlRef} size="sm" variant="ghost" aria-label="恢复玻璃默认值" onClick={resetNewtabGlassSettings} disabled={!view.ready}>恢复默认值</Button>
+      </SettingsSectionHeader>
       <StatusMessage lines={1} className={SETTINGS_NOTE_CLASS} tone={view.saveState === 'error' ? 'error' : 'neutral'}>
         {view.saveState === 'error' ? '设置保存失败，请重试。' : ''}
       </StatusMessage>
-      <CollapsibleRoot className="newtab-glass-controls">
-        <CollapsibleTrigger
-          render={<Button unstyled ref={firstControlRef} />}
-          aria-label="精细调整玻璃材质"
-          className={settingsControlClassName('flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left text-sm')}
-        >
-          <span className="grid gap-1">
-            <span>精细调整</span>
-            <span className={SETTINGS_DESCRIPTION_CLASS}>模糊 {settings.blur}px，底色 {settings.tint}%</span>
-          </span>
-        </CollapsibleTrigger>
-        <CollapsiblePanel className="grid gap-2.5">
-          <div className="newtab-glass-preview-scene" aria-label="玻璃效果实时预览">
-            <NewtabGlassSurface className="newtab-glass-preview">
-              <strong className="block text-sm font-semibold">实时预览</strong>
-            </NewtabGlassSurface>
-          </div>
-          {GLASS_CONTROLS.map(control => {
-            const [min, max, step] = GLASS_SETTING_LIMITS[control.key]
-            return <SliderRow key={control.key} id={'glass-' + control.key} label={control.label}
-              description={control.description} valueId={'glass-' + control.key + '-value'}
-              value={settings[control.key] + (control.unit || '')} min={String(min)} max={String(max)}
-              step={step} defaultValue={String(DEFAULT_GLASS_SETTINGS[control.key])}
-              ariaLabel={control.label} sliderValue={settings[control.key]} disabled={!view.ready}
-              onValueChange={value => changeNewtabGlassSetting(control.key, value)} />
-          })}
-        </CollapsiblePanel>
-      </CollapsibleRoot>
+      <div className="newtab-glass-controls grid gap-2.5">
+        <div className="newtab-glass-preview-scene" aria-label="玻璃效果实时预览">
+          <NewtabGlassSurface className="newtab-glass-preview">
+            <strong className="block text-sm font-semibold">实时预览</strong>
+          </NewtabGlassSurface>
+        </div>
+        {GLASS_CONTROLS.map(control => {
+          const [min, max, step] = GLASS_SETTING_LIMITS[control.key]
+          return <SliderRow key={control.key} id={'glass-' + control.key} label={control.label}
+            description={control.description} valueId={'glass-' + control.key + '-value'}
+            value={settings[control.key] + (control.unit || '')} min={String(min)} max={String(max)}
+            step={step} defaultValue={String(DEFAULT_GLASS_SETTINGS[control.key])}
+            ariaLabel={control.label} sliderValue={settings[control.key]} disabled={!view.ready}
+            onValueChange={value => changeNewtabGlassSetting(control.key, value)} />
+        })}
+      </div>
     </section>
   )
 })
@@ -1317,10 +1293,9 @@ const IconSettingsSection = memo(function IconSettingsSection({
 
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="appearance" aria-labelledby="settings-icon-title">
-      <div className="flex min-h-8 items-center justify-between gap-3">
-        <h2 id="settings-icon-title" className={SETTINGS_SECTION_TITLE_CLASS}>书签卡片</h2>
+      <SettingsSectionHeader id="settings-icon-title" title="书签卡片">
         <Button id="icon-reset-defaults" variant="ghost" size="sm" onClick={dispatchNewtabIconResetDefaults}>恢复默认布局</Button>
-      </div>
+      </SettingsSectionHeader>
       <Surface className={SETTINGS_LIST_CLASS} variant="plain">
         <div id="icon-preset-row" className={ICON_PRESET_ROW_CLASS} role="group" aria-label="书签卡片密度">
           {iconPresetCards.map((card, index) => (
@@ -1563,25 +1538,12 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
   sectionRef?: SettingsSectionRef
 }) {
   const searchSettings = useNewtabSearchSettingsView()
-  const sizePreset = getSearchSizePreset(searchSettings.height)
-  const enabledEngineSet = new Set(searchSettings.enabledEngines)
-  const handleSearchEngineToggle = (engine: string, checked: boolean) => {
-    const currentEngines = searchSettings.enabledEngines.includes(searchSettings.engine)
-      ? searchSettings.enabledEngines
-      : [...searchSettings.enabledEngines, searchSettings.engine]
-    const nextEngines = checked
-      ? [...new Set([...currentEngines, engine])]
-      : currentEngines.filter((item) => item !== engine)
-
-    dispatchNewtabSearchSettingFieldChange('enabledEngines', nextEngines)
-  }
 
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="search" aria-labelledby="settings-search-title">
-      <div className="flex min-h-8 items-center justify-between gap-3">
-        <h2 id="settings-search-title" className={SETTINGS_SECTION_TITLE_CLASS}>搜索栏</h2>
+      <SettingsSectionHeader id="settings-search-title" title="搜索栏">
         {searchSettings.enabled ? <Button id="search-reset-layout" variant="ghost" size="sm" onClick={dispatchNewtabSearchLayoutReset}>恢复默认布局</Button> : null}
-      </div>
+      </SettingsSectionHeader>
       <Surface className={SETTINGS_LIST_CLASS} variant="plain">
         <SwitchRow
           id="search-enabled"
@@ -1591,41 +1553,13 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
           onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('enabled', checked)}
         />
         {searchSettings.enabled ? <>
-          <SettingsSelect
-            id="search-engine"
-            label="网页搜索"
-            ariaLabel="默认搜索引擎"
-            onValueChange={(value) => {
-              if (value) dispatchNewtabSearchWebEngineChange(value === 'bookmarks' ? null : value)
-            }}
-            portalContainer={panelElement}
-            value={searchSettings.webSearchEnabled ? searchSettings.engine : 'bookmarks'}
-            options={[['bookmarks', '关闭，仅搜索书签'], ...searchEngines.map(([value, label]) => [value, label] as const)]}
+          <SwitchRow
+            id="search-web-enabled"
+            title="网页搜索"
+            checked={searchSettings.webSearchEnabled}
+            onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('webSearchEnabled', checked)}
           />
-          <div className={settingRowClassName()}>
-            <SettingLabelStack title="尺寸" description={sizePreset === 'custom' ? `自定义 ${searchSettings.height}px` : undefined} />
-            <ToggleGroup
-              id="search-size-control"
-              slidingIndicator
-              aria-label="搜索栏尺寸"
-              className={SETTINGS_SEGMENTED_CLASS}
-              itemClassName={settingsControlClassName(SETTINGS_SEGMENTED_BUTTON_CLASS)}
-              value={sizePreset}
-              onValueChange={(value) => {
-                const key = value[0] as SearchSizePreset | undefined
-                if (key && key in SEARCH_SIZE_PRESETS) {
-                  dispatchNewtabSearchSettingFieldChange('height', SEARCH_SIZE_PRESETS[key])
-                }
-              }}
-              items={[
-                { value: 'compact', label: '紧凑' },
-                { value: 'standard', label: '标准' },
-                { value: 'comfortable', label: '宽松' }
-              ]}
-              unstyled
-            />
-          </div>
-          <SettingsDetails id="search-details" title="更多搜索设置">
+          <div id="search-details-panel" className={SETTINGS_LIST_CLASS}>
             {searchSettings.webSearchEnabled ? <>
               <SwitchRow
                 id="search-open-new-tab"
@@ -1633,34 +1567,19 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
                 checked={searchSettings.openInNewTab}
                 onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('openInNewTab', checked)}
               />
-              <div className={settingRowClassName(SEARCH_ENGINE_ROW_CLASS)}>
-                <SettingLabelStack title="快捷引擎" description={`Cmd/Ctrl+Enter 同时搜索前 ${SEARCH_MULTI_OPEN_LIMIT} 个。`} />
-                <div className={SEARCH_ENGINE_GRID_CLASS} aria-label="启用的搜索引擎">
-                  {searchEngines.map(([value, label]) => {
-                    const isSelected = searchSettings.engine === value
-                    const checked = enabledEngineSet.has(value) || isSelected
-                    return (
-                      <label
-                        className={settingsControlClassName(SEARCH_ENGINE_TOGGLE_CLASS, checked ? SETTINGS_SELECTED_SURFACE_CLASS : undefined, isSelected ? 'opacity-80' : undefined)}
-                        key={value}
-                      >
-                        <SwitchControl
-                          aria-label={label}
-                          checked={checked}
-                          disabled={isSelected}
-                          className={SEARCH_ENGINE_HIDDEN_SWITCH_CLASS}
-                          data-search-engine-toggle={value}
-                          onCheckedChange={(checked) => handleSearchEngineToggle(value, checked)}
-                          syncInputState
-                          unstyled
-                        />
-                        <span>{label}</span>
-                      </label>
-                    )
-                  })}
-                </div>
-              </div>
             </> : null}
+            <SliderRow
+              id="search-height"
+              label="高度"
+              valueId="search-height-value"
+              value={`${searchSettings.height}px`}
+              min={String(SEARCH_HEIGHT_MIN)}
+              max={String(SEARCH_HEIGHT_MAX)}
+              defaultValue={String(DEFAULT_SEARCH_LAYOUT.height)}
+              ariaLabel="搜索栏高度"
+              onValueChange={(value) => dispatchNewtabSearchSettingFieldChange('height', value)}
+              sliderValue={searchSettings.height}
+            />
             {!searchSettings.widthDisabled ? (
               <SliderRow
                 id="search-width"
@@ -1710,7 +1629,7 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
               </span>
             </div>
             <p className={SETTINGS_NOTE_CLASS}>仅影响 Curator 内的搜索，不会修改浏览器的默认搜索引擎。</p>
-          </SettingsDetails>
+          </div>
         </> : null}
       </Surface>
     </section>

@@ -6,7 +6,8 @@ import {
   type SyncOAuthAdapterType,
   type SyncProfileInput,
   type SyncProfileView,
-  type SyncSecretField
+  type SyncSecretField,
+  type SyncStrategy
 } from '../../shared/sync/sync-contract.js'
 
 export type SyncTextField =
@@ -99,6 +100,12 @@ export const SYNC_BEHAVIOR_DEFAULTS: SyncProfileInput = {
   strategy: 'default',
   nestedSync: true,
   failsafe: true
+}
+
+export const SYNC_DIRECTION_LABELS: Record<SyncStrategy, string> = {
+  default: '双向合并',
+  slave: '只下载',
+  overwrite: '只上传'
 }
 
 /** The order services are offered in */

@@ -11,14 +11,6 @@ export const DEFAULT_SEARCH_LAYOUT = {
   offsetY: 0
 }
 
-export const SEARCH_SIZE_PRESETS = {
-  compact: 36,
-  standard: DEFAULT_SEARCH_LAYOUT.height,
-  comfortable: 48
-} as const
-
-export type SearchSizePreset = keyof typeof SEARCH_SIZE_PRESETS
-
 export function getAdaptiveSearchWidthBounds({
   viewportWidth,
   containerWidth,
@@ -51,11 +43,6 @@ export function normalizeSearchHeight(value: unknown): number {
     : Number.NaN
   if (!Number.isFinite(numeric)) return DEFAULT_SEARCH_LAYOUT.height
   return Math.max(SEARCH_HEIGHT_MIN, Math.min(SEARCH_HEIGHT_MAX, Math.round(numeric)))
-}
-
-export function getSearchSizePreset(height: number): SearchSizePreset | 'custom' {
-  return (Object.keys(SEARCH_SIZE_PRESETS) as SearchSizePreset[])
-    .find(key => SEARCH_SIZE_PRESETS[key] === height) || 'custom'
 }
 
 export function resetSearchLayout<T extends typeof DEFAULT_SEARCH_LAYOUT>(settings: T): T {

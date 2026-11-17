@@ -94,10 +94,6 @@ export function beginNewtabGlassEditSession(): void {
   store.setState({ ...store.getState(), canUndo: false })
 }
 
-export function applyNewtabGlassPreset(settings: NewtabGlassSettings): void {
-  if (store.getState().ready) update(normalizeGlassSettings(settings))
-}
-
 export function undoNewtabGlassEditSession(): void {
   if (editBaseline && store.getState().ready) update({ ...editBaseline })
 }

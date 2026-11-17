@@ -64,6 +64,12 @@ export async function runSyncInterfaceChecks(page, url, directory) {
     await scene('idle')
     const idle = await measure()
     check(idle.status.includes('上次同步'), `${width}: an idle profile shows when it last synced`)
+    check(await page.evaluate(() => document.querySelector('#settings-sync li').textContent.includes('双向合并')), `${width}: the saved merge direction is visible`)
+    for (const [name, direction] of [['download', '只下载'], ['upload', '只上传']]) {
+      await scene(name)
+      check(await page.evaluate(direction => document.querySelector('#settings-sync li').textContent.includes(direction), direction), `${width}: the saved ${direction} direction is visible`)
+    }
+    await scene('idle')
     await page.evaluate(() => {
       window.__sync.fail('后台查询失败。' + '这是需要保留完整详情的较长错误原因。'.repeat(12))
       window.__sync.scene('idle')
@@ -164,13 +170,24 @@ export async function runSyncInterfaceChecks(page, url, directory) {
 
     // Overwriting one side asks first.
     await click('#settings-sync li button[aria-label$="的更多同步操作"] >> nth=0')
-    await click('text="以服务器为准"')
+    check(await page.evaluate(() => ![...document.querySelectorAll('[role="menuitem"]')].some(item => item.textContent.trim() === '设置')), `${width}: settings is available directly instead of inside the menu`)
+    await click('text="本次以服务器为准"')
     await page.waitForSelector('#sync-overwrite-title', { state: 'visible' })
     const before = await page.evaluate(() => window.__sync.calls.filter(call => call.type === 'sync:run').length)
     await screenshot(`sync-${width}-overwrite`)
     await page.keyboard.press('Escape')
     await page.waitForSelector('#sync-overwrite-title', { state: 'hidden' })
     check(before === await page.evaluate(() => window.__sync.calls.filter(call => call.type === 'sync:run').length), `${width}: dismissing the confirmation starts nothing`)
+    await click('#settings-sync li button[aria-label$="的更多同步操作"] >> nth=0')
+    await click('text="本次以服务器为准"')
+    await page.waitForSelector('#sync-overwrite-title', { state: 'visible' })
+    await click('[role="dialog"] button:text-is("覆盖本机")')
+    await page.waitForSelector('#sync-overwrite-title', { state: 'hidden' })
+    check(await page.evaluate(() => {
+      const call = window.__sync.calls.filter(call => call.type === 'sync:run').at(-1)
+      return call?.mode === 'download' && !window.__sync.calls.some(call => call.type === 'sync:update') &&
+        document.querySelector('#settings-sync li').textContent.includes('双向合并')
+    }), `${width}: a one-time overwrite preserves the saved direction`)
 
     // The editor: one form, service-specific fields, nothing wider than the dialog.
     await click('#settings-sync button[aria-label="添加同步"]')
@@ -200,15 +217,16 @@ export async function runSyncInterfaceChecks(page, url, directory) {
     check(form.inside && form.spill === 0 && !form.bodyScrollsX, `${width}: the editor overflows ${JSON.stringify(form)}`)
     check(form.unlabelled === 0, `${width}: ${form.unlabelled} editor inputs have no label`)
     check(['WebDAV 地址', '用户名', '密码', '书签文件', '加密口令'].every(label => form.labels.includes(label)), `${width}: WebDAV fields are missing: ${form.labels}`)
+    check(await page.evaluate(() => document.querySelector('[role="dialog"][aria-labelledby="sync-editor-title"] [aria-label="要同步的本地文件夹"]').textContent === '书签栏'), `${width}: new profiles default to the bookmarks bar`)
     await screenshot(`sync-${width}-editor`)
 
-    // Saving without a folder is refused in the footer's status slot; the buttons stay put.
     const footer = form.footer
+    await page.evaluate(() => window.__sync.fail('同步设置保存失败，请重试。'))
     await click('[role="dialog"][aria-labelledby="sync-editor-title"] .curator-dialog-footer button >> nth=-1')
-    await page.waitForFunction(() => document.querySelector('[role="dialog"][aria-labelledby="sync-editor-title"] .curator-dialog-footer [role="alert"]')?.textContent.includes('本地文件夹'))
+    await page.waitForFunction(() => document.querySelector('[role="dialog"][aria-labelledby="sync-editor-title"] .curator-dialog-footer [role="alert"]')?.textContent.includes('保存失败'))
     form = await editor()
     check(JSON.stringify(form.footer) === JSON.stringify(footer), `${width}: the save button moved when an error appeared`)
-    check(!(await page.evaluate(() => window.__sync.calls.some(call => call.type === 'sync:create'))), `${width}: nothing is created without a folder`)
+    check(await page.evaluate(() => window.__sync.calls.filter(call => call.type === 'sync:create').at(-1)?.data.localRoot === '1'), `${width}: the default bookmarks bar reaches the save request`)
 
     await click('[role="dialog"][aria-labelledby="sync-editor-title"] [aria-label="WebDAV 服务商"]')
     await click('[role="option"]:has-text("Koofr")')
@@ -256,10 +274,10 @@ export async function runSyncInterfaceChecks(page, url, directory) {
     await page.waitForSelector('#sync-editor-title', { state: 'hidden' })
 
     // An existing profile: stored secrets are never filled in, removal needs a deliberate hold.
-    await click('#settings-sync li button[aria-label$="的更多同步操作"] >> nth=0')
-    await click('[role="menuitem"]:has-text("设置")')
+    await click('#settings-sync li button[aria-label^="同步设置："] >> nth=0')
     await page.waitForSelector('#sync-editor-title', { state: 'visible' })
     await page.waitForTimeout(350)
+    check(await page.evaluate(() => document.querySelector('[role="dialog"][aria-labelledby="sync-editor-title"] [aria-label="要同步的本地文件夹"]').textContent === '书签栏 / 工作资料'), `${width}: existing profiles keep their chosen folder`)
     check(await page.evaluate(() => {
       const panel = document.querySelector('#sync-editor-title').closest('[role="dialog"][aria-labelledby="sync-editor-title"]')
       const secrets = [...panel.querySelectorAll('input[type="password"]')]
@@ -324,9 +342,7 @@ export async function runSyncInterfaceChecks(page, url, directory) {
       `${width}: keyboard order selection reaches the create request`)
 
     await scene('linkwarden')
-    await click('#settings-sync li button[aria-label$="的更多同步操作"]')
-    await page.waitForSelector('[role="menuitem"][aria-label="设置"]', { state: 'visible' })
-    await click('[role="menuitem"]:has-text("设置")')
+    await click('#settings-sync li button[aria-label^="同步设置："]')
     await page.waitForSelector('#sync-editor-title', { state: 'visible' })
     await click('[role="dialog"][aria-labelledby="sync-editor-title"] button:has-text("高级")')
     await page.waitForSelector(orderSwitch)
@@ -334,10 +350,14 @@ export async function runSyncInterfaceChecks(page, url, directory) {
       `${width}: older Linkwarden profiles retain disabled ordering`)
     await page.focus(orderSwitch)
     await page.keyboard.press('Space')
+    await click('[role="dialog"][aria-labelledby="sync-editor-title"] [aria-label="同步方向"]')
+    await click('[role="option"]:has-text("只上传：本机覆盖服务器")')
     await click('[role="dialog"][aria-labelledby="sync-editor-title"] button:text-is("保存")')
     await page.waitForSelector('#sync-editor-title', { state: 'hidden' })
     check(await page.evaluate(() => window.__sync.calls.filter(call => call.type === 'sync:update' && call.id === 'lw').at(-1)?.data.syncOrder === true),
       `${width}: explicit order changes reach the existing profile update`)
+    await page.waitForFunction(() => document.querySelector('#settings-sync li').textContent.includes('只上传'))
+    check(await page.evaluate(() => window.__sync.calls.filter(call => call.type === 'sync:update' && call.id === 'lw').at(-1)?.data.strategy === 'overwrite'), `${width}: the list shows the direction after saving it`)
 
     check((await page.evaluate(() => window.__fixtureErrors || [])).length === 0, `${width}: page errors`)
   }

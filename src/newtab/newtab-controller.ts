@@ -132,15 +132,7 @@ import {
   validateBackgroundBlobSize,
   validateBackgroundContentLength
 } from './interactions.js'
-import {
-  DEFAULT_ENABLED_SEARCH_ENGINE_IDS,
-  SEARCH_ENGINE_CONFIG_BY_ID,
-  SEARCH_MULTI_OPEN_LIMIT,
-  normalizeEnabledSearchEngineIds,
-  normalizeSearchEngineId,
-  planSearchOpenTargets,
-  type SearchEngineId
-} from './search-engines.js'
+import { searchWithBrowserDefault } from './browser-search.js'
 import {
   canUseNewtabSearchFocus,
   getNewtabBlankPointerAction,
@@ -251,10 +243,8 @@ import {
   patchNewtabSearchWidgetView,
   type NewtabSearchWidgetNodes,
   type SearchChipViewModel,
-  type SearchEngineMenuItemViewModel,
   type SearchHintState,
   type SearchSuggestionViewModel,
-  type SearchWidgetEngineMenuState,
   type SearchWidgetShellState
 } from './newtab-search-widget-store.js'
 import {
@@ -442,8 +432,6 @@ const DEFAULT_SEARCH_SETTINGS = {
   enabled: true,
   webSearchEnabled: true,
   openInNewTab: false,
-  engine: 'google' as SearchEngineId,
-  enabledEngines: DEFAULT_ENABLED_SEARCH_ENGINE_IDS,
   placeholder: '搜索书签、网页，或输入 / 执行命令',
   naturalSearchEnabled: false,
   naturalSearchAiConfigured: false,
@@ -1243,14 +1231,7 @@ function bindEvents(): void {
       commitSearchSettings(resetSearchLayout(state.searchSettings), { live: true })
       scheduleSearchSettingsSettle()
     },
-    onToggle: handleSearchSettingToggle,
-    onWebEngineChange: (engine) => {
-      commitSearchSettings(normalizeSearchSettings({
-        ...state.searchSettings,
-        webSearchEnabled: engine !== null,
-        engine: engine ?? state.searchSettings.engine
-      }), { render: true })
-    }
+    onToggle: handleSearchSettingToggle
   })
   registerNewtabBackgroundSettingsActions({
     onFileSelect: (mediaType, file) => {
@@ -1494,8 +1475,7 @@ function getDocumentSearchFocusIntent(event: KeyboardEvent): NewtabSearchFocusIn
     featuredPickerOpen: isFeaturedBackgroundPickerOpen(),
     menuOpen: Boolean(
       state.activeMenuBookmarkId ||
-      state.addMenuOpen ||
-      getNewtabSearchWidgetView()?.engineMenu.open
+      state.addMenuOpen
     ),
     settingsOpen: isSettingsDrawerOpen()
   })) {
@@ -5847,8 +5827,6 @@ function getNewTabShellSignature(): string {
     state.searchSettings.enabled,
     state.searchSettings.webSearchEnabled,
     state.searchSettings.openInNewTab,
-    state.searchSettings.engine,
-    state.searchSettings.enabledEngines.join(','),
     state.searchSettings.placeholder,
     state.searchSettings.naturalSearchEnabled,
     state.searchSettings.autoVerticalCenter,
@@ -6268,12 +6246,6 @@ function initializeSearchWidget(): boolean {
       getRevealedAutoSearchShell() === null && readCachedAutoSearchOffsetYValue() === null
     )
   }
-  let engineMenuExpanded = false
-  let searchEngineMenuState: SearchWidgetEngineMenuState = {
-    hint: '',
-    items: [],
-    open: false
-  }
   let searchComboboxExpanded = false
   let activeSearchDescendantId = ''
   let searchPanelVisible = false
@@ -6283,6 +6255,7 @@ function initializeSearchWidget(): boolean {
   let searchInputComposing = false
   let suggestionDebounceTimer = 0
   let suggestionRequestId = 0
+  let webSearchRequestId = 0
   let visibleSuggestionQuery = ''
   let visibleSuggestionIndex = state.preparedSearchIndex
   const suggestionIdentity = (item: NewTabSearchSuggestion) => `${item.suggestionType}:${item.id}`
@@ -6291,12 +6264,10 @@ function initializeSearchWidget(): boolean {
   const getSearchNodes = (): NewtabSearchWidgetNodes => getNewtabSearchWidgetNodes()
   const getSearchInput = (): HTMLInputElement | null => getSearchNodes().input
   const getSearchSlot = (): HTMLElement | null => getSearchNodes().slot
-  const getSearchEngineButton = (): HTMLButtonElement | null => getSearchNodes().engineButton
   const hasSearchInteraction = () => {
     const active = document.activeElement
     return shouldKeepNewtabSearchOpen({
-      focusWithin: Boolean(active && (getSearchSlot()?.contains(active) || getSearchNodes().engineMenu?.contains(active))),
-      engineMenuOpen: searchEngineMenuState.open,
+      focusWithin: Boolean(active && getSearchSlot()?.contains(active)),
       settingsOpen: isSettingsDrawerOpen(),
       composing: searchInputComposing
     })
@@ -6305,13 +6276,22 @@ function initializeSearchWidget(): boolean {
   const syncSearchWidgetButtons = () => {
     patchNewtabSearchWidgetView({
       buttons: {
-        engine: getSearchEngineButtonState(),
         natural: getNaturalSearchButtonState()
       }
     })
   }
-  const updateEngineButton = syncSearchWidgetButtons
   const updateNaturalButton = syncSearchWidgetButtons
+  const executeWebSearch = (value: string, forceNewTab = false) => {
+    const requestId = ++webSearchRequestId
+    patchNewtabSearchWidgetView({ webSearchError: '' })
+    void submitSearch(value, forceNewTab).catch(() => {
+      if (!ownsWidget() || requestId !== webSearchRequestId ||
+        getSearchInput()?.value.trim() !== value.trim()) return
+      patchNewtabSearchWidgetView({
+        webSearchError: '网页搜索失败，请检查 Chrome 的默认搜索引擎后重试。'
+      })
+    })
+  }
   const syncSearchWidgetInteractions = () => {
     patchNewtabSearchWidgetView({
       interactions: {
@@ -6321,20 +6301,10 @@ function initializeSearchWidget(): boolean {
             return
           }
           input.value = ''
+          patchNewtabSearchWidgetView({ webSearchError: '' })
           syncSearchInputActions(input)
           hideSuggestions()
           input.focus()
-        },
-        onEngineOpenChange: (open) => {
-          if (state.searchSettings.webSearchEnabled === false) {
-            closeEngineMenu()
-            return
-          }
-          if (!open) {
-            closeEngineMenu()
-            return
-          }
-          renderEngineMenu()
         },
         onInputFocus: () => {
           scheduleSuggestionsRender({ immediate: true })
@@ -6345,6 +6315,7 @@ function initializeSearchWidget(): boolean {
             return
           }
           syncSearchInputActions(input)
+          patchNewtabSearchWidgetView({ webSearchError: '' })
           scheduleSuggestionsRender()
         },
         onInputCompositionChange: (composing) => {
@@ -6382,12 +6353,11 @@ function initializeSearchWidget(): boolean {
 
           if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
             event.preventDefault()
-            closeEngineMenu()
             hideSuggestions()
             if (state.searchSettings.webSearchEnabled === false) {
               return
             }
-            submitSearch(input.value, true)
+            executeWebSearch(input.value, true)
             return
           }
 
@@ -6422,7 +6392,6 @@ function initializeSearchWidget(): boolean {
             // Check the settled destination, not the earlier blur event.
             const slot = getSearchSlot()
             if (slot && !hasSearchInteraction()) {
-              closeEngineMenu()
               hideSuggestions()
             }
           }, 0)
@@ -6431,12 +6400,11 @@ function initializeSearchWidget(): boolean {
           const input = getSearchInput()
           event.preventDefault()
           if (searchInputComposing) return
-          closeEngineMenu()
           hideSuggestions()
           if (!input || state.searchSettings.webSearchEnabled === false) {
             return
           }
-          submitSearch(input.value)
+          executeWebSearch(input.value)
         },
         onToggleNatural: () => {
           const input = getSearchInput()
@@ -6453,9 +6421,6 @@ function initializeSearchWidget(): boolean {
     })
   }
 
-  const renderSearchEngineMenuState = () => {
-    patchNewtabSearchWidgetView({ engineMenu: searchEngineMenuState })
-  }
   const renderSearchComboboxState = () => {
     patchNewtabSearchWidgetView({
       combobox: {
@@ -6496,57 +6461,6 @@ function initializeSearchWidget(): boolean {
   const setSearchSuggestionsListVisible = (visible: boolean) => {
     searchSuggestionListVisible = visible
     syncSearchWidgetPanelState()
-  }
-
-  const closeEngineMenu = ({ restoreFocus = false } = {}) => {
-    searchEngineMenuState = {
-      ...searchEngineMenuState,
-      open: false
-    }
-    renderSearchEngineMenuState()
-    engineMenuExpanded = false
-    updateEngineButton()
-    if (restoreFocus) {
-      getSearchEngineButton()?.focus()
-    }
-  }
-
-  const renderEngineMenu = () => {
-    closeEngineMenu()
-    const items: SearchEngineMenuItemViewModel[] = []
-    for (const engineId of state.searchSettings.enabledEngines) {
-      const engine = SEARCH_ENGINE_CONFIG_BY_ID.get(engineId)
-      if (!engine) {
-        continue
-      }
-
-      items.push({
-        active: engineId === state.searchSettings.engine,
-        id: engineId,
-        label: engine.name,
-        onSelect: () => {
-          const input = getSearchInput()
-          state.searchSettings = normalizeSearchSettings({
-            ...state.searchSettings,
-            engine: engineId
-          })
-          scheduleSearchSettingsSave()
-          updateEngineButton()
-          closeEngineMenu()
-          input?.focus()
-          scheduleSuggestionsRender({ preserveActive: true, immediate: true })
-        }
-      })
-    }
-
-    searchEngineMenuState = {
-      hint: `Cmd/Ctrl+Enter 打开前 ${SEARCH_MULTI_OPEN_LIMIT} 个启用引擎`,
-      items,
-      open: true
-    }
-    renderSearchEngineMenuState()
-    engineMenuExpanded = true
-    updateEngineButton()
   }
 
   const hideSuggestions = () => {
@@ -6813,7 +6727,6 @@ function initializeSearchWidget(): boolean {
     // Settings can rebuild this view without remounting its uncontrolled input.
     action: createSearchWidgetActionState(getSearchInput()?.value || ''),
     buttons: {
-      engine: getSearchEngineButtonState(),
       natural: getNaturalSearchButtonState()
     },
     chips: [],
@@ -6821,7 +6734,6 @@ function initializeSearchWidget(): boolean {
       activeDescendantId: activeSearchDescendantId,
       expanded: searchComboboxExpanded
     },
-    engineMenu: searchEngineMenuState,
     hint: { type: 'empty' },
     interactions: createDefaultSearchWidgetInteractionState(),
     panel: {
@@ -6831,48 +6743,29 @@ function initializeSearchWidget(): boolean {
     sectionLabel: '书签匹配',
     shell: createSearchWidgetShellState(settings),
     onNodesChange: handleSearchWidgetNodesChange,
-    suggestions: []
+    suggestions: [],
+    webSearchEnabled: settings.webSearchEnabled,
+    webSearchError: ''
   })
   syncSearchWidgetInteractions()
-  renderSearchEngineMenuState()
   renderSearchComboboxState()
   syncSearchWidgetPanelState()
   return true
 
   function createSearchWebFallbackState(query: string): SearchHintState {
-    const label = `未找到书签；按 Enter 仅在本页用 ${getSearchEngineDisplayName()} 搜索网页`
+    const label = '未找到书签；按 Enter 用 Chrome 默认搜索引擎搜索网页'
     return {
       type: 'webFallback',
       ariaLabel: label,
       label,
-      title: `用 ${getSearchEngineDisplayName()} 搜索「${query}」`,
+      title: `搜索「${query}」`,
       onSelect: () => {
-        closeEngineMenu()
         hideSuggestions()
         if (state.searchSettings.webSearchEnabled === false) {
           return
         }
-        submitSearch(query)
+        executeWebSearch(query)
       }
-    }
-  }
-
-  function getSearchEngineDisplayName(): string {
-    return SEARCH_ENGINE_CONFIG_BY_ID.get(state.searchSettings.engine)?.name || 'Google'
-  }
-
-  function getSearchEngineButtonState() {
-    const engine = SEARCH_ENGINE_CONFIG_BY_ID.get(state.searchSettings.engine)
-    const label = engine?.shortName || '搜索'
-    const disabled = state.searchSettings.webSearchEnabled === false
-    return {
-      ariaLabel: `选择搜索引擎，当前为 ${engine?.name || label}`,
-      disabled,
-      expanded: engineMenuExpanded,
-      label,
-      title: disabled
-        ? '网页搜索已关闭。可在新标签页设置中重新启用。'
-        : `当前引擎：${engine?.name || label}。Cmd/Ctrl+Enter 搜索前 ${SEARCH_MULTI_OPEN_LIMIT} 个启用引擎。`
     }
   }
 
@@ -6902,7 +6795,7 @@ function initializeSearchWidget(): boolean {
       : '关键词匹配'
     const fallback = state.naturalSearchError ? `；${state.naturalSearchError}` : ''
     const webShortcut = state.searchSettings.webSearchEnabled === false
-      ? '' : `；Cmd/Ctrl+Enter 用 ${getSearchEngineDisplayName()} 搜索网页`
+      ? '' : '；Cmd/Ctrl+Enter 在新标签页搜索网页'
     return `按 ↓ 选择书签，选中后 Enter 打开${webShortcut}；${mode}${fallback}`
   }
 }
@@ -11075,13 +10968,10 @@ function normalizeSearchSettings(rawSettings: unknown): typeof DEFAULT_SEARCH_SE
   const placeholder = Object.prototype.hasOwnProperty.call(settings, 'placeholder')
     ? String(settings.placeholder ?? '').trim()
     : DEFAULT_SEARCH_SETTINGS.placeholder
-  const engine = normalizeSearchEngineId(settings.engine, DEFAULT_SEARCH_SETTINGS.engine)
   return {
     enabled: settings.enabled !== false,
     webSearchEnabled: settings.webSearchEnabled !== false,
     openInNewTab: settings.openInNewTab === true,
-    engine,
-    enabledEngines: normalizeEnabledSearchEngineIds(settings.enabledEngines, engine),
     placeholder,
     naturalSearchEnabled: settings.naturalSearchEnabled === true,
     naturalSearchAiConfigured: settings.naturalSearchAiConfigured === true,
@@ -12476,7 +12366,7 @@ async function hydrateFeaturedBackgroundCredit(settings: typeof DEFAULT_BACKGROU
   }
 }
 
-function submitSearch(value: string, openAllEnabled = false): void {
+async function submitSearch(value: string, forceNewTab = false): Promise<void> {
   const query = String(value || '').trim()
   if (!query) {
     return
@@ -12484,7 +12374,7 @@ function submitSearch(value: string, openAllEnabled = false): void {
 
   const directUrl = getDirectNavigationUrl(query)
   if (directUrl) {
-    openSearchTarget(directUrl)
+    openSearchTarget(directUrl, forceNewTab)
     return
   }
 
@@ -12492,14 +12382,7 @@ function submitSearch(value: string, openAllEnabled = false): void {
     return
   }
 
-  const targets = planSearchOpenTargets(
-    query,
-    state.searchSettings.engine,
-    state.searchSettings.enabledEngines,
-    openAllEnabled,
-    SEARCH_MULTI_OPEN_LIMIT
-  )
-  openSearchTargets(targets.map((target) => target.url))
+  await searchWithBrowserDefault(query, forceNewTab || state.searchSettings.openInNewTab)
 }
 
 function getDirectNavigationUrl(value: string): string {
@@ -12529,28 +12412,9 @@ function getDirectNavigationUrl(value: string): string {
   }
 }
 
-function openSearchTarget(targetUrl: string): void {
-  openSearchTargets([targetUrl])
-}
-
-function openSearchTargets(targetUrls: string[]): void {
-  const urls = targetUrls.filter(Boolean)
-  if (!urls.length) {
-    return
-  }
-
-  if (urls.length > 1) {
-    for (const url of urls.slice(0, SEARCH_MULTI_OPEN_LIMIT)) {
-      const opened = window.open(url, '_blank', 'noopener')
-      if (opened) {
-        opened.opener = null
-      }
-    }
-    return
-  }
-
-  const targetUrl = urls[0]
-  if (state.searchSettings.openInNewTab) {
+function openSearchTarget(targetUrl: string, forceNewTab = false): void {
+  if (!targetUrl) return
+  if (forceNewTab || state.searchSettings.openInNewTab) {
     const opened = window.open(targetUrl, '_blank', 'noopener')
     if (opened) {
       opened.opener = null

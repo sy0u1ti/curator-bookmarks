@@ -720,7 +720,8 @@ body::after {
   display: flex;
   flex-direction: column;
   height: var(--popup-edit-panel-height);
-  contain: layout paint;
+  overflow: visible;
+  contain: layout;
   /* The tree is kept mounted, painted at sub-pixel opacity, and clipped by
      its zero-height panel. Opening therefore only composites existing
      textures instead of rasterizing the whole picker on the first frame. */

@@ -15,6 +15,7 @@ import { takeSyncEditorTransfer, type SyncEditorTransfer } from '../../shared/sy
 import { isBackgroundRuntimeError, openExtensionManager } from '../../shared/background-runtime'
 import {
   SYNC_ADAPTERS,
+  SYNC_DIRECTION_LABELS,
   getSyncProfileStatus,
   getSyncProfileTitle,
   getSyncRestingText,
@@ -46,12 +47,12 @@ const RUN_LABELS = ['同步', '取消'] as const
 
 const OVERWRITE_COPY: Record<'download' | 'upload' | 'force', { title: string; copy: string; confirm: string }> = {
   download: {
-    title: '以服务器为准？',
+    title: '本次以服务器为准？',
     copy: '本机这个文件夹里与服务器不同的书签会被改写或删除。同步前会自动创建恢复点。',
     confirm: '覆盖本机'
   },
   upload: {
-    title: '以本机为准？',
+    title: '本次以本机为准？',
     copy: '服务器上与本机不同的书签会被改写或删除，其他设备下次同步时也会跟着变化。',
     confirm: '覆盖服务器'
   },
@@ -251,6 +252,7 @@ export function SyncCard() {
                       <p className={`${BACKUP_ROW_DETAIL_CLASS} [overflow-wrap:anywhere]`}>
                         {/* Some services already name themselves in the address */}
                         {profile.label.startsWith(service) ? profile.label : `${service} · ${profile.label}`}
+                        {' · '}{SYNC_DIRECTION_LABELS[profile.data.strategy || 'default']}
                         {profile.data.failsafe === false ? <span className="text-ds-warning"> · 安全保护已关闭</span> : null}
                       </p>
                       <StatusMessage className={`${BACKUP_ROW_DETAIL_CLASS} tabular-nums`} reserve={[getSyncRestingText(profile, formatDateTime)]} tone={state.tone}>
@@ -277,18 +279,22 @@ export function SyncCard() {
                       </StatusMessage>
                     </>}
                   >
+                    <Button size="sm" variant="secondary" aria-label={`同步设置：${title}`}
+                      onClick={() => openEditor(profile)}>
+                      <Icon name="Settings" size={14} aria-hidden="true" />
+                      设置
+                    </Button>
                     <OptionActionsMenu
                       label={`${title}的更多同步操作`}
                       triggerLabel="更多"
                       actions={[
-                        { id: 'download', label: '以服务器为准', description: '覆盖本机，先创建恢复点', disabled: active, onSelect: () => setOverwrite({ open: true, profile, mode: 'download' }) },
-                        { id: 'upload', label: '以本机为准', description: '覆盖服务器', disabled: active, onSelect: () => setOverwrite({ open: true, profile, mode: 'upload' }) },
+                        { id: 'download', label: '本次以服务器为准', description: '覆盖本机，先创建恢复点', disabled: active, onSelect: () => setOverwrite({ open: true, profile, mode: 'download' }) },
+                        { id: 'upload', label: '本次以本机为准', description: '覆盖服务器', disabled: active, onSelect: () => setOverwrite({ open: true, profile, mode: 'upload' }) },
                         ...(state.state === 'scheduled' ? [{
                           id: 'force', label: '立即强制同步', description: '不等其他设备释放服务器上的锁', onSelect: () => setOverwrite({ open: true, profile, mode: 'force' })
                         }] : []),
                         { id: 'export-profile', label: '导出此配置', description: '文件包含服务器密码，请妥善保管', icon: 'Download', separatorBefore: true, onSelect: () => exportProfiles([profile]) },
-                        { id: 'export-bookmarks', label: '导出此项书签', disabled: !profile.localFolderExists, onSelect: () => act(() => exportSyncBookmarks(profile), '书签导出失败。') },
-                        { id: 'settings', label: '设置', icon: 'Settings' as const, separatorBefore: true, onSelect: () => openEditor(profile) }
+                        { id: 'export-bookmarks', label: '导出此项书签', disabled: !profile.localFolderExists, onSelect: () => act(() => exportSyncBookmarks(profile), '书签导出失败。') }
                       ]}
                     />
                     <Button size="sm" variant="secondary"

@@ -35,7 +35,7 @@
   let stored = {}
   try { stored = JSON.parse(localStorage.getItem(storageKey) || '{}') } catch {}
   const data = { ...defaults, ...stored }
-  const fixture = window.__glassFixture = { data, tree, errors: [], calls: [], workers: [], failGlassSaves: false, frames: [] }
+  const fixture = window.__glassFixture = { data, tree, errors: [], calls: [], workers: [], failGlassSaves: false, frames: [], searchCalls: [], failSearch: false }
   addEventListener('error', error => fixture.errors.push(error.message))
   addEventListener('unhandledrejection', error => fixture.errors.push(String(error.reason)))
   const NativeWorker = Worker
@@ -105,6 +105,10 @@
       openOptionsPage: callback => respond(undefined, callback)
     },
     bookmarks,
+    search: { query: async options => {
+      fixture.searchCalls.push(structuredClone(options))
+      if (fixture.failSearch) throw new Error('Fixture: default search unavailable')
+    } },
     storage: { local: storage, session: storage, sync: storage, onChanged: changed },
     tabs: {
       query: (_query, callback) => respond([activeTab], callback),

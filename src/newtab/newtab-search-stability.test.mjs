@@ -73,7 +73,7 @@ for (const density of [1, 1.25]) {
       await page.waitForFunction(() => document.querySelector('.newtab-search-shell').getBoundingClientRect().top === document.querySelector('.newtab-search-slot').getBoundingClientRect().top)
     }
     const capture = () => page.evaluate(() => new Promise(resolve => {
-      const selectors = ['.newtab-search-input', '.newtab-search-icon', '.newtab-search-natural', '.newtab-search-engine', '.newtab-search-submit']
+      const selectors = ['.newtab-search-input', '.newtab-search-icon', '.newtab-search-natural', '.newtab-search-submit']
       const frames = []
       const started = performance.now()
       const frame = () => {
@@ -96,7 +96,7 @@ for (const density of [1, 1.25]) {
     const focus = await pending
     const stationary = focus.at(-1)
     const hoverPending = capture()
-    await page.locator('.newtab-search-engine').hover()
+    await page.locator('.newtab-search-natural').hover()
     const hover = await hoverPending
     const input = page.locator('.newtab-search-input')
     await input.fill('Guide')
@@ -107,21 +107,7 @@ for (const density of [1, 1.25]) {
     const typing = await typingPending
     await writeFile(path.join(output, `partial-${density}.json`), JSON.stringify({ density, counters, focus, hover, typing }, null, 2))
     await page.screenshot({ path: path.join(output, `focused-${density}.png`) })
-    await page.locator('.newtab-search-engine').click()
-    try { await page.getByRole('menu', { name: /搜索引擎/ }).waitFor({ timeout: 3000 }) }
-    catch (error) {
-      console.log('Engine menu state:', await page.evaluate(() => ({ expanded: document.querySelector('.newtab-search-engine')?.getAttribute('aria-expanded'), menus: [...document.querySelectorAll('.newtab-search-engine-menu')].map(element => ({ visible: element.checkVisibility(), open: element.hasAttribute('data-open') })), active: document.activeElement?.className, engineOpen: document.querySelector('.newtab-search-shell')?.dataset.engineOpen })))
-      await page.screenshot({ path: path.join(output, `menu-failure-${density}.png`) })
-      throw error
-    }
-    const menu = await capture()
-    if (!baseline) {
-      const rotation = await page.locator('.newtab-search-engine-caret').evaluate(element => new DOMMatrixReadOnly(getComputedStyle(element).transform).a)
-      assert.ok(Math.abs(rotation + 1) < 0.001, 'The search-engine caret must show that its menu is open')
-    }
-    await page.keyboard.press('Escape')
-    const menuClosed = await capture()
-    await writeFile(path.join(output, `partial-${density}.json`), JSON.stringify({ density, counters, focus, hover, typing, menu, menuClosed }, null, 2))
+    await writeFile(path.join(output, `partial-${density}.json`), JSON.stringify({ density, counters, focus, hover, typing }, null, 2))
     if (!baseline) {
       for (const counter of counters) {
         assert.equal(counter.background, 'rgba(0, 0, 0, 0)', `${counter.label} count should have no badge background`)
@@ -137,7 +123,7 @@ for (const density of [1, 1.25]) {
         })
       }
       assert.ok(Math.abs(stationary.y - expectedLift) < 0.02, 'retain the selected field lift from the CSS token')
-      for (const [phase, frames] of Object.entries({ hover, typing, menu, menuClosed })) {
+      for (const [phase, frames] of Object.entries({ hover, typing })) {
         for (const frame of frames) {
           assert.ok(Math.abs(frame.y - expectedLift) < 0.02 && Math.abs(frame.scaleX - 1) < 0.001, `focused search must stay steady during ${phase}: y=${frame.y}, scale=${frame.scaleX}, time=${frame.time}`)
           frame.controls.forEach((control, index) => {
@@ -146,10 +132,6 @@ for (const density of [1, 1.25]) {
           })
         }
       }
-      await page.locator('.newtab-search-engine').press('ArrowDown')
-      await page.getByRole('menu', { name: /搜索引擎/ }).waitFor()
-      await page.getByRole('menuitemradio', { name: 'Bing', exact: true }).click()
-      await page.waitForFunction(() => document.activeElement === document.querySelector('.newtab-search-input'))
       assert.equal(await input.inputValue(), 'Guide 1')
       await verifySearchButtonFeedback(page)
       await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -160,7 +142,7 @@ for (const density of [1, 1.25]) {
       }
     }
     assert.deepEqual(errors, [])
-    report.push({ density, counters, focus, hover, typing, menu, menuClosed, errors })
+    report.push({ density, counters, focus, hover, typing, errors })
   } finally {
     await context?.close()
     assert.equal(path.dirname(path.resolve(profile)), path.resolve(tmpdir()))
@@ -219,7 +201,7 @@ async function verifyFolderHeadingFeedback(page) {
 }
 
 async function verifySearchButtonFeedback(page) {
-  for (const selector of ['.newtab-search-natural', '.newtab-search-engine']) {
+  for (const selector of ['.newtab-search-natural']) {
     const button = page.locator(selector)
     await button.scrollIntoViewIfNeeded()
     await page.mouse.move(4, 4)

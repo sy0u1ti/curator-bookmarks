@@ -17,7 +17,7 @@ const baseEvent = {
   shiftKey: false
 }
 
-const inactiveSearch = { focusWithin: false, engineMenuOpen: false, settingsOpen: false, composing: false }
+const inactiveSearch = { focusWithin: false, settingsOpen: false, composing: false }
 assert.equal(shouldKeepNewtabSearchOpen(inactiveSearch), false)
 for (const key of Object.keys(inactiveSearch)) {
   assert.equal(shouldKeepNewtabSearchOpen({ ...inactiveSearch, [key]: true }), true,

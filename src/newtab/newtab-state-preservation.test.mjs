@@ -215,9 +215,9 @@ try {
   await expect(b.locator('.bookmark-edit-menu')).toHaveCount(0)
 
   await settings(a, 'search')
-  await a.locator('#search-details-toggle').click()
+  await a.locator('#search-placeholder').waitFor()
   await settings(b, 'search')
-  await b.locator('#search-details-toggle').click()
+  await b.locator('#search-placeholder').waitFor()
   await a.bringToFront()
   await a.locator('#search-placeholder').fill('两个页面保留设置')
   await b.bringToFront()

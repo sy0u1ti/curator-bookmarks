@@ -10,8 +10,7 @@ const output = path.resolve('output/playwright/popup-folder-picker')
 const currentUrl = 'https://example.com/folder-picker-current'
 const selectAttribute = {
   smart: 'data-smart-select-folder',
-  edit: 'data-select-edit-folder',
-  move: 'data-select-folder'
+  edit: 'data-select-edit-folder'
 }
 let context
 
@@ -173,17 +172,16 @@ try {
   await page.locator('#close-edit-modal').click()
   await page.locator('#edit-modal').waitFor({ state: 'hidden' })
 
-  await openBookmarkAction('\u79fb\u52a8\u4e66\u7b7e')
-  await assertPickerAppearance('move')
-  await page.locator('#move-search-input').focus()
-  await page.mouse.move(790, 590)
-  await waitForModalSettled('#move-modal')
-  await page.screenshot({ path: path.join(output, 'move-folder-tree.png') })
-  await option('move', fixture.target.id).click()
-  await page.locator('#move-modal').waitFor({ state: 'hidden' })
+  assert.equal(await bookmarkRow.locator('button[aria-label^="\u79fb\u52a8\u4e66\u7b7e"]').count(), 0)
+  await openBookmarkAction('\u7f16\u8f91\u4e66\u7b7e')
+  await page.locator('#edit-folder-picker-button').click()
+  await option('edit', fixture.target.id).click()
+  assert.equal((await worker.evaluate(id => chrome.bookmarks.get(id), fixture.bookmark.id))[0].parentId, fixture.child.id)
+  await page.locator('#save-edit').click()
+  await page.locator('#edit-modal').waitFor({ state: 'hidden' })
   assert.equal((await worker.evaluate(id => chrome.bookmarks.get(id), fixture.bookmark.id))[0].parentId, fixture.target.id)
   assert.deepEqual(errors, [])
-  console.log('Popup folder pickers passed: shared tree geometry and glow, no circles, all three dialogs, search, disclosure, keyboard, narrow viewport and accessibility media.')
+  console.log('Popup folder pickers passed: shared tree geometry and glow, no circles, save and edit dialogs, deferred folder changes, search, disclosure, keyboard, narrow viewport and accessibility media.')
 } finally {
   await context?.close()
   assert.equal(path.dirname(path.resolve(profile)), path.resolve(tmpdir()))
