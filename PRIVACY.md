@@ -55,6 +55,10 @@ Curator 仅为本政策和产品界面说明的书签管理功能处理数据。
 
 Curator processes data only for the bookmark-management features described in this policy and the product interface. We do not sell user data, use it for advertising, creditworthiness, or lending, repurpose it for unrelated functions, or build behavioral profiles.
 
+Curator 对用户数据的使用和转移遵循 [Chrome Web Store User Data Policy](https://developer.chrome.com/docs/webstore/program-policies/limited-use)，包括 Limited Use 要求。
+
+Curator's use and transfer of user data adhere to the [Chrome Web Store User Data Policy](https://developer.chrome.com/docs/webstore/program-policies/limited-use), including its Limited Use requirements.
+
 Curator 对通过 Google API 获得的信息的使用和转移遵循 [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy)，包括 Limited Use 要求。
 
 Curator's use and transfer of information received from Google APIs adhere to the [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy), including its Limited Use requirements.
