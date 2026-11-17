@@ -8,6 +8,10 @@ release/
 .tmp-test/
 output/
 
+# Local promotional media and video projects
+/assets/
+/videos/
+
 # Local environment and logs
 *.log
 .DS_Store

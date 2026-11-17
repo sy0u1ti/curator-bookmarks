@@ -36,7 +36,7 @@ https://github.com/user-attachments/assets/bc6c5a9b-81f3-4d29-85da-30e031a6f9ca
 找回资料时，只记得一个词、一段拼音或所在目录就可以开始搜索。已保存的标签、摘要和正文也能成为线索，普通搜索完全在本机完成。
 
 <p align="center">
-  <img src="assets/readme/popup.png" alt="弹窗中的当前页操作、文件夹和书签搜索" width="800">
+  <img src="https://raw.githubusercontent.com/sy0u1ti/curator-bookmarks/bd02eeec7ddd272bb75ccaea38fc1bb8397266e8/assets/readme/popup.png" alt="弹窗中的当前页操作、文件夹和书签搜索" width="800">
 </p>
 
 ### 让常用资料留在眼前
@@ -46,7 +46,7 @@ https://github.com/user-attachments/assets/bc6c5a9b-81f3-4d29-85da-30e031a6f9ca
 弹窗、侧栏和新标签页共享 Chrome 的原生书签。在哪一处改名、移动或删除，其他入口都会反映出来。
 
 <p align="center">
-  <img src="assets/readme/newtab.png" alt="新标签页中的固定入口、文件夹和玻璃书签卡片" width="1200">
+  <img src="https://raw.githubusercontent.com/sy0u1ti/curator-bookmarks/bd02eeec7ddd272bb75ccaea38fc1bb8397266e8/assets/readme/newtab.png" alt="新标签页中的固定入口、文件夹和玻璃书签卡片" width="1200">
 </p>
 
 ### 整理积累，也留好退路
@@ -58,7 +58,7 @@ https://github.com/user-attachments/assets/bc6c5a9b-81f3-4d29-85da-30e031a6f9ca
 **设置 → 数据与备份** 可以导出 JSON 备份，或从文件、自动恢复点中预览并恢复数据。书签恢复会补回缺失内容，保留现有书签；受保护的批量整理和覆盖操作前会创建恢复点，默认保留最近 5 份。
 
 <p align="center">
-  <img src="assets/readme/backup.png" alt="数据备份、文件恢复与自动恢复点" width="1200">
+  <img src="https://raw.githubusercontent.com/sy0u1ti/curator-bookmarks/bd02eeec7ddd272bb75ccaea38fc1bb8397266e8/assets/readme/backup.png" alt="数据备份、文件恢复与自动恢复点" width="1200">
 </p>
 
 ### 换一台设备，接着用
@@ -68,7 +68,7 @@ https://github.com/user-attachments/assets/bc6c5a9b-81f3-4d29-85da-30e031a6f9ca
 配置好后，从弹窗或侧栏就能查看进度、手动同步或调整自动同步。大量新增或删除会触发保护，等待确认；从服务器覆盖本机标签页可能关闭现有普通标签页，会另行确认。
 
 <p align="center">
-  <img src="assets/readme/sync.png" alt="弹窗中的多设备同步工作区" width="800">
+  <img src="https://raw.githubusercontent.com/sy0u1ti/curator-bookmarks/bd02eeec7ddd272bb75ccaea38fc1bb8397266e8/assets/readme/sync.png" alt="弹窗中的多设备同步工作区" width="800">
 </p>
 
 同步会传播书签的修改与删除。扩展的标签、设置和本地媒体不随书签同步，迁移方式见[更新与迁移](#更新与迁移)。
