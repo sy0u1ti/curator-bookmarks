@@ -38,22 +38,18 @@ const api = await import(pathToFileURL(output).href)
 test('migrates old glass preferences without losing tint or blur', () => {
   const legacy = Object.freeze({ tint: 17, blur: 7.5, rim: 0.15, bevel: 44, thickness: 28, dispersion: 0.11, light: -25, smooth: 0.75 })
   const migrated = api.normalizeGlassSettings(legacy)
-  assert.deepEqual(migrated, { tint: 17, blur: 7.5, saturation: 140, brightness: 104, highlight: 50 })
+  assert.deepEqual(migrated, { tint: 17, blur: 7.5, saturation: 140, brightness: 100, highlight: 50 })
   assert.deepEqual(api.normalizeGlassSettings(migrated), migrated)
   assert.equal(api.normalizeGlassSettings({ rim: 1.6, highlight: 37 }).highlight, 37)
-  assert.equal(api.normalizeGlassSettings({ rim: ' ' }).highlight, 100)
+  assert.equal(api.normalizeGlassSettings({ rim: ' ' }).highlight, 0)
 })
 
 test('invalid and boundary preferences stay finite and preserve explicit zero', () => {
   assert.deepEqual(api.normalizeGlassSettings(null), api.DEFAULT_GLASS_SETTINGS)
   assert.deepEqual(api.normalizeGlassSettings({
     tint: 0, blur: 0, saturation: Infinity, brightness: -20, highlight: ' '
-  }), { tint: 0, blur: 0, saturation: 140, brightness: 80, highlight: 100 })
+  }), { tint: 0, blur: 0, saturation: 140, brightness: 80, highlight: 0 })
   assert.equal(api.normalizeGlassSettings({ blur: 50 }).blur, 12)
-  for (const preset of api.GLASS_PRESETS) {
-    assert.deepEqual(api.normalizeGlassSettings(preset.settings), preset.settings)
-    assert.equal(api.getGlassPresetId(preset.settings), preset.id)
-  }
 })
 
 test('every material control reaches CSS without asynchronous rendering', () => {

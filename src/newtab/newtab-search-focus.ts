@@ -23,16 +23,14 @@ export function getNewtabBlankPointerAction(searchFocused: boolean): NewtabBlank
 
 export function shouldKeepNewtabSearchOpen({
   focusWithin,
-  engineMenuOpen,
   settingsOpen,
   composing
 }: {
   focusWithin: boolean
-  engineMenuOpen: boolean
   settingsOpen: boolean
   composing: boolean
 }): boolean {
-  return focusWithin || engineMenuOpen || settingsOpen || composing
+  return focusWithin || settingsOpen || composing
 }
 
 export interface NewtabSearchFocusContext {

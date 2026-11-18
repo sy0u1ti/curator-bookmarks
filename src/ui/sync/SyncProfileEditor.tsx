@@ -11,6 +11,7 @@ import { HoldConfirmButton } from '../actions/HoldConfirmButton'
 import { RevealInput } from '../actions/RevealInput'
 import { Icon } from '../icons/Icon'
 import { writeClipboardText } from '../../shared/clipboard'
+import { findBookmarksBar } from '../../shared/bookmark-tree'
 import {
   SYNC_INTERVAL_MINUTES,
   SYNC_TABS_ROOT,
@@ -27,6 +28,7 @@ import {
   SYNC_ADAPTERS,
   SYNC_ADAPTER_ORDER,
   SYNC_BEHAVIOR_DEFAULTS,
+  SYNC_DIRECTION_LABELS,
   WEBDAV_PRESETS,
   formatSyncInterval,
   listSyncFolders,
@@ -153,7 +155,14 @@ export function SyncProfileEditor({ profile, onClose, onSaved, embedded = false,
 
   useEffect(() => {
     alive.current = true
-    void chrome.bookmarks.getTree().then(tree => { if (alive.current) setFolders(listSyncFolders(tree)) })
+    void chrome.bookmarks.getTree().then(tree => {
+      if (!alive.current) return
+      setFolders(listSyncFolders(tree))
+      if (!profile && !initialTransfer?.profileId) {
+        const localRoot = findBookmarksBar(tree[0])?.id
+        if (localRoot) setDraft(current => current.localRoot ? current : { ...current, localRoot })
+      }
+    })
       .catch(reason => { if (alive.current) setStatus({ text: errorText(reason, '文件夹读取失败，请重新打开设置。'), tone: 'error' }) })
     return () => {
       alive.current = false
@@ -450,9 +459,9 @@ export function SyncProfileEditor({ profile, onClose, onSaved, embedded = false,
             <Field label="方向">
               {id => <Select id={id} ariaLabel="同步方向" triggerClassName={SELECT_TRIGGER_CLASS} positionerClassName={SELECT_POSITIONER_CLASS} value={draft.strategy || 'default'}
                 options={[
-                  { value: 'default', label: '双向合并' },
-                  { value: 'slave', label: '只下载：服务器覆盖本机' },
-                  { value: 'overwrite', label: '只上传：本机覆盖服务器' }
+                  { value: 'default', label: SYNC_DIRECTION_LABELS.default },
+                  { value: 'slave', label: `${SYNC_DIRECTION_LABELS.slave}：服务器覆盖本机` },
+                  { value: 'overwrite', label: `${SYNC_DIRECTION_LABELS.overwrite}：本机覆盖服务器` }
                 ]}
                 onValueChange={value => { if (value) set({ strategy: value as SyncProfileInput['strategy'] }) }} />}
             </Field>

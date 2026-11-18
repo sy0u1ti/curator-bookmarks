@@ -6,7 +6,7 @@ export function readGlassSurfaceInventory() {
   const selectors = [
     '.newtab-search-surface', '.newtab-clock', '.bookmark-tile', '.newtab-speed-dial',
     '.newtab-speed-dial-card', '.settings-trigger', '.folder-section-header',
-    '.newtab-search-engine-menu', '.bookmark-menu-surface', '.settings-drawer-panel',
+    '.bookmark-menu-surface', '.settings-drawer-panel',
     '[data-drawer-content]', '.custom-select-list', '.newtab-glass-preview'
   ]
   const visible = element => element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
@@ -108,17 +108,8 @@ export async function runGlassSurfaceChecks(page, origin, directory) {
     await page.press('.newtab-search-input', 'Tab')
     assert.ok(await page.evaluate(() => document.activeElement?.classList.contains('newtab-search-clear')))
     await page.fill('.newtab-search-input', '')
-    await page.click('.newtab-search-engine')
-    await page.waitForFunction(() => document.querySelector('.newtab-search-engine')?.getAttribute('aria-expanded') === 'true')
-    await inspect('engine-menu')
-    await page.waitForFunction(() => document.querySelector('.newtab-search-engine-menu')?.contains(document.activeElement))
-    await page.evaluate(async () => {
-      await Promise.all(document.querySelector('.newtab-search-engine-menu').getAnimations({ subtree: true })
-        .filter(animation => animation.effect?.getTiming().iterations !== Infinity)
-        .map(animation => animation.finished.catch(() => {})))
-    })
-    await page.keyboard.press('Escape')
-    await page.waitForFunction(() => document.querySelector('.newtab-search-engine')?.getAttribute('aria-expanded') !== 'true')
+    assert.equal(await page.evaluate(() => document.querySelectorAll('.newtab-search-engine').length), 0,
+      'Web search must follow Chrome settings without an extension provider picker')
 
     await page.hover('a.bookmark-tile[data-bookmark-id="101"]')
     await page.click('a.bookmark-tile[data-bookmark-id="101"] [data-bookmark-menu-trigger]')
@@ -142,7 +133,6 @@ export async function runGlassSurfaceChecks(page, origin, directory) {
     await page.keyboard.press('Escape')
     await page.waitForFunction(() => !document.querySelector('.base-select-popup[data-drawer-content]')?.checkVisibility())
     await page.click("loc=role:tab[name='玻璃']")
-    await page.click("loc=role:button[name='精细调整玻璃材质']")
     await page.waitForSelector('.newtab-glass-preview')
     await inspect('glass-settings')
     const top = await page.evaluate(() => document.querySelector('.settings-drawer-panel').getBoundingClientRect().top)
@@ -165,13 +155,13 @@ export async function runGlassSurfaceChecks(page, origin, directory) {
     }), 'Zero highlight must remove the sheen without changing the contour')
     await page.press("loc=role:slider[name='边缘高光']", 'End')
     await page.waitForFunction(() => window.__glassFixture.data.curatorBookmarkNewTabGlassSettings?.highlight === 150)
-    await page.click("loc=role:button[name='柔和']")
-    await page.waitForFunction(() => window.__glassFixture.data.curatorBookmarkNewTabGlassSettings?.tint === 24)
+    await page.press("loc=role:slider[name='底色深浅']", 'End')
+    await page.waitForFunction(() => window.__glassFixture.data.curatorBookmarkNewTabGlassSettings?.tint === 60)
     await page.screenshot({ path: `${directory}/settings-glass.png` })
     await page.keyboard.press('Escape')
     await page.reload()
     await ready()
-    assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.newtab-search-surface')).backgroundColor), 'rgba(0, 0, 0, 0.24)')
+    assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.newtab-search-surface')).backgroundColor), 'rgba(0, 0, 0, 0.6)')
     await inspect('preferences-after-refresh')
 
     for (const deviceScaleFactor of [1.25, 1.5, 2]) {

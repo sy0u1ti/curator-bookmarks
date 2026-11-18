@@ -14,6 +14,8 @@ const LONG_ERROR = 'E029：安全保护：本次同步会删除服务器上 56% 
 const scenes: Record<string, ReturnType<typeof profile>[]> = {
   empty: [],
   idle: [profile('a', {})],
+  download: [profile('a', { strategy: 'slave' })],
+  upload: [profile('a', { strategy: 'overwrite' })],
   syncing: [profile('a', { syncing: 0.42 })],
   scheduled: [profile('a', { scheduled: true })],
   error: [profile('a', { error: LONG_ERROR })],
@@ -47,7 +49,7 @@ Object.assign(window, {
   chrome: {
     runtime: {
       id: 'curator-sync-fixture', getURL: (value: string) => '/' + value, onMessage: event(),
-      async sendMessage(message: { type: string; ids?: string[] }) {
+      async sendMessage(message: { type: string; ids?: string[]; id?: string; data?: Record<string, unknown> }) {
         sync.calls.push(message)
         if (sync.failNext) {
           const error = sync.failNext
@@ -55,6 +57,11 @@ Object.assign(window, {
           return { ok: false, error }
         }
         if (message.type === 'sync:list') return { ok: true, result: sync.profiles }
+        if (message.type === 'sync:update') {
+          sync.profiles = sync.profiles.map(profile => profile.id === message.id
+            ? { ...profile, data: { ...profile.data, ...message.data } } : profile)
+          return { ok: true }
+        }
         if (message.type === 'sync:export') return {
           ok: true, result: sync.profiles.filter(profile => message.ids?.includes(profile.id)).map(profile => ({ ...profile.data, password: 'fixture-only-secret' }))
         }

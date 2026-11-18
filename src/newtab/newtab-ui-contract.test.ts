@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import './newtab-settings-policy.test.js'
+import './browser-search.test.js'
 import {
   NEWTAB_BACKGROUND_TYPE_OPTIONS,
   normalizeNewtabBackgroundType

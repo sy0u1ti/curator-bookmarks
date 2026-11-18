@@ -8,8 +8,7 @@ import {
   useState,
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
-  type Ref,
-  type RefObject
+  type Ref
 } from 'react'
 import { Icon } from '../../ui/icons/Icon'
 import { Collapsible as BaseCollapsible } from '@base-ui/react/collapsible'
@@ -27,7 +26,6 @@ import {
 import {
   SEARCH_CHIPS_CLASS,
   SEARCH_CLEAR_BUTTON_CLASS,
-  SEARCH_ENGINE_BUTTON_CLASS,
   SEARCH_FORM_CLASS,
   SEARCH_FORM_PANEL_OPEN_CLASS,
   SEARCH_HINT_CLASS,
@@ -53,22 +51,6 @@ import {
   getSearchSuggestionMarkClass
 } from './searchWidgetClasses'
 
-type NewtabSearchEngineMenuComponent = (typeof import('./NewtabSearchEngineMenu'))['NewtabSearchEngineMenu']
-
-let newtabSearchEngineMenuComponent: NewtabSearchEngineMenuComponent | null = null
-let newtabSearchEngineMenuPromise: Promise<NewtabSearchEngineMenuComponent> | null = null
-
-function loadNewtabSearchEngineMenu(): Promise<NewtabSearchEngineMenuComponent> {
-  if (newtabSearchEngineMenuComponent) {
-    return Promise.resolve(newtabSearchEngineMenuComponent)
-  }
-  newtabSearchEngineMenuPromise ||= import('./NewtabSearchEngineMenu').then((module) => {
-    newtabSearchEngineMenuComponent = module.NewtabSearchEngineMenu
-    return module.NewtabSearchEngineMenu
-  })
-  return newtabSearchEngineMenuPromise
-}
-
 function handleSearchContextMenu(event: ReactMouseEvent<HTMLDivElement>): void {
   event.stopPropagation()
 }
@@ -76,8 +58,6 @@ function handleSearchContextMenu(event: ReactMouseEvent<HTMLDivElement>): void {
 export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
   const slotRef = useRef<HTMLElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
-  const engineButtonRef = useRef<HTMLButtonElement | null>(null)
-  const engineMenuRef = useRef<HTMLDivElement | null>(null)
   const [focusWithin, setFocusWithin] = useState(false)
   const shell = view.shell
   const slotStyle = useMemo(() => ({
@@ -96,28 +76,18 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
 
   const publishNodes = useCallback(() => {
     const nodes = {
-      engineButton: engineButtonRef.current,
-      engineMenu: engineMenuRef.current,
       input: inputRef.current,
       slot: slotRef.current
     }
     setNewtabSearchWidgetNodes(nodes)
     view.onNodesChange?.(nodes)
   }, [view.onNodesChange])
-  const setEngineMenuNode = useCallback((element: HTMLDivElement | null) => {
-    engineMenuRef.current = element
-    // The menu mounts lazily without rerendering this parent. Publish its node
-    // immediately so portal focus is still recognized as part of the search.
-    publishNodes()
-  }, [publishNodes])
   useLayoutEffect(publishNodes)
 
   useEffect(() => {
     const onNodesChange = view.onNodesChange
     return () => {
       const nodes = {
-        engineButton: null,
-        engineMenu: null,
         input: null,
         slot: null
       }
@@ -143,16 +113,13 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
         open={view.panel.panelVisible}
         data-squircle-subtree="off"
         data-panel-open={view.panel.panelVisible ? 'true' : 'false'}
-        data-engine-open={view.engineMenu.open ? 'true' : undefined}
         data-focus-within={focusWithin ? 'true' : undefined}
         onFocusCapture={() => setFocusWithin(true)}
         onBlur={(event) => {
-          // React focus events cross the menu portal; CSS :focus-within does
-          // not. Hold the lift while focus returns from a closing menu.
           queueMicrotask(() => {
             if (!slotRef.current) return
             const active = document.activeElement
-            setFocusWithin(Boolean(slotRef.current.contains(active) || engineMenuRef.current?.contains(active)))
+            setFocusWithin(Boolean(slotRef.current.contains(active)))
           })
           view.interactions.onRootBlur(event)
         }}
@@ -173,12 +140,14 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
           <SearchWidgetClearButton view={view} />
           <SearchWidgetSeparator view={view} />
           <SearchWidgetNaturalButton view={view} />
-          {!view.buttons.engine.disabled ? <>
-            <DeferredSearchEngineMenu view={view} buttonRef={engineButtonRef} menuRef={setEngineMenuNode} />
-            <SearchWidgetSubmitButton view={view} />
-          </> : null}
+          {view.webSearchEnabled ? <SearchWidgetSubmitButton view={view} /> : null}
         </form>
         <SearchWidgetSuggestionsPanel view={view} />
+        {view.webSearchError ? (
+          <output role="alert" className="newtab-search-error fixed right-6 bottom-6 z-50 max-w-[min(360px,calc(100vw-48px))] rounded-ds-card border border-[var(--newtab-glass-stroke)] bg-[var(--newtab-glass-bg-popup)] p-3 text-sm text-[var(--ds-danger-text)] shadow-none [backdrop-filter:var(--newtab-glass-filter-popup)]">
+            {view.webSearchError}
+          </output>
+        ) : null}
       </BaseCollapsible.Root>
     </section>
   )
@@ -245,7 +214,7 @@ function SearchWidgetSeparator({ view }: { view: NewtabSearchWidgetView }) {
     <span
       className={SEARCH_SEPARATOR_CLASS}
       aria-hidden="true"
-      hidden={!hasInputValue || view.buttons.engine.disabled}
+      hidden={!hasInputValue || !view.webSearchEnabled}
     />
   )
 }
@@ -284,91 +253,6 @@ function SearchWidgetNaturalButton({ view }: { view: NewtabSearchWidgetView }) {
       {natural.pending ? <span className={SEARCH_NATURAL_PENDING_DOT_CLASS} aria-hidden="true" /> : null}
       {natural.label}
     </NewtabGlassSurface>
-  )
-}
-
-function SearchWidgetEngineButtonFallback({
-  buttonRef,
-  onRequest,
-  view
-}: {
-  buttonRef: Ref<HTMLButtonElement>
-  onRequest: () => void
-  view: NewtabSearchWidgetView
-}) {
-  const { engine } = view.buttons
-
-  return (
-    <NewtabGlassSurface as={Button} tone="chip"
-      className={SEARCH_ENGINE_BUTTON_CLASS}
-      type="button"
-      aria-label={engine.ariaLabel}
-      aria-haspopup="menu"
-      aria-expanded={view.engineMenu.open}
-      disabled={engine.disabled}
-      title={engine.title}
-      onPointerEnter={() => {
-        void loadNewtabSearchEngineMenu()
-      }}
-      onFocus={() => {
-        void loadNewtabSearchEngineMenu()
-      }}
-      onClick={() => {
-        if (!engine.disabled) {
-          onRequest()
-          view.interactions.onEngineOpenChange(true)
-        }
-      }}
-      ref={buttonRef}
-      unstyled
-    >
-      {engine.label}
-    </NewtabGlassSurface>
-  )
-}
-
-function DeferredSearchEngineMenu({
-  buttonRef,
-  menuRef,
-  view
-}: {
-  buttonRef: RefObject<HTMLButtonElement | null>
-  menuRef: Ref<HTMLDivElement>
-  view: NewtabSearchWidgetView
-}) {
-  const [Menu, setMenu] = useState<NewtabSearchEngineMenuComponent | null>(
-    newtabSearchEngineMenuComponent
-  )
-
-  const mountMenu = () => {
-    void loadNewtabSearchEngineMenu().then((Component) => {
-      setMenu(() => Component)
-    })
-  }
-
-  useEffect(() => {
-    if (Menu || !view.engineMenu.open) {
-      return
-    }
-    let active = true
-    void loadNewtabSearchEngineMenu().then((Component) => {
-      if (active) {
-        setMenu(() => Component)
-      }
-    })
-    return () => {
-      active = false
-    }
-  }, [Menu, view.engineMenu.open])
-
-  return Menu ? (
-    <Menu view={view} buttonRef={buttonRef} menuRef={menuRef} />
-  ) : (
-    <SearchWidgetEngineButtonFallback
-      view={view}
-      buttonRef={buttonRef}
-      onRequest={mountMenu}
-    />
   )
 }
 

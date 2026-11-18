@@ -21,13 +21,6 @@ const SEARCH_NATURAL_ACTIVE_CLASS = 'text-[var(--ui-text-inverse)] enabled:hover
 const SEARCH_NATURAL_FALLBACK_CLASS = 'text-[var(--ui-warning)] enabled:hover:text-[var(--ui-warning)] focus-visible:text-[var(--ui-warning)]'
 
 export const SEARCH_NATURAL_PENDING_DOT_CLASS = 'newtab-search-natural-pending-dot h-1.5 w-1.5 rounded-full bg-current animate-[cb-search-pulse_1s_var(--ui-ease-standard)_infinite] motion-reduce:animate-none'
-export const SEARCH_ENGINE_BUTTON_CLASS = cx('newtab-search-engine', SEARCH_CHIP_BUTTON_BASE_CLASS, 'min-w-13 disabled:cursor-default disabled:opacity-40')
-export const SEARCH_ENGINE_MENU_POSITIONER_CLASS = 'newtab-search-engine-menu-positioner z-[3] outline-none'
-export const SEARCH_ENGINE_MENU_CLASS = 'newtab-search-engine-menu grid w-44 gap-1 rounded-ds-menu border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-popup)] ds-inset-menu shadow-none [filter:var(--newtab-glass-drop)] motion-reduce:transform-none motion-reduce:transition-none [-webkit-backdrop-filter:var(--newtab-glass-filter-popup)] [backdrop-filter:var(--newtab-glass-filter-popup)]'
-export const SEARCH_ENGINE_MENU_ITEMS_CLASS = 'newtab-search-engine-menu-items grid gap-1'
-export const SEARCH_ENGINE_ITEM_CLASS = 'newtab-search-engine-item flex min-h-[30px] cursor-pointer items-center justify-between gap-2 rounded-[var(--ui-radius-control)] bg-transparent px-[9px] text-left text-xs font-[650] leading-[1.2] text-[rgba(245,245,247,0.9)] outline-none hover:bg-[var(--ui-surface-hover)] hover:text-[var(--ui-text-primary)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--ui-text-primary)] data-[checked]:bg-[var(--ui-surface-hover)] data-[checked]:text-[var(--ui-text-primary)] data-[highlighted]:bg-[var(--ui-surface-hover)] data-[highlighted]:text-[var(--ui-text-primary)]'
-export const SEARCH_ENGINE_ITEM_INDICATOR_CLASS = 'newtab-search-engine-item-indicator inline-flex items-center text-current'
-export const SEARCH_ENGINE_MENU_HINT_CLASS = 'newtab-search-engine-menu-hint px-2 pt-1 pb-0.5 text-xs leading-[1.4] text-[rgba(245,245,247,0.9)]'
 
 export const SEARCH_PANEL_CLASS = 'newtab-search-suggestions-panel relative z-[1] grid min-w-0 w-full'
 export const SEARCH_CHIPS_CLASS = 'newtab-search-chips flex flex-wrap gap-[5px] px-1.5 py-0.5 empty:hidden'

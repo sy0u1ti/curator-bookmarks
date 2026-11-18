@@ -10,14 +10,11 @@ import {
 import {
   DEFAULT_SEARCH_LAYOUT,
   getAdaptiveSearchWidthBounds,
-  getSearchSizePreset,
   normalizeSearchHeight,
   resetSearchLayout,
   SEARCH_HEIGHT_MAX,
   SEARCH_HEIGHT_MIN,
-  SEARCH_SIZE_PRESETS,
-  SEARCH_WIDTH_MIN_PX,
-  type SearchSizePreset
+  SEARCH_WIDTH_MIN_PX
 } from './search-layout.js'
 import { createNewtabSearchSettingsView } from './newtab-search-settings-store.js'
 import { createSearchWidgetActionState } from './newtab-search-widget-store.js'
@@ -36,14 +33,6 @@ for (let height = SEARCH_HEIGHT_MIN; height <= SEARCH_HEIGHT_MAX; height++) {
   assert.ok(controlSize >= 24)
   assert.ok((height - controlSize) / 2 >= 5, 'Buttons and focus rings must fit inside the field.')
 }
-for (const key of Object.keys(SEARCH_SIZE_PRESETS) as SearchSizePreset[]) {
-  const height = SEARCH_SIZE_PRESETS[key]
-  assert.equal(normalizeSearchHeight(height), height)
-  assert.equal(getSearchSizePreset(height), key)
-}
-assert.equal(getSearchSizePreset(44), 'custom')
-assert.equal(getSearchSizePreset(DEFAULT_SEARCH_LAYOUT.height), 'standard')
-
 const customSearch = {
   ...DEFAULT_SEARCH_LAYOUT,
   height: 28,
@@ -137,10 +126,10 @@ const classes = readFileSync('src/newtab/components/searchWidgetClasses.ts', 'ut
 const widget = readFileSync('src/newtab/components/NewtabSearchWidget.tsx', 'utf8')
 const controller = readFileSync('src/newtab/newtab-controller.ts', 'utf8')
 const css = readFileSync('src/newtab/newtab.css', 'utf8')
-for (const id of ['search-height', 'search-offset-y', 'icon-tile-width', 'icon-shell-size', 'icon-column-gap', 'icon-row-gap', 'icon-folder-gap', 'time-clock-size']) {
+for (const id of ['search-offset-y', 'icon-tile-width', 'icon-shell-size', 'icon-column-gap', 'icon-row-gap', 'icon-folder-gap', 'time-clock-size']) {
   assert.ok(!drawer.includes(`id="${id}"`), `${id} is no longer an independent user decision.`)
 }
-assert.ok(drawer.includes('id="search-size-control"') && drawer.includes('SEARCH_SIZE_PRESETS[key]'))
+assert.ok(drawer.includes('id="search-height"') && drawer.includes("dispatchNewtabSearchSettingFieldChange('height', value)"))
 assert.ok(drawer.includes('searchSettings.enabled ? <>') && drawer.includes('timeSettings.enabled ? <>'))
 assert.ok(drawer.includes('searchSettings.webSearchEnabled ? <>'))
 assert.ok(drawer.includes("iconPreview.layoutMode === 'fixed' ? (") && drawer.includes('iconPreview.showTitles ? ('))
@@ -150,7 +139,7 @@ assert.ok(classes.includes('--search-control-inset:calc((var(--search-height)_-_
   classes.includes('--search-radius:calc(var(--ds-radius-control)_+_var(--search-control-inset))'),
   'Search controls and the shell must retain concentric corners at every supported height.')
 assert.ok(widget.includes('normalizeSearchHeight(shell.height)') && !widget.includes('formStyle'))
-assert.ok(widget.includes('!view.buttons.engine.disabled ? <>'), 'Local-only search should not render inactive web actions.')
+assert.ok(widget.includes('view.webSearchEnabled ? <SearchWidgetSubmitButton'), 'Local-only search should not render inactive web actions.')
 assert.ok(widget.includes('`${SEARCH_WIDTH_MIN_PX}px`') && classes.includes('var(--search-min-width)'), 'The widget and settings share the same minimum width.')
 assert.ok(drawer.includes('!searchSettings.widthDisabled ? ('))
 assert.ok(classes.includes('var(--search-auto-width,') && css.includes('--search-auto-width: calc(100vw - 40px)'))

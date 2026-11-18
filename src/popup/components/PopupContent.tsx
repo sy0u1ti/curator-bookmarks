@@ -1826,7 +1826,7 @@ function PopupRowActionRail({
   const [forcedCollapsed, setForcedCollapsed] = useRowFlag(bookmarkId)
   const quickActions = mountQuickActions
     ? menu.items.filter((item) => {
-        return ['edit', 'copy-url', 'open-current-tab', 'move', 'delete'].includes(item.action)
+        return ['edit', 'copy-url', 'open-current-tab', 'delete'].includes(item.action)
       })
     : []
   const expanded = (active || focusExpanded || pinnedExpanded) && !forcedCollapsed
@@ -1924,9 +1924,6 @@ function getPopupActionIconName(action: string): IconName {
   }
   if (action === 'copy-url') {
     return 'Copy'
-  }
-  if (action === 'move') {
-    return 'Move'
   }
   if (action === 'delete') {
     return 'Trash2'

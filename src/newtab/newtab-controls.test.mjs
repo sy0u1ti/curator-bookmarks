@@ -14,7 +14,7 @@ const page = await context.newPage()
 const errors = []
 page.on('pageerror', error => errors.push(error.message))
 context.setDefaultTimeout(12000)
-const report = { timeZones: [], dates: [], engines: [] }
+const report = { timeZones: [], dates: [] }
 try {
   const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker')
   await worker.evaluate(() => chrome.storage.local.set({ curatorBookmarkNewTabBackgroundSettings: { type: 'color', color: '#111111' } }))
@@ -63,16 +63,12 @@ try {
   await page.locator('.newtab-clock').waitFor()
   report.secondsAndPeriod = true
   await page.getByRole('tab', { name: '搜索', exact: true }).click()
-  await page.locator('#search-details-toggle').click()
-  for (const [id, label] of [['google','Google'],['bing','Bing'],['baidu','百度'],['duckduckgo','DuckDuckGo'],['perplexity','Perplexity'],['chatgpt','ChatGPT'],['you','You.com'],['kagi','Kagi'],['brave','Brave']]) {
-    await select('默认搜索引擎', label)
-    await page.waitForFunction(label => document.querySelector('[aria-label^="选择搜索引擎，当前为"]')?.getAttribute('aria-label') === `选择搜索引擎，当前为 ${label}`, label)
-    assert.equal(await page.locator(`[data-search-engine-toggle="${id}"][role="switch"]`).isDisabled(), true)
-    assert.deepEqual((await page.evaluate(readSearchGeometry)).action, {
-      query, clearAvailable: true, canSubmit: true
-    }, `${label}: settings must preserve both the query and its actions.`)
-    report.engines.push(label)
-  }
+  await page.getByRole('slider', { name: '搜索栏高度', exact: true }).waitFor()
+  assert.equal(await page.locator('.newtab-search-engine, [data-search-engine-toggle]').count(), 0,
+    'Web search must respect Chrome settings without an extension provider picker.')
+  assert.deepEqual((await page.evaluate(readSearchGeometry)).action, {
+    query, clearAvailable: true, canSubmit: true
+  }, 'Search settings must preserve both the query and its actions.')
   const searchWidth = page.locator('#search-width-root input[type="range"]')
   await searchWidth.press('Home')
   await page.waitForFunction(() => document.querySelector('#search-width-root input')?.value === '23')
@@ -99,7 +95,7 @@ try {
   })
   assert.equal(await page.evaluate(async () => (await chrome.storage.local.get('curatorBookmarkNewTabSearchSettings')).curatorBookmarkNewTabSearchSettings.width), 24, 'Resizing must preserve the saved desktop preference.')
   report.responsiveWidth = true
-  await select('默认搜索引擎', '关闭，仅搜索书签')
+  await toggle('search-web-enabled')
   await page.getByRole('combobox', { name: '输入关键词搜索本地书签或命令', exact: true }).waitFor()
   assert.equal(await page.locator('[data-search-engine-toggle]').count(), 0, 'Local-only search has no irrelevant engine controls.')
   assert.equal(await page.locator('.newtab-search-engine, .newtab-search-submit').count(), 0, 'Local-only search has no inactive web buttons.')
@@ -108,7 +104,7 @@ try {
   }, 'Local-only mode must retain the query and its clear action.')
   await toggle('search-enabled')
   await page.locator('input[aria-controls="newtab-search-suggestions"]').waitFor({ state: 'hidden' })
-  assert.equal(await page.locator('#search-size-control').count(), 0, 'A disabled module shows only its enable switch.')
+  assert.equal(await page.locator('#search-height-root').count(), 0, 'A disabled module shows only its enable switch.')
   await toggle('search-enabled')
   await page.locator('input[aria-controls="newtab-search-suggestions"]').waitFor()
   report.moduleToggles = true
@@ -116,7 +112,7 @@ try {
   await page.screenshot({ path: path.join(output, 'controls.png'), animations: 'disabled' })
   assert.deepEqual(errors, [])
   await writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2))
-  console.log('Time formats, nine search engines, retained query actions, responsive width and contextual module controls passed.')
+  console.log('Time formats, Chrome-default web search, retained query actions, responsive width and contextual module controls passed.')
 } catch (error) {
   await writeFile(path.join(output, 'failure.txt'), await page.locator('body').ariaSnapshot())
   await page.screenshot({ path: path.join(output, 'failure.png'), animations: 'disabled' })

@@ -3,8 +3,8 @@
 :root {
   --newtab-glass-tint: 0.13;
   --newtab-glass-saturation: 1.4;
-  --newtab-glass-brightness: 1.04;
-  --newtab-glass-highlight: 1;
+  --newtab-glass-brightness: 1;
+  --newtab-glass-highlight: 0;
   --newtab-glass-border-hover: rgba(255, 255, 255, 0.38);
   --newtab-panel-bg: rgba(22, 24, 29, 0.9);
   --newtab-panel-bg-raised: rgba(30, 32, 38, 0.98);

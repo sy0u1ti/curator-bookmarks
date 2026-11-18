@@ -156,7 +156,7 @@ function Options() {
 function Popup() {
   const [feedback, setFeedback] = useState(IDLE_ACTION_FEEDBACK)
   const listRef = useRef<HTMLDivElement>(null)
-  const menu: PopupActionMenuViewModel = { items: ['edit', 'copy-url', 'open-current-tab', 'move', 'delete'].map(action => ({
+  const menu: PopupActionMenuViewModel = { items: ['edit', 'copy-url', 'open-current-tab', 'delete'].map(action => ({
     action, bookmarkId: 'fixture', ariaLabel: action === 'copy-url' ? '复制书签链接：设计参考' : action,
     label: action === 'copy-url' ? '复制链接' : action, danger: action === 'delete',
     disabled: action === 'copy-url' && feedback.status === 'pending',

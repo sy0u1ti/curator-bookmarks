@@ -10,19 +10,9 @@ export const GLASS_SETTINGS_CACHE_KEY = 'curator-newtab-glass-v1'
 
 // GlassSurface's Frosted path is controlled entirely by CSS.
 export const DEFAULT_GLASS_SETTINGS: Readonly<NewtabGlassSettings> = {
-  tint: 13, blur: 12, saturation: 140, brightness: 104, highlight: 100
+  tint: 13, blur: 12, saturation: 140, brightness: 100, highlight: 0
 }
 
-export const GLASS_PRESETS = [
-  { id: 'balanced', label: '均衡', description: '均衡的磨砂与边缘高光', settings: DEFAULT_GLASS_SETTINGS },
-  { id: 'clear', label: '清透', description: '更清晰地透出背景', settings: { ...DEFAULT_GLASS_SETTINGS, tint: 6, blur: 3, saturation: 110, highlight: 65 } },
-  { id: 'soft', label: '柔和', description: '柔和磨砂与低高光', settings: { ...DEFAULT_GLASS_SETTINGS, tint: 24, saturation: 100, brightness: 100, highlight: 50 } }
-] as const
-
-export function getGlassPresetId(settings: NewtabGlassSettings): string {
-  return GLASS_PRESETS.find(preset => (Object.keys(DEFAULT_GLASS_SETTINGS) as NewtabGlassSettingKey[])
-    .every(key => preset.settings[key] === settings[key]))?.id || 'custom'
-}
 export const GLASS_SETTING_LIMITS: Record<NewtabGlassSettingKey, readonly [number, number, number]> = {
   tint: [0, 60, 1],
   blur: [0, 12, 0.5], saturation: [0, 200, 1],

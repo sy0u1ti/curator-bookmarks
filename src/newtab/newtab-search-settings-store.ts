@@ -11,9 +11,6 @@ export interface NewtabSearchSettingsView {
   background: number
   backgroundDisabled: boolean
   enabled: boolean
-  enabledEngines: string[]
-  engine: string
-  engineControlsDisabled: boolean
   height: number
   offsetDisabled: boolean
   offsetMax: number
@@ -39,8 +36,6 @@ export type NewtabSearchSettingsToggleKey =
 
 export type NewtabSearchSettingsFieldKey =
   | 'background'
-  | 'enabledEngines'
-  | 'engine'
   | 'height'
   | 'offsetY'
   | 'placeholder'
@@ -50,8 +45,6 @@ interface NewtabSearchSettingsSource {
   autoVerticalCenter: boolean
   background: number
   enabled: boolean
-  enabledEngines: string[]
-  engine: string
   height: number
   offsetY: number
   openInNewTab: boolean
@@ -64,7 +57,6 @@ export interface NewtabSearchSettingsActions {
   onFieldChange: (key: NewtabSearchSettingsFieldKey, value: number | string | string[]) => void
   onResetLayout: () => void
   onToggle: (key: NewtabSearchSettingsToggleKey, enabled: boolean) => void
-  onWebEngineChange: (engine: string | null) => void
 }
 
 const EMPTY_VIEW: NewtabSearchSettingsView = {
@@ -73,9 +65,6 @@ const EMPTY_VIEW: NewtabSearchSettingsView = {
   background: NEWTAB_SEARCH_BACKGROUND_DEFAULT,
   backgroundDisabled: false,
   enabled: true,
-  enabledEngines: ['google', 'bing', 'baidu', 'duckduckgo'],
-  engine: 'google',
-  engineControlsDisabled: false,
   height: DEFAULT_SEARCH_LAYOUT.height,
   offsetDisabled: false,
   offsetMax: 240,
@@ -96,8 +85,7 @@ const EMPTY_VIEW: NewtabSearchSettingsView = {
 const EMPTY_ACTIONS: NewtabSearchSettingsActions = {
   onFieldChange: () => {},
   onResetLayout: () => {},
-  onToggle: () => {},
-  onWebEngineChange: () => {}
+  onToggle: () => {}
 }
 
 let searchSettingsActions: NewtabSearchSettingsActions = EMPTY_ACTIONS
@@ -113,7 +101,7 @@ export function createNewtabSearchSettingsView(
     width: { min: SEARCH_WIDTH_MIN_VW, max: SEARCH_WIDTH_MAX_VW }
   }
 ): NewtabSearchSettingsView {
-  const engineControlsDisabled = !settings.enabled || !settings.webSearchEnabled
+  const webControlsDisabled = !settings.enabled || !settings.webSearchEnabled
   const width = clampNumber(settings.width, bounds.width.min, bounds.width.max)
   const offsetY = clampNumber(settings.offsetY, bounds.offset.min, bounds.offset.max)
   const background = clampNumber(
@@ -128,16 +116,13 @@ export function createNewtabSearchSettingsView(
     background,
     backgroundDisabled: !settings.enabled,
     enabled: settings.enabled,
-    enabledEngines: settings.enabledEngines,
-    engine: settings.engine,
-    engineControlsDisabled,
     height: normalizeSearchHeight(settings.height),
     offsetDisabled: !settings.enabled || settings.autoVerticalCenter,
     offsetMax: bounds.offset.max,
     offsetMin: bounds.offset.min,
     offsetY,
     openInNewTab: settings.openInNewTab,
-    openInNewTabDisabled: engineControlsDisabled,
+    openInNewTabDisabled: webControlsDisabled,
     placeholder: settings.placeholder,
     placeholderDisabled: !settings.enabled,
     width,
@@ -191,8 +176,4 @@ export function dispatchNewtabSearchSettingFieldChange(
 
 export function dispatchNewtabSearchLayoutReset(): void {
   searchSettingsActions.onResetLayout()
-}
-
-export function dispatchNewtabSearchWebEngineChange(engine: string | null): void {
-  searchSettingsActions.onWebEngineChange(engine)
 }

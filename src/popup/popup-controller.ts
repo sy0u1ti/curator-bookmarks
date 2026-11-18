@@ -2879,14 +2879,12 @@ function buildActionMenuViewModel(bookmarkId): PopupActionMenuViewModel {
   const menuBusy = hasBlockingPopupActionPending()
   const copyBusy = isPopupActionPending('copy-url', bookmarkId)
   const openBusy = isPopupActionPending('open-current-tab', bookmarkId)
-  const moveBusy = isPopupActionPending('move', bookmarkId)
   const editBusy = isPopupActionPending('edit', bookmarkId)
   const deleteBusy = isPopupActionPending('delete', bookmarkId)
   const actionTitle = getBookmarkActionTitle(bookmarkId)
   const editLabel = formatBookmarkActionLabel('编辑书签', actionTitle)
   const copyLabel = formatBookmarkActionLabel('复制书签链接', actionTitle)
   const openLabel = formatBookmarkActionLabel('当前页打开书签', actionTitle)
-  const moveLabel = formatBookmarkActionLabel('移动书签', actionTitle)
   const deleteLabel = formatBookmarkActionLabel('删除书签', actionTitle)
 
   return {
@@ -2915,14 +2913,6 @@ function buildActionMenuViewModel(bookmarkId): PopupActionMenuViewModel {
         danger: false,
         disabled: menuBusy || openBusy,
         label: '当前页打开'
-      },
-      {
-        action: 'move',
-        ariaLabel: moveLabel,
-        bookmarkId: String(bookmarkId || ''),
-        danger: false,
-        disabled: menuBusy || moveBusy,
-        label: '移动至'
       },
       {
         action: 'delete',

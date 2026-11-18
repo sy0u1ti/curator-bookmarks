@@ -15,11 +15,6 @@ export interface SearchWidgetNaturalButtonState extends SearchWidgetButtonState 
   pending: boolean
 }
 
-export interface SearchWidgetEngineButtonState extends SearchWidgetButtonState {
-  disabled: boolean
-  expanded?: boolean
-}
-
 export interface SearchWidgetShellState {
   ariaLabel: string
   autoVerticalCenter: boolean
@@ -33,7 +28,6 @@ export interface SearchWidgetShellState {
 }
 
 export interface SearchWidgetButtonStates {
-  engine: SearchWidgetEngineButtonState
   natural: SearchWidgetNaturalButtonState
 }
 
@@ -59,13 +53,8 @@ export interface SearchWidgetComboboxState {
   expanded: boolean
 }
 
-export interface SearchWidgetEngineMenuState extends SearchEngineMenuState {
-  open: boolean
-}
-
 export interface SearchWidgetInteractionState {
   onClear: () => void
-  onEngineOpenChange: (open: boolean) => void
   onInputFocus: () => void
   onInputInput: () => void
   onInputCompositionChange?: (composing: boolean) => void
@@ -73,18 +62,6 @@ export interface SearchWidgetInteractionState {
   onRootBlur: (event: FocusEvent<HTMLDivElement>) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   onToggleNatural: () => void
-}
-
-export interface SearchEngineMenuItemViewModel {
-  active: boolean
-  id: string
-  label: string
-  onSelect: () => void | Promise<void>
-}
-
-export interface SearchEngineMenuState {
-  hint: string
-  items: SearchEngineMenuItemViewModel[]
 }
 
 export interface SearchChipViewModel {
@@ -110,8 +87,6 @@ export type SearchHintState =
   | { type: 'webFallback'; ariaLabel: string; label: string; onSelect: () => void; title: string }
 
 export interface NewtabSearchWidgetNodes {
-  engineButton: HTMLButtonElement | null
-  engineMenu: HTMLElement | null
   input: HTMLInputElement | null
   slot: HTMLElement | null
 }
@@ -121,7 +96,6 @@ export interface NewtabSearchWidgetView {
   buttons: SearchWidgetButtonStates
   chips: SearchChipViewModel[]
   combobox: SearchWidgetComboboxState
-  engineMenu: SearchWidgetEngineMenuState
   hint: SearchHintState
   interactions: SearchWidgetInteractionState
   onNodesChange?: (nodes: NewtabSearchWidgetNodes) => void
@@ -129,6 +103,8 @@ export interface NewtabSearchWidgetView {
   sectionLabel: string
   shell: SearchWidgetShellState
   suggestions: SearchSuggestionViewModel[]
+  webSearchEnabled: boolean
+  webSearchError: string
 }
 
 const searchWidgetStore = createUiViewStoreSlice<NewtabSearchWidgetView | null>(
@@ -141,7 +117,6 @@ let searchWidgetNodes: NewtabSearchWidgetNodes = createEmptySearchWidgetNodes()
 export function createDefaultSearchWidgetInteractionState(): SearchWidgetInteractionState {
   return {
     onClear: noop,
-    onEngineOpenChange: noop,
     onInputFocus: noop,
     onInputInput: noop,
     onInputKeyDown: noop,
@@ -155,8 +130,6 @@ export function createDefaultSearchWidgetInteractionState(): SearchWidgetInterac
 
 export function createEmptySearchWidgetNodes(): NewtabSearchWidgetNodes {
   return {
-    engineButton: null,
-    engineMenu: null,
     input: null,
     slot: null
   }

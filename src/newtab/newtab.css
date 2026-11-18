@@ -1110,6 +1110,41 @@ body {
 
 /* The engine toggles are visually hidden switches (1px, opacity 0); the row is
    the only painted control, so keyboard focus has to be drawn there. */
+#newtab-settings-drawer .search-engine-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+#newtab-settings-drawer .search-engine-toggle {
+  --ds-accent: var(--ds-text-primary);
+  --ds-accent-hover: color-mix(in srgb, var(--ds-text-primary) 94%, var(--ds-bg-page));
+  --ds-accent-contrast: var(--ds-bg-page);
+}
+
+/* Read the switch's actual state. Its persistent fill and check remain visible
+   under pointer hover, including the always-enabled default search engine. */
+#newtab-settings-drawer .search-engine-toggle:has([data-checked]) {
+  border-color: var(--ds-accent);
+  background-color: var(--ds-accent);
+  color: var(--ds-accent-contrast);
+}
+
+#newtab-settings-drawer .search-engine-toggle:has([data-checked]):hover {
+  border-color: var(--ds-accent-hover);
+  background-color: var(--ds-accent-hover);
+}
+
+#newtab-settings-drawer .search-engine-toggle:has([data-disabled]) {
+  cursor: default;
+}
+
+#newtab-settings-drawer .search-engine-check {
+  display: none;
+}
+
+#newtab-settings-drawer .search-engine-toggle:has([data-checked]) .search-engine-check {
+  display: block;
+}
+
 #newtab-settings-drawer .search-engine-toggle:has(:focus-visible) {
   outline: var(--newtab-focus-outline);
   outline-offset: 2px;
