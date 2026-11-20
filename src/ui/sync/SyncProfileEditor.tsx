@@ -31,6 +31,7 @@ import {
   SYNC_DIRECTION_LABELS,
   WEBDAV_PRESETS,
   formatSyncInterval,
+  getSyncProfileTitle,
   listSyncFolders,
   requestSyncPermissions,
   type SyncFieldSpec,
@@ -59,11 +60,19 @@ const SAVED_SECRET_PLACEHOLDER = '已保存，留空不修改'
 
 const errorText = (reason: unknown, fallback: string) => reason instanceof Error ? reason.message : fallback
 
-function Field({ label, children, wide = false }: { label: string; children: (id: string) => ReactNode; wide?: boolean }) {
+function Field({ label, action, children, wide = false }: {
+  label: string
+  action?: ReactNode
+  children: (id: string) => ReactNode
+  wide?: boolean
+}) {
   const id = useId()
   return (
     <div className={`${FIELD_CLASS} ${wide ? 'col-span-full' : ''}`}>
-      <label htmlFor={id} className={LABEL_CLASS}>{label}</label>
+      <div className="flex min-h-5 items-center justify-between gap-2">
+        <label htmlFor={id} className={LABEL_CLASS}>{label}</label>
+        {action}
+      </div>
       {children(id)}
     </div>
   )
@@ -318,7 +327,7 @@ export function SyncProfileEditor({ profile, onClose, onSaved, embedded = false,
   }, '文件夹创建失败。')
 
   const textField = (field: SyncFieldSpec) => {
-    const wide = field.key === 'url'
+    const wide = field.key === 'url' || adapter.fields.length === 1
     if (field.secret) {
       return (
         <Field key={field.key} label={field.label} wide={wide}>
@@ -339,12 +348,16 @@ export function SyncProfileEditor({ profile, onClose, onSaved, embedded = false,
   }
 
   const insecure = /^http:\/\//i.test(String(draft.url || ''))
+  const profileSubtitle = profile ? getSyncProfileTitle(profile) : ''
 
   return (
     <div className="sync-profile-editor">
       <DialogHeader className={embedded ? 'popup-sync-editor-header' : 'flex items-start justify-between gap-3 pb-4'}>
-        {embedded ? <Button data-sync-back size="icon-sm" variant="ghost" aria-label="返回同步列表" onClick={onClose}><Icon name="ChevronRight" className="rotate-180" size={16} /></Button> : null}
-        <h2 id="sync-editor-title" className={OPTIONS_MODAL_TITLE_CLASS}>{profile ? '同步设置' : '添加同步'}</h2>
+        {embedded ? <Button data-sync-back size="icon-xs" variant="ghost" aria-label="返回同步列表" onClick={onClose}><Icon name="ArrowLeft" size={15} aria-hidden="true" /></Button> : null}
+        <div className={embedded ? 'popup-sync-editor-heading' : 'min-w-0'}>
+          <h2 id="sync-editor-title" className={OPTIONS_MODAL_TITLE_CLASS}>{profile ? '同步设置' : '添加同步'}</h2>
+          {embedded && profileSubtitle ? <span className="popup-sync-editor-subtitle" title={profileSubtitle}>{profileSubtitle}</span> : null}
+        </div>
         {!embedded ? <CloseButton label="关闭同步设置" variant="ghost" size="icon" className="shrink-0" onClick={onClose} /> : null}
       </DialogHeader>
 
@@ -367,7 +380,15 @@ export function SyncProfileEditor({ profile, onClose, onSaved, embedded = false,
                 }))
               }} />}
           </Field>
-          <Field label="本地文件夹">
+          <Field
+            label="本地文件夹"
+            action={!tabs && !creatingFolder ? (
+              <Button unstyled className="inline-flex h-5 items-center gap-1 rounded-ds-xs px-1.5 text-[11px] font-medium text-ds-text-secondary hover:bg-ds-hover hover:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus"
+                onClick={() => setCreatingFolder(true)}>
+                <Icon name="Plus" size={12} aria-hidden="true" />新建文件夹
+              </Button>
+            ) : undefined}
+          >
             {id => <Select id={id} ariaLabel="要同步的本地文件夹" triggerClassName={SELECT_TRIGGER_CLASS} positionerClassName={SELECT_POSITIONER_CLASS} placeholder="选择文件夹"
               value={draft.localRoot || null} options={folderOptions}
               onValueChange={value => { if (value) set({ localRoot: value }) }} />}
@@ -375,8 +396,8 @@ export function SyncProfileEditor({ profile, onClose, onSaved, embedded = false,
         </div>
 
         {!tabs ? (
-          <div className="flex min-w-0 items-center gap-2">
-            {creatingFolder ? <>
+          creatingFolder ? (
+            <div className="flex min-w-0 items-center gap-2">
               <Input className={`${INPUT_CLASS} min-w-0 flex-1`} aria-label="新文件夹名称" value={folderName}
                 placeholder="在所选文件夹内新建" onValueChange={setFolderName}
                 onKeyDown={event => {
@@ -385,10 +406,8 @@ export function SyncProfileEditor({ profile, onClose, onSaved, embedded = false,
                 }} />
               <Button size="sm" variant="secondary" disabled={pending !== null || !folderName.trim()} onClick={createFolder}>创建</Button>
               <CloseButton label="取消新建文件夹" size="icon-sm" variant="ghost" onClick={() => setCreatingFolder(false)} />
-            </> : <Button size="sm" variant="ghost" onClick={() => setCreatingFolder(true)}>
-              <Icon name="Plus" size={14} aria-hidden="true" /> 新建文件夹
-            </Button>}
-          </div>
+            </div>
+          ) : null
         ) : <p className={NOTE_CLASS}>同步所有普通窗口及标签组，不含隐身窗口。只下载可能关闭本机标签页。</p>}
 
         <section className={SECTION_CLASS} aria-label="服务器">
@@ -572,7 +591,7 @@ export function SyncProfileEditor({ profile, onClose, onSaved, embedded = false,
       </DialogBody>
 
       <DialogFooter className={embedded ? 'popup-sync-editor-footer' : 'mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-ds-border-subtle pt-4 @max-[560px]/sync-editor:grid-cols-1'}>
-        <StatusMessage className="text-[13px] leading-[1.5] text-ds-text-secondary" lines={2} tone={status.tone}>
+        <StatusMessage className={embedded ? 'text-xs leading-[1.5] text-ds-text-secondary' : 'text-[13px] leading-[1.5] text-ds-text-secondary'} lines={embedded ? 1 : 2} tone={status.tone}>
           {status.text}
         </StatusMessage>
         <div className="flex flex-wrap items-center justify-end gap-2.5">

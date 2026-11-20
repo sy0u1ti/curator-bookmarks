@@ -10,6 +10,7 @@ import { cleanStorageCategory, type StorageCleanupCategory, type StorageUsage } 
 import {
   AI_SETTINGS_BODY_CLASS,
   AI_SETTINGS_CARD_CLASS,
+  AI_SETTINGS_HEADER_BORDERLESS_CLASS,
   AI_SETTINGS_HEADER_CLASS,
   AI_SETTINGS_SUBTITLE_CLASS,
   AI_SETTINGS_TITLE_CLASS
@@ -84,13 +85,13 @@ export function StorageManagement() {
           <StableLabel reserve={['刷新', '扩展管理']} text={needsReload ? '扩展管理' : '刷新'} />
         </Button>
       }
-      headerClassName={AI_SETTINGS_HEADER_CLASS}
+      headerClassName={usage || storageIssue ? AI_SETTINGS_HEADER_CLASS : AI_SETTINGS_HEADER_BORDERLESS_CLASS}
       copyClassName={BACKUP_CARD_COPY_CLASS}
       iconName="HardDrive"
       bodyClassName={AI_SETTINGS_BODY_CLASS}
     >
       {storageIssue ? (
-        <p role="alert" className="m-0 px-4 py-3 text-[13px] leading-[1.55] text-ds-warning">{storageIssue}</p>
+        <p role="alert" className="m-0 px-5 py-3.5 text-[13px] leading-[1.55] text-ds-warning max-[760px]:px-4">{storageIssue}</p>
       ) : null}
       {usage ? <>
         {usage.sync?.profiles || usage.sync?.logLines ? <BackupRow title="同步数据"

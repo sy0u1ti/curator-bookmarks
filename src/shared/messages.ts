@@ -6,7 +6,7 @@ import type {
   CuratorBackupFileV1
 } from './backup.js'
 import type { StorageUsage } from './storage-maintenance.js'
-import { ensureBackgroundReady } from './background-runtime.js'
+import { BackgroundRuntimeError, ensureBackgroundReady, recoverFromBackgroundRuntime } from './background-runtime.js'
 
 export const AVAILABILITY_NAVIGATION_CONCURRENCY_LIMIT = 6
 export const AVAILABILITY_NAVIGATION_TIMEOUT_MIN_MS = 1000
@@ -349,7 +349,9 @@ function sendRuntimeMessage<TResult>(message: unknown): Promise<TResult> {
     chrome.runtime.sendMessage(message, (response: RuntimeMessageResponse<TResult>) => {
       const error = chrome.runtime.lastError
       if (error) {
-        reject(new Error(error.message))
+        const runtimeError = new BackgroundRuntimeError('background-unavailable')
+        recoverFromBackgroundRuntime(runtimeError)
+        reject(runtimeError)
         return
       }
 

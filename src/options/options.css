@@ -323,7 +323,6 @@ body {
     transition-timing-function: linear !important;
   }
 
-  .ai-provider-advanced-trigger::after,
   .folder-picker-toggle-icon {
     transition: none !important;
   }

@@ -196,11 +196,11 @@ export function Select({
           aria-label={ariaLabel}
           ref={triggerRef}
           className={unstyled ? cx('base-select-trigger inline-flex items-center', triggerClassName) : cx(
-            'base-select-trigger inline-flex h-9 min-w-36 items-center justify-start rounded-ds-sm border border-ds-border bg-ds-surface-1 px-3 text-sm text-ds-text-primary outline-none transition-[background-color,border-color,color] duration-ds-fast ease-ds-standard data-[popup-open]:border-ds-border-hover focus-visible:shadow-ds-focus disabled:opacity-50 motion-reduce:transition-none',
+            'base-select-trigger inline-flex h-9 min-w-36 items-center justify-start rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-left text-sm text-ds-text-primary outline-none transition-[background-color,border-color,color] duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover data-[popup-open]:border-ds-border-hover focus-visible:shadow-ds-focus disabled:opacity-50 motion-reduce:transition-none',
             triggerClassName
           )}
         >
-          <BaseSelect.Value className={cx('base-select-value min-w-0 flex-1', valueClassName)} placeholder={placeholder}>
+          <BaseSelect.Value className={cx('base-select-value min-w-0 flex-1 truncate text-left', valueClassName)} placeholder={placeholder}>
             {(selectedValue: string | null) => options.find((option) => option.value === selectedValue)?.label ?? placeholder}
           </BaseSelect.Value>
         </BaseSelect.Trigger>

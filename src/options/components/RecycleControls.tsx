@@ -69,14 +69,14 @@ export function RecycleControls() {
         </div>
       </SelectionDock>
 
-      <div className={RECYCLE_HEADER_CLASS}>
-        <div className={RECYCLE_HEADER_COPY_CLASS}>
-          <strong className={RECYCLE_HEADER_TITLE_CLASS}>回收站条目</strong>
-          <p className={RECYCLE_HEADER_SUBTITLE_CLASS}>
-            共 {state.entryCount} 条，恢复时优先放回原文件夹。
-          </p>
-        </div>
-        {hasEntries ? (
+      {hasEntries ? (
+        <div className={RECYCLE_HEADER_CLASS}>
+          <div className={RECYCLE_HEADER_COPY_CLASS}>
+            <strong className={RECYCLE_HEADER_TITLE_CLASS}>回收站条目</strong>
+            <p className={RECYCLE_HEADER_SUBTITLE_CLASS}>
+              恢复时优先放回原文件夹。
+            </p>
+          </div>
           <div className={RECYCLE_HEADER_ACTIONS_CLASS}>
             <Button
               size="sm"
@@ -101,8 +101,8 @@ export function RecycleControls() {
               清空回收站
             </Button>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </>
   )
 }

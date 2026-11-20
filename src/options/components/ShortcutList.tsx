@@ -1,16 +1,16 @@
 import type { ShortcutListState } from './shortcut-types.js'
 
 const SHORTCUT_ROW_CLASS =
-  'grid min-h-[60px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 px-4 py-2.5 max-[760px]:grid-cols-1 max-[760px]:items-stretch'
+  'grid min-h-[58px] grid-cols-[minmax(0,1fr)_auto] items-center gap-6 px-5 py-3.5 max-[760px]:grid-cols-1 max-[760px]:items-stretch max-[760px]:gap-2.5 max-[760px]:px-4'
 const SHORTCUT_COPY_CLASS = 'min-h-11 min-w-0'
 const SHORTCUT_TITLE_CLASS =
-  'block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-bold text-ds-text-primary'
+  'block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium leading-[1.4] text-ds-text-primary'
 const SHORTCUT_DETAIL_CLASS =
-  'mt-1 block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-ds-text-disabled'
+  'mt-1 block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] leading-[1.55] text-ds-text-secondary'
 const SHORTCUT_KEY_CLASS =
-  'inline-flex min-h-7 min-w-[72px] items-center justify-center whitespace-nowrap rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 text-xs font-bold text-ds-text-primary max-[760px]:w-fit max-[760px]:max-w-full'
-const SHORTCUT_KEY_UNASSIGNED_CLASS = 'text-ds-text-disabled'
-const SHORTCUT_EMPTY_CLASS = 'px-4 py-[18px] text-[13px] leading-[1.7] text-ds-text-secondary'
+  'inline-flex h-7 min-w-[72px] items-center justify-center whitespace-nowrap rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 font-mono text-xs font-medium text-ds-text-primary max-[760px]:w-fit max-[760px]:max-w-full'
+const SHORTCUT_KEY_UNASSIGNED_CLASS = 'border-ds-border-subtle bg-transparent font-sans text-ds-text-disabled'
+const SHORTCUT_EMPTY_CLASS = 'px-5 py-4 text-[13px] leading-[1.6] text-ds-text-secondary max-[760px]:px-4'
 const SHORTCUT_LOADING_COPY_CLASS = 'grid min-h-11 content-center gap-2'
 const SHORTCUT_LOADING_TITLE_CLASS =
   'block h-2.5 w-[min(62%,260px)] rounded-full bg-ds-text-primary/[0.075]'

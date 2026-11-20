@@ -67,14 +67,14 @@ export function RedirectControls() {
         </div>
       </SelectionDock>
 
-      <div className={REDIRECT_HEADER_CLASS}>
-        <div className={REDIRECT_HEADER_COPY_CLASS}>
-          <strong className={REDIRECT_HEADER_TITLE_CLASS}>待更新重定向</strong>
-          <p className={REDIRECT_HEADER_SUBTITLE_CLASS}>
-            {state.subtitle}
-          </p>
-        </div>
-        {hasResults ? (
+      {hasResults ? (
+        <div className={REDIRECT_HEADER_CLASS}>
+          <div className={REDIRECT_HEADER_COPY_CLASS}>
+            <strong className={REDIRECT_HEADER_TITLE_CLASS}>待更新重定向</strong>
+            <p className={REDIRECT_HEADER_SUBTITLE_CLASS}>
+              {state.subtitle}
+            </p>
+          </div>
           <div className={REDIRECT_HEADER_ACTIONS_CLASS}>
             <Button
               size="sm"
@@ -97,8 +97,8 @@ export function RedirectControls() {
               批量删除本区
             </Button>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </>
   )
 }

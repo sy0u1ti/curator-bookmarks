@@ -90,7 +90,8 @@ export async function runSyncInterfaceChecks(page, url, directory) {
       check(JSON.stringify(current.add) === JSON.stringify(idle.add), `${width}/${state}: the add button moved`)
       check(current.spill === 0 && current.scroll <= 0, `${width}/${state}: content overflows (${current.spill} nodes, ${current.scroll}px)`)
       if (state === 'syncing') {
-        check(await page.evaluate(() => document.querySelector('#settings-sync [role="progressbar"]')?.getAttribute('aria-valuenow') === '42'), `${width}: progress is exposed`)
+        check(await page.evaluate(() => !document.querySelector('#settings-sync [role="progressbar"]')), `${width}: running state stays indeterminate`)
+        check(await page.evaluate(() => document.querySelector('#settings-sync li')?.textContent.includes('正在同步')), `${width}: running state is still readable`)
         check(await page.evaluate(() => Boolean(document.querySelector('#settings-sync li button[aria-label^="取消同步："]'))), `${width}: a running sync can be cancelled from the same button`)
       }
       if (state === 'error') {

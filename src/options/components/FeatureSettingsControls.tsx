@@ -16,6 +16,7 @@ import {
   AI_SETTINGS_READY_BODY_CLASS,
   AI_SETTINGS_ROW_CLASS,
   AI_SETTINGS_ROW_TITLE_CLASS,
+  AI_SETTINGS_SECONDARY_CLASS,
   AI_SETTINGS_STATUS_TONE_CLASS,
   AI_SETTINGS_SWITCH_CONTROL_CLASS,
   AI_SETTINGS_SWITCH_THUMB_CLASS,
@@ -76,13 +77,22 @@ export function FeatureSettingsControls() {
 
 function InboxWorkflowControl({ state }: { state: FeatureSettingsControlsState['inboxWorkflow'] }) {
   return (
-    <div id="settings-inbox-workflow" className="grid gap-3 px-4 py-4" aria-hidden={!state || undefined}>
-      <div>
+    <div
+      id="settings-inbox-workflow"
+      className="grid min-h-[56px] grid-cols-[minmax(0,1fr)_auto] items-center gap-6 px-5 py-3.5 max-[760px]:grid-cols-1 max-[760px]:items-stretch max-[760px]:gap-3 max-[760px]:px-4"
+      aria-hidden={!state || undefined}
+    >
+      <div className={AI_SETTINGS_COPY_CLASS}>
         <h3 className={AI_SETTINGS_ROW_TITLE_CLASS}>用快捷键保存到待整理后</h3>
+        <StatusMessage className={`m-0 ${AI_SETTINGS_SECONDARY_CLASS}`} reserve={INBOX_STATUS_RESERVE}>
+          {state?.status || INBOX_WORKFLOW_STATUS_COPY.analyze}
+        </StatusMessage>
       </div>
       {state ? (
         <Select
           ariaLabel="保存到待整理后的整理方式"
+          className="w-[268px] shrink-0 max-[760px]:w-full"
+          triggerClassName="w-full text-[13px]"
           value={state.value}
           disabled={state.disabled}
           options={[
@@ -95,10 +105,7 @@ function InboxWorkflowControl({ state }: { state: FeatureSettingsControlsState['
             if (value) handleFeatureSettingsChange({ key: 'inboxWorkflow', value: value as InboxWorkflowMode })
           }}
         />
-      ) : <span className="block h-9 rounded-ds-sm bg-ds-surface-2" />}
-      <StatusMessage className="m-0 text-xs leading-relaxed text-ds-text-secondary" reserve={INBOX_STATUS_RESERVE}>
-        {state?.status || INBOX_WORKFLOW_STATUS_COPY.analyze}
-      </StatusMessage>
+      ) : <span className="block h-9 w-[268px] shrink-0 rounded-ds-sm bg-ds-surface-2 max-[760px]:w-full" />}
     </div>
   )
 }
@@ -114,7 +121,7 @@ function FeatureSwitchLoadingRow({
         <div className={AI_SETTINGS_TITLE_ROW_CLASS}>
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>{item.label}</strong>
         </div>
-        <p className="mb-0 mt-1 text-xs leading-relaxed text-ds-text-secondary">{item.description}</p>
+        <p className={`mb-0 ${AI_SETTINGS_SECONDARY_CLASS}`}>{item.description}</p>
       </div>
       <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
         <span className={AI_SETTINGS_LOADING_SWITCH_CLASS} />
@@ -139,7 +146,7 @@ function FeatureSwitchRow({ item }: { item: FeatureSwitchItemState }) {
             <StableLabel text={item.status || ''} reserve={FEATURE_STATUS_LABELS} />
           </span>
         </div>
-        {item.description && <p id={`feature-${item.key}-description`} className="mb-0 mt-1 text-xs leading-relaxed text-ds-text-secondary">{item.description}</p>}
+        {item.description && <p id={`feature-${item.key}-description`} className={`mb-0 ${AI_SETTINGS_SECONDARY_CLASS}`}>{item.description}</p>}
       </div>
       <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
         <SwitchControl

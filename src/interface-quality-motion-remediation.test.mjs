@@ -144,7 +144,7 @@ assert.ok(
     optionsModalClasses.includes('folder-picker-card') &&
     optionsCss.includes('.ai-provider-dialog-panel[data-starting-style]') &&
     optionsCss.includes('scale: 1 !important') &&
-    optionsCss.includes('.ai-provider-advanced-trigger::after') &&
+    !aiProviderSettingsClasses.includes('after:rotate-45') &&
     optionsCss.includes('.folder-picker-toggle:active') &&
     optionsCss.includes('@media (prefers-reduced-transparency: reduce)'),
   'The AI provider dialog must keep its centered geometry while honoring reduced motion and transparency.'

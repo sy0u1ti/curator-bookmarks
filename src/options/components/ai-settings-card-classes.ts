@@ -11,14 +11,17 @@ export const AI_SETTINGS_CARD_CLASS =
 export const AI_SETTINGS_NARROW_CARD_CLASS = AI_SETTINGS_CARD_CLASS
 
 export const AI_SETTINGS_HEADER_CLASS =
-  'mb-0 flex min-w-0 items-start justify-between gap-3 border-b border-ds-border-subtle p-4 max-[760px]:flex-col'
+  'mb-0 flex min-w-0 items-start justify-between gap-3 border-b border-ds-border-subtle/70 px-5 py-4 max-[760px]:flex-col max-[760px]:px-4'
 
-export const AI_SETTINGS_BODY_CLASS = 'mt-0 flex flex-col divide-y divide-ds-border-subtle'
+export const AI_SETTINGS_HEADER_BORDERLESS_CLASS =
+  'mb-0 flex min-w-0 items-start justify-between gap-3 border-b border-transparent px-5 py-4 max-[760px]:flex-col max-[760px]:px-4'
 
-export const AI_SETTINGS_TITLE_CLASS = 'm-0 text-base font-bold leading-[1.35] text-ds-text-primary'
+export const AI_SETTINGS_BODY_CLASS = 'mt-0 flex flex-col divide-y divide-ds-border-subtle/70'
+
+export const AI_SETTINGS_TITLE_CLASS = 'm-0 text-[15px] font-semibold leading-[1.35] text-ds-text-primary'
 
 export const AI_SETTINGS_SUBTITLE_CLASS =
-  'mt-1.5 mb-0 text-[13px] leading-[1.7] text-ds-text-disabled'
+  'mt-1 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 
 export const AI_SETTINGS_STATUS_BADGE_CLASS =
   'inline-flex min-h-6 w-fit flex-none items-center justify-center rounded-full border border-ds-hover bg-ds-surface-2 px-2.5 text-xs font-semibold leading-none tracking-[0] text-ds-text-muted'
@@ -33,17 +36,17 @@ export const AI_SETTINGS_STATUS_TONE_CLASS = {
 } as const
 
 export const AI_SETTINGS_ROW_CLASS =
-  'grid min-h-[54px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3 max-[420px]:gap-3'
+  'grid min-h-[56px] grid-cols-[minmax(0,1fr)_auto] items-center gap-6 px-5 py-3.5 max-[760px]:gap-4 max-[760px]:px-4'
 
 export const AI_SETTINGS_COPY_CLASS = 'min-w-0'
 
-export const AI_SETTINGS_TITLE_ROW_CLASS = 'flex min-h-6 min-w-0 items-center justify-between gap-2.5'
+export const AI_SETTINGS_TITLE_ROW_CLASS = 'flex min-h-6 min-w-0 flex-wrap items-center justify-start gap-2'
 
 export const AI_SETTINGS_ROW_TITLE_CLASS =
-  'block text-sm font-bold leading-[1.4] text-ds-text-primary'
+  'block text-sm font-medium leading-[1.4] text-ds-text-primary'
 
 export const AI_SETTINGS_SECONDARY_CLASS =
-  'mt-[3px] block text-[13px] leading-[1.65] text-ds-text-disabled'
+  'mt-1 block text-[13px] leading-[1.55] text-ds-text-secondary'
 
 export const AI_SETTINGS_SWITCH_WRAP_CLASS = OPTION_SWITCH_WRAP_CLASS
 
@@ -52,7 +55,7 @@ export const AI_SETTINGS_SWITCH_CONTROL_CLASS = OPTION_SWITCH_CONTROL_CLASS
 export const AI_SETTINGS_SWITCH_THUMB_CLASS = OPTION_SWITCH_THUMB_CLASS
 
 export const AI_SETTINGS_FIELD_TIP_CLASS =
-  'm-0 px-4 py-3 text-[13px] leading-[1.65] text-ds-text-muted'
+  'm-0 px-5 py-3.5 text-[13px] leading-[1.55] text-ds-text-secondary max-[760px]:px-4'
 
 export const AI_SETTINGS_LOADING_BADGE_CLASS =
   'inline-flex h-2.5 w-14 flex-none rounded-full bg-ds-text-primary/[0.055]'

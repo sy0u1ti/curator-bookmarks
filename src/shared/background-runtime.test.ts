@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { BackgroundRuntimeError, createBackgroundReadyCheck } from './background-runtime.js'
+import { BackgroundRuntimeError, createBackgroundReadyCheck, recoverFromBackgroundRuntime } from './background-runtime.js'
 
 test('concurrent readers share a check against the installed worker', async () => {
   let requests = 0
@@ -43,4 +43,39 @@ test('a hung worker has a bounded wait and does not poison a later check', async
     : Promise.resolve({ ok: true, result: { buildId: 'build' } }), 10)
   await assert.rejects(ready, BackgroundRuntimeError)
   await ready()
+})
+
+test('a stale extension page reloads only once instead of looping', () => {
+  const descriptors = ['window', 'document', 'sessionStorage'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const)
+  const values = new Map<string, string>()
+  let reloads = 0
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { location: { reload: () => { reloads++ } } }
+  })
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: { documentElement: { dataset: { curatorSurface: 'popup' } } }
+  })
+  Object.defineProperty(globalThis, 'sessionStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key)
+    }
+  })
+  try {
+    assert.equal(recoverFromBackgroundRuntime(new Error('not a runtime error')), false)
+    const error = new BackgroundRuntimeError('background-outdated')
+    assert.equal(recoverFromBackgroundRuntime(error), true)
+    assert.equal(reloads, 1)
+    assert.equal(recoverFromBackgroundRuntime(error), false)
+    assert.equal(reloads, 1)
+  } finally {
+    for (const [key, descriptor] of descriptors) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+      else Reflect.deleteProperty(globalThis, key)
+    }
+  }
 })

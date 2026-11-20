@@ -7,7 +7,7 @@ import {
   type SyncProfileView,
   type SyncRunMode
 } from './sync-contract.js'
-import { ensureBackgroundReady } from '../background-runtime.js'
+import { BackgroundRuntimeError, ensureBackgroundReady, recoverFromBackgroundRuntime } from '../background-runtime.js'
 import type { SyncStatusSummary } from './sync-status.js'
 
 export type SyncMessage =
@@ -126,7 +126,14 @@ export async function requestSync<TMessage extends SyncMessage>(
   message: TMessage
 ): Promise<SyncMessageResults[TMessage['type']]> {
   await ensureBackgroundReady()
-  const response = await chrome.runtime.sendMessage(message)
+  let response: { ok?: boolean; error?: unknown; result?: unknown } | undefined
+  try {
+    response = await chrome.runtime.sendMessage(message)
+  } catch {
+    const runtimeError = new BackgroundRuntimeError('background-unavailable')
+    recoverFromBackgroundRuntime(runtimeError)
+    throw runtimeError
+  }
   if (!response?.ok) {
     throw new Error(String(response?.error || '同步服务没有响应，请重试。'))
   }

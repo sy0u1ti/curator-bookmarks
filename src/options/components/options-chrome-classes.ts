@@ -49,12 +49,12 @@ export const navSubIndicatorClass =
   'options-nav-sub-indicator options-nav-selection pointer-events-none absolute left-0 top-0 z-[0] rounded-ds-sm'
 
 export const navSublistClass = [
-  'options-nav-sublist relative isolate grid gap-1 ml-2.5 pl-2.5 border-l border-ds-border-subtle',
+  'options-nav-sublist relative isolate grid gap-1 ml-[17px] pl-2.5 border-l border-ds-border-subtle',
   'max-[920px]:ml-0 max-[920px]:mt-1.5 max-[920px]:border-l-0'
 ].join(' ')
 
 export const navGroupTriggerClass =
-  'options-nav-trigger t-acc-head relative flex items-center gap-2 min-h-[36px] max-[920px]:min-h-10 w-full cursor-pointer justify-between font-semibold rounded-ds-sm border border-transparent bg-transparent px-2.5 py-0 text-left text-[13px] text-ds-text-secondary no-underline outline-none focus-visible:shadow-ds-focus focus-visible:text-ds-text-primary [font-family:var(--font-sans)] max-[920px]:[overflow-wrap:anywhere] max-[920px]:[writing-mode:horizontal-tb]'
+  'options-nav-trigger t-acc-head relative flex items-center gap-2.5 min-h-[36px] max-[920px]:min-h-10 w-full cursor-pointer justify-start font-semibold rounded-ds-sm border border-transparent bg-transparent px-2.5 py-0 text-left text-[13px] text-ds-text-secondary no-underline outline-none focus-visible:shadow-ds-focus focus-visible:text-ds-text-primary [font-family:var(--font-sans)] max-[920px]:[overflow-wrap:anywhere] max-[920px]:[writing-mode:horizontal-tb]'
 
 export const navSubitemClass = [
   'flex min-h-8 w-full items-center justify-start gap-2 pl-3 text-left font-semibold text-ds-text-secondary',

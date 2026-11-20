@@ -6,7 +6,7 @@ import { DialogBackdrop, DialogPanel } from '../base/Dialog'
 import { cx } from '../base/utils'
 
 const MODEL_SELECTOR_TRIGGER_CLASS =
-  'inline-flex min-h-[50px] w-full touch-manipulation select-none items-center justify-start gap-2 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-sm font-semibold leading-5 text-ds-text-primary shadow-none outline-none transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard hover:not-disabled:border-ds-border-hover hover:not-disabled:bg-ds-surface-3 focus-visible:border-ds-focus focus-visible:bg-ds-surface-3 focus-visible:shadow-ds-focus active:not-disabled:scale-[var(--ds-press-scale)] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none motion-reduce:active:not-disabled:scale-100'
+  'inline-flex min-h-[42px] w-full touch-manipulation select-none items-center justify-start gap-2 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-sm font-semibold leading-5 text-ds-text-primary shadow-none outline-none transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard hover:not-disabled:border-ds-border-hover hover:not-disabled:bg-ds-surface-3 focus-visible:border-ds-focus focus-visible:bg-ds-surface-3 focus-visible:shadow-ds-focus active:not-disabled:scale-[var(--ds-press-scale)] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none motion-reduce:active:not-disabled:scale-100'
 const MODEL_SELECTOR_BACKDROP_CLASS =
   'model-selector-backdrop fixed inset-0 z-[1200] min-h-dvh bg-ds-overlay supports-[-webkit-touch-callout:none]:absolute'
 const MODEL_SELECTOR_CONTENT_CLASS =

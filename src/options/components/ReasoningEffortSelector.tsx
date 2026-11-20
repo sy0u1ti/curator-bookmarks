@@ -57,7 +57,7 @@ const PANEL_CLASS = cx(
 )
 
 const TRIGGER_CLASS = cx(
-  'reasoning-effort-trigger group relative inline-flex min-h-[50px] w-full min-w-0 touch-manipulation select-none items-center rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3.5 text-sm text-ds-text-primary outline-none',
+  'reasoning-effort-trigger group relative inline-flex min-h-[42px] w-full min-w-0 touch-manipulation select-none items-center rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3.5 text-sm text-ds-text-primary outline-none',
   'transition-[background-color,border-color,transform] duration-ds-fast ease-ds-standard',
   'hover:not-disabled:border-ds-border-hover hover:not-disabled:bg-ds-surface-3 active:not-disabled:scale-[var(--ds-press-scale)]',
   'focus-visible:border-ds-focus focus-visible:bg-ds-surface-3 focus-visible:shadow-ds-focus',

@@ -25,11 +25,17 @@ const OPTION_PANEL_SURFACE_RESET_CLASS =
 export const OPTION_PANEL_STANDARD_LAYOUT_CLASS =
   `${OPTION_PANEL_BASE_CLASS} w-[min(100%,1120px)]`
 
+export const OPTION_PANEL_SETTINGS_LAYOUT_CLASS =
+  `${OPTION_PANEL_BASE_CLASS} w-[min(100%,840px)]`
+
 export const OPTION_PANEL_WIDE_LAYOUT_CLASS =
   `${OPTION_PANEL_BASE_CLASS} w-[min(100%,1880px)]`
 
 export const OPTION_PANEL_CLASS =
   `${OPTION_PANEL_STANDARD_LAYOUT_CLASS} ${OPTION_PANEL_SURFACE_RESET_CLASS}`
+
+export const OPTION_PANEL_SETTINGS_CLASS =
+  `${OPTION_PANEL_SETTINGS_LAYOUT_CLASS} ${OPTION_PANEL_SURFACE_RESET_CLASS}`
 
 export const OPTION_SURFACE_CLASS =
   'rounded-ds-card border-0 bg-ds-surface-1 shadow-none'
@@ -38,10 +44,10 @@ export const OPTION_INSET_CLASS =
   'rounded-ds-lg border-0 bg-ds-surface-2 shadow-none'
 
 export const OPTION_GROUP_CLASS =
-  `options-interactive-surface curator-motion-surface mt-7 ${OPTION_SURFACE_CLASS} py-2 max-[760px]:mt-5`
+  `options-interactive-surface curator-motion-surface mt-5 ${OPTION_SURFACE_CLASS} py-1 max-[760px]:mt-4`
 
 export const OPTION_TOOL_PANEL_CLASS =
-  `options-interactive-surface curator-motion-surface mt-5 ${OPTION_SURFACE_CLASS} p-4 ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  `options-interactive-surface curator-motion-surface mt-5 ${OPTION_SURFACE_CLASS} p-5 ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
 
 export const OPTION_RUN_HEADER_CLASS = [
   'curator-motion-surface mt-6 grid grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)_auto] items-stretch gap-3',
@@ -80,10 +86,10 @@ export const OPTION_COPY_TEXT_CLASS =
   'mt-[7px] mb-0 text-[13px] leading-[1.65] text-ds-text-muted'
 
 export const OPTION_EMPTY_STATE_CLASS =
-  'options-interactive-surface curator-motion-surface t-stagger rounded-ds-card border-0 bg-ds-surface-1 p-4 text-left shadow-none'
+  'options-interactive-surface curator-motion-surface t-stagger rounded-ds-card border-0 bg-ds-surface-1 p-5 text-left shadow-none'
 
 export const OPTION_EMPTY_STATE_TITLE_CLASS =
-  'm-0 text-sm font-bold leading-[1.4] text-ds-text-primary'
+  'm-0 text-sm font-semibold leading-[1.4] text-ds-text-primary'
 
 export const OPTION_EMPTY_STATE_TEXT_CLASS =
   'm-0 mt-2 max-w-[620px] text-[13px] leading-[1.65] text-ds-text-secondary'
@@ -98,7 +104,7 @@ export const OPTION_PANEL_DESCRIPTION_CLASS =
   'mt-[10px] mb-0 max-w-[720px] text-sm leading-[1.7] tracking-[0] text-ds-text-secondary'
 
 export const OPTION_PANEL_HEADER_CLASS =
-  'mb-1 pb-2'
+  'mb-2 pb-1'
 
 export const OPTION_VALUE_CLASS = [
   'inline-flex min-h-5 min-w-0 max-w-full items-center overflow-hidden text-ellipsis whitespace-nowrap',

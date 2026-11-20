@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { parseSyncMessage } from './sync-messages.js'
+import { parseSyncMessage, requestSync } from './sync-messages.js'
+import { BackgroundRuntimeError } from '../background-runtime.js'
 import { summarizeStoredSyncProfiles } from './sync-profile-summary.js'
 import {
   SYNC_ADAPTERS, getSyncPermissions, getSyncProfileStatus, getSyncProfileTitle, listSyncFolders, requestSyncProfilePermissions, sortSyncProfiles
@@ -15,6 +16,21 @@ const profile = (data: Partial<SyncProfileView['data']> = {}, extra: Partial<Syn
   secrets: { password: true, passphrase: false, refreshToken: false }, data: { type: 'webdav', localRoot: '5', ...data }, ...extra
 })
 const time = () => '昨天'
+
+test('a closed runtime port becomes a recoverable background error', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'chrome')
+  Object.defineProperty(globalThis, 'chrome', {
+    configurable: true,
+    value: { runtime: { sendMessage: async () => { throw new Error('The message port closed') } } }
+  })
+  try {
+    await assert.rejects(requestSync({ type: 'sync:status' }), error =>
+      error instanceof BackgroundRuntimeError && error.code === 'background-unavailable')
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'chrome', previous)
+    else Reflect.deleteProperty(globalThis, 'chrome')
+  }
+})
 
 test('the worker accepts only well-formed sync messages', () => {
   assert.deepEqual(parseSyncMessage({ type: 'sync:status' }), { value: { type: 'sync:status' } })
@@ -71,10 +87,10 @@ test('lightweight sync status exposes only counts and success time, retaining er
   assert.equal(formatSyncTime(60000, 90000), '刚刚')
 })
 
-test('sync progress reaches completion only after the engine clears its running flag', () => {
+test('sync status distinguishes running from finishing without exposing a fake percentage', () => {
   assert.equal(getSyncProfileStatus(profile({ syncing: 1, lastSync: 5 }), time).text, '正在完成')
-  assert.equal(getSyncProfileStatus(profile({ syncing: true }), time).progress, null)
-  assert.equal(getSyncProfileStatus(profile({ syncing: Number.POSITIVE_INFINITY }), time).progress, null)
+  assert.equal(getSyncProfileStatus(profile({ syncing: true }), time).text, '正在同步')
+  assert.equal(getSyncProfileStatus(profile({ syncing: Number.POSITIVE_INFINITY }), time).text, '正在同步')
   assert.equal(summarizeSyncStatus({ a: { localRoot: '5', syncing: 1, lastSync: 5 } }, 6).state, 'running')
 })
 
@@ -110,7 +126,7 @@ test('a profile asks for exactly the access it needs', () => {
 
 test('a profile shows the one state that needs attention first', () => {
   assert.deepEqual(getSyncProfileStatus(profile({ syncing: 0.416, error: 'old' }), time),
-    { state: 'syncing', text: '正在同步 42%', tone: 'neutral', progress: 0.416 })
+    { state: 'syncing', text: '正在同步', tone: 'neutral' })
   assert.equal(getSyncProfileStatus(profile({ scheduled: true, error: 'E037' }), time).state, 'scheduled')
   assert.equal(getSyncProfileStatus(profile({ error: 'E017' }, { needsAuthorization: true }), time).state, 'authorize')
   assert.equal(getSyncProfileStatus(profile({}, { localFolderExists: false }), time).state, 'folder')

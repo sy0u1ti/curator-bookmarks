@@ -4,6 +4,7 @@ import { DuplicateGroups } from './DuplicateGroups.js'
 import { IgnoreRules } from './IgnoreRules.js'
 import {
   OPTION_PANEL_CLASS,
+  OPTION_PANEL_SETTINGS_CLASS,
   OPTION_TOOL_PANEL_CLASS
 } from './option-layout-classes.js'
 import { OptionPanelHeader } from './OptionPanelHeader.js'
@@ -55,7 +56,7 @@ export function HistoryPanel({ hidden }: OptionsPanelVisibilityProps) {
 
 export function BackupPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
-    <section id="backup" className={OPTION_PANEL_CLASS} aria-labelledby="backup-title" hidden={hidden}>
+    <section id="backup" className={OPTION_PANEL_SETTINGS_CLASS} aria-labelledby="backup-title" hidden={hidden}>
       <OptionPanelHeader titleId="backup-title" title="数据与备份" />
 
       <BackupControls />
@@ -105,7 +106,7 @@ export function IgnoreRulesPanel({ hidden }: OptionsPanelVisibilityProps) {
 export function RecyclePanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="recycle" className={OPTION_PANEL_CLASS} aria-labelledby="recycle-title" hidden={hidden}>
-      <OptionPanelHeader titleId="recycle-title" title="回收站" description="记录保留至你主动清空。可恢复暂时移除的书签，或永久清理不再需要的内容。" />
+      <OptionPanelHeader titleId="recycle-title" title="回收站" />
 
       <div className={RECYCLE_GROUP_CLASS}>
         <RecycleControls />

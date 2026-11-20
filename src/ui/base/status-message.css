@@ -53,6 +53,7 @@
 .curator-stable-label {
   display: inline-grid;
   align-items: center;
+  justify-items: center;
   min-width: 0;
   white-space: nowrap;
 }

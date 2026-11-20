@@ -1,6 +1,9 @@
 import {
   AlertTriangle,
   ArrowDown,
+  ArrowLeft,
+  ArrowLeftRight,
+  ArrowRight,
   ArrowUp,
   ArchiveRestore,
   Bot,
@@ -50,6 +53,9 @@ import {
 export const iconMap = {
   AlertTriangle,
   ArrowDown,
+  ArrowLeft,
+  ArrowLeftRight,
+  ArrowRight,
   ArrowUp,
   ArchiveRestore,
   Bot,

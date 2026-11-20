@@ -73,21 +73,16 @@ export function DuplicateGroups() {
 
   if (!state.catalogLoading && !state.groups.length) {
     return (
-      <div className={RESULTS_CLASS}>
-        <OptionEmptyState
-          title="未发现重复书签"
-          description="按网址检测，并给出推荐保留项。"
-        />
-      </div>
+      <OptionEmptyState
+        embedded
+        title="未发现重复书签"
+        description="按网址检测，并给出推荐保留项。"
+      />
     )
   }
 
   if (!state.groups.length) {
-    return (
-      <div className={RESULTS_CLASS}>
-        <div className={EMPTY_CLASS}>正在分析重复书签。</div>
-      </div>
-    )
+    return <div className={EMPTY_CLASS}>正在分析重复书签。</div>
   }
 
   return (

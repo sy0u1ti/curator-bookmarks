@@ -27,6 +27,7 @@ import { exportSyncBookmarks } from '../sync/sync-files'
 import {
   AI_SETTINGS_BODY_CLASS,
   AI_SETTINGS_CARD_CLASS,
+  AI_SETTINGS_HEADER_BORDERLESS_CLASS,
   AI_SETTINGS_HEADER_CLASS,
   AI_SETTINGS_SUBTITLE_CLASS,
   AI_SETTINGS_TITLE_CLASS
@@ -232,13 +233,13 @@ export function SyncCard() {
               }} />
           </div>
         }
-        headerClassName={AI_SETTINGS_HEADER_CLASS}
+        headerClassName={profiles.length ? AI_SETTINGS_HEADER_CLASS : AI_SETTINGS_HEADER_BORDERLESS_CLASS}
         copyClassName={BACKUP_CARD_COPY_CLASS}
         iconName="RefreshCw"
         bodyClassName={AI_SETTINGS_BODY_CLASS}
       >
         {profiles.length ? (
-          <ul className="m-0 grid list-none divide-y divide-ds-border-subtle p-0" aria-label="同步项">
+          <ul className="m-0 grid list-none divide-y divide-ds-border-subtle/70 p-0" aria-label="同步项">
             {profiles.map(profile => {
               const title = getSyncProfileTitle(profile)
               const state = getSyncProfileStatus(profile, formatDateTime)
@@ -255,7 +256,7 @@ export function SyncCard() {
                         {' · '}{SYNC_DIRECTION_LABELS[profile.data.strategy || 'default']}
                         {profile.data.failsafe === false ? <span className="text-ds-warning"> · 安全保护已关闭</span> : null}
                       </p>
-                      <StatusMessage className={`${BACKUP_ROW_DETAIL_CLASS} tabular-nums`} reserve={[getSyncRestingText(profile, formatDateTime)]} tone={state.tone}>
+                      <StatusMessage className={BACKUP_ROW_DETAIL_CLASS} reserve={[getSyncRestingText(profile, formatDateTime)]} tone={state.tone}>
                         {state.state === 'error' ? (
                           // The row keeps its height; the whole message, which says how to recover, opens beside it.
                           <Popover
@@ -307,13 +308,6 @@ export function SyncCard() {
                       <StableLabel text={active ? '取消' : state.state === 'authorize' ? '连接' : state.state === 'folder' ? '设置' : '同步'} reserve={RUN_LABELS} />
                     </Button>
                   </BackupRow>
-                  {state.progress !== null ? (
-                    <div role="progressbar" aria-label={`${title}的同步进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.progress * 100)}
-                      className="pointer-events-none absolute inset-x-4 bottom-0 h-0.5 overflow-hidden rounded-full bg-ds-border-subtle">
-                      <div className="h-full origin-left bg-ds-accent transition-transform duration-ds-standard ease-ds-standard motion-reduce:transition-none"
-                        style={{ transform: `scaleX(${state.progress})` }} />
-                    </div>
-                  ) : null}
                 </li>
               )
             })}

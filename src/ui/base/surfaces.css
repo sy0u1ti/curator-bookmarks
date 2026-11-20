@@ -1,5 +1,7 @@
-/* Defaults belong below utilities. A caller's p-0 or smaller nested radius
-   must replace them, not compete with another utility in generated CSS order. */
+/* Defaults belong below utilities. Declare the shared Tailwind layer order so
+   code-split chunks that load before globals.css never place components below base. */
+@layer properties, theme, base, components, utilities;
+
 @layer components {
   .curator-card {
     border-radius: var(--ds-radius-card);

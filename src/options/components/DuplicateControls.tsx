@@ -16,7 +16,7 @@ const duplicateStrategies = [
 ]
 
 const SUMMARY_GRID_CLASS =
-  `mt-[18px] flex flex-wrap items-center gap-x-8 gap-y-4 ${OPTION_SURFACE_CLASS} px-5 py-4`
+  `mt-5 flex flex-wrap items-center gap-x-8 gap-y-4 ${OPTION_SURFACE_CLASS} px-5 py-4`
 const SUMMARY_PRIMARY_CLASS = 'grid min-w-24 gap-2'
 const SUMMARY_LABEL_ROW_CLASS =
   'min-w-0 text-xs font-medium leading-4 text-ds-text-secondary'

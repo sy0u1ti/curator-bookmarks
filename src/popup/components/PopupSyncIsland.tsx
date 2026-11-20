@@ -88,7 +88,7 @@ export function PopupSyncIsland({ hidden }: { hidden: boolean }) {
       } else if (event.key === 'Escape' &&
         !(event.target as HTMLElement)?.closest('[role="menu"], [role="listbox"], [role="dialog"], [data-popup-sync-overlay]')) {
         event.preventDefault()
-        const back = root.current?.querySelector<HTMLButtonElement>('[data-sync-back]')
+        const back = root.current?.querySelector<HTMLButtonElement>('.popup-sync-subview-layer:not([data-phase="closing"]) [data-sync-back]')
         if (back) back.click()
         else close()
       }
@@ -113,8 +113,17 @@ export function PopupSyncIsland({ hidden }: { hidden: boolean }) {
       <section id="popup-sync-workspace" className="popup-sync-view" aria-label="书签同步"
         inert={!open} aria-hidden={!open || undefined}>
         <header className="popup-sync-header">
-          <Icon name={error || status?.attention ? 'AlertTriangle' : 'RefreshCw'} size={16} aria-hidden="true"
-            className={error || status?.tone === 'error' ? 'text-ds-danger-text' : status?.tone === 'warning' ? 'text-ds-warning' : ''} />
+          <span
+            className="popup-sync-header-icon"
+            data-tone={error || status?.tone === 'error' ? 'error' : status?.tone === 'warning' ? 'warning' : status?.state === 'idle' ? 'success' : 'neutral'}
+            aria-hidden="true"
+          >
+            <Icon
+              name={error || status?.attention ? 'AlertTriangle' : status?.state === 'idle' ? 'Check' : 'RefreshCw'}
+              size={14}
+              className={!error && status?.state === 'running' ? 'animate-spin motion-reduce:animate-none' : undefined}
+            />
+          </span>
           <div className="popup-sync-header-copy">
             <h2>同步{status && status.count > 1 ? ` · ${status.count} 项` : ''}</h2>
             <p title={error || undefined}>{error ? '状态读取失败' : status ? syncStatusDetail(status) : '正在读取同步状态'}</p>

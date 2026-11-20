@@ -95,6 +95,17 @@ export function AvailabilityHistory() {
   const hasHistory = state.log.runs.length > 0
   const hasRecovered = state.recovered.results.length > 0
 
+  if (!hasHistory && !hasRecovered) {
+    return (
+      <OptionEmptyState
+        embedded
+        title="还没有检测历史"
+        description="完成一次检测后，这里会保留异常变化、恢复记录和趋势。"
+        actions={[{ action: 'run-availability', label: '去做可用性检测', variant: 'primary' }]}
+      />
+    )
+  }
+
   return (
     <>
       <AvailabilityHistoryControls state={state.controls} />

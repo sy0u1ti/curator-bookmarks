@@ -153,7 +153,7 @@ export function InputCaretSettings() {
         </span>
       </div>
       {state.error ? (
-        <p className="mb-0 px-4 pb-3 text-xs leading-relaxed text-ds-danger-text" role="status">
+        <p className="mb-0 px-5 pb-3.5 text-xs leading-relaxed text-ds-danger-text max-[760px]:px-4" role="status">
           {state.error}
         </p>
       ) : null}

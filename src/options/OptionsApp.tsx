@@ -151,6 +151,7 @@ interface NavGroup {
   links?: NavLink[]
   collapsible?: {
     key: string
+    icon: IconName
     trigger: string
     panelId: string
     links: NavLink[]
@@ -171,7 +172,7 @@ const availabilityLinks: NavLink[] = [
 ]
 
 const bookmarkLinks: NavLink[] = [
-  { section: 'inbox', href: '#inbox', icon: 'Bookmark', label: '待整理' },
+  { section: 'inbox', href: '#inbox', icon: 'Inbox', label: '待整理' },
   { section: 'duplicates', href: '#duplicates', icon: 'Copy', label: '重复书签检测' },
   { section: 'recycle', href: '#recycle', icon: 'Trash2', label: '回收站' }
 ]
@@ -179,7 +180,7 @@ const bookmarkLinks: NavLink[] = [
 const aiLinks: NavLink[] = [
   { section: 'ai-settings', href: '#ai-settings', icon: 'Settings', label: 'AI 服务配置' },
   { section: 'ai', href: '#ai', icon: 'Bot', label: '书签智能分析' },
-  { section: 'bookmark-history', href: '#bookmark-history', icon: 'Bookmark', label: 'AI 整理记录' }
+  { section: 'bookmark-history', href: '#bookmark-history', icon: 'Clock', label: 'AI 整理记录' }
 ]
 
 const availabilitySectionKeys = new Set(availabilityLinks.map((link) => link.section))
@@ -195,6 +196,7 @@ const navGroups: NavGroup[] = [
     label: '书签管理',
     collapsible: {
       key: 'availability-tools',
+      icon: 'CheckCircle2',
       trigger: '可用性管理',
       panelId: 'availability-tools-nav',
       links: availabilityLinks
@@ -385,7 +387,12 @@ function OptionsSidebar({
                   aria-controls={`${idPrefix}${group.collapsible.panelId}`}
                   onClick={onNavigate}
                 >
-                  <span className="options-nav-label">{group.collapsible.trigger}</span>
+                  <span className="relative z-[1] flex min-w-0 items-center gap-[inherit]">
+                    <span className={navLinkIconClass} aria-hidden="true">
+                      <Icon name={group.collapsible.icon} size={15} />
+                    </span>
+                    <span className="options-nav-label min-w-0 truncate max-[920px]:whitespace-normal">{group.collapsible.trigger}</span>
+                  </span>
                 </a>
                 <CollapsiblePanel
                   id={`${idPrefix}${group.collapsible.panelId}`}

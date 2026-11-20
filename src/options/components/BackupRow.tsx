@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
 
 export const BACKUP_ROW_CLASS =
-  'grid min-h-[58px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3 max-[560px]:grid-cols-1 max-[560px]:gap-2.5'
+  'grid min-h-[58px] grid-cols-[minmax(0,1fr)_auto] items-center gap-6 px-5 py-3.5 max-[760px]:px-4 max-[560px]:grid-cols-1 max-[560px]:gap-2.5'
 export const BACKUP_ROW_TITLE_CLASS =
-  'block text-sm font-semibold leading-[1.4] text-ds-text-primary [overflow-wrap:anywhere]'
-export const BACKUP_ROW_DETAIL_CLASS = 'm-0 mt-0.5 text-[13px] leading-[1.55] text-ds-text-secondary'
+  'block text-sm font-medium leading-[1.4] text-ds-text-primary [overflow-wrap:anywhere]'
+export const BACKUP_ROW_DETAIL_CLASS = 'm-0 mt-1 text-[13px] leading-[1.55] text-ds-text-secondary'
 export const BACKUP_ROW_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2 max-[560px]:justify-start'
 /** The card copy fills its header row, so a status slot wraps at the card width instead of its own. */

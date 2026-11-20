@@ -196,8 +196,6 @@ export interface SyncProfileStatus {
   state: SyncProfileState
   text: string
   tone: 'neutral' | 'error' | 'warning'
-  /** 0–1 while a sync runs */
-  progress: number | null
 }
 
 /** What a profile shows when nothing needs attention; it sizes the status slot. */
@@ -210,10 +208,9 @@ export function getSyncRestingText(profile: SyncProfileView, formatTime: (timest
 export function getSyncProfileStatus(profile: SyncProfileView, formatTime: (timestamp: number) => string, now = Date.now()): SyncProfileStatus {
   const { data } = profile
   const status = (state: SyncProfileState, text: string, tone: SyncProfileStatus['tone'] = 'neutral'): SyncProfileStatus =>
-    ({ state, text, tone, progress: null })
+    ({ state, text, tone })
   if (data.syncing) {
-    const progress = typeof data.syncing === 'number' && Number.isFinite(data.syncing) ? Math.max(0, Math.min(1, data.syncing)) : null
-    return { state: 'syncing', text: progress === null ? '正在同步' : progress >= 1 ? '正在完成' : `正在同步 ${Math.round(progress * 100)}%`, tone: 'neutral', progress }
+    return { state: 'syncing', text: data.syncing === 1 ? '正在完成' : '正在同步', tone: 'neutral' }
   }
   if (data.scheduled) return status('scheduled', '等待同步')
   if (profile.needsAuthorization) return status('authorize', '需要连接账号', 'warning')
@@ -231,7 +228,7 @@ export function getSyncProfileStatus(profile: SyncProfileView, formatTime: (time
   return status(!automatic ? 'manual' : data.lastSync ? 'ok' : 'never', getSyncRestingText(profile, formatTime))
 }
 
-/** Automatic profiles first; stable within each group while progress changes. */
+/** Automatic profiles first; stable within each group while profiles refresh. */
 export function sortSyncProfiles(profiles: SyncProfileView[]): SyncProfileView[] {
   const automatic = (profile: SyncProfileView) => Boolean(profile.data.enabled || profile.data.syncIntervalEnabled || profile.data.syncOnStartupEnabled)
   return [...profiles].sort((a, b) => Number(automatic(b)) - Number(automatic(a)))

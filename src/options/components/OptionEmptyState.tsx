@@ -17,22 +17,26 @@ interface OptionEmptyStateAction {
 
 const EMPTY_OPTION_EMPTY_STATE_ACTIONS: OptionEmptyStateAction[] = []
 
+const OPTION_EMPTY_STATE_EMBEDDED_CLASS = 't-stagger text-left'
+
 export function OptionEmptyState({
   actions = EMPTY_OPTION_EMPTY_STATE_ACTIONS,
   className = '',
   description,
+  embedded = false,
   title
 }: {
   actions?: OptionEmptyStateAction[]
   className?: string
   description?: string
+  embedded?: boolean
   title: string
 }) {
   const entered = useMotionEntrance()
 
   return (
     <div
-      className={[OPTION_EMPTY_STATE_CLASS, entered ? 'is-shown' : '', className]
+      className={[embedded ? OPTION_EMPTY_STATE_EMBEDDED_CLASS : OPTION_EMPTY_STATE_CLASS, entered ? 'is-shown' : '', className]
         .filter(Boolean)
         .join(' ')}
     >

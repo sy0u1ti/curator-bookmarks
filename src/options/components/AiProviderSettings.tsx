@@ -332,7 +332,7 @@ function AiProviderModelToolsContent({
           </div>
         </div>
       </div>
-      <div className="-mx-2.5 flex min-w-0 flex-wrap items-center justify-between gap-2">
+      <div className="-ml-2.5 flex min-w-0 flex-wrap items-center justify-start gap-1">
         <AiModelDetails state={state} />
         <Button
           ref={manageModelsRef}

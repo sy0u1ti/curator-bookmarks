@@ -33,24 +33,27 @@ const REDIRECT_STATUS_BADGE_CLASS =
 export function RedirectResults() {
   const state = useRedirectResultsState()
 
+  if (!state.results.length) {
+    return (
+      <OptionEmptyState
+        embedded
+        title="没有待更新的重定向"
+        description="检测发现原地址与最终地址不同的书签后，会出现在这里。"
+        actions={[{ action: 'run-availability', label: '去做可用性检测', variant: 'primary' }]}
+      />
+    )
+  }
+
   return (
     <div className={REDIRECT_RESULTS_LIST_CLASS}>
-      {state.results.length ? (
-        state.results.map((result) => (
-          <RedirectResultCard
-            key={result.id}
-            locked={state.locked}
-            result={result}
-            selected={state.selectedIds.has(String(result.id))}
-          />
-        ))
-      ) : (
-        <OptionEmptyState
-          title="没有待更新的重定向"
-          description={`${state.emptyMessage} 检测发现原地址与最终地址不同的书签后，会出现在这里。`}
-          actions={[{ action: 'run-availability', label: '去做可用性检测', variant: 'primary' }]}
+      {state.results.map((result) => (
+        <RedirectResultCard
+          key={result.id}
+          locked={state.locked}
+          result={result}
+          selected={state.selectedIds.has(String(result.id))}
         />
-      )}
+      ))}
     </div>
   )
 }

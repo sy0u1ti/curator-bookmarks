@@ -52,7 +52,7 @@ export function RecycleBin() {
   const hiddenSelectedCount = state.selectedIds.size - visibleSelectedCount
 
   return (
-    <div className={RECYCLE_RESULTS_LIST_CLASS}>
+    <div className={hasRows ? RECYCLE_RESULTS_LIST_CLASS : 'flex flex-col'}>
       {hasRows ? <Input aria-label="搜索回收站记录" placeholder="搜索标题、网址或原文件夹" value={query} onChange={event => { setQuery(event.target.value); setPage(0) }} /> : null}
       {hasRows ? <StatusMessage className="m-0 text-xs leading-relaxed text-ds-text-secondary" reserve={RECYCLE_STATUS_RESERVE}>
         {state.selectedIds.size > 0
@@ -67,6 +67,7 @@ export function RecycleBin() {
         />
       ) : (
         <OptionEmptyState
+          embedded
           title="回收站为空"
           description="各清理功能删除的书签会先进入这里，恢复时尽量放回原文件夹。"
         />

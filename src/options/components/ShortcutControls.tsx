@@ -23,7 +23,7 @@ const SHORTCUT_STATUS_TONE_CLASSES: Record<string, string> = {
   warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
 }
 const SHORTCUT_ACTIONS_CLASS =
-  'flex flex-wrap items-center justify-end gap-2.5 px-4 py-3 max-[760px]:flex-col max-[760px]:items-stretch'
+  'flex flex-wrap items-center justify-end gap-2.5 px-5 py-3.5 max-[760px]:flex-col max-[760px]:items-stretch max-[760px]:px-4'
 const SHORTCUT_ACTION_BUTTON_CLASS = 'max-[760px]:w-full'
 const SHORTCUT_DEFAULT_DETAIL = '快捷键在 Chrome 扩展设置中修改。'
 const SHORTCUT_DETAIL_RESERVE = [SHORTCUT_DEFAULT_DETAIL, '快捷键未配置，可在 Chrome 扩展快捷键页设置。']

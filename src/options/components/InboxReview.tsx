@@ -83,7 +83,7 @@ export function InboxReview() {
   const rows = useListExit(visible, item => item.captureId, `${normalizedQuery}\u0000${currentPage}`)
   const searchable = pending.length > 1 || Boolean(query)
 
-  return <section aria-labelledby="inbox-review-title" className={`mb-7 ${OPTION_SURFACE_CLASS} px-5`}>
+  return <section aria-labelledby="inbox-review-title" className={`mt-5 mb-7 ${OPTION_SURFACE_CLASS} px-5`}>
     <div className="flex min-h-[68px] flex-wrap items-center gap-3 py-4">
       {searchable ? <label className="relative flex min-w-[220px] flex-1 items-center text-ds-text-muted">
         <Icon name="Search" size={15} aria-hidden="true" className="pointer-events-none absolute left-3" />
@@ -102,15 +102,15 @@ export function InboxReview() {
         <Icon name="RotateCcw" size={14} aria-hidden="true" />撤销最近一次移动
       </Button> : null}
     </div>
-    {error ? <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ds-border-subtle py-4">
+    {error ? <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ds-border-subtle/70 py-4">
       <p role="alert" className="m-0 min-w-0 text-[13px] text-ds-danger-text [overflow-wrap:anywhere]">{error}</p>
       <Button size="sm" disabled={busy} onClick={() => void refreshInboxReview()}>重新读取</Button>
     </div> : null}
-    {!data ? (!error ? <p className="m-0 border-t border-ds-border-subtle py-10 text-center text-[13px] text-ds-text-muted">正在读取…</p> : null)
-      : !pending.length && !rows.length ? <p className="m-0 border-t border-ds-border-subtle py-10 text-center text-[13px] text-ds-text-muted">没有待整理的书签</p>
-      : filtered.length === 0 && !rows.length ? <p className="m-0 border-t border-ds-border-subtle py-10 text-center text-[13px] text-ds-text-muted">没有匹配的书签</p>
+    {!data ? (!error ? <p className="m-0 border-t border-ds-border-subtle/70 py-10 text-center text-[13px] text-ds-text-muted">正在读取…</p> : null)
+      : !pending.length && !rows.length ? <p className="m-0 border-t border-ds-border-subtle/70 py-10 text-center text-[13px] text-ds-text-muted">没有待整理的书签</p>
+      : filtered.length === 0 && !rows.length ? <p className="m-0 border-t border-ds-border-subtle/70 py-10 text-center text-[13px] text-ds-text-muted">没有匹配的书签</p>
       : <InboxReviewList rows={rows} bookmarks={data.bookmarks} folderMap={folderMap} folderOptions={folderOptions} busy={busy} run={run} />}
-    {filtered.length > PAGE_SIZE ? <div className="flex items-center justify-end gap-3 border-t border-ds-border-subtle py-3">
+    {filtered.length > PAGE_SIZE ? <div className="flex items-center justify-end gap-3 border-t border-ds-border-subtle/70 py-3">
       <span className="text-xs tabular-nums text-ds-text-secondary">{currentPage + 1} / {pageCount}</span>
       <Button size="sm" variant="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</Button>
       <Button size="sm" variant="secondary" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>下一页</Button>
@@ -121,7 +121,7 @@ export function InboxReview() {
 function InboxReviewList({ rows, bookmarks, folderMap, folderOptions, busy, run }: { rows: MountedListEntry<InboxItem>[]; bookmarks: Map<string, { url?: string }>; folderMap: Map<string, FolderRecord>; folderOptions: FolderOption[]; busy: boolean; run: InboxReviewRunner }) {
   return <div className="flex flex-col">
     {rows.map(entry =>
-      <div ref={entry.ref} className="t-list-exit border-t border-ds-border-subtle" data-exiting={entry.exiting ? 'true' : 'false'} inert={entry.exiting || undefined} key={entry.key}>
+      <div ref={entry.ref} className="t-list-exit border-t border-ds-border-subtle/70" data-exiting={entry.exiting ? 'true' : 'false'} inert={entry.exiting || undefined} key={entry.key}>
         <div className="t-list-exit-inner">
           <InboxReviewRow item={entry.item} stale={bookmarks.get(entry.item.bookmarkId)?.url !== entry.item.url} folderMap={folderMap} folderOptions={folderOptions} busy={busy || entry.exiting} run={run} />
         </div>

@@ -115,7 +115,7 @@ function BackupCard({ state }: { state: BackupControlsState }) {
         headerClassName={AI_SETTINGS_HEADER_CLASS}
         copyClassName={BACKUP_CARD_COPY_CLASS}
         iconName="Save"
-        bodyClassName="p-4"
+        bodyClassName="px-5 py-4 max-[760px]:px-4"
       >
         <AutoBackupPoints busy={busy} onPreview={backupId => dispatch({ action: 'preview-auto-backup', backupId })} />
       </AiProviderCard>

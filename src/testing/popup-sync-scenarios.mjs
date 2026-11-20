@@ -86,6 +86,9 @@ export async function runPopupSyncChecks(task, config) {
     await page.click('#popup-sync-toggle')
     await page.waitForSelector('.popup-sync-profile')
     await finishMotion()
+    assert.equal(await page.evaluate(() => Boolean(document.querySelector('.popup-sync-cockpit'))), true)
+    assert.equal(await page.evaluate(() => Boolean(document.querySelector('.popup-sync-orb'))), true)
+    assert.equal(await page.evaluate(() => [...document.querySelectorAll('.popup-sync-footer button')].some(button => button.textContent.includes('同步全部'))), false)
     assert.ok(await page.evaluate(() => document.querySelector('.popup-sync-bookmarks').inert &&
       getComputedStyle(document.querySelector('.popup-sync-bookmarks')).opacity === '0'))
     await page.click('button[aria-label="立即同步：同步测试"]')
@@ -119,9 +122,48 @@ export async function runPopupSyncChecks(task, config) {
 
     await page.click('button[aria-label="同步测试的同步选项"]')
     await page.waitForSelector('#sync-editor-title')
+    const enterMotion = await page.evaluate(() => {
+      const layer = document.querySelector('.popup-sync-subview-layer')
+      const home = document.querySelector('.popup-sync-home')
+      return {
+        phase: layer?.dataset.phase,
+        covered: home?.dataset.covered,
+        homeInert: Boolean(home?.inert),
+        layerProps: layer?.getAnimations().map(animation => animation.transitionProperty) ?? [],
+        homeProps: home?.getAnimations().map(animation => animation.transitionProperty) ?? []
+      }
+    })
+    assert.equal(enterMotion.phase, 'open')
+    assert.equal(enterMotion.covered, 'true')
+    assert.equal(enterMotion.homeInert, true)
+    assert.ok(enterMotion.layerProps.includes('transform') && enterMotion.homeProps.includes('transform'),
+      `Expected pointer navigation into settings to animate transform: ${JSON.stringify(enterMotion)}`)
     await page.snapshot()
     assert.ok(await page.evaluate(() => document.querySelector('.popup-sync-editor input') && document.querySelector('.popup-sync-editor .curator-dialog-body').scrollHeight > 0))
     await shot('popup-editor')
+    await page.click('.popup-sync-editor-header button[data-sync-back]')
+    const exitMotion = await page.evaluate(() => {
+      const layer = document.querySelector('.popup-sync-subview-layer')
+      const home = document.querySelector('.popup-sync-home')
+      return {
+        phase: layer?.dataset.phase,
+        layerInert: Boolean(layer?.inert),
+        covered: home?.dataset.covered,
+        homeInert: Boolean(home?.inert),
+        layerProps: layer?.getAnimations().map(animation => animation.transitionProperty) ?? []
+      }
+    })
+    assert.equal(exitMotion.phase, 'closing')
+    assert.equal(exitMotion.layerInert, true)
+    assert.equal(exitMotion.covered, 'false')
+    assert.equal(exitMotion.homeInert, false)
+    assert.ok(exitMotion.layerProps.includes('transform'), `Expected closing settings to animate transform: ${JSON.stringify(exitMotion)}`)
+    await finishMotion()
+    await page.waitForSelector('#sync-editor-title', { state: 'hidden' })
+    note('Sync settings push in and pop back with interruptible transform/opacity transitions')
+    await page.click('button[aria-label="同步测试的同步选项"]')
+    await page.waitForSelector('#sync-editor-title')
+    await finishMotion()
     await page.keyboard.press('Escape')
     await page.waitForSelector('#sync-editor-title', { state: 'hidden' })
     await page.click('button[aria-label="更多同步操作"]')
@@ -145,21 +187,32 @@ export async function runPopupSyncChecks(task, config) {
     assert.equal(imported.length, 2)
     note('Embedded editor and real export/import round trip remain usable inside the popup')
     if (await page.evaluate(() => Boolean(document.getElementById('sync-editor-title')))) await page.keyboard.press('Escape')
+    await page.waitForFunction(() => document.querySelectorAll('.popup-sync-profile').length === 2)
+    assert.equal(await page.evaluate(() => Boolean(document.querySelector('.popup-sync-cockpit'))), false)
+    assert.equal(await page.evaluate(() => [...document.querySelectorAll('.popup-sync-footer button')].some(button => button.textContent.includes('同步全部'))), true)
+    await shot('popup-multi')
     const second = imported.find(profile => profile.id !== seeded.profile)
     await send({ type: 'sync:delete', id: second.id })
+    await page.waitForFunction(() => Boolean(document.querySelector('.popup-sync-cockpit')))
 
     await profilePatch(seeded.profile, { error: '网络连接失败。'.repeat(60), syncing: false, scheduled: false })
     await page.waitForFunction(() => document.querySelector('.popup-sync-profile-status')?.dataset.tone === 'error')
+    await shot('popup-error')
     const beforeErrorDetail = await page.evaluate(() => document.querySelector('.popup-sync-footer').getBoundingClientRect().top)
     await page.click('.popup-sync-error')
     assert.ok((await page.evaluate(() => document.querySelector('.popup-sync-detail').textContent)).length > 120)
     await page.keyboard.press('Escape')
     assert.equal(await page.evaluate(() => document.querySelector('.popup-sync-footer').getBoundingClientRect().top), beforeErrorDetail)
+    await profilePatch(seeded.profile, { error: null, syncing: 0.42 })
+    await page.waitForFunction(() => document.querySelector('.popup-sync-cockpit-side')?.textContent.includes('正在同步'))
+    assert.equal(await page.evaluate(() => Boolean(document.querySelector('.popup-sync-stage [role="progressbar"]'))), false)
+    assert.equal(await page.evaluate(() => document.querySelector('.popup-sync-cockpit')?.textContent.includes('%')), false)
+    await shot('popup-syncing')
     await profilePatch(seeded.profile, { error: null, syncing: 1 })
-    await page.waitForFunction(() => document.querySelector('.popup-sync-profile-status')?.textContent.includes('正在完成'))
+    await page.waitForFunction(() => document.querySelector('.popup-sync-cockpit-side')?.textContent.includes('正在完成'))
     assert.equal((await send({ type: 'sync:status' })).state, 'running')
     await profilePatch(seeded.profile, { syncing: false })
-    note('Long errors stay readable without displacing controls; 100% progress does not claim success')
+    note('Long errors stay readable without displacing controls; finishing does not claim success')
 
     // Browser login leaves a transient popup. Transfer the real unsaved form
     // through storage.session and let the persistent options editor consume it.
@@ -195,6 +248,7 @@ export async function runPopupSyncChecks(task, config) {
       await page.click('#popup-sync-toggle')
       await page.waitForSelector('.popup-sync-profile')
       await finishMotion()
+      assert.equal(await page.evaluate(() => Boolean(document.querySelector('.popup-sync-cockpit'))), true)
       assert.ok(await page.evaluate(() => {
         const root = document.getElementById('popup-app-shell')
         const stage = document.querySelector('.popup-sync-stage').getBoundingClientRect()
