@@ -8,6 +8,9 @@ export interface NewtabFeaturedBackgroundHoverPreviewView {
   top: number
   visible: boolean
   width: number
+  origin?: string
+  enterX?: number
+  enterY?: number
 }
 
 const EMPTY_PREVIEW_VIEW: NewtabFeaturedBackgroundHoverPreviewView = {

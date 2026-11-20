@@ -1,5 +1,6 @@
 export const SEARCH_HEIGHT_MIN = 36
 export const SEARCH_HEIGHT_MAX = 56
+export const SEARCH_HEIGHT_STEP = 2
 export const SEARCH_WIDTH_MIN_VW = 16
 export const SEARCH_WIDTH_MAX_VW = 72
 export const SEARCH_WIDTH_MIN_PX = 320
@@ -42,7 +43,9 @@ export function normalizeSearchHeight(value: unknown): number {
     ? Number(value)
     : Number.NaN
   if (!Number.isFinite(numeric)) return DEFAULT_SEARCH_LAYOUT.height
-  return Math.max(SEARCH_HEIGHT_MIN, Math.min(SEARCH_HEIGHT_MAX, Math.round(numeric)))
+  const clamped = Math.max(SEARCH_HEIGHT_MIN, Math.min(SEARCH_HEIGHT_MAX, numeric))
+  const stepped = Math.round((clamped - SEARCH_HEIGHT_MIN) / SEARCH_HEIGHT_STEP) * SEARCH_HEIGHT_STEP + SEARCH_HEIGHT_MIN
+  return Math.max(SEARCH_HEIGHT_MIN, Math.min(SEARCH_HEIGHT_MAX, stepped))
 }
 
 export function resetSearchLayout<T extends typeof DEFAULT_SEARCH_LAYOUT>(settings: T): T {

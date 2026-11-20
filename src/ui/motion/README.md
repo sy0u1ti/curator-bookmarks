@@ -111,7 +111,8 @@ absorb occasional OS repeat jitter; the final tail is capped at 100 ms.
 
 The sidebar's text hover is fine-pointer only; a touch never activates it. Closed
 navigation children are inert immediately. Initial content paints settled;
-stagger belongs only to opening a small navigation sublist, capped below 300 ms.
+opening a navigation sublist lets `.t-acc-panel-inner` carry all rows and the
+child selection mark together without per-row stagger.
 
 ## Motion and layout continuity
 

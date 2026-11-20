@@ -498,7 +498,15 @@ function PopupSmartPermission({
             {state.permissionOrigins.map((origin) => <span className={permissionOriginClass} key={origin}>{origin}</span>)}
           </div>
         ) : null}
-        <StatusMessage className={permissionErrorClass} tone="error">{state.error}</StatusMessage>
+        {state.error ? (
+          <StatusMessage
+            className={permissionErrorClass}
+            style={{ blockSize: 'auto', maxBlockSize: 'calc(3 * 1lh)' }}
+            tone="error"
+          >
+            {state.error}
+          </StatusMessage>
+        ) : null}
       </div>
       <Toolbar className={actionsClass} unstyled>
         <Button

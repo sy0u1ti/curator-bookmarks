@@ -18,7 +18,7 @@ const RECYCLE_ENTRY_LIST_CLASS = 'flex flex-col [--list-exit-gap:0.75rem]'
 const RECYCLE_PAGE_SIZE = 30
 const RECYCLE_STATUS_RESERVE = ['当前页已选 30 条，其他页或筛选外已选 999 条。']
 const RECYCLE_CARD_CLASS =
-  `${OPTION_INSET_CLASS} p-[14px_16px] [transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:border-ds-border-hover hover:bg-ds-hover`
+  `${OPTION_INSET_CLASS} p-[14px_16px] [transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard),transform_var(--list-exit-dur)_var(--list-exit-ease)] hover:border-ds-border-hover hover:bg-ds-hover`
 const RECYCLE_CARD_SELECTED_CLASS = 'border-ds-border-hover bg-ds-selected'
 const RECYCLE_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3 max-[760px]:flex-col'

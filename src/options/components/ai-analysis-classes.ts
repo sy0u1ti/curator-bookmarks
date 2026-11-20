@@ -7,7 +7,7 @@ export const AI_ANALYSIS_SELECTION_GROUP_CLASS =
   `mt-7 ${OPTION_SURFACE_CLASS} p-[18px_20px_20px] max-[760px]:mt-5 max-[760px]:p-4`
 
 export const AI_ANALYSIS_PRIMARY_BUTTON_CLASS =
-  'font-bold active:scale-[0.985]'
+  'font-bold'
 
 export const AI_ANALYSIS_SMALL_BUTTON_CLASS =
   'font-semibold'

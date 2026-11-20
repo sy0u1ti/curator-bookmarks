@@ -27,6 +27,8 @@
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ds-border-hover) transparent;
 }
 
 .curator-dialog-workspace > label {

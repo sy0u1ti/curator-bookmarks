@@ -8,14 +8,6 @@ export const OPTION_PANEL_ENTER_CLASS = [
   'motion-reduce:[.options-motion-ready_&:not([hidden])]:duration-[80ms]'
 ].join(' ')
 
-export const OPTION_REVEAL_ENTER_CLASS = [
-  '[.options-motion-ready_&]:transition-opacity',
-  '[.options-motion-ready_&]:duration-ds-standard',
-  '[.options-motion-ready_&]:ease-ds-standard',
-  '[.options-motion-ready_&]:starting:opacity-0',
-  'motion-reduce:[.options-motion-ready_&]:duration-[80ms]'
-].join(' ')
-
 export const OPTION_PANEL_BASE_CLASS =
   `mx-auto min-w-0 ${OPTION_PANEL_ENTER_CLASS} max-[920px]:mx-0 max-[920px]:w-full max-[760px]:max-w-full`
 
@@ -47,7 +39,7 @@ export const OPTION_GROUP_CLASS =
   `options-interactive-surface curator-motion-surface mt-5 ${OPTION_SURFACE_CLASS} py-1 max-[760px]:mt-4`
 
 export const OPTION_TOOL_PANEL_CLASS =
-  `options-interactive-surface curator-motion-surface mt-5 ${OPTION_SURFACE_CLASS} p-5 ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  `options-interactive-surface curator-motion-surface mt-5 ${OPTION_SURFACE_CLASS} p-5 max-[760px]:p-4`
 
 export const OPTION_RUN_HEADER_CLASS = [
   'curator-motion-surface mt-6 grid grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)_auto] items-stretch gap-3',
@@ -86,7 +78,7 @@ export const OPTION_COPY_TEXT_CLASS =
   'mt-[7px] mb-0 text-[13px] leading-[1.65] text-ds-text-muted'
 
 export const OPTION_EMPTY_STATE_CLASS =
-  'options-interactive-surface curator-motion-surface t-stagger rounded-ds-card border-0 bg-ds-surface-1 p-5 text-left shadow-none'
+  'options-interactive-surface curator-motion-surface rounded-ds-card border-0 bg-ds-surface-1 p-5 text-left shadow-none'
 
 export const OPTION_EMPTY_STATE_TITLE_CLASS =
   'm-0 text-sm font-semibold leading-[1.4] text-ds-text-primary'
@@ -134,7 +126,7 @@ export const SCOPE_PICKER_TRIGGER_CLASS = [
   'transition-[background-color,border-color,color,transform,opacity] duration-ds-standard ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-focus focus-visible:bg-ds-surface-2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-ds-focus focus-visible:shadow-none',
-  'active:scale-[0.985] disabled:cursor-default disabled:opacity-55 data-disabled:cursor-default data-disabled:opacity-55',
+  'active:scale-[var(--ds-press-scale)] motion-reduce:active:scale-100 disabled:cursor-default disabled:opacity-55 data-disabled:cursor-default data-disabled:opacity-55',
   'max-[1180px]:w-full max-[1180px]:min-w-0'
 ].join(' ')
 

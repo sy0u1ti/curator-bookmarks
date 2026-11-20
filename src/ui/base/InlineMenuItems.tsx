@@ -1,5 +1,5 @@
 import { Menu as BaseMenu } from '@base-ui/react/menu'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Icon } from '../icons/Icon'
 import { MotionPanel } from '../motion/MotionPanel'
 import type { InlineMenuAction } from './InlineMenu.js'
@@ -217,25 +217,19 @@ export function InlineMenuItems({
       )
     }
 
-    if (!submenu) {
-      return (
-        <BaseMenu.Item
-          {...common}
-          key={action.id}
-          closeOnClick={action.closeOnSelect ?? closeOnSelect}
-          onClick={() => {
-            if (cascade.enabled) intent.reset()
-            void action.onSelect?.()
-          }}
-        >
-          {content}
-        </BaseMenu.Item>
-      )
-    }
-
-    return (
+    const itemNode = !submenu ? (
+      <BaseMenu.Item
+        {...common}
+        closeOnClick={action.closeOnSelect ?? closeOnSelect}
+        onClick={() => {
+          if (cascade.enabled) intent.reset()
+          void action.onSelect?.()
+        }}
+      >
+        {content}
+      </BaseMenu.Item>
+    ) : (
       <BaseMenu.SubmenuRoot
-        key={action.id}
         open={open}
         highlightItemOnHover={false}
         closeParentOnEsc
@@ -299,6 +293,15 @@ export function InlineMenuItems({
           </BaseMenu.Positioner>
         </BaseMenu.Portal>
       </BaseMenu.SubmenuRoot>
+    )
+
+    return (
+      <Fragment key={action.id}>
+        {action.separatorBefore ? (
+          <BaseMenu.Separator className="my-[1px] h-px bg-[var(--ui-divider,var(--ds-border-subtle))]" />
+        ) : null}
+        {itemNode}
+      </Fragment>
     )
   })
 

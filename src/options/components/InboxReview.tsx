@@ -12,6 +12,7 @@ import { Icon } from '../../ui/icons/Icon.js'
 import { StableLabel } from '../../ui/base/StatusMessage.js'
 import { useListExit, type MountedListEntry } from '../../ui/motion/useListExit.js'
 import { getInboxReviewData, refreshInboxReview, useInboxReviewData } from './inbox-review-store.js'
+import { OptionEmptyState } from './OptionEmptyState.js'
 import { showOptionsUndoToast } from './options-undo-toast-store.js'
 
 const PAGE_SIZE = 20
@@ -82,6 +83,22 @@ export function InboxReview() {
   const visible = filtered.slice(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE)
   const rows = useListExit(visible, item => item.captureId, `${normalizedQuery}\u0000${currentPage}`)
   const searchable = pending.length > 1 || Boolean(query)
+  const emptyReady = Boolean(data) && !error && !pending.length && !rows.length
+
+  if (emptyReady) {
+    return (
+      <section aria-labelledby="inbox-review-title" className="mt-5 mb-7">
+        <h3 id="inbox-review-title" className="sr-only">待整理 0 条</h3>
+        <OptionEmptyState
+          title="没有待整理的书签"
+          description="用快捷键保存或自动分析未命中分类的书签，会暂存在这里等待确认。"
+          actions={data?.inbox.lastUndoMove
+            ? [{ label: '撤销最近一次移动', onClick: () => void undoLastMove(), variant: 'secondary' }]
+            : [{ action: 'open-auto-analyze', label: '前往通用设置', variant: 'secondary' }]}
+        />
+      </section>
+    )
+  }
 
   return <section aria-labelledby="inbox-review-title" className={`mt-5 mb-7 ${OPTION_SURFACE_CLASS} px-5`}>
     <div className="flex min-h-[68px] flex-wrap items-center gap-3 py-4">

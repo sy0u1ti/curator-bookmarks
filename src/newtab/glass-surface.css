@@ -78,6 +78,29 @@
   --glass-shadow: var(--newtab-bookmark-current-shadow, var(--newtab-glass-drop-shadow));
 }
 
+/* Speed-dial cards sit inside the speed-dial lens; a second lens would only
+   re-filter that panel. */
+.newtab-speed-dial-card.newtab-glass:not(.speed-dial-drag-ghost) {
+  --glass-blur: 0px;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:is(.bookmark-tile, .newtab-speed-dial-card, .newtab-quick-link).newtab-glass:focus-visible {
+  border-color: var(--newtab-glass-border-hover);
+}
+
+:is(.newtab-speed-dial-card, .newtab-quick-link).newtab-glass:focus-visible {
+  outline: var(--newtab-focus-outline);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :is(.newtab-speed-dial-card, .newtab-quick-link).newtab-glass:not(.curator-motion-disabled):not(.dragging):hover {
+    border-color: var(--newtab-glass-border-hover);
+  }
+}
+
 .newtab-search-surface.newtab-glass {
   --glass-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
 }
@@ -180,7 +203,7 @@ body:has(#newtab-settings-drawer .settings-drawer-panel[data-ending-style]) .set
   .newtab-glass.glass-surface--fallback {
     background: Canvas !important;
     color: CanvasText;
-    border-color: CanvasText;
+    border-color: CanvasText !important;
     box-shadow: none;
     text-shadow: none;
     -webkit-backdrop-filter: none !important;

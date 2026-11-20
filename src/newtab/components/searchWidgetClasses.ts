@@ -1,7 +1,7 @@
 import type { SearchWidgetNaturalButtonState } from '../newtab-search-widget-store'
 import { cx } from '../../ui/base/utils'
 
-export const SEARCH_SLOT_CLASS = 'newtab-search-slot relative z-[2] mt-[var(--search-offset-y)] h-[var(--search-height)] w-full justify-self-center [--search-effective-width:var(--search-auto-width,min(max(var(--search-min-width),var(--search-width)),100%))] [--search-height:40px] [--search-control-size:clamp(24px,calc(var(--search-height)_-_16px),36px)] [--search-control-inset:calc((var(--search-height)_-_var(--search-control-size))/2)] [--search-radius:calc(var(--ds-radius-control)_+_var(--search-control-inset))] [--search-offset-y:0px] [--search-width:44vw]'
+export const SEARCH_SLOT_CLASS = 'newtab-search-slot relative z-[2] mt-[var(--search-offset-y)] h-[var(--search-height)] w-full justify-self-center [--search-effective-width:var(--search-auto-width,min(max(var(--search-min-width),var(--search-width)),100%))] [--search-height:40px] [--search-control-size:clamp(calc(24px_+_mod(var(--search-height),2px)),calc(var(--search-height)_-_16px),calc(36px_-_mod(var(--search-height),2px)))] [--search-control-inset:calc((var(--search-height)_-_var(--search-control-size))/2)] [--search-radius:calc(var(--ds-radius-control)_+_var(--search-control-inset))] [--search-offset-y:0px] [--search-width:44vw]'
 export const SEARCH_SLOT_PENDING_LAYOUT_CLASS = 'opacity-0 invisible pointer-events-none'
 export const SEARCH_SHELL_CLASS = 'newtab-search-shell relative mx-auto w-[var(--search-effective-width)]'
 export const SEARCH_FORM_CLASS = 'newtab-search group relative z-[1] flex h-[var(--search-height)] w-full items-center gap-2 border-0 bg-transparent py-0 pr-[var(--search-control-inset)] pl-4 outline-none'

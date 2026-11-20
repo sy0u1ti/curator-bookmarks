@@ -16,7 +16,6 @@ import { OptionsModals } from '../../options/components/OptionsModals'
 import { publishOptionsModals } from '../../options/components/options-modals-store'
 import { PopupContent } from '../../popup/components/PopupContent'
 import type { PopupActionMenuViewModel } from '../../popup/components/PopupViewModels'
-import { SidePanelBookmarkActions } from '../../sidepanel/SidePanelBookmarkActions'
 import { BookmarkMenusHost } from '../../newtab/components/BookmarkMenusHost'
 import { dispatchNewtabBookmarkEditMenuView } from '../../newtab/newtab-bookmark-menu-store'
 import type { BookmarkMenuActionViewModel } from '../../newtab/bookmark-menu-view-models'
@@ -168,10 +167,7 @@ function Popup() {
     setFeedback(actionFeedback('pending'))
     probe.complete = success => setFeedback(actionFeedback(success ? 'success' : 'error'))
   }
-  if (surface === 'sidepanel') return <div style={{ margin: 40, position: 'relative', height: 80 }}>
-    <SidePanelBookmarkActions menu={menu} onMenuAction={copy} />
-  </div>
-  return <main id="popup-app-shell" style={{ width: 'min(720px, 100%)', height: 320, margin: '32px auto' }}>
+  return <main id="popup-app-shell" style={{ width: surface === 'sidepanel' ? 'min(390px, 100%)' : 'min(720px, 100%)', height: 320, margin: '32px auto' }}>
     <PopupContent mainListRef={listRef} handlers={{ onMenuAction: copy }} state={{ mode: 'tree', rows: [{
       active: true, kind: 'bookmark', bookmarkId: 'fixture', depth: 0, index: 0, parentId: '1',
       title: '设计参考', displayUrl: 'fixture.invalid', url: 'https://fixture.invalid', menu, menuLabel: '书签操作'

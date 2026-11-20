@@ -23,6 +23,26 @@ html {
   }
 }
 
+.archive-status-copy {
+  display: block;
+  animation: archive-status-arrive var(--ds-motion-fast) var(--ds-ease-settle) backwards;
+}
+
+@keyframes archive-status-arrive {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 3px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+:root[data-motion-input="keyboard"] :is(.archive-status-copy, .archive-saved-check path) {
+  animation: none !important;
+}
+
 .archive-saved-check {
   width: 16px;
   height: 16px;
@@ -51,6 +71,10 @@ html {
   .archive-status {
     transform: none !important;
     transition: opacity 80ms linear !important;
+  }
+
+  .archive-status-copy {
+    animation: none !important;
   }
 
   .archive-saved-check path {

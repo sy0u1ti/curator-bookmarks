@@ -4,6 +4,7 @@ import { Button } from '../../ui/base/Button'
 import { StableLabel, StatusMessage } from '../../ui/base/StatusMessage'
 import { Input } from '../../ui/base/Input'
 import { Popover } from '../../ui/base/Popover'
+import { Icon } from '../../ui/icons/Icon'
 import { cx } from '../../ui/base/utils'
 import { ButtonBusyLoadingLabel } from './LoadingLabel.js'
 import { handleAvailabilityControlsAction } from '../options-controller'
@@ -41,7 +42,7 @@ const AVAILABILITY_BADGE_TONE_CLASSES: Record<string, string> = {
   warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
 }
 const AVAILABILITY_BUTTON_MOBILE_FULL_CLASS = OPTION_RUN_ACTION_BUTTON_CLASS
-const SETTINGS_ANCHOR_CLASS = `relative shrink-0 ${AVAILABILITY_BUTTON_MOBILE_FULL_CLASS}`
+const SETTINGS_ANCHOR_CLASS = 'relative w-full shrink-0'
 const SETTINGS_POPOVER_CLASS =
   'w-[min(320px,calc(100vw_-_48px))]'
 const SETTINGS_HEAD_CLASS = 'flex items-center justify-between gap-2.5'
@@ -157,13 +158,14 @@ export function AvailabilityControls() {
             sideOffset={10}
             trigger={
               <Button
-                className={AVAILABILITY_BUTTON_MOBILE_FULL_CLASS}
+                className="w-full border-ds-border bg-ds-surface-2 hover:border-ds-border-hover hover:bg-ds-surface-3"
                 size="sm"
                 type="button"
                 variant="secondary"
                 disabled={state.settingsDisabled}
                 focusableWhenDisabled={state.settingsDisabled}
               >
+                <Icon name="Settings" size={14} aria-hidden="true" />
                 检测设置
               </Button>
             }

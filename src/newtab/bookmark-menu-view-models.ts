@@ -21,6 +21,7 @@ export interface BookmarkMenuActionViewModel {
   label: string
   feedback?: import('../shared/action-feedback').ActionFeedback
   onSelect: () => void | Promise<void>
+  separatorBefore?: boolean
   children?: () => BookmarkMenuActionViewModel[]
   variant?: 'danger' | ''
 }

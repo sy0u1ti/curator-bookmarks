@@ -13,7 +13,7 @@ export const optionsBrandClassBase =
   'options-brand curator-motion-chip inline-flex min-h-[58px] min-w-0 items-center gap-2 p-[6px_0] outline-none max-[920px]:min-h-0 max-[920px]:py-0'
 
 export const optionsBrandMarkClass =
-  'options-brand-mark h-[42px] w-[42px] flex-none overflow-hidden rounded-ds-sm border border-ds-border bg-ds-surface-1 shadow-none max-[920px]:h-10 max-[920px]:w-10'
+  'options-brand-mark h-[42px] w-[42px] flex-none overflow-hidden rounded-ds-sm border border-ds-border bg-ds-surface-1 shadow-none transition-[border-color] duration-ds-standard ease-ds-standard max-[920px]:h-10 max-[920px]:w-10'
 
 export const optionsBrandMarkImageClass =
   'block h-full w-full object-cover [filter:grayscale(1)_contrast(1.08)_brightness(0.9)] transition-[filter,opacity] duration-ds-standard ease-ds-standard'
@@ -30,7 +30,7 @@ export const navClass =
   'grid grid-cols-[minmax(0,1fr)] justify-stretch gap-1 max-[920px]:grid-cols-[repeat(auto-fit,minmax(148px,1fr))] max-[760px]:grid-cols-[minmax(0,1fr)]'
 
 export const navCollapsibleClass =
-  'options-nav-disclosure grid min-w-0 gap-[3px] max-[920px]:w-full'
+  'options-nav-disclosure grid min-w-0 max-[920px]:w-full'
 
 export const navLinkClass = [
   'options-nav-link relative z-[1] flex min-h-[36px] w-full items-center justify-start gap-2.5 overflow-hidden rounded-ds-sm border border-transparent bg-transparent px-2.5 py-0',
@@ -49,8 +49,8 @@ export const navSubIndicatorClass =
   'options-nav-sub-indicator options-nav-selection pointer-events-none absolute left-0 top-0 z-[0] rounded-ds-sm'
 
 export const navSublistClass = [
-  'options-nav-sublist relative isolate grid gap-1 ml-[17px] pl-2.5 border-l border-ds-border-subtle',
-  'max-[920px]:ml-0 max-[920px]:mt-1.5 max-[920px]:border-l-0'
+  'options-nav-sublist relative isolate grid gap-1 ml-[17px] mt-[3px] pl-2.5 border-l border-ds-border-subtle',
+  'max-[920px]:ml-0 max-[920px]:mt-[9px] max-[920px]:border-l-0'
 ].join(' ')
 
 export const navGroupTriggerClass =
@@ -76,7 +76,7 @@ export const optionsMobileNavBackdropClass =
   'options-mobile-nav-backdrop fixed inset-0 bg-ds-overlay'
 
 export const optionsMobileNavPanelClass =
-  'options-mobile-nav-panel fixed inset-y-0 left-0 flex w-[min(86vw,340px)] max-w-full flex-col overflow-hidden border-r border-ds-border bg-ds-page text-ds-text-primary shadow-ds-dialog [--curator-overlay-enter-x:-18px]'
+  'options-mobile-nav-panel origin-left fixed inset-y-0 left-0 flex w-[min(86vw,340px)] max-w-full flex-col overflow-hidden border-r border-ds-border bg-ds-page text-ds-text-primary shadow-ds-dialog [--curator-overlay-enter-x:-28px]'
 
 export const optionsMobileNavHeaderClass =
   'flex h-[70px] min-h-[70px] items-center justify-between border-b border-ds-border-subtle px-4'

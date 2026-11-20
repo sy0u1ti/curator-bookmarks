@@ -64,10 +64,7 @@ const TRIGGER_CLASS = cx(
   'disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-colors motion-reduce:duration-[80ms] motion-reduce:active:not-disabled:scale-100'
 )
 
-const VIEW_TRACK_CLASS = cx(
-  'reasoning-selector-view-track grid min-w-0',
-  'transition-[grid-template-rows,opacity,transform] duration-[var(--resize-dur)] ease-[var(--resize-ease)]'
-)
+const VIEW_TRACK_CLASS = 'reasoning-selector-view-track grid min-w-0'
 
 const MENU_ROW_CLASS =
   'reasoning-selector-menu-row grid min-h-9 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-ds-sm px-3 text-sm'
@@ -436,19 +433,27 @@ export function ReasoningEffortSelector({
       aria-label={`${ariaLabel}：${currentLevel?.label ?? '—'}；模型：${modelName}`}
       disabled={disabled}
     >
-      <ZapIcon className="mr-2 size-3.5 flex-none fill-current text-ds-text-primary" aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate text-left font-semibold">{modelName}</span>
-      <span className="ml-2 inline-grid flex-none font-normal text-ds-text-secondary">
-        <span className="invisible col-start-1 row-start-1 whitespace-nowrap" aria-hidden="true">{widestLabel}</span>
+      <ZapIcon
+        className={cx(
+          'mr-2 size-3.5 flex-none fill-current',
+          isHighestLevel ? 'text-[#c472fb]' : 'text-ds-text-primary'
+        )}
+        aria-hidden="true"
+      />
+      <span className="inline-grid min-w-0 flex-1 font-semibold">
+        <span className="invisible col-start-1 row-start-1 whitespace-nowrap text-left" aria-hidden="true">{widestLabel}</span>
         <span
           className={cx(
-            'col-start-1 row-start-1 whitespace-nowrap text-right',
+            'col-start-1 row-start-1 truncate text-left',
             isHighestLevel ? 'text-[#c472fb]' : ''
           )}
           ref={tierLabelRef}
         >
           {currentLevel?.label ?? '—'}
         </span>
+      </span>
+      <span className="ml-2 flex-none whitespace-nowrap text-xs font-normal text-ds-text-secondary">
+        {speedLabel}
       </span>
     </Button>
   )
@@ -470,6 +475,7 @@ export function ReasoningEffortSelector({
       <div className="min-w-0" data-selector-view={view}>
         <div
           className={VIEW_TRACK_CLASS}
+          data-active={view === 'menu'}
           style={{
             gridTemplateRows: view === 'menu' ? '1fr' : '0fr',
             opacity: view === 'menu' ? 1 : 0,
@@ -482,7 +488,6 @@ export function ReasoningEffortSelector({
           <div className="min-h-0 overflow-hidden">
             <div
               className="reasoning-selector-menu p-[8px_8px_6px]"
-              data-stagger={open && view === 'menu'}
             >
               <div className={MENU_ROW_CLASS}>
                 <span className="font-semibold text-ds-text-primary">模型</span>
@@ -516,6 +521,7 @@ export function ReasoningEffortSelector({
 
         <div
           className={VIEW_TRACK_CLASS}
+          data-active={view === 'advanced'}
           style={{
             gridTemplateRows: view === 'advanced' ? '1fr' : '0fr',
             opacity: view === 'advanced' ? 1 : 0,

@@ -185,10 +185,13 @@ export async function runSidebarMotionScenarios(page, output) {
   assert.equal(entered.inert, false)
   pass('activating a parent opens its page and marks both parent and selected child')
 
-  const stagger = await page.evaluate(root => [...document.querySelector(root).querySelectorAll('.options-nav-disclosure .options-nav-content')].map(element => Number.parseFloat(getComputedStyle(element).transitionDelay)), desktop)
-  assert.equal(stagger.length, 4)
-  assert.ok(stagger.every((delay, index) => Math.abs(delay - (0.06 + index * 0.028)) < 0.001))
-  pass('child entry keeps the shared capped stagger')
+  const childRows = await page.evaluate(root => [...document.querySelector(root).querySelectorAll('.options-nav-disclosure .options-nav-content')].map(element => {
+    const style = getComputedStyle(element)
+    return { delay: Number.parseFloat(style.transitionDelay), transform: style.transform }
+  }), desktop)
+  assert.equal(childRows.length, 4)
+  assert.ok(childRows.every(row => row.delay === 0 && row.transform === 'none'))
+  pass('child rows enter together with the disclosure panel and sub-indicator without per-row stagger')
 
   const parentY = await page.evaluate(selector => document.querySelector(selector).getBoundingClientRect().y, indicator)
   await record(`${desktop} .options-nav-sub-indicator`)
@@ -247,6 +250,30 @@ export async function runSidebarMotionScenarios(page, output) {
   await aligned()
   assert.equal((await groupState()).activeChild, '#history')
   pass('back, forward and parent re-entry restore the correct child and group visibility')
+
+  for (const [section, maxOvershoot] of [['inbox', 1.5], ['recycle', 2]]) {
+    const startY = await page.evaluate(selector => document.querySelector(selector).getBoundingClientRect().y, indicator)
+    await record()
+    await page.click(link(section))
+    await settled()
+    await aligned()
+    const leaveTrace = await stopRecord()
+    report.traces[`leaveGroupTo_${section}`] = leaveTrace
+    const finalY = await page.evaluate(selector => document.querySelector(selector).getBoundingClientRect().y, link(section))
+    const maxY = Math.max(...leaveTrace.map(frame => frame.y))
+    assert.ok(
+      leaveTrace.some(frame => frame.y > startY + 2 && frame.y < finalY - 2),
+      `Leaving group to ${section} must glide smoothly toward final slot`
+    )
+    assert.ok(
+      maxY <= finalY + maxOvershoot,
+      `Leaving group to ${section} overshot downward: maxY=${maxY}, finalY=${finalY}`
+    )
+    await page.click(trigger)
+    await settled()
+    await aligned()
+  }
+  pass('leaving an open group to lower items glides directly to the settled slot without downward overshoot')
 
   await record()
   await page.evaluate(async ({ outside, group }) => {

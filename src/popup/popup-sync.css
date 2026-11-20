@@ -1,5 +1,6 @@
 .popup-sync-stage {
   --popup-activity-size: 48px;
+  --popup-sync-gap: 8px;
   position: relative;
   flex: 1 1 0%;
   min-height: 0;
@@ -10,16 +11,18 @@
 .popup-sync-stage[hidden] { display: none; }
 .popup-sync-bookmarks {
   position: absolute;
-  inset: calc(var(--popup-activity-size) + 8px) 0 0;
-  transform-origin: center bottom;
-  transform: scale(1);
+  inset: calc(var(--popup-activity-size) + var(--popup-sync-gap)) 0 0;
+  transform: translateY(0);
   opacity: 1;
-  transition: transform 340ms var(--ds-ease-settle), opacity var(--ds-motion-state) var(--ds-ease-standard);
+  transition:
+    transform 340ms var(--ds-ease-settle),
+    opacity var(--ds-motion-enter-opacity) var(--ds-ease-standard);
 }
 .popup-sync-stage[data-sync-open="true"] .popup-sync-bookmarks {
-  transform: scale(.96, .045);
+  transform: translateY(calc(100% + var(--popup-sync-gap)));
   opacity: 0;
-  transition-duration: var(--ds-motion-surface), var(--ds-motion-state);
+  transition-duration: var(--ds-motion-surface), var(--ds-motion-standard);
+  transition-timing-function: var(--ds-ease-settle), var(--ds-ease-standard);
 }
 .popup-sync-surface {
   position: absolute;
@@ -49,9 +52,13 @@
   flex-direction: column;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--ds-motion-fast) var(--ds-ease-standard);
+  transition: opacity var(--ds-motion-exit-opacity) var(--ds-ease-standard);
 }
-.popup-sync-stage[data-sync-open="true"] .popup-sync-view { opacity: 1; pointer-events: auto; }
+.popup-sync-stage[data-sync-open="true"] .popup-sync-view {
+  opacity: 1;
+  pointer-events: auto;
+  transition-duration: var(--ds-motion-enter-opacity);
+}
 .popup-page-actions { display: flex; gap: 8px; min-width: 0; justify-content: flex-end; align-items: center; }
 .popup-sync-toggle {
   display: inline-flex;
@@ -59,9 +66,9 @@
   align-items: center;
   flex: none;
   gap: 5px;
-  width: 80px;
+  width: 88px;
   height: 28px;
-  padding: 0 6px;
+  padding: 0 8px;
   border-radius: var(--ds-radius-sm);
   border: 0;
   background: var(--ds-surface-3);
@@ -118,13 +125,6 @@
 .popup-sync-body {
   position: relative;
   overflow: clip;
-  opacity: 0;
-  transform: translateY(-8px);
-  transition: transform 340ms var(--ds-ease-settle), opacity var(--ds-motion-fast) var(--ds-ease-standard);
-}
-.popup-sync-stage[data-sync-open="true"] .popup-sync-body {
-  opacity: 1; transform: none;
-  transition-duration: var(--ds-motion-surface), var(--ds-motion-state);
 }
 .popup-sync-home {
   position: absolute;
@@ -452,6 +452,18 @@
   border-radius: 10px;
   background: var(--ds-surface-2);
 }
+.popup-sync-fact--toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.popup-sync-fact--toggle > div {
+  min-width: 0;
+}
+.popup-sync-fact--toggle .popup-sync-auto {
+  flex: none;
+}
 .popup-sync-fact span {
   display: block;
   color: var(--ds-text-muted);
@@ -534,6 +546,7 @@
   border-radius: var(--ds-radius-sm); border: 0; color: var(--ds-text-secondary); font-size: 12px;
   white-space: nowrap; background: transparent;
 }
+.popup-sync-action[data-tone="warning"] { color: var(--ds-warning); }
 .popup-sync-direction { width: 28px; padding: 0; background: var(--ds-surface-3); }
 .popup-sync-run { min-width: 76px; background: var(--ds-surface-3); color: var(--ds-text-primary); }
 .popup-sync-run[data-primary="true"] { color: var(--ds-accent-contrast); background: var(--ds-accent); }
@@ -663,19 +676,21 @@
   .popup-sync-list--cockpit .popup-sync-cockpit { padding: 0; }
   .popup-sync-header { gap: 8px; padding-inline: 10px; }
   .popup-sync-header-icon { display: none; }
-  .popup-sync-toggle { width: 76px; font-size: 11px; }
+  .popup-sync-toggle { width: 80px; font-size: 11px; }
   .popup-sync-header-copy p { font-size: 11px; }
   .popup-sync-editor-footer { grid-template-columns: minmax(0,1fr); gap: 6px; }
+  .popup-sync-editor-footer > .curator-status-message[data-empty="true"] { display: none; }
   .popup-sync-editor-footer > div:last-child { flex-wrap: nowrap; }
 }
 @media (hover: hover) and (pointer: fine) {
   :is(.popup-sync-toggle, .popup-sync-action, .popup-sync-direction, .popup-sync-run):not(:disabled):hover { background: var(--ds-hover); color: var(--ds-text-primary); }
+  .popup-sync-action[data-tone="warning"]:not(:disabled):hover { color: var(--ds-warning); }
   .popup-sync-cockpit-actions :is(.popup-sync-action, .popup-sync-direction):not(:disabled):hover { border-color: var(--ds-border); }
   .popup-sync-run[data-primary="true"]:not(:disabled):hover { background: var(--ds-accent-hover); color: var(--ds-accent-contrast); }
   .popup-sync-cockpit-alert .popup-sync-error:hover { text-decoration: underline; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .popup-sync-stage :is(.popup-sync-bookmarks, .popup-sync-surface, .popup-sync-page, .popup-sync-view, .popup-sync-body) { transition: none; }
+  .popup-sync-stage :is(.popup-sync-bookmarks, .popup-sync-surface, .popup-sync-page, .popup-sync-view) { transition: none; }
   .popup-sync-bookmarks, .popup-sync-stage[data-sync-open="true"] .popup-sync-bookmarks { transform: none; }
   .popup-sync-home,
   .popup-sync-home[data-covered="true"],

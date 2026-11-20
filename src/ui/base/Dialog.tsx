@@ -1,16 +1,76 @@
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import {
+  createContext,
   createElement,
   useCallback,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useRef,
   useState,
   type ComponentPropsWithoutRef,
   type ReactNode,
-  type Ref
+  type Ref,
+  type RefObject
 } from 'react'
 import { MotionPanel } from '../motion/MotionPanel'
+import {
+  computeDialogAnchorStyle,
+  isPopupSurfaceDocument,
+  type AnchorPoint
+} from '../../shared/anchor-origin'
+import { shouldSkipMotion } from '../../shared/motion'
+import { getRecentPointerAnchor } from '../../shared/motion-preferences'
+import { assignRef } from './input-sync'
 import { cx, cxState } from './utils'
 import { SurfaceMaterial } from './SurfaceMaterial'
 import './dialog-layout.css'
+
+interface DialogAnchorContextValue {
+  open: boolean
+  triggerId?: string | null
+  openerRef: RefObject<HTMLElement | null>
+  pointerRef: RefObject<AnchorPoint | null>
+}
+
+const DialogAnchorContext = createContext<DialogAnchorContextValue | null>(null)
+
+export interface DialogAnchorProviderProps {
+  open: boolean
+  triggerId?: string | null
+  children: ReactNode
+}
+
+export function DialogAnchorProvider({
+  open,
+  triggerId,
+  children
+}: DialogAnchorProviderProps) {
+  const wasOpenRef = useRef(false)
+  const openerRef = useRef<HTMLElement | null>(null)
+  const pointerRef = useRef<AnchorPoint | null>(null)
+
+  if (open && !wasOpenRef.current) {
+    openerRef.current = typeof document !== 'undefined' &&
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement !== document.body
+      ? document.activeElement
+      : null
+    pointerRef.current = getRecentPointerAnchor()
+  }
+  wasOpenRef.current = open
+
+  const anchorContext = useMemo<DialogAnchorContextValue>(
+    () => ({ open, triggerId, openerRef, pointerRef }),
+    [open, triggerId]
+  )
+
+  return (
+    <DialogAnchorContext.Provider value={anchorContext}>
+      {children}
+    </DialogAnchorContext.Provider>
+  )
+}
 
 export interface DialogProps {
   open?: boolean
@@ -67,7 +127,9 @@ export function DialogOverlay({
       disablePointerDismissal={disablePointerDismissal}
     >
       <BaseDialog.Portal keepMounted={keepMounted} container={portalContainer}>
-        <div ref={ref} {...overlayProps}>{children}</div>
+        <DialogAnchorProvider open={open} triggerId={triggerId}>
+          <div ref={ref} {...overlayProps}>{children}</div>
+        </DialogAnchorProvider>
       </BaseDialog.Portal>
     </BaseDialog.Root>
   )
@@ -91,13 +153,74 @@ export function DialogPanel({
   layout = 'centered',
   ...props
 }: DialogPanelProps) {
+  const anchorContext = useContext(DialogAnchorContext)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+
+  const handlePanelRef = useCallback((node: HTMLDivElement | null) => {
+    panelRef.current = node
+    assignRef(ref, node)
+  }, [ref])
+
+  useLayoutEffect(() => {
+    if (unanimated || motionVariant !== 'dialog' || !anchorContext?.open) {
+      return
+    }
+    if (isPopupSurfaceDocument()) {
+      return
+    }
+    const panel = panelRef.current
+    if (!panel) {
+      return
+    }
+    if (shouldSkipMotion()) {
+      panel.style.removeProperty('--curator-dialog-origin')
+      panel.style.removeProperty('--curator-overlay-enter-x')
+      panel.style.removeProperty('--curator-overlay-enter-y')
+      return
+    }
+
+    const explicitTrigger = anchorContext.triggerId ? document.getElementById(anchorContext.triggerId) : null
+    const candidateTrigger = explicitTrigger ?? anchorContext.openerRef.current
+    const triggerElement = candidateTrigger && candidateTrigger.isConnected && !panel.contains(candidateTrigger)
+      ? candidateTrigger
+      : null
+    const rawTriggerRect = triggerElement?.getBoundingClientRect() ?? null
+    const triggerBox = rawTriggerRect && (rawTriggerRect.width > 0 || rawTriggerRect.height > 0)
+      ? {
+          left: rawTriggerRect.left,
+          top: rawTriggerRect.top,
+          width: rawTriggerRect.width,
+          height: rawTriggerRect.height
+        }
+      : null
+
+    panel.style.removeProperty('--curator-dialog-origin')
+    panel.style.removeProperty('--curator-overlay-enter-x')
+    panel.style.removeProperty('--curator-overlay-enter-y')
+
+    const rect = panel.getBoundingClientRect()
+    const width = panel.offsetWidth || rect.width
+    const height = panel.offsetHeight || rect.height
+    const panelBox = {
+      left: rect.left + (rect.width - width) / 2,
+      top: rect.top + (rect.height - height) / 2,
+      width,
+      height
+    }
+
+    const anchor = computeDialogAnchorStyle(panelBox, triggerBox, anchorContext.pointerRef.current)
+    panel.style.setProperty('--curator-dialog-origin', anchor.origin)
+    panel.style.setProperty('--curator-overlay-enter-x', `${anchor.enterX}px`)
+    panel.style.setProperty('--curator-overlay-enter-y', `${anchor.enterY}px`)
+  }, [anchorContext, motionVariant, unanimated])
+
   if (unanimated) {
-    return <BaseDialog.Popup ref={ref} render={<SurfaceMaterial />} className={cx(layout === 'workspace' && 'curator-dialog-workspace', className)} {...props} />
+    return <BaseDialog.Popup ref={handlePanelRef} render={<SurfaceMaterial />} className={cx(layout === 'workspace' && 'curator-dialog-workspace', className)} {...props} />
   }
 
   return (
     <BaseDialog.Popup
-      ref={ref}
+      ref={handlePanelRef}
       render={<MotionPanel variant={motionVariant} className={cx(layout === 'workspace' && 'curator-dialog-workspace', className, motionClassName)} />}
       {...props}
     />

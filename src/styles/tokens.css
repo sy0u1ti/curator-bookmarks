@@ -68,17 +68,15 @@
      these on the same contour avoids seams at thin, translucent edges. */
   --ds-corner-shape: round;
 
-  --ds-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.16);
-  --ds-shadow-popover: 0 1px 1px rgba(0, 0, 0, 0.02), 0 4px 8px -4px rgba(0, 0, 0, 0.04), 0 16px 24px -8px rgba(0, 0, 0, 0.06);
-  --ds-shadow-dialog: 0 1px 1px rgba(0, 0, 0, 0.02), 0 8px 16px -4px rgba(0, 0, 0, 0.04), 0 24px 32px -8px rgba(0, 0, 0, 0.06);
+  --ds-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --ds-shadow-popover: 0 1px 2px rgba(0, 0, 0, 0.36), 0 8px 20px -4px rgba(0, 0, 0, 0.52), 0 20px 36px -8px rgba(0, 0, 0, 0.44);
+  --ds-shadow-dialog: 0 2px 6px rgba(0, 0, 0, 0.4), 0 14px 28px -6px rgba(0, 0, 0, 0.56), 0 28px 48px -10px rgba(0, 0, 0, 0.48);
   --ds-shadow-focus: 0 0 0 2px var(--ds-bg-page), 0 0 0 4px rgba(245, 245, 247, 0.38);
 
   /* Floating surfaces keep shared elevation without adding a second stroke. */
-  --ds-filter-card: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.16));
-  --ds-filter-popover: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.02)) drop-shadow(0 4px 4px rgba(0, 0, 0, 0.04))
-    drop-shadow(0 16px 16px rgba(0, 0, 0, 0.06));
-  --ds-filter-dialog: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.02)) drop-shadow(0 8px 12px rgba(0, 0, 0, 0.04))
-    drop-shadow(0 24px 24px rgba(0, 0, 0, 0.06));
+  --ds-filter-card: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.28));
+  --ds-filter-popover: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.42)) drop-shadow(0 12px 24px rgba(0, 0, 0, 0.58));
+  --ds-filter-dialog: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.46)) drop-shadow(0 20px 36px rgba(0, 0, 0, 0.62));
 
   /* Shared vocabulary; semantic roles below carry the Magpie-derived rhythm.
      Feedback is quick, state changes settle, and large surfaces have a longer
@@ -141,7 +139,7 @@
   --nav-expand-dur: var(--ds-motion-surface);
   --nav-collapse-dur: 380ms;
   --nav-item-dur: 380ms;
-  --nav-content-delay: 60ms;
+  --nav-content-delay: 0ms;
 
   --tt-in-dur: var(--duration-quick);
   --tt-out-dur: var(--duration-micro);
@@ -200,9 +198,9 @@
 
   --toast-open-dur: var(--ds-motion-standard);
   --toast-close-dur: var(--ds-motion-exit-opacity);
-  --toast-offset-y: 0px;
-  --toast-scale: 1;
-  --toast-ease: var(--ds-ease-standard);
+  --toast-offset-y: var(--distance-base);
+  --toast-scale: var(--scale-large);
+  --toast-ease: var(--ds-ease-settle);
 
   --modal-open-dur: var(--ds-motion-spring);
   --modal-close-dur: 260ms;
@@ -247,8 +245,8 @@
   --page-slide-ease: var(--ds-ease-settle);
   --page-fade-ease: var(--ds-ease-standard);
 
-  --stagger-dur: 380ms;
-  --stagger-distance: var(--distance-small);
+  --stagger-dur: var(--ds-motion-standard);
+  --stagger-distance: var(--distance-base);
   --stagger-stagger: var(--duration-stagger);
   --stagger-blur: 0px;
   --stagger-ease: var(--ds-ease-settle);
@@ -361,6 +359,7 @@
     --dropdown-close-dur: 80ms;
     --toast-open-dur: 80ms;
     --toast-close-dur: 80ms;
+    --toast-offset-y: 0px;
     --toast-scale: 1;
     --modal-open-dur: 80ms;
     --modal-close-dur: 80ms;
@@ -379,7 +378,7 @@
     --page-fade-dur: 80ms;
     --page-slide-distance: 0px;
     --drag-settle-dur: 1ms;
-    --stagger-dur: 1ms;
+    --stagger-dur: 80ms;
     --shimmer-dur: 1ms;
   }
 }

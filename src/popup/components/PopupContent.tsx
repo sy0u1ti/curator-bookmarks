@@ -41,7 +41,6 @@ import { isPopupContentNavigationKey } from '../popup-keyboard-navigation'
 import { getPopupSearchGridAria, getPopupSearchResultId } from '../popup-workspace-state'
 import { usePopupChromeView } from '../popup-controller-store'
 import { isSidePanelSurface } from '../../shared/extension-surfaces'
-import { SidePanelBookmarkActions } from '../../sidepanel/SidePanelBookmarkActions'
 import {
   folderBranchClass,
   folderCardActiveClass,
@@ -119,7 +118,7 @@ const paneClass =
   'popup-surface flex min-h-0 min-w-0 flex-col overflow-hidden border-0 bg-ds-surface-1'
 const mainPaneClass = cx(paneClass, 'popup-main-pane bg-ds-surface-1')
 const paneHeaderClass =
-  'flex min-h-[42px] flex-none items-center justify-between gap-2.5 border-b border-ds-border px-[13px] text-xs font-semibold text-ds-text-primary'
+  'flex min-h-[42px] flex-none items-center justify-between gap-2 border-b border-ds-border px-[11px] text-xs font-semibold text-ds-text-primary'
 const paneHeaderTitleClass = 'min-w-0 truncate'
 const paneTitleMetaClass = 'font-medium text-ds-text-muted'
 const paneCaptionClass = 'ml-auto min-w-0 truncate text-right font-medium text-ds-text-secondary'
@@ -137,7 +136,7 @@ const mainListClass =
 // no new pane. Geometry matches the folder rows' 34px rhythm, not the 40px
 // main search shell, which would make the header grow.
 const folderFilterShellClass = [
-  'popup-folder-filter group/filter relative flex h-[26px] min-h-[26px] w-full min-w-0 items-center gap-1 rounded-ds-sm border border-transparent bg-ds-text-primary/[0.055] ds-inset-menu pl-2 text-ds-text-primary',
+  'popup-folder-filter group/filter relative flex h-7 min-h-7 w-full min-w-0 items-center gap-1 rounded-ds-sm border border-transparent bg-ds-text-primary/[0.055] ds-inset-menu pl-2 text-ds-text-primary',
   'shadow-[0_0_0_3px_transparent] transition-[background-color,border-color,box-shadow] duration-ds-standard ease-ds-standard',
   'hover:border-ds-border hover:bg-ds-text-primary/[0.085]',
   'focus-within:border-ds-border-hover focus-within:bg-ds-text-primary/[0.085] focus-within:shadow-[0_0_0_3px_var(--ds-accent-soft)]'
@@ -673,7 +672,7 @@ function PopupFolderPane({
       <header className={paneHeaderClass}>
         {sidePanel ? (
           <Button
-            className="shrink-0 rounded-ds-sm bg-transparent p-0 text-left font-[inherit] text-inherit outline-none hover:text-ds-text-primary focus-visible:shadow-ds-focus"
+            className="-ml-1.5 inline-flex min-h-7 shrink-0 items-center rounded-ds-sm bg-transparent px-1.5 text-left font-[inherit] text-inherit outline-none hover:bg-ds-hover hover:text-ds-text-primary focus-visible:shadow-ds-focus"
             aria-label={collapsed ? '展开文件夹列表' : '收起文件夹列表'}
             aria-expanded={!collapsed}
             aria-controls="sidepanel-folder-tree"
@@ -1796,12 +1795,6 @@ function handleContentNavigationKeyDown(
   }
 }
 
-function PopupRowActions(props: PopupRowActionsProps) {
-  return isSidePanelSurface()
-    ? <SidePanelBookmarkActions key={props.bookmarkId} menu={props.menu} onMenuAction={props.onMenuAction} />
-    : <PopupRowActionRail {...props} />
-}
-
 interface PopupRowActionsProps {
   active?: boolean
   bookmarkId: string
@@ -1812,7 +1805,7 @@ interface PopupRowActionsProps {
   title?: string
 }
 
-function PopupRowActionRail({
+function PopupRowActions({
   active = false,
   bookmarkId,
   label,
@@ -1860,6 +1853,7 @@ function PopupRowActionRail({
             className={rowActionButtonClass}
             type="button"
             aria-label={item.ariaLabel}
+            data-bookmark-menu-action={item.action}
             feedback={item.feedback || IDLE_ACTION_FEEDBACK}
             icon="Copy"
             labels={COPY_ACTION_LABELS}
@@ -1877,6 +1871,7 @@ function PopupRowActionRail({
             className={cx(rowActionButtonClass, item.danger ? rowActionDangerClass : '')}
             type="button"
             aria-label={item.ariaLabel}
+            data-bookmark-menu-action={item.action}
             title={item.label}
             disabled={item.disabled}
             tabIndex={expanded ? undefined : -1}

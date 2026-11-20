@@ -114,6 +114,10 @@ export function AiModelDetails({ state }: { state: AiProviderSettingsState }) {
         <p className="m-0 text-xs leading-relaxed text-ds-text-secondary">仅下载公开资料，不发送密钥、书签或服务商配置。</p>
         <StatusMessage
           className="m-0 text-xs leading-relaxed text-ds-text-secondary"
+          reserve={[
+            catalog.checkedAt ? `检查于 ${formatDateTime(catalog.checkedAt)}` : '尚未同步',
+            '正在更新模型资料…'
+          ]}
           tone={error ? 'error' : 'neutral'}
         >
           {error || (pending ? '正在更新模型资料…' : catalog.checkedAt

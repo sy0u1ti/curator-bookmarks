@@ -3807,10 +3807,7 @@ function getShortcutStatusDetail() {
   }
 
   if (status === 'ready') {
-    const hasAssignedShortcut = (managerState.shortcutCommands || []).some((command) => {
-      return Boolean(String(command.shortcut || '').trim())
-    })
-    return hasAssignedShortcut ? '' : '快捷键未配置，可在 Chrome 扩展快捷键页设置。'
+    return ''
   }
 
   return status

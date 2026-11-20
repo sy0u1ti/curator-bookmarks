@@ -43,9 +43,9 @@ export function AutoBackupPoints({ busy, onPreview }: { busy: boolean; onPreview
 
   return (
     <section id="settings-recovery-points" aria-labelledby="recovery-points-title">
-      <header className="mb-3 flex min-h-8 items-center justify-between gap-3">
+      <header className="mb-2 flex min-h-7 items-center justify-between gap-3">
         <h3 id="recovery-points-title" className="m-0 text-sm font-semibold leading-6 text-ds-text-primary">自动恢复点</h3>
-        {error ? <div className="flex items-center gap-1">
+        {error ? <div className="-my-0.5 flex items-center gap-1">
           {points.length ? <Popover title="恢复点读取失败" showArrow={false} align="end"
             trigger={<Button size="icon-sm" variant="ghost" aria-label="查看恢复点读取错误">
               <Icon name="AlertTriangle" size={15} aria-hidden="true" className="text-ds-warning" />
@@ -56,7 +56,7 @@ export function AutoBackupPoints({ busy, onPreview }: { busy: boolean; onPreview
         </div> : null}
       </header>
       {!points.length ? (
-        <StatusMessage className="mb-3 text-[13px] leading-[1.65] text-ds-text-secondary" reserve={[EMPTY_COPY]} tone={error ? 'error' : 'neutral'}>
+        <StatusMessage className="mb-0 text-[13px] leading-[1.65] text-ds-text-secondary" reserve={[EMPTY_COPY]} tone={error ? 'error' : 'neutral'}>
           {error || (loading ? '正在读取恢复点…' : EMPTY_COPY)}
         </StatusMessage>
       ) : null}

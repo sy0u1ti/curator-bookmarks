@@ -492,6 +492,14 @@ body::after {
   overflow-anchor: none;
 }
 
+@container popup (max-width: 620px) {
+  .popup-folder-tree {
+    padding-bottom: 16px;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent 100%);
+  }
+}
+
 [data-keyboard-scroll="true"] > .popup-row-layer {
   will-change: transform;
 }
@@ -646,11 +654,12 @@ body::after {
   transform: translateZ(0);
   will-change: opacity, transform;
   backface-visibility: hidden;
-  transition: opacity var(--acc-expand) var(--acc-ease);
+  transition: opacity var(--acc-collapse) var(--acc-ease);
 }
 
 .popup-edit-modal:has(.edit-folder-accordion[data-open]) .popup-edit-surface {
   opacity: 1;
+  transition-duration: var(--acc-expand);
 }
 
 .popup-edit-upper,
@@ -658,7 +667,7 @@ body::after {
   transform: translate3d(0, 0, 0);
   will-change: transform;
   backface-visibility: hidden;
-  transition: transform var(--acc-expand) var(--acc-ease);
+  transition: transform var(--acc-collapse) var(--acc-ease);
 }
 .popup-edit-upper {
   position: relative;
@@ -685,10 +694,12 @@ body::after {
 
 .popup-edit-modal:has(.edit-folder-accordion[data-open]) .popup-edit-upper {
   transform: translate3d(0, calc(var(--popup-edit-open-shift) * -1), 0);
+  transition-duration: var(--acc-expand);
 }
 
 .popup-edit-modal:has(.edit-folder-accordion[data-open]) .popup-edit-lower {
   transform: translate3d(0, var(--popup-edit-open-shift), 0);
+  transition-duration: var(--acc-expand);
 }
 
 
@@ -747,7 +758,7 @@ body::after {
      Keep this viewport fixed while the outer grid clips it; the native
      scrollbar and every tree row no longer relayout on every motion frame. */
   flex: none;
-  height: clamp(0px, calc(100dvh - var(--popup-edit-rest-height, 343px) - 64px), 226px);
+  height: var(--popup-edit-panel-height, clamp(0px, calc(100dvh - var(--popup-edit-rest-height, 343px) - 64px), 226px));
 }
 
 .edit-folder-picker > label {
@@ -966,6 +977,10 @@ body::after {
   to {
     stroke-dashoffset: 0;
   }
+}
+
+:root[data-motion-input="keyboard"] .popup-saved-check path {
+  animation: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

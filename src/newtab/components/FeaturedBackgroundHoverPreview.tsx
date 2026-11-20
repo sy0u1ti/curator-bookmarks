@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { NewtabGlassSurface } from './NewtabGlassSurface'
 import {
   useNewtabFeaturedBackgroundHoverPreviewView,
@@ -23,8 +23,11 @@ function FeaturedBackgroundHoverPreview({ preview }: { preview: NewtabFeaturedBa
         height: `${preview.height}px`,
         left: `${preview.left}px`,
         top: `${preview.top}px`,
-        width: `${preview.width}px`
-      }}
+        width: `${preview.width}px`,
+        '--preview-origin': preview.origin ?? 'center center',
+        '--preview-enter-x': `${preview.enterX ?? 0}px`,
+        '--preview-enter-y': `${preview.enterY ?? 4}px`
+      } as CSSProperties}
     >
       <img
         className="featured-wallpaper-hover-preview-image"

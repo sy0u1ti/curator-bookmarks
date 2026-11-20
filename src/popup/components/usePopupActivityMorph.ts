@@ -62,12 +62,12 @@ function measure(stage: HTMLElement): Frame {
 }
 
 function play(stage: HTMLElement, previous: Frame, next: Frame): void {
-  const travel = getMotionDurationMs('--ds-motion-spring', 570, stage)
-  const reveal = getMotionDurationMs('--ds-motion-state', 280, stage)
-  const exit = getMotionDurationMs('--ds-motion-exit-opacity', 140, stage)
-  const spring = getMotionEasing('--ds-ease-spring', 'cubic-bezier(0.2, 0.9, 0.25, 1.02)')
+  const travel = getMotionDurationMs('--ds-motion-state', 280, stage)
+  const copyEnter = getMotionDurationMs('--ds-motion-standard', 220, stage)
+  const actionEnter = getMotionDurationMs('--ds-motion-enter-opacity', 180, stage)
+  const exit = getMotionDurationMs('--ds-motion-feedback', 120, stage)
   const settle = getMotionEasing('--ds-ease-settle', 'cubic-bezier(0.32, 0.72, 0, 1)')
-  const accelerate = getMotionEasing('--ds-ease-in', 'cubic-bezier(0.4, 0, 1, 1)')
+  const standard = getMotionEasing('--ds-ease-standard', 'cubic-bezier(0.2, 0.8, 0.2, 1)')
   const timing = (duration: number, easing: string, delay = 0): KeyframeAnimationOptions =>
     ({ id: MORPH_ID, duration, easing, delay, fill: 'backwards' })
   const swapped = Boolean(previous.activeId && next.activeId && previous.activeId !== next.activeId)
@@ -79,10 +79,10 @@ function play(stage: HTMLElement, previous: Frame, next: Frame): void {
     if (!last) return
     if (first) {
       if (first.x !== last.x || first.y !== last.y || first.width !== last.width) {
-        dot.animate([{ transform: invert(first, last) }, { transform: 'none' }], timing(travel, spring))
+        dot.animate([{ transform: invert(first, last) }, { transform: 'none' }], timing(travel, settle))
       }
     } else {
-      dot.animate([{ opacity: 0, transform: 'scale(0.4)' }, { opacity: 1, transform: 'none' }], timing(reveal, spring, exit / 2))
+      dot.animate([{ opacity: 0, transform: 'scale(0.75)' }, { opacity: 1, transform: 'none' }], timing(actionEnter, standard, 60))
     }
   })
   if (!swapped) return
@@ -94,17 +94,17 @@ function play(stage: HTMLElement, previous: Frame, next: Frame): void {
   if (icon && iconBox) {
     icon.animate(source
       ? [{ transform: invert(source, iconBox) }, { transform: 'none' }]
-      : [{ opacity: 0, transform: 'scale(0.5)' }, { opacity: 1, transform: 'none' }], timing(travel, spring))
+      : [{ opacity: 0, transform: 'scale(0.75)' }, { opacity: 1, transform: 'none' }], timing(travel, settle))
   }
   const copy = card?.querySelector<HTMLElement>('.popup-activity-copy')
   copy?.animate([
-    { opacity: 0, transform: 'translateX(12px)', filter: 'blur(4px)' },
-    { opacity: 1, transform: 'none', filter: 'blur(0)' }
-  ], timing(reveal, settle, exit))
-  card?.querySelector<HTMLElement>('#popup-activity-action')?.animate([
-    { opacity: 0, transform: 'scale(0.86)' },
+    { opacity: 0, transform: 'translateX(8px)' },
     { opacity: 1, transform: 'none' }
-  ], timing(reveal, spring, exit / 2))
+  ], timing(copyEnter, settle, 45))
+  card?.querySelector<HTMLElement>('#popup-activity-action')?.animate([
+    { opacity: 0, transform: 'scale(0.94)' },
+    { opacity: 1, transform: 'none' }
+  ], timing(actionEnter, standard, 70))
 
   // The outgoing words collapse toward the badge that now holds them.
   for (const { node, box } of previous.ghosts) {
@@ -115,9 +115,9 @@ function play(stage: HTMLElement, previous: Frame, next: Frame): void {
     })
     layerOf(stage).append(node)
     const animation = node.animate([
-      { opacity: 1, transform: 'none', filter: 'blur(0)' },
-      { opacity: 0, transform: 'translateX(8px) scale(0.96)', filter: 'blur(4px)' }
-    ], { id: MORPH_ID, duration: exit, easing: accelerate, fill: 'forwards' })
+      { opacity: 1, transform: 'none' },
+      { opacity: 0, transform: 'translateX(6px)' }
+    ], { id: MORPH_ID, duration: exit, easing: standard, fill: 'forwards' })
     animation.finished.catch(() => {}).finally(() => node.remove())
   }
 }

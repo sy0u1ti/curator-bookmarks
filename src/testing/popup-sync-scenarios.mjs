@@ -108,6 +108,52 @@ export async function runPopupSyncChecks(task, config) {
     })), { sameContent: true, query: original.query, focus: 'popup-sync-toggle' })
     note('Closing restores the same bookmark DOM, search input and sync-button focus')
     await page.click('#popup-sync-toggle')
+    const pushMotion = await page.evaluate(() => {
+      const stage = document.querySelector('.popup-sync-stage')
+      const bookmarks = document.querySelector('.popup-sync-bookmarks')
+      const surface = document.querySelector('.popup-sync-surface')
+      const bookmarksAnim = bookmarks?.getAnimations().find(animation => animation.transitionProperty === 'transform')
+      const surfaceAnim = surface?.getAnimations().find(animation => animation.transitionProperty === 'clip-path')
+      if (!stage || !bookmarks || !surface || !bookmarksAnim || !surfaceAnim) {
+        return { ok: false, reason: 'missing active sync transitions' }
+      }
+      const sampleTime = 115
+      bookmarksAnim.pause()
+      surfaceAnim.pause()
+      bookmarksAnim.currentTime = sampleTime
+      surfaceAnim.currentTime = sampleTime
+      const stageRect = stage.getBoundingClientRect()
+      const bookmarksRect = bookmarks.getBoundingClientRect()
+      const stageStyle = getComputedStyle(stage)
+      const activitySize = parseFloat(stageStyle.getPropertyValue('--popup-activity-size'))
+      const expectedGap = parseFloat(stageStyle.getPropertyValue('--popup-sync-gap'))
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(bookmarks).transform)
+      const bookmarksTiming = bookmarksAnim.effect.getComputedTiming()
+      const surfaceTiming = surfaceAnim.effect.getComputedTiming()
+      const expectedSurfaceBottom = stageRect.top + activitySize + surfaceTiming.progress * (stageRect.height - activitySize)
+      return {
+        ok: true,
+        bookmarksDuration: bookmarksTiming.duration,
+        surfaceDuration: surfaceTiming.duration,
+        progressDelta: Math.abs(bookmarksTiming.progress - surfaceTiming.progress),
+        scaleX: matrix.a,
+        scaleY: matrix.d,
+        translateY: matrix.f,
+        widthDelta: Math.abs(bookmarksRect.width - stageRect.width),
+        leftDelta: Math.abs(bookmarksRect.left - stageRect.left),
+        rightDelta: Math.abs(bookmarksRect.right - stageRect.right),
+        gapDelta: Math.abs((bookmarksRect.top - expectedSurfaceBottom) - expectedGap)
+      }
+    })
+    assert.equal(pushMotion.ok, true, JSON.stringify(pushMotion))
+    assert.equal(pushMotion.bookmarksDuration, pushMotion.surfaceDuration, JSON.stringify(pushMotion))
+    assert.ok(pushMotion.progressDelta < 0.001, JSON.stringify(pushMotion))
+    assert.ok(Math.abs(pushMotion.scaleX - 1) < 0.001 && Math.abs(pushMotion.scaleY - 1) < 0.001, JSON.stringify(pushMotion))
+    assert.ok(pushMotion.translateY > 20, JSON.stringify(pushMotion))
+    assert.ok(pushMotion.widthDelta < 0.5 && pushMotion.leftDelta < 0.5 && pushMotion.rightDelta < 0.5, JSON.stringify(pushMotion))
+    assert.ok(pushMotion.gapDelta < 0.5, JSON.stringify(pushMotion))
+    await finishMotion()
+    note('Opening sync pushes bookmarks straight down at full width with a locked 8px gap')
     await page.click('button[aria-label="下载一次：同步测试"]')
     await page.waitForSelector('#popup-sync-confirm-title')
     assert.match(await page.evaluate(() => document.getElementById('popup-sync-confirm-title').textContent), /覆盖本机/)

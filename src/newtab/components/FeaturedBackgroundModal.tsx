@@ -155,8 +155,8 @@ function FeaturedBackgroundModal({
         >
           {pickerView ? <FeaturedBackgroundPicker previewRootRef={gridRef} state={pickerView} /> : null}
         </div>
-        <FeaturedBackgroundHoverPreviewHost />
       </DialogPanel>
+      <FeaturedBackgroundHoverPreviewHost />
     </DialogOverlay>
   )
 }

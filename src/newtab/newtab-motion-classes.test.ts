@@ -16,16 +16,17 @@ assert.ok(
 assert.ok(
   speedDialClasses.includes('newtab-speed-dial') &&
     !speedDialClasses.includes('curator-motion-surface') &&
-    speedDialClasses.includes('curator-motion-card') &&
+    !speedDialClasses.includes('curator-motion-card') &&
+    speedDialClasses.includes('top_var(--ui-motion-fast)_var(--ui-ease-standard)') &&
     speedDialClasses.includes('curator-motion-disabled'),
-  'Newtab Speed Dial should keep interactive card motion without replaying surface entrance motion at startup.'
+  'Newtab Speed Dial cards should lift through their own top transition and keep drag staging, without the shared transform lift or surface entrance motion.'
 )
 assert.ok(
   bookmarkContent.includes('newtab-portal') &&
     !bookmarkContent.includes('curator-motion-surface') &&
-    bookmarkContent.includes('curator-motion-card') &&
+    !bookmarkContent.includes('curator-motion-card') &&
     bookmarkContent.includes('curator-motion-chip'),
-  'Newtab portal should mount steadily while quick access, source chips, and folder controls retain interaction motion.'
+  'Newtab portal should mount steadily; quick links lift like speed-dial cards while source chips and folder controls retain interaction motion.'
 )
 assert.ok(
   !folderSectionClasses.includes('curator-motion-chip'),

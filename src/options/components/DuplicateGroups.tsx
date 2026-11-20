@@ -146,7 +146,14 @@ function DuplicateDockedSelection({
               text={`已选 ${selectionStats.deleteCount} 条`}
             />
           </strong>
-          <StatusMessage className={unsafe ? DOCKED_WARNING_CLASS : DOCKED_TEXT_CLASS} tone={unsafe ? 'error' : 'neutral'}>
+          <StatusMessage
+            className={unsafe ? DOCKED_WARNING_CLASS : DOCKED_TEXT_CLASS}
+            reserve={[
+              `${selectionStats.unsafeGroupCount || 1} 组已全选，每组至少保留 1 条。`,
+              `保留 ${selectionStats.keepCount} 条，涉及 ${selectionStats.groupCount} 组。`
+            ]}
+            tone={unsafe ? 'error' : 'neutral'}
+          >
             {unsafe
               ? `${selectionStats.unsafeGroupCount} 组已全选，每组至少保留 1 条。`
               : `保留 ${selectionStats.keepCount} 条，涉及 ${selectionStats.groupCount} 组。`}
@@ -302,7 +309,14 @@ function DuplicateItemRow({
         {showRecommendation ? <p className={RECOMMENDATION_TEXT_CLASS}>{group.recommendation.reason}</p> : null}
         {details ? <p className="mb-0 mt-1 text-xs leading-relaxed text-ds-text-secondary">{details}</p> : null}
         {isNewtabSource ? (
-          <StatusMessage className="mb-0 mt-1 text-xs leading-relaxed text-ds-text-secondary" tone={sourceWarning ? 'error' : 'neutral'}>
+          <StatusMessage
+            className="mb-0 mt-1 text-xs leading-relaxed text-ds-text-secondary"
+            reserve={[
+              '删除此副本也会移除新标签页入口。',
+              recommended && group.recommendation.reason ? group.recommendation.reason : '用于新标签页入口。'
+            ]}
+            tone={sourceWarning ? 'error' : 'neutral'}
+          >
             {sourceWarning ? '删除此副本也会移除新标签页入口。' : recommended && group.recommendation.reason ? group.recommendation.reason : '用于新标签页入口。'}
           </StatusMessage>
         ) : null}

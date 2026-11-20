@@ -1,5 +1,4 @@
 import { Button } from '../../ui/base/Button'
-import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
 import { navigateToOptionsEmptyStateAction } from '../options-section-store.js'
 import {
   OPTION_EMPTY_STATE_ACTIONS_CLASS,
@@ -17,7 +16,7 @@ interface OptionEmptyStateAction {
 
 const EMPTY_OPTION_EMPTY_STATE_ACTIONS: OptionEmptyStateAction[] = []
 
-const OPTION_EMPTY_STATE_EMBEDDED_CLASS = 't-stagger text-left'
+const OPTION_EMPTY_STATE_EMBEDDED_CLASS = 'text-left'
 
 export function OptionEmptyState({
   actions = EMPTY_OPTION_EMPTY_STATE_ACTIONS,
@@ -32,22 +31,20 @@ export function OptionEmptyState({
   embedded?: boolean
   title: string
 }) {
-  const entered = useMotionEntrance()
-
   return (
     <div
-      className={[embedded ? OPTION_EMPTY_STATE_EMBEDDED_CLASS : OPTION_EMPTY_STATE_CLASS, entered ? 'is-shown' : '', className]
+      className={[embedded ? OPTION_EMPTY_STATE_EMBEDDED_CLASS : OPTION_EMPTY_STATE_CLASS, className]
         .filter(Boolean)
         .join(' ')}
     >
-      <strong className={`t-stagger-line t-stagger-line--1 ${OPTION_EMPTY_STATE_TITLE_CLASS}`}>
+      <strong className={OPTION_EMPTY_STATE_TITLE_CLASS}>
         {title}
       </strong>
-      {description ? <p className={`t-stagger-line t-stagger-line--2 ${OPTION_EMPTY_STATE_TEXT_CLASS}`}>
+      {description ? <p className={OPTION_EMPTY_STATE_TEXT_CLASS}>
         {description}
       </p> : null}
       {actions.length ? (
-        <div className={`t-stagger-line t-stagger-line--3 ${OPTION_EMPTY_STATE_ACTIONS_CLASS}`}>
+        <div className={OPTION_EMPTY_STATE_ACTIONS_CLASS}>
           {actions.map((item) => (
             <Button
               key={`${item.action || item.label}:${item.label}`}

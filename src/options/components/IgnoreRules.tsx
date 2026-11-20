@@ -3,7 +3,7 @@ import { Button } from '../../ui/base/Button'
 import { useListExit } from '../../ui/motion/useListExit'
 import { handleIgnoreRuleAction } from '../options-controller'
 import { useIgnoreRulesState } from './ignore-rules-store.js'
-import { OPTION_REVEAL_ENTER_CLASS, OPTION_INSET_CLASS, OPTION_SURFACE_CLASS } from './option-layout-classes.js'
+import { OPTION_INSET_CLASS, OPTION_SURFACE_CLASS } from './option-layout-classes.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
 import type {
   IgnoreRuleKind,
@@ -31,7 +31,7 @@ const IGNORE_SUMMARY_VALUE_CLASS =
   'text-sm font-semibold leading-none text-ds-text-primary tabular-nums'
 const IGNORE_SUMMARY_PRIMARY_VALUE_CLASS = 'text-2xl font-[650] leading-none tracking-[-0.03em] text-ds-text-primary tabular-nums'
 const IGNORE_RULE_GROUP_CLASS =
-  `mt-5 ${OPTION_SURFACE_CLASS} p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  `mt-5 ${OPTION_SURFACE_CLASS} p-[18px_20px_20px] shadow-none max-[760px]:p-4`
 const IGNORE_RULE_HEADER_CLASS =
   'flex min-w-0 flex-wrap items-center justify-between gap-3'
 const IGNORE_RULE_HEADER_COPY_CLASS = 'min-w-0'

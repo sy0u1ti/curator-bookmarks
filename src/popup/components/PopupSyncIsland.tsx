@@ -23,12 +23,13 @@ export function PopupSyncTrigger() {
   const open = usePopupSyncOpen()
   if (!error && !status?.count) return null
   const text = error ? '需处理' : syncStatusLabel(status!)
+  const detail = error || (status?.state === 'idle' ? `上次成功 ${formatSyncTime(status.lastSync)}` : syncStatusDetail(status!))
   const running = !error && status?.state === 'running'
   return <Button
     id="popup-sync-toggle" type="button" className="popup-sync-toggle"
-    aria-label={error ? '同步状态读取失败，查看详情' : `${syncStatusDetail(status!)}，查看同步`}
+    aria-label={error ? '同步状态读取失败，打开同步面板查看详情' : `${detail}，打开同步面板`}
     aria-expanded={open} aria-controls="popup-sync-workspace"
-    title={error || (status?.state === 'idle' ? `上次成功 ${formatSyncTime(status.lastSync)}` : syncStatusDetail(status!))}
+    title={`打开同步面板 · ${detail}`}
     data-tone={error ? 'error' : status?.tone}
     onClick={() => setPopupSyncOpen(!open)} unstyled
   >
@@ -132,7 +133,7 @@ export function PopupSyncIsland({ hidden }: { hidden: boolean }) {
             popupActivities.select(latest.id)
             close()
           }}>操作反馈</Button> : null}
-          <Button id="popup-sync-collapse" className="popup-sync-toggle" aria-label="收起同步，返回书签"
+          <Button id="popup-sync-collapse" className="popup-sync-toggle" aria-label="收起同步面板，返回书签"
             onClick={() => close()} unstyled>收起</Button>
         </header>
         {Workspace ? <Workspace active={open && !hidden} onBackToBookmarks={() => close()} /> :

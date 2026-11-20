@@ -33,6 +33,38 @@
   overscroll-behavior: contain;
 }
 
+@supports not selector(::-webkit-scrollbar) {
+  .curator-status-message,
+  .curator-status-message-live {
+    scrollbar-width: thin;
+    scrollbar-color: var(--ds-border-hover) transparent;
+  }
+}
+
+.curator-status-message::-webkit-scrollbar,
+.curator-status-message-live::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.curator-status-message::-webkit-scrollbar-button,
+.curator-status-message-live::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.curator-status-message::-webkit-scrollbar-track,
+.curator-status-message-live::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.curator-status-message::-webkit-scrollbar-thumb,
+.curator-status-message-live::-webkit-scrollbar-thumb {
+  border-radius: var(--ds-radius-full, 999px);
+  background: var(--ds-border-hover);
+}
+
 .curator-status-message[data-tone="error"] {
   color: var(--ds-danger-text);
 }

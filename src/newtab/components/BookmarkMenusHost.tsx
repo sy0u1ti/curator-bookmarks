@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { Icon, type IconName } from '../../ui/icons/Icon'
 import { Button } from '../../ui/base/Button'
 import { StatusMessage } from '../../ui/base/StatusMessage'
@@ -8,6 +8,7 @@ import { Input } from '../../ui/base/Input'
 import { InlineMenuList, type InlineMenuAction } from '../../ui/base/Menu'
 import { Select } from '../../ui/base/Select'
 import { cx } from '../../ui/base/utils'
+import { computeMenuAnchorOrigin } from '../../shared/anchor-origin'
 import { NewtabGlassSurface } from './NewtabGlassSurface'
 import {
   useNewtabBookmarkMenusView,
@@ -34,7 +35,7 @@ const MENU_ACTION_ICON_BY_ACTION: Record<BookmarkMenuActionIcon, IconName> = {
   trash: 'Trash2'
 }
 
-const MENU_SURFACE_CLASS = 'curator-motion-popover bookmark-menu-surface fixed z-[10030] overflow-hidden rounded-ds-lg border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] ds-inset-panel text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] origin-top-right'
+const MENU_SURFACE_CLASS = 'curator-motion-popover bookmark-menu-surface fixed z-[10030] overflow-hidden rounded-ds-lg border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] ds-inset-panel text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)]'
 const MENU_CLOSING_CLASS = 'is-closing pointer-events-none'
 const MENU_FULL_WIDTH_CLASS = 'w-[276px]'
 const MENU_ADD_EXPANDED_CLASS = 'w-[300px]'
@@ -42,13 +43,14 @@ const MENU_ADD_COLLAPSED_CLASS = 'w-[236px]'
 const MENU_ROW_CLASS = 'grid min-h-9 grid-cols-[42px_minmax(0,1fr)] items-center gap-2 border-0 bg-transparent px-0 py-[3px] text-[13px] leading-[1.3] text-[var(--ui-text-secondary)]'
 const MENU_ROW_LABEL_CLASS = 'min-w-0 pl-0.5 leading-[1.3]'
 const MENU_CONTROL_CLASS = 'min-h-[30px] w-full min-w-0 rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] px-[9px] text-[13px] text-[var(--ui-text-primary)] placeholder:text-[var(--ui-text-disabled)] focus:border-[var(--ui-focus-ring)] disabled:opacity-60'
-const MENU_SELECT_TRIGGER_CLASS = 'base-select-trigger flex min-h-[30px] w-full min-w-0 items-center justify-start rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] px-2 text-[13px] text-[var(--ui-text-primary)] outline-none [transition:background-color_var(--ui-motion-fast)_var(--ui-ease-standard),border-color_var(--ui-motion-fast)_var(--ui-ease-standard),color_var(--ui-motion-fast)_var(--ui-ease-standard)] data-[popup-open]:border-[var(--ui-focus-ring)] hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] focus-visible:border-[var(--ui-focus-ring)] disabled:opacity-60 motion-reduce:transition-none'
+const MENU_SELECT_TRIGGER_CLASS = 'base-select-trigger flex min-h-[30px] w-full min-w-0 items-center justify-start rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] px-2 text-[13px] text-[var(--ui-text-primary)] outline-none [transition:background-color_var(--ds-motion-fast)_var(--ds-ease-standard),border-color_var(--ds-motion-fast)_var(--ds-ease-standard),color_var(--ds-motion-fast)_var(--ds-ease-standard)] data-[popup-open]:border-[var(--ui-focus-ring)] hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] focus-visible:border-[var(--ui-focus-ring)] disabled:opacity-60 motion-reduce:transition-none'
 const MENU_SELECT_POPUP_CLASS = 'custom-select-list z-[10040] max-h-60 min-w-[var(--anchor-width)] overflow-hidden rounded-ds-menu border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] ds-inset-menu text-[13px] text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] outline-none'
-const MENU_SELECT_OPTION_CLASS = 'flex cursor-default items-center justify-between gap-3 rounded-[var(--ui-radius-control)] px-2.5 py-2 outline-none [transition:background-color_var(--ui-motion-fast)_var(--ui-ease-standard),color_var(--ui-motion-fast)_var(--ui-ease-standard),opacity_var(--ui-motion-fast)_var(--ui-ease-standard)] data-[highlighted]:bg-[var(--ui-surface-hover)] data-[disabled]:opacity-45 motion-reduce:transition-none'
-const MENU_ACTION_CLASS = 'bookmark-menu-action flex min-h-[30px] w-full cursor-pointer items-center justify-start gap-2.5 rounded-[var(--ui-radius-control)] bg-transparent px-2 text-left text-[13px] leading-none text-[var(--ui-text-primary)] outline-none [transition:background-color_var(--ui-motion-fast)_var(--ui-ease-standard),color_var(--ui-motion-fast)_var(--ui-ease-standard),transform_var(--ui-motion-fast)_var(--ui-ease-standard),opacity_var(--ui-motion-fast)_var(--ui-ease-standard)] data-[cascade-highlighted]:bg-[var(--ui-surface-hover)] data-[popup-open]:bg-[var(--ui-surface-hover)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:[outline:3px_solid_var(--ui-accent-soft)] focus-visible:outline-offset-0 active:[transform:scale(var(--ui-press-scale))] disabled:cursor-default disabled:opacity-60 data-[disabled]:cursor-default data-[disabled]:opacity-60 motion-reduce:transition-none motion-reduce:transform-none [&_svg]:h-[17px] [&_svg]:w-[17px] [&_svg]:shrink-0'
+const MENU_SELECT_OPTION_CLASS = 'flex cursor-default items-center justify-between gap-3 rounded-[var(--ui-radius-control)] px-2.5 py-2 outline-none [transition:background-color_var(--ds-motion-fast)_var(--ds-ease-standard),color_var(--ds-motion-fast)_var(--ds-ease-standard),opacity_var(--ds-motion-fast)_var(--ds-ease-standard)] data-[highlighted]:bg-[var(--ui-surface-hover)] data-[disabled]:opacity-45 motion-reduce:transition-none'
+const MENU_ACTION_CLASS = 'bookmark-menu-action flex min-h-[30px] w-full cursor-pointer items-center justify-start gap-2.5 rounded-[var(--ui-radius-control)] bg-transparent px-2 text-left text-[13px] leading-none text-[var(--ui-text-primary)] outline-none [transition:background-color_var(--ds-motion-fast)_var(--ds-ease-standard),color_var(--ds-motion-fast)_var(--ds-ease-standard),opacity_var(--ds-motion-fast)_var(--ds-ease-standard)] data-[cascade-highlighted]:bg-[var(--ui-surface-hover)] data-[popup-open]:bg-[var(--ui-surface-hover)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:[outline:3px_solid_var(--ui-accent-soft)] focus-visible:outline-offset-0 disabled:cursor-default disabled:opacity-60 data-[disabled]:cursor-default data-[disabled]:opacity-60 motion-reduce:transition-none [&_svg]:h-[17px] [&_svg]:w-[17px] [&_svg]:shrink-0'
 const MENU_DANGER_ACTION_CLASS = 'bookmark-menu-action-danger text-[var(--ui-danger)] data-[cascade-highlighted]:bg-[var(--ui-danger-soft)] focus-visible:bg-[var(--ui-danger-soft)]'
 const MENU_ACTIONS_CLASS = 'bookmark-menu-actions grid gap-0.5'
-const MENU_FEEDBACK_CLASS = 'bookmark-menu-feedback mt-2 mx-0.5 rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] text-xs leading-[1.45] shadow-none'
+const MENU_FEEDBACK_BOX_CLASS = 'bookmark-menu-feedback-box mx-0.5 rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] shadow-none'
+const MENU_FEEDBACK_CLASS = 'bookmark-menu-feedback text-xs leading-[1.45]'
 const MENU_ERROR_CLASS = `${MENU_FEEDBACK_CLASS} bookmark-menu-error text-[var(--ui-danger)]`
 const MENU_STATUS_CLASS = `${MENU_FEEDBACK_CLASS} bookmark-menu-status text-[var(--ui-accent-text)]`
 const MENU_WARNING_STATUS_CLASS = `${MENU_FEEDBACK_CLASS} bookmark-menu-status bookmark-menu-warning text-[var(--ui-warning)]`
@@ -90,7 +92,13 @@ function BookmarkEditMenuHost({ view }: { view: NewtabBookmarkEditMenuView }) {
       )}
       data-newtab-bookmark-menu-surface=""
       inert={view.closing}
-      style={{ left: position.left, top: position.top }}
+      style={{
+        left: position.left,
+        top: position.top,
+        '--transform-origin': position.origin,
+        '--bookmark-menu-enter-x': `${position.enterX}px`,
+        '--bookmark-menu-enter-y': `${position.enterY}px`
+      } as CSSProperties}
       onKeyDownCapture={(event) => {
         if (event.key === 'Escape') {
           event.preventDefault()
@@ -132,7 +140,13 @@ function BookmarkAddMenuHost({ view }: { view: NewtabBookmarkAddMenuView }) {
       data-expanded={view.menu.expanded ? 'true' : 'false'}
       data-newtab-bookmark-menu-surface=""
       inert={view.closing}
-      style={{ left: position.left, top: position.top }}
+      style={{
+        left: position.left,
+        top: position.top,
+        '--transform-origin': position.origin,
+        '--bookmark-menu-enter-x': `${position.enterX}px`,
+        '--bookmark-menu-enter-y': `${position.enterY}px`
+      } as CSSProperties}
       onKeyDownCapture={(event) => {
         if (event.key === 'Escape') {
           event.preventDefault()
@@ -226,21 +240,51 @@ function useBookmarkMenuPosition(
   x: number,
   y: number
 ) {
-  const [position, setPosition] = useState(() => ({ left: x, top: y }))
+  const [position, setPosition] = useState(() => ({
+    left: x,
+    top: y,
+    origin: '0px 0px',
+    enterX: -4,
+    enterY: -4
+  }))
 
   useLayoutEffect(() => {
     const menu = ref.current
     if (!menu) {
       setPosition((current) =>
-        current.left === x && current.top === y ? current : { left: x, top: y }
+        current.left === x && current.top === y
+          ? current
+          : { left: x, top: y, origin: '0px 0px', enterX: -4, enterY: -4 }
       )
       return
     }
 
     const updatePosition = () => {
-      const next = getClampedMenuPosition(menu, x, y)
+      const clamped = getClampedMenuPosition(menu, x, y)
+      const anchor = computeMenuAnchorOrigin(
+        { x, y },
+        {
+          left: clamped.left,
+          top: clamped.top,
+          width: clamped.width,
+          height: clamped.height
+        }
+      )
+      const next = {
+        left: clamped.left,
+        top: clamped.top,
+        origin: anchor.origin,
+        enterX: anchor.enterX,
+        enterY: anchor.enterY
+      }
       setPosition((current) =>
-        current.left === next.left && current.top === next.top ? current : next
+        current.left === next.left &&
+          current.top === next.top &&
+          current.origin === next.origin &&
+          current.enterX === next.enterX &&
+          current.enterY === next.enterY
+          ? current
+          : next
       )
     }
 
@@ -268,7 +312,7 @@ function getClampedMenuPosition(
   menu: HTMLElement,
   menuX: number,
   menuY: number
-): { left: number; top: number } {
+): { left: number; top: number; width: number; height: number } {
   const margin = 16
   const menuWidth = menu.offsetWidth || menu.getBoundingClientRect().width
   const menuHeight = menu.offsetHeight || menu.getBoundingClientRect().height
@@ -281,7 +325,7 @@ function getClampedMenuPosition(
     margin,
     Math.min(menuY, viewport.height - menuHeight - margin)
   )
-  return { left, top }
+  return { left, top, width: menuWidth, height: menuHeight }
 }
 
 function getMenuViewportSize(): { width: number; height: number } {
@@ -371,8 +415,10 @@ function BookmarkEditMenu({
           />
         </div>
       </div>
-      <BookmarkMenuActions actionRefs={actionRefs} actions={menu.actions} active={active} label="书签操作" />
-      <BookmarkMenuFeedback error={menu.error} status={menu.status} statusTone={menu.statusTone} />
+      <div className="bookmark-menu-actions-wrap">
+        <BookmarkMenuActions actionRefs={actionRefs} actions={menu.actions} active={active} label="书签操作" />
+        <BookmarkMenuFeedback error={menu.error} status={menu.status} statusTone={menu.statusTone} />
+      </div>
     </InlineDialogPanel>
   )
 }
@@ -399,7 +445,10 @@ function BookmarkAddMenu({
             <BookmarkMenuTextField field={menu.fields[0]} inputRef={firstInputRef} />
             <BookmarkMenuTextField field={menu.fields[1]} />
           </div>
-          <BookmarkMenuActions actionRefs={actionRefs} actions={menu.actions} label="添加书签操作" />
+          <div className="bookmark-menu-actions-wrap">
+            <BookmarkMenuActions actionRefs={actionRefs} actions={menu.actions} label="添加书签操作" />
+            <BookmarkMenuFeedback error={menu.error} status="" />
+          </div>
         </div>
       ) : (
         <div className="bookmark-add-menu-content is-collapsed">
@@ -418,7 +467,6 @@ function BookmarkAddMenu({
           </Button>
         </div>
       )}
-      {menu.expanded ? <BookmarkMenuFeedback error={menu.error} status="" /> : null}
     </InlineDialogPanel>
   )
 }
@@ -490,6 +538,7 @@ function toInlineMenuAction(
     children: action.children ? () => action.children!().map(child => toInlineMenuAction(child, actionRefs)) : undefined,
     disabled: action.disabled,
     destructive: action.variant === 'danger',
+    separatorBefore: action.separatorBefore,
     className: cx(MENU_ACTION_CLASS, action.variant === 'danger' && MENU_DANGER_ACTION_CLASS),
     onSelect: action.onSelect,
     closeOnSelect: false,
@@ -514,12 +563,30 @@ function BookmarkMenuFeedback({
   status: string
   statusTone?: 'warning' | ''
 }) {
+  const message = error || status
+  const hasMessage = Boolean(message)
+  const tone = error ? 'error' : statusTone === 'warning' ? 'warning' : 'neutral'
   return (
-    <StatusMessage
-      className={error ? MENU_ERROR_CLASS : statusTone === 'warning' ? MENU_WARNING_STATUS_CLASS : MENU_STATUS_CLASS}
-      tone={error ? 'error' : statusTone === 'warning' ? 'warning' : 'neutral'}
+    <div
+      className="bookmark-menu-feedback-collapse"
+      data-open={hasMessage ? 'true' : 'false'}
+      aria-hidden={!hasMessage || undefined}
+      inert={!hasMessage || undefined}
     >
-      {error || status}
-    </StatusMessage>
+      <div className="bookmark-menu-feedback-collapse-inner">
+        <div
+          className={MENU_FEEDBACK_BOX_CLASS}
+          data-tone={tone}
+          data-empty={!hasMessage || undefined}
+        >
+          <StatusMessage
+            className={error ? MENU_ERROR_CLASS : statusTone === 'warning' ? MENU_WARNING_STATUS_CLASS : MENU_STATUS_CLASS}
+            tone={tone}
+          >
+            {message}
+          </StatusMessage>
+        </div>
+      </div>
+    </div>
   )
 }

@@ -64,7 +64,7 @@ function BackupCard({ state }: { state: BackupControlsState }) {
           <div className="flex min-w-0 items-center gap-1.5">
             <h2 id="backup-export-title" className={AI_SETTINGS_TITLE_CLASS}>备份与恢复</h2>
             <Popover title="备份范围" align="start" showArrow={false} collisionPadding={16}
-              trigger={<Button variant="ghost" size="icon-xs" aria-label="查看备份范围">
+              trigger={<Button variant="ghost" size="icon-xs" className="-my-1" aria-label="查看备份范围">
                 <Icon name="CircleHelp" size={14} aria-hidden="true" />
               </Button>}>
               <p className="m-0 text-[13px] leading-relaxed text-ds-text-secondary">

@@ -13,8 +13,8 @@ const cases = {
   sidepanel: { selectors: ['#popup-app-shell', '#search-input', '.popup-main-pane'], phases: ['running', 'collapsed', 'success', 'error', 'long-error', 'idle'] },
   'popup-dialog': { selectors: ['#smart-folder-modal', '#smart-folder-title-input', '#smart-folder-list', '#save-smart-folder-button'], phases: ['saving', 'error', 'long-error', 'success', 'idle'] },
   'newtab-settings': { selectors: ['#newtab-settings-drawer', '#settings-background-title', '#settings-icon-title'], phases: ['saving', 'error', 'long-error', 'success', 'idle'] },
-  'newtab-menu': { selectors: ['.bookmark-edit-menu', '.bookmark-edit-menu input[type="text"]', '.bookmark-edit-menu input[type="url"]'], phases: ['saving', 'error', 'long-error', 'success', 'idle'] },
-  'newtab-add': { selectors: ['.bookmark-add-menu', '.bookmark-add-menu input[type="text"]', '.bookmark-add-menu input[type="url"]'], phases: ['saving', 'error', 'long-error', 'success', 'idle'] },
+  'newtab-menu': { selectors: ['.bookmark-edit-menu .bookmark-menu-fields', '.bookmark-edit-menu input[type="text"]', '.bookmark-edit-menu input[type="url"]', '.bookmark-edit-menu .bookmark-menu-actions'], phases: ['saving', 'error', 'long-error', 'success', 'idle'] },
+  'newtab-add': { selectors: ['.bookmark-add-menu .bookmark-menu-fields', '.bookmark-add-menu input[type="text"]', '.bookmark-add-menu input[type="url"]', '.bookmark-add-menu .bookmark-menu-actions'], phases: ['saving', 'error', 'long-error', 'success', 'idle'] },
   archive: { selectors: ['main', '[aria-label="来源网页"]', '.archive-actions', '.archive-status'] }
 }
 

@@ -127,12 +127,13 @@ function ProfileStatus({ profile, presentation, onError }: {
   </div>
 }
 
-function ProfileActions({ profile, presentation, pending, className, showRun = true, onOptions, onAutoChange, onForce, onDownload, onUpload, onRun }: {
+function ProfileActions({ profile, presentation, pending, className, showRun = true, showAuto = true, onOptions, onAutoChange, onForce, onDownload, onUpload, onRun }: {
   profile: SyncProfileView
   presentation: ProfilePresentation
   pending: string | null
   className?: string
   showRun?: boolean
+  showAuto?: boolean
   onOptions: () => void
   onAutoChange: (checked: boolean) => void
   onForce: () => void
@@ -145,19 +146,19 @@ function ProfileActions({ profile, presentation, pending, className, showRun = t
     <Button className="popup-sync-action" aria-label={`${title}的同步选项`} disabled={isBusy || Boolean(pending)} onClick={onOptions} unstyled>
       <Icon name="Settings" size={14} aria-hidden="true" />选项
     </Button>
-    <Checkbox label="自动" aria-label={`${title}自动同步`} checked={automatic}
+    {showAuto ? <Checkbox label="自动" aria-label={`${title}自动同步`} checked={automatic}
       labelClassName="popup-sync-auto" disabled={isBusy || Boolean(pending)}
-      onCheckedChange={onAutoChange} />
-    {profile.data.failsafe === false ? <Button className="popup-sync-action text-ds-warning" title="大量变更保护已关闭"
+      onCheckedChange={onAutoChange} /> : null}
+    {profile.data.failsafe === false ? <Button className="popup-sync-action text-ds-warning" data-tone="warning" title="大量变更保护已关闭"
       onClick={onOptions} unstyled><Icon name="AlertTriangle" size={13} /></Button> : null}
     {state.state === 'scheduled' ? <Button className="popup-sync-action" onClick={onForce} unstyled>现在同步</Button> : null}
     <div className="popup-sync-profile-buttons">
       <Button className="popup-sync-direction" title="下载一次" aria-label={`下载一次：${title}`}
         disabled={isBusy || Boolean(pending) || profile.needsAuthorization || !profile.localFolderExists}
-        onClick={onDownload} unstyled><Icon name="ArrowDown" size={14} aria-hidden="true" /></Button>
+        onClick={onDownload} unstyled><Icon name="Download" size={14} aria-hidden="true" /></Button>
       <Button className="popup-sync-direction" title="上传一次" aria-label={`上传一次：${title}`}
         disabled={isBusy || Boolean(pending) || profile.needsAuthorization || !profile.localFolderExists}
-        onClick={onUpload} unstyled><Icon name="ArrowUp" size={14} aria-hidden="true" /></Button>
+        onClick={onUpload} unstyled><Icon name="Upload" size={14} aria-hidden="true" /></Button>
       {showRun ? <Button className="popup-sync-run" aria-label={`${runLabel}：${title}`} disabled={Boolean(pending)}
         data-primary={state.state === 'error' || state.state === 'authorize' || undefined}
         onClick={onRun} unstyled>
@@ -253,13 +254,21 @@ function ProfileCockpit({ profile, presentation, pending, onOptions, onAutoChang
       </aside>
     </div>
     <div className="popup-sync-facts">
-      <div className="popup-sync-fact"><span>自动同步</span><strong>{automaticLabel(profile)}</strong></div>
+      <div className="popup-sync-fact popup-sync-fact--toggle">
+        <div>
+          <span>自动同步</span>
+          <strong>{automaticLabel(profile)}</strong>
+        </div>
+        <Checkbox aria-label={`${title}自动同步`} checked={presentation.automatic}
+          labelClassName="popup-sync-auto" disabled={isBusy || Boolean(pending)}
+          onCheckedChange={onAutoChange} />
+      </div>
       <div className="popup-sync-fact"><span>同步方向</span><strong>{direction}</strong></div>
       <div className="popup-sync-fact" data-warning={profile.data.failsafe === false || undefined}>
         <span>安全保护</span><strong>{profile.data.failsafe === false ? '已关闭' : '已开启'}</strong>
       </div>
     </div>
-    <ProfileActions profile={profile} presentation={presentation} pending={pending} className="popup-sync-cockpit-actions" showRun={false}
+    <ProfileActions profile={profile} presentation={presentation} pending={pending} className="popup-sync-cockpit-actions" showRun={false} showAuto={false}
       onOptions={onOptions} onAutoChange={onAutoChange} onForce={onForce} onDownload={onDownload} onUpload={onUpload} onRun={onRun} />
   </li>
 }

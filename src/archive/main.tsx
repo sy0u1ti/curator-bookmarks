@@ -79,31 +79,51 @@ function ArchivePage() {
     }
   }
 
+  function openOptions() {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.openOptionsPage) {
+      void chrome.runtime.openOptionsPage()
+      return
+    }
+    window.open(chrome.runtime.getURL('src/options/options.html'), '_blank', 'noopener')
+  }
+
+  const statusPhase = error ? `error:${error}` : loading ? 'loading' : busy ? 'busy' : result ? `saved:${result.filename}` : 'idle'
+
   return <ThemeProvider>
     <InputCaretHost />
     <main className="mx-auto grid w-full min-w-0 max-w-3xl gap-6 px-6 py-12 text-ds-text-primary [overflow-wrap:anywhere]">
       <div className="flex items-center gap-3 text-sm text-ds-text-secondary"><Icon name="ArchiveRestore" size={22} />Curator</div>
       <h1 className="text-2xl font-semibold">网页离线存档</h1>
       <p className="text-sm leading-relaxed text-ds-text-secondary">将已加载的页面、图片和样式保存为单个 MHTML 文件，可用 Chrome 或 Edge 离线打开。</p>
-      {tabId !== null ? <Surface as="section" className="p-4" aria-label="来源网页" aria-busy={loading}>
-        <h2 className="m-0 h-[2lh] overflow-auto text-lg font-semibold" title={source?.title}>{source?.title || (loading ? '正在读取来源网页…' : '来源标签页')}</h2>
-        <p className="m-0 mt-2 h-[2lh] overflow-auto break-all text-sm text-ds-text-secondary">{source?.url || ''}</p>
+      {tabId !== null ? <Surface as="section" className="p-5" aria-label="来源网页" aria-busy={loading}>
+        <h2 className="m-0 max-h-[2lh] overflow-auto text-lg font-semibold [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-width:thin]" title={source?.title}>{source?.title || (loading ? '正在读取来源网页…' : '来源标签页')}</h2>
+        <p className="m-0 mt-2 max-h-[2lh] overflow-auto text-sm text-ds-text-secondary [overflow-wrap:anywhere] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-width:thin]">{source?.url || ''}</p>
         <p className="mt-3 text-sm leading-relaxed text-ds-text-secondary">保存前请在来源页展开或加载需要保留的内容，并保持来源标签页打开。脚本交互、流媒体和服务器功能无法离线运行。</p>
-      </Surface> : null}
+      </Surface> : (
+        <Surface as="section" className="grid gap-3 p-5" aria-label="未指定来源网页">
+          <h2 className="m-0 text-base font-semibold text-ds-text-primary">未找到来源网页</h2>
+          <p className="m-0 text-sm leading-relaxed text-ds-text-secondary">{error}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-2.5">
+            <Button variant="secondary" size="sm" onClick={openOptions}>打开设置</Button>
+          </div>
+        </Surface>
+      )}
       {tabId !== null ? <div className="archive-actions grid grid-cols-2 gap-3">
        <Button variant="primary" disabled={busy || loading || !source} aria-busy={busy} onClick={() => void save()}><Icon name="Download" size={16} /><StableLabel text={result ? '重新保存网页' : '保存离线文件'} reserve={['保存离线文件', '重新保存网页']} /></Button>
         <Button variant="secondary" disabled={busy || loading} onClick={() => void loadSource()}>重新读取来源</Button>
         <Button variant="secondary" disabled={!source} onClick={() => void returnToSource()}>回到来源网页</Button>
-        <Button className={result ? undefined : 'invisible'} variant="secondary" disabled={!result} aria-hidden={!result || undefined} tabIndex={result ? undefined : -1} onClick={() => { if (result) downloadBlobFile(result.filename, result.blob) }}>再次下载</Button>
+        <Button variant="secondary" disabled={!result} onClick={() => { if (result) downloadBlobFile(result.filename, result.blob) }}>再次下载</Button>
       </div> : null}
-      <StatusMessage lines={3} className="archive-status text-sm leading-relaxed text-ds-text-secondary" tone={error ? 'error' : 'neutral'}>
-        {error || (loading ? '正在读取来源网页…' : busy ? <><span className="sr-only">正在保存已加载的页面内容…</span>{archivePrivacyNote}</> : result ? (
-          <span className="flex items-start gap-2">
-            <svg className="archive-saved-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5 L6.5 11.5 L12.5 4.5" /></svg>
-            <span>离线文件已生成：{result.filename}（{formatBytes(result.blob.size)}）。</span>
-          </span>
-        ) : archivePrivacyNote)}
-      </StatusMessage>
+      {tabId !== null ? <StatusMessage lines={3} className="archive-status text-sm leading-relaxed text-ds-text-secondary" tone={error ? 'error' : 'neutral'}>
+        <span key={statusPhase} className="archive-status-copy">
+          {error || (loading ? '正在读取来源网页…' : busy ? <><span className="sr-only">正在保存已加载的页面内容…</span>{archivePrivacyNote}</> : result ? (
+            <span className="flex items-start gap-2">
+              <svg className="archive-saved-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5 L6.5 11.5 L12.5 4.5" /></svg>
+              <span>离线文件已生成：{result.filename}（{formatBytes(result.blob.size)}）。</span>
+            </span>
+          ) : archivePrivacyNote)}
+        </span>
+      </StatusMessage> : null}
     </main>
   </ThemeProvider>
 }

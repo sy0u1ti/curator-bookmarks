@@ -14,6 +14,7 @@ import {
   resetSearchLayout,
   SEARCH_HEIGHT_MAX,
   SEARCH_HEIGHT_MIN,
+  SEARCH_HEIGHT_STEP,
   SEARCH_WIDTH_MIN_PX
 } from './search-layout.js'
 import { createNewtabSearchSettingsView } from './newtab-search-settings-store.js'
@@ -27,11 +28,16 @@ assert.equal(normalizeSearchHeight(43.6), 44)
 for (const value of [undefined, null, '', ' ', false, true, [], {}, NaN, Infinity, -Infinity, 'invalid']) {
   assert.equal(normalizeSearchHeight(value), DEFAULT_SEARCH_LAYOUT.height, `Invalid height: ${String(value)}`)
 }
-for (let height = SEARCH_HEIGHT_MIN; height <= SEARCH_HEIGHT_MAX; height++) {
-  assert.equal(normalizeSearchHeight(height), height, 'Safe custom heights are not snapped to presets.')
-  const controlSize = Math.min(36, Math.max(24, height - 10))
+for (let height = SEARCH_HEIGHT_MIN; height <= SEARCH_HEIGHT_MAX; height += SEARCH_HEIGHT_STEP) {
+  assert.equal(normalizeSearchHeight(height), height, 'Safe even custom heights are not snapped to presets.')
+  const controlSize = Math.min(36, Math.max(24, height - 16))
   assert.ok(controlSize >= 24)
+  assert.equal(controlSize % 2, 0, 'Even search heights keep even button sizes for even SVG icons.')
+  assert.equal((height - controlSize) % 2, 0, 'Even search heights keep integer vertical and horizontal insets.')
   assert.ok((height - controlSize) / 2 >= 5, 'Buttons and focus rings must fit inside the field.')
+}
+for (const [oddHeight, expectedEven] of [[37, 38], [45, 46], [53, 54], [55, 56]]) {
+  assert.equal(normalizeSearchHeight(oddHeight), expectedEven, 'Legacy odd search heights snap to even pixel steps.')
 }
 const customSearch = {
   ...DEFAULT_SEARCH_LAYOUT,
@@ -129,7 +135,11 @@ const css = readFileSync('src/newtab/newtab.css', 'utf8')
 for (const id of ['search-offset-y', 'icon-tile-width', 'icon-shell-size', 'icon-column-gap', 'icon-row-gap', 'icon-folder-gap', 'time-clock-size']) {
   assert.ok(!drawer.includes(`id="${id}"`), `${id} is no longer an independent user decision.`)
 }
-assert.ok(drawer.includes('id="search-height"') && drawer.includes("dispatchNewtabSearchSettingFieldChange('height', value)"))
+assert.ok(
+  drawer.includes('id="search-height"') &&
+    drawer.includes('step={SEARCH_HEIGHT_STEP}') &&
+    drawer.includes("dispatchNewtabSearchSettingFieldChange('height', value)")
+)
 assert.ok(drawer.includes('searchSettings.enabled ? <>') && drawer.includes('timeSettings.enabled ? <>'))
 assert.ok(drawer.includes('searchSettings.webSearchEnabled ? <>'))
 assert.ok(drawer.includes("iconPreview.layoutMode === 'fixed' ? (") && drawer.includes('iconPreview.showTitles ? ('))

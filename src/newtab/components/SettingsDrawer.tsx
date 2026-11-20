@@ -63,7 +63,7 @@ import {
   dispatchNewtabSearchSettingToggle,
   useNewtabSearchSettingsView
 } from '../newtab-search-settings-store'
-import { DEFAULT_SEARCH_LAYOUT, SEARCH_HEIGHT_MIN, SEARCH_HEIGHT_MAX } from '../search-layout'
+import { DEFAULT_SEARCH_LAYOUT, SEARCH_HEIGHT_MIN, SEARCH_HEIGHT_MAX, SEARCH_HEIGHT_STEP } from '../search-layout'
 import {
   dispatchNewtabBackgroundFileSelect,
   dispatchNewtabBackgroundSettingFieldChange,
@@ -132,7 +132,7 @@ const SETTINGS_ROOT_CLASS = 'grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]'
 const SETTINGS_CHROME_CLASS = 'settings-drawer-chrome grid gap-3 border-b border-ds-border-subtle px-6 pb-4 pt-4 @max-[440px]/settings:px-4'
 const SETTINGS_HEADER_CLASS = 'grid min-h-10 grid-cols-[minmax(0,1fr)_96px_auto] items-center gap-x-3'
 const SETTINGS_TITLE_CLASS = 'm-0 text-xl font-semibold leading-tight text-ds-text-primary'
-const SETTINGS_SAVE_STATUS_CLASS = 'm-0 text-right text-xs font-medium leading-4 text-ds-text-secondary'
+const SETTINGS_SAVE_STATUS_CLASS = 'm-0 text-right text-xs font-medium leading-8 text-ds-text-secondary [align-content:safe_center]'
 const SETTINGS_TABS_LIST_CLASS = 't-tabs grid grid-cols-5 gap-1 rounded-ds-md border-0 bg-[rgba(245,245,247,0.06)] p-1'
 const SETTINGS_TAB_CLASS = 't-tab min-h-8 min-w-0 whitespace-nowrap rounded-ds-sm bg-transparent px-2 text-xs font-semibold outline-none hover:text-ds-text-primary data-[active]:text-ds-text-primary data-[selected]:text-ds-text-primary data-[state=active]:text-ds-text-primary focus-visible:shadow-ds-focus @max-[380px]/settings:px-0'
 const SETTINGS_TABS_INDICATOR_CLASS = 't-tabs-pill'
@@ -150,7 +150,9 @@ const SETTINGS_INPUT_INTERACTION_CLASS = 'outline-none transition-colors duratio
 const SETTINGS_CONTROL_CLASS = cx(SETTINGS_INPUT_SURFACE_CLASS, SETTINGS_INPUT_INTERACTION_CLASS)
 const SETTINGS_TEXT_INPUT_INTERACTION_CLASS = 'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus:bg-ds-hover focus:text-ds-text-primary disabled:cursor-not-allowed disabled:opacity-50'
 const SETTINGS_TEXT_INPUT_CLASS = cx('h-9 min-h-9 w-full min-w-0 px-3 text-xs font-semibold', SETTINGS_INPUT_SURFACE_CLASS, SETTINGS_TEXT_INPUT_INTERACTION_CLASS)
-const SETTINGS_ROW_CLASS = 'settings-control-row grid min-h-12 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-ds-lg border-0 bg-[rgba(245,245,247,0.045)] p-2 @max-[440px]/settings:grid-cols-1 @max-[440px]/settings:justify-items-stretch'
+const SETTINGS_ROW_BASE_CLASS = 'settings-control-row grid min-h-12 min-w-0 items-center gap-3 rounded-ds-lg border-0 bg-[rgba(245,245,247,0.045)] p-2 @max-[440px]/settings:grid-cols-1 @max-[440px]/settings:justify-items-stretch'
+const SETTINGS_ROW_CLASS = cx(SETTINGS_ROW_BASE_CLASS, 'grid-cols-[minmax(0,1fr)_auto]')
+const SETTINGS_ROW_TEXT_INPUT_CLASS = cx(SETTINGS_ROW_BASE_CLASS, 'grid-cols-[auto_minmax(0,1fr)]', SETTINGS_PSEUDO_SHADOW_RESET_CLASS)
 const SETTINGS_ROW_DISABLED_CLASS = 'opacity-60'
 // Switch rows keep label and control side by side at every drawer width.
 const SETTINGS_SWITCH_ROW_CLASS = 'settings-switch-row @max-[440px]/settings:grid-cols-[minmax(0,1fr)_auto]'
@@ -179,8 +181,8 @@ const FOLDER_SELECTED_COPY_CLASS = 'grid min-w-0 gap-0.5 p-1 text-xs leading-[18
 const FOLDER_REMOVE_BUTTON_CLASS = 'curator-compact-hit-target group/folder-remove inline-flex size-8 min-h-8 min-w-8 items-center justify-center rounded-ds-sm border border-[rgba(245,245,247,0.07)] bg-[rgba(245,245,247,0.045)] p-0 text-[rgba(245,245,247,0.9)] outline-none transition-[background-color,border-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard hover:border-[rgba(255,138,130,0.24)] hover:bg-[rgba(255,138,130,0.11)] hover:text-[rgba(255,210,205,0.95)] focus-visible:border-[rgba(255,138,130,0.28)] focus-visible:bg-[rgba(255,138,130,0.12)] focus-visible:text-[rgba(255,210,205,0.95)] focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] motion-reduce:transition-colors motion-reduce:duration-[80ms] motion-reduce:active:scale-100 [&_svg]:size-[15px] [&_svg]:stroke-[1.9]'
 const FOLDER_EMPTY_CLASS = SETTINGS_NOTE_CLASS
 const FOLDER_CANDIDATES_PANEL_CLASS = cx('grid gap-2 p-2', SETTINGS_NESTED_SURFACE_CLASS)
-const FOLDER_CANDIDATE_LIST_CLASS = 'grid max-h-56 gap-1 overflow-y-auto'
-const FOLDER_CANDIDATE_CARD_CLASS = 'folder-candidate-card grid min-h-14 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 overflow-hidden rounded-ds-sm border border-transparent bg-transparent px-2.5 py-2 text-left text-ds-text-primary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover aria-pressed:border-ds-border-hover aria-pressed:bg-ds-selected aria-pressed:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:shadow-ds-focus'
+const FOLDER_CANDIDATE_LIST_CLASS = 'grid max-h-56 gap-1 overflow-y-auto [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-width:thin]'
+const FOLDER_CANDIDATE_CARD_CLASS = 'folder-candidate-card grid min-h-14 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 overflow-hidden rounded-ds-sm border border-transparent bg-transparent px-2.5 py-2 text-left text-ds-text-primary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover active:bg-ds-active aria-pressed:border-ds-border-hover aria-pressed:bg-ds-selected aria-pressed:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:shadow-ds-focus'
 const FOLDER_CANDIDATE_COPY_CLASS = 'grid min-w-0 gap-0.5'
 const FOLDER_CANDIDATE_TITLE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold leading-snug text-ds-text-primary'
 const FOLDER_CANDIDATE_META_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-snug text-ds-text-secondary'
@@ -195,7 +197,7 @@ const ICON_PREVIEW_SUMMARY_CLASS = 'min-w-0 text-xs font-medium leading-relaxed 
 const ICON_LIVE_PREVIEW_CLASS = 'm-0 overflow-x-auto rounded-ds-lg border border-ds-border bg-ds-app px-2.5 py-4 outline-none focus-visible:shadow-ds-focus [scrollbar-width:thin] [scrollbar-color:var(--ds-border-hover)_transparent]'
 const ICON_LIVE_PREVIEW_GRID_CLASS = 'mx-auto grid w-[var(--preview-grid-max-width)] content-center [column-gap:var(--preview-column-gap)] [row-gap:var(--preview-row-gap)]'
 const ICON_PRESET_ROW_CLASS = 'grid grid-cols-3 gap-2'
-const ICON_PRESET_CARD_CLASS = 'grid min-h-24 min-w-0 content-center gap-3 rounded-ds-lg border border-ds-border bg-ds-surface-1 ds-inset-panel text-left text-ds-text-secondary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-ds-focus'
+const ICON_PRESET_CARD_CLASS = 'curator-control grid min-h-24 min-w-0 content-center gap-3 rounded-ds-lg border border-ds-border bg-ds-surface-1 ds-inset-panel text-left text-ds-text-secondary outline-none hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-ds-focus'
 const ICON_PRESET_PREVIEW_CLASS = 'grid min-h-11 content-center rounded-ds-sm bg-ds-app'
 const ICON_PRESET_PREVIEW_CELL_CLASS = 'block rounded-ds-xs bg-ds-surface-2'
 const ICON_PRESET_NAME_CLASS = 'min-w-0 overflow-hidden text-ellipsis px-1 pb-1 text-xs font-semibold leading-5 text-ds-text-primary'
@@ -448,6 +450,7 @@ function SettingsDrawerHeader({ closeButtonRef }: { closeButtonRef: Ref<HTMLButt
       <StatusMessage
         id="settings-save-status"
         className={SETTINGS_SAVE_STATUS_CLASS}
+        lines={1}
         tone={view.saveState === 'error' ? 'error' : 'neutral'}
         data-state={view.saveState}
         title={view.saveMessage || undefined}
@@ -462,7 +465,7 @@ function SettingsDrawerHeader({ closeButtonRef }: { closeButtonRef: Ref<HTMLButt
             collisionPadding={16}
             showArrow={false}
             popupClassName="w-[min(320px,calc(100vw_-_32px))] max-h-[min(320px,var(--available-height))] overflow-auto"
-            trigger={<Button size="sm" variant="ghost" className="w-full px-1 text-ds-danger-text" aria-label="查看保存失败详情">
+            trigger={<Button size="sm" variant="ghost" className="w-full px-1 !text-ds-danger-text hover:bg-ds-danger-soft hover:!text-ds-danger-text" aria-label="查看保存失败详情">
               保存失败
             </Button>}
           >
@@ -742,7 +745,7 @@ const AdvancedSettingsSection = memo(function AdvancedSettingsSection({
 
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="advanced" aria-labelledby="settings-general-title">
-      <h2 id="settings-general-title" className={SETTINGS_SECTION_TITLE_CLASS}>高级</h2>
+      <h2 id="settings-general-title" className="sr-only">高级</h2>
       <Surface className={SETTINGS_LIST_CLASS} variant="plain">
         <SwitchRow
           id="general-hide-settings-trigger"
@@ -756,7 +759,7 @@ const AdvancedSettingsSection = memo(function AdvancedSettingsSection({
         />
         <SwitchRow
           id="general-open-bookmarks-new-tab"
-          title="新标签页打开"
+          title="在新标签页打开书签"
           checked={folderSource.general.openBookmarksInNewTab}
           onCheckedChange={(checked) => {
             dispatchNewtabGeneralSettingToggle('openBookmarksInNewTab', checked)
@@ -1080,8 +1083,10 @@ const BackgroundSettingsSection = memo(function BackgroundSettingsSection({
         <h2 id="settings-background-title" className={SETTINGS_SECTION_TITLE_CLASS}>背景</h2>
         <StatusMessage
           id="background-status"
-          className="m-0 text-right text-xs leading-4 text-ds-text-secondary"
+          className="m-0 text-right text-xs leading-5 text-ds-text-secondary [align-content:safe_center]"
+          lines={1}
           tone={backgroundSettings.backgroundStatusTone === 'error' ? 'error' : backgroundSettings.backgroundStatusTone === 'warning' ? 'warning' : 'neutral'}
+          title={backgroundSettings.backgroundStatus || undefined}
         >
           {backgroundSettings.backgroundStatus}
         </StatusMessage>
@@ -1146,7 +1151,7 @@ const BackgroundSettingsSection = memo(function BackgroundSettingsSection({
             unstyled
           />
         </div>
-        <div id="background-url-row" className={settingRowClassName()} hidden={backgroundSettings.urlRowHidden}>
+        <div id="background-url-row" className={SETTINGS_ROW_TEXT_INPUT_CLASS} hidden={backgroundSettings.urlRowHidden}>
           <span className={SETTINGS_LABEL_CLASS}>图片链接</span>
           <span className={SETTINGS_FIELD_CLASS}>
             <Input
@@ -1213,8 +1218,8 @@ const WallpaperAdjustmentSettings = memo(function WallpaperAdjustmentSettings({ 
 const IconSettingSwitchRow = memo(SwitchRow)
 
 const GLASS_CONTROLS: Array<{ key: NewtabGlassSettingKey; label: string; description: string; unit?: string }> = [
-  { key: 'blur', label: '玻璃模糊', description: '背景模糊半径；数值越小越透光，数值越大磨砂感越强。', unit: 'px' },
-  { key: 'tint', label: '底色深浅', description: '卡片底色浓度；浅色壁纸调高可提升对比度，深色壁纸调低透出背景。', unit: '%' },
+  { key: 'blur', label: '玻璃模糊', description: '', unit: 'px' },
+  { key: 'tint', label: '底色深浅', description: '', unit: '%' },
   { key: 'saturation', label: '背景饱和度', description: '', unit: '%' },
   { key: 'brightness', label: '背景亮度', description: '', unit: '%' },
   { key: 'highlight', label: '边缘高光', description: '', unit: '%' }
@@ -1239,9 +1244,11 @@ const GlassSettingsSection = memo(function GlassSettingsSection({
         <Button size="sm" variant="ghost" disabled={!view.ready || !view.canUndo} onClick={undoNewtabGlassEditSession}>撤销本次调整</Button>
         <Button id="glass-reset-defaults" ref={firstControlRef} size="sm" variant="ghost" aria-label="恢复玻璃默认值" onClick={resetNewtabGlassSettings} disabled={!view.ready}>恢复默认值</Button>
       </SettingsSectionHeader>
-      <StatusMessage lines={1} className={SETTINGS_NOTE_CLASS} tone={view.saveState === 'error' ? 'error' : 'neutral'}>
-        {view.saveState === 'error' ? '设置保存失败，请重试。' : ''}
-      </StatusMessage>
+      {view.saveState === 'error' ? (
+        <StatusMessage lines={1} className={SETTINGS_NOTE_CLASS} tone="error">
+          设置保存失败，请重试。
+        </StatusMessage>
+      ) : null}
       <div className="newtab-glass-controls grid gap-2.5">
         <div className="newtab-glass-preview-scene" aria-label="玻璃效果实时预览">
           <NewtabGlassSurface className="newtab-glass-preview">
@@ -1575,6 +1582,7 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
               value={`${searchSettings.height}px`}
               min={String(SEARCH_HEIGHT_MIN)}
               max={String(SEARCH_HEIGHT_MAX)}
+              step={SEARCH_HEIGHT_STEP}
               defaultValue={String(DEFAULT_SEARCH_LAYOUT.height)}
               ariaLabel="搜索栏高度"
               onValueChange={(value) => dispatchNewtabSearchSettingFieldChange('height', value)}
@@ -1613,7 +1621,7 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
                 dispatchNewtabSearchSettingToggle('autoVerticalCenter', value === 'center')
               }}
             />
-            <div className={settingRowClassName()}>
+            <div className={SETTINGS_ROW_TEXT_INPUT_CLASS}>
               <label className={SETTINGS_LABEL_CLASS} htmlFor="search-placeholder">提示文字</label>
               <span className={SETTINGS_FIELD_CLASS}>
                 <Input

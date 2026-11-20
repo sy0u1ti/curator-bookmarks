@@ -45,7 +45,7 @@ export function ShortcutList({ state }: { state: ShortcutListState }) {
     <>
       {state.commands.map((command) => {
         const shortcut = String(command.shortcut || '').trim()
-        const shortcutLabel = shortcut || '未配置'
+        const shortcutLabel = shortcut || '未设置'
         return (
           <div className={SHORTCUT_ROW_CLASS} key={command.name}>
             <div className={SHORTCUT_COPY_CLASS}>

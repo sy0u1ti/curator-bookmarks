@@ -79,30 +79,73 @@ export function attachSidebarMotion(sidebar: HTMLElement, indicator: HTMLElement
     stop()
   }
 
-  const folding = () => [...sidebar.querySelectorAll('.t-acc-panel')].some(panel =>
+  const isClosingPanel = (panel: HTMLElement) =>
+    panel.inert || !panel.hasAttribute('data-open') || panel.hasAttribute('data-ending-style')
+
+  const isPanelTransitioning = (panel: HTMLElement) =>
     panel.getAnimations().some(animation =>
       (animation as CSSTransition).transitionProperty === 'grid-template-rows' && animation.playState === 'running'
     )
+
+  const panelClosingRowGap = (panel: HTMLElement) => {
+    if (panel.hidden) return 0
+    const parent = panel.parentElement
+    if (!parent || parent.children.length < 2) return 0
+    const style = getComputedStyle(parent)
+    if (!style.display.includes('grid') && !style.display.includes('flex')) return 0
+    const gap = Number.parseFloat(style.rowGap)
+    return Number.isFinite(gap) && gap > 0 ? gap : 0
+  }
+
+  const settledGeometry = (target: HTMLElement, host = sidebar): Rect | null => {
+    const rect = geometry(target, host)
+    if (!rect || host !== sidebar) return rect
+    const inner = target.getBoundingClientRect()
+    let deltaY = 0
+    for (const panel of sidebar.querySelectorAll<HTMLElement>('.t-acc-panel')) {
+      if (panel.contains(target) || panel.hidden) continue
+      if (!(panel.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING)) continue
+      const panelRect = panel.getBoundingClientRect()
+      if (panelRect.right <= inner.left || panelRect.left >= inner.right) continue
+      if (isClosingPanel(panel)) {
+        deltaY -= panelRect.height + panelClosingRowGap(panel)
+        continue
+      }
+      if (!panel.hasAttribute('data-starting-style') && !isPanelTransitioning(panel)) continue
+      const panelInner = panel.firstElementChild as HTMLElement | null
+      const expandedHeight = panelInner ? Math.max(panelRect.height, panelInner.scrollHeight) : panelRect.height
+      if (expandedHeight > panelRect.height + 0.5) {
+        deltaY += expandedHeight - panelRect.height
+      }
+    }
+    return deltaY ? { ...rect, y: rect.y + deltaY } : rect
+  }
+
+  const folding = () => [...sidebar.querySelectorAll<HTMLElement>('.t-acc-panel')].some(panel =>
+    isPanelTransitioning(panel) ||
+    (isClosingPanel(panel) && !panel.hidden && (panel.getBoundingClientRect().height > 0.5 || panelClosingRowGap(panel) > 0))
   )
 
   const step = (now: number) => {
     frame = 0
-    const rect = row?.isConnected ? geometry(row) : null
-    if (!rect) {
+    const currentRow = row
+    const liveRect = currentRow?.isConnected ? geometry(currentRow) : null
+    if (!liveRect) {
       indicator.hidden = true
       placed = false
       stop()
       return
     }
     if (shouldSkipMotion() || document.hidden) {
-      put(rect)
+      put(liveRect)
       return
     }
+    const targetRect = settledGeometry(currentRow) ?? liveRect
     const elapsed = (now - previousTime) / 1000
     previousTime = now
-    for (const key of axes) advanceSpring(position[key], rect[key], elapsed, spring)
-    if (axes.every(key => springSettled(position[key], rect[key])) && !folding()) {
-      put(rect)
+    for (const key of axes) advanceSpring(position[key], targetRect[key], elapsed, spring)
+    if (axes.every(key => springSettled(position[key], targetRect[key])) && !folding()) {
+      put(liveRect)
       return
     }
     paint()

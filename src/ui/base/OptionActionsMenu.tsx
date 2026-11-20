@@ -37,7 +37,7 @@ export function OptionActionsMenu({ actions, label, triggerLabel = '更多操作
           <Menu.Popup
             aria-label={label}
             render={<MotionPanel variant="menu" />}
-            className="max-h-[var(--available-height)] w-[min(320px,calc(100vw_-_24px))] overflow-y-auto rounded-ds-menu border border-ds-border bg-ds-surface-2 ds-inset-menu shadow-lg outline-none"
+            className="max-h-[var(--available-height)] w-[min(320px,calc(100vw_-_24px))] overflow-y-auto rounded-ds-menu border border-ds-border bg-ds-surface-2 ds-inset-menu [filter:var(--ds-filter-popover)] outline-none"
           >
             {actions.map(action => (
               <Fragment key={action.id}>

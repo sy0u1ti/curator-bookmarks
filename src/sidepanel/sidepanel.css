@@ -20,12 +20,13 @@ html[data-curator-surface="sidepanel"] .popup-workspace:has([aria-controls="side
 html[data-curator-surface="sidepanel"] #sidepanel-folder-tree {
   opacity: 1;
   transition:
-    opacity var(--acc-fade-out) var(--ds-ease-standard),
+    opacity var(--ds-motion-enter-opacity) var(--ds-ease-standard),
     display var(--acc-collapse) allow-discrete;
 }
 html[data-curator-surface="sidepanel"] #sidepanel-folder-tree[hidden] {
   opacity: 0;
   pointer-events: none;
+  transition-duration: var(--ds-motion-exit-opacity), var(--acc-collapse);
 }
 @starting-style {
   html[data-curator-surface="sidepanel"] #sidepanel-folder-tree {

@@ -234,6 +234,7 @@ import {
   type SourceNavigationState
 } from './newtab-bookmark-content-store.js'
 import { clearNewtabBookmarkPrebootSnapshot } from './newtab-bookmark-preboot.js'
+import { computeCardAnchoredOrigin } from '../shared/anchor-origin.js'
 import {
   createDefaultSearchWidgetInteractionState,
   createSearchWidgetActionState,
@@ -8796,11 +8797,15 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
     onExitComplete: finalizeBookmarkMenuClose,
     menu: {
       actions: [
+        createMenuActionViewModel('保存更改', 'save', saveBookmarkMenuChanges, {
+          actionId: 'save-bookmark',
+          ariaLabel: `保存书签更改：${bookmarkLabel}`
+        }),
         createMenuActionViewModel(
           pinCopy.label,
           'pin',
           toggleActiveMenuBookmarkPin,
-          { actionId: 'toggle-pin', ariaLabel: `${pinCopy.ariaLabel}：${bookmarkLabel}` }
+          { actionId: 'toggle-pin', ariaLabel: `${pinCopy.ariaLabel}：${bookmarkLabel}`, separatorBefore: true }
         ),
         {
           ...createMenuActionViewModel('复制链接', 'copy', copyActiveMenuBookmarkUrl, {
@@ -8809,6 +8814,10 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
           }),
           feedback: bookmarkCopyFeedback
         },
+        createMenuActionViewModel('刷新图标', 'refresh', refreshActiveMenuIcon, {
+          actionId: 'refresh-icon',
+          ariaLabel: `刷新书签图标：${bookmarkLabel}`
+        }),
         {
           ...createMenuActionViewModel('移动到', 'move', () => {}, {
             actionId: 'move-bookmark',
@@ -8827,16 +8836,8 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
           '删除',
           'trash',
           deleteActiveMenuBookmark,
-          { actionId: 'delete-bookmark', variant: 'danger', ariaLabel: `删除书签：${bookmarkLabel}` }
-        ),
-        createMenuActionViewModel('刷新图标', 'refresh', refreshActiveMenuIcon, {
-          actionId: 'refresh-icon',
-          ariaLabel: `刷新书签图标：${bookmarkLabel}`
-        }),
-        createMenuActionViewModel('保存更改', 'save', saveBookmarkMenuChanges, {
-          actionId: 'save-bookmark',
-          ariaLabel: `保存书签更改：${bookmarkLabel}`
-        })
+          { actionId: 'delete-bookmark', variant: 'danger', ariaLabel: `删除书签：${bookmarkLabel}`, separatorBefore: true }
+        )
       ],
       error: state.menuError,
       fields: [
@@ -8988,12 +8989,14 @@ function createMenuActionViewModel(
     disabled = state.menuBusy,
     actionId = '',
     variant = '',
-    ariaLabel = label
+    ariaLabel = label,
+    separatorBefore = false
   }: {
     disabled?: boolean
     actionId?: string
     variant?: 'danger' | ''
     ariaLabel?: string
+    separatorBefore?: boolean
   } = {}
 ): BookmarkMenuActionViewModel {
   return {
@@ -9003,6 +9006,7 @@ function createMenuActionViewModel(
     icon,
     id: actionId || `${icon}:${label}`,
     label,
+    separatorBefore,
     onSelect: action,
     variant
   }
@@ -11950,7 +11954,10 @@ function showFeaturedBackgroundHoverPreview(request: FeaturedBackgroundHoverPrev
     src: fallbackUrl,
     top: position.top,
     visible: true,
-    width: position.width
+    width: position.width,
+    origin: position.origin,
+    enterX: position.enterX,
+    enterY: position.enterY
   })
   void resolveFeaturedBackgroundGalleryObjectUrl(imageUrl).then((cachedUrl) => {
     if (!cachedUrl || featuredBackgroundPreviewCard !== card) {
@@ -11965,6 +11972,9 @@ function getFeaturedBackgroundHoverPreviewPosition(card: HTMLElement): {
   left: number
   top: number
   width: number
+  origin: string
+  enterX: number
+  enterY: number
 } {
   const cardRect = card.getBoundingClientRect()
   const modal = getNewtabFeaturedBackgroundModalNodes().modal
@@ -11986,12 +11996,29 @@ function getFeaturedBackgroundHoverPreviewPosition(card: HTMLElement): {
   const top = belowTop <= maxTop
     ? belowTop
     : Math.max(modalRect.top + 16, aboveTop)
+  const anchor = computeCardAnchoredOrigin(
+    {
+      left: cardRect.left,
+      top: cardRect.top,
+      width: cardRect.width,
+      height: cardRect.height
+    },
+    {
+      left,
+      top,
+      width: previewWidth,
+      height: previewHeight
+    }
+  )
 
   return {
     height: previewHeight,
     left,
     top,
-    width: previewWidth
+    width: previewWidth,
+    origin: anchor.origin,
+    enterX: anchor.enterX,
+    enterY: anchor.enterY
   }
 }
 

@@ -59,7 +59,7 @@ export function summarizeSyncViews(profiles: SyncProfileView[], now = Date.now()
 
 export function syncStatusLabel(status: SyncStatusSummary): string {
   return {
-    empty: '同步', idle: '同步', running: '同步中', waiting: '等待中',
+    empty: '同步面板', idle: '同步面板', running: '同步中', waiting: '等待中',
     attention: '需处理', pending: '待同步', never: '尚未同步'
   }[status.state]
 }

@@ -1454,8 +1454,8 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-favicon {
   position: relative;
   z-index: 1;
-  width: calc(var(--icon-shell-size) * 0.68);
-  height: calc(var(--icon-shell-size) * 0.68);
+  width: calc(var(--icon-shell-size) - 2 * round(nearest, calc(var(--icon-shell-size) * 0.16), 1px));
+  height: calc(var(--icon-shell-size) - 2 * round(nearest, calc(var(--icon-shell-size) * 0.16), 1px));
   border-radius: var(--ds-radius-xs, 4px);
   object-fit: contain;
   opacity: 0;
@@ -1469,8 +1469,8 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-fallback {
   position: absolute;
   display: grid;
-  width: calc(var(--icon-shell-size) * 0.76);
-  height: calc(var(--icon-shell-size) * 0.76);
+  width: calc(var(--icon-shell-size) - 2 * round(nearest, calc(var(--icon-shell-size) * 0.12), 1px));
+  height: calc(var(--icon-shell-size) - 2 * round(nearest, calc(var(--icon-shell-size) * 0.12), 1px));
   place-items: center;
   border-radius: var(--ds-radius-xs, 4px);
   background: rgba(245, 245, 247, 0.09);
@@ -1493,7 +1493,7 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
   color: rgba(245, 245, 247, 0.8);
   font-size: 13px;
   font-weight: 520;
-  line-height: 1.3;
+  line-height: 17px;
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: var(--icon-title-lines);

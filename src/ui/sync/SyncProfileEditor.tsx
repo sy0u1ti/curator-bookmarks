@@ -591,7 +591,13 @@ export function SyncProfileEditor({ profile, onClose, onSaved, embedded = false,
       </DialogBody>
 
       <DialogFooter className={embedded ? 'popup-sync-editor-footer' : 'mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-ds-border-subtle pt-4 @max-[560px]/sync-editor:grid-cols-1'}>
-        <StatusMessage className={embedded ? 'text-xs leading-[1.5] text-ds-text-secondary' : 'text-[13px] leading-[1.5] text-ds-text-secondary'} lines={embedded ? 1 : 2} tone={status.tone}>
+        <StatusMessage
+          className={embedded
+            ? 'text-xs leading-[1.5] text-ds-text-secondary [align-content:safe_center]'
+            : 'text-[13px] leading-[1.5] text-ds-text-secondary [align-content:safe_center] @max-[560px]/sync-editor:data-[empty=true]:hidden'}
+          lines={embedded ? 1 : 2}
+          tone={status.tone}
+        >
           {status.text}
         </StatusMessage>
         <div className="flex flex-wrap items-center justify-end gap-2.5">

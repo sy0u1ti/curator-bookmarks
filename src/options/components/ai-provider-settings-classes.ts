@@ -7,7 +7,7 @@ export const AI_PROVIDER_CARD_CLASS =
 export const AI_PROVIDER_CARD_ATTENTION_CLASS = 'outline outline-1 outline-ds-border-hover outline-offset-2'
 
 export const AI_PROVIDER_HEADER_CLASS =
-  'flex items-start justify-between gap-[18px] max-[760px]:flex-col'
+  'flex items-start justify-between gap-3'
 
 export const AI_PROVIDER_COPY_CLASS = 'min-w-0'
 

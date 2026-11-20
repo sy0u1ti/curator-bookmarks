@@ -1,12 +1,12 @@
 import { Combobox as BaseCombobox } from '@base-ui/react/combobox'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { SearchIcon, XIcon } from 'lucide-react'
-import type { ComponentPropsWithoutRef, ReactNode } from 'react'
-import { DialogBackdrop, DialogPanel } from '../base/Dialog'
+import { useState, type ComponentPropsWithoutRef, type ReactNode } from 'react'
+import { DialogAnchorProvider, DialogBackdrop, DialogPanel } from '../base/Dialog'
 import { cx } from '../base/utils'
 
 const MODEL_SELECTOR_TRIGGER_CLASS =
-  'inline-flex min-h-[42px] w-full touch-manipulation select-none items-center justify-start gap-2 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-sm font-semibold leading-5 text-ds-text-primary shadow-none outline-none transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard hover:not-disabled:border-ds-border-hover hover:not-disabled:bg-ds-surface-3 focus-visible:border-ds-focus focus-visible:bg-ds-surface-3 focus-visible:shadow-ds-focus active:not-disabled:scale-[var(--ds-press-scale)] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none motion-reduce:active:not-disabled:scale-100'
+  'inline-flex min-h-[42px] w-full touch-manipulation select-none items-center justify-start gap-2 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-sm font-semibold leading-5 text-ds-text-primary shadow-none outline-none transition-[border-color,background-color,color] duration-ds-fast ease-ds-standard hover:not-disabled:border-ds-border-hover hover:not-disabled:bg-ds-surface-3 active:not-disabled:bg-ds-active focus-visible:border-ds-focus focus-visible:bg-ds-surface-3 focus-visible:shadow-ds-focus disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none'
 const MODEL_SELECTOR_BACKDROP_CLASS =
   'model-selector-backdrop fixed inset-0 z-[1200] min-h-dvh bg-ds-overlay supports-[-webkit-touch-callout:none]:absolute'
 const MODEL_SELECTOR_CONTENT_CLASS =
@@ -27,7 +27,7 @@ const MODEL_SELECTOR_GROUP_CLASS = 'model-selector-group'
 const MODEL_SELECTOR_GROUP_HEADING_CLASS = 'px-2 pb-1.5 pt-[5px] text-xs font-semibold leading-[1.2] text-ds-accent-text'
 const MODEL_SELECTOR_GROUP_ITEMS_CLASS = 'grid list-none gap-px p-0'
 const MODEL_SELECTOR_ITEM_CLASS =
-  'grid min-h-8 w-full touch-manipulation select-none grid-cols-[16px_minmax(0,1fr)_auto_16px] items-center gap-2 rounded-ds-sm border-0 bg-transparent px-2 text-left text-sm font-semibold text-ds-text-primary outline-none transition-[background-color,color,transform,scale] duration-ds-fast ease-ds-standard hover:bg-ds-hover data-[highlighted]:bg-ds-hover data-[selected]:bg-ds-selected data-[selected]:text-ds-accent-text active:scale-[var(--ds-press-scale)] motion-reduce:transition-none motion-reduce:active:scale-100'
+  'grid min-h-8 w-full touch-manipulation select-none grid-cols-[16px_minmax(0,1fr)_auto_16px] items-center gap-2 rounded-ds-sm border-0 bg-transparent px-2 text-left text-sm font-semibold text-ds-text-primary outline-none transition-[background-color,color] duration-ds-fast ease-ds-standard hover:bg-ds-hover active:bg-ds-active data-[highlighted]:bg-ds-hover data-[selected]:bg-ds-selected data-[selected]:text-ds-accent-text motion-reduce:transition-none'
 const MODEL_SELECTOR_ITEM_INDICATOR_CLASS =
   'model-selector-selection-indicator inline-grid size-4 place-items-center opacity-0 data-[selected]:opacity-100'
 const MODEL_SELECTOR_LOGO_CLASS = 'size-3 flex-none object-contain invert'
@@ -39,8 +39,29 @@ const MODEL_SELECTOR_NAME_CLASS =
 
 export type ModelSelectorProps = ComponentPropsWithoutRef<typeof BaseDialog.Root>
 
-export function ModelSelector(props: ModelSelectorProps) {
-  return <BaseDialog.Root {...props} />
+export function ModelSelector({
+  open,
+  defaultOpen,
+  onOpenChange,
+  triggerId,
+  ...props
+}: ModelSelectorProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(Boolean(defaultOpen))
+  const resolvedOpen = open ?? uncontrolledOpen
+  return (
+    <DialogAnchorProvider open={resolvedOpen} triggerId={triggerId}>
+      <BaseDialog.Root
+        {...props}
+        open={open}
+        defaultOpen={defaultOpen}
+        triggerId={triggerId}
+        onOpenChange={(nextOpen, eventDetails) => {
+          if (open === undefined) setUncontrolledOpen(nextOpen)
+          onOpenChange?.(nextOpen, eventDetails)
+        }}
+      />
+    </DialogAnchorProvider>
+  )
 }
 
 export type ModelSelectorTriggerProps = ComponentPropsWithoutRef<typeof BaseDialog.Trigger>

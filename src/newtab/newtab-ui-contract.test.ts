@@ -648,6 +648,21 @@ assert.ok(
   'The small bookmark hover lift must use relative positioning, not a transform or a separate glyph layer that re-snaps text at fractional DPI.'
 )
 
+const bookmarkIconHoverRule = newtabCss.match(
+  /:is\(\.bookmark-tile, \.newtab-speed-dial-card\):not\(\.curator-motion-disabled\):not\(\.dragging\):hover :is\(\.bookmark-icon-shell, \.bookmark-folder-card-icon\)\s*\{([^}]*)\}/s
+)?.[1] || ''
+
+assert.ok(
+  /--newtab-bookmark-hover-lift:\s*-?\d+px;/.test(newtabCss) &&
+    bookmarkIconShell.includes('round(nearest,calc(var(--icon-shell-size)_*_0.16),1px)') &&
+    bookmarkPreboot.includes('round(nearest, calc(var(--icon-shell-size) * 0.16), 1px)') &&
+    !bookmarkIconShell.includes('var(--icon-shell-size)*0.68') &&
+    !bookmarkPreboot.includes('var(--icon-shell-size) * 0.68') &&
+    bookmarkIconHoverRule.includes('box-shadow: inset ') &&
+    !bookmarkIconHoverRule.includes('0 5px 10px'),
+  'Bookmark hover lift and favicon insets must stay on integer pixels with a flush inset icon shell so icons never stretch or detach during hover.'
+)
+
 assert.ok(
   !bookmarkTileClasses.includes('--bookmark-card-rgb') &&
     !speedDialClasses.includes('--bookmark-card-rgb') &&
@@ -698,7 +713,9 @@ assert.ok(
 assert.ok(
   bookmarkFocusRule.includes('transform: none') &&
     newtabCss.includes('.bookmark-tile:focus-visible::before') &&
-    newtabCss.includes('--newtab-bookmark-focus-inset'),
+    newtabCss.includes('--newtab-bookmark-focus-inset') &&
+    glassCss.includes(':is(.bookmark-tile, .newtab-speed-dial-card, .newtab-quick-link).newtab-glass:focus-visible') &&
+    newtabCss.includes(':is(.bookmark-tile, .newtab-speed-dial-card):not(.curator-motion-disabled):not(.dragging):active :is(.bookmark-icon-shell, .bookmark-folder-card-icon)'),
   'Bookmark keyboard focus should use an unclipped inset treatment without moving the card.'
 )
 

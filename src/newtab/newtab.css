@@ -46,7 +46,7 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
 
 .newtab-app {
   --newtab-bookmark-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
-  --newtab-bookmark-hover-lift: -2.5px;
+  --newtab-bookmark-hover-lift: -2px;
   --newtab-bookmark-hover-shadow:
     0 18px 24px -22px rgba(0, 0, 0, 0.82),
     0 8px 14px -12px rgba(0, 0, 0, 0.58),
@@ -310,7 +310,7 @@ body {
   height: var(--active-tab-height, 32px);
   border-radius: var(--ds-radius-sm);
   background: var(--tabs-pill-bg);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.09);
   pointer-events: none;
   transform: translateX(var(--active-tab-left, 0));
   transition: transform var(--tabs-dur) var(--tabs-ease);
@@ -506,15 +506,47 @@ body {
   background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg));
   box-shadow: var(--newtab-glass-inset);
   filter: var(--newtab-glass-drop);
-  transform-origin: top right;
+  transform-origin: var(--transform-origin, top left);
   transition:
-    opacity var(--duration-quick) var(--dropdown-ease),
+    opacity var(--ds-motion-enter-opacity) var(--ds-ease-standard),
     transform var(--dropdown-open-dur) var(--dropdown-open-ease),
     border-color var(--ds-motion-fast) var(--dropdown-ease),
     background-color var(--ds-motion-fast) var(--dropdown-ease),
     box-shadow var(--ds-motion-fast) var(--dropdown-ease);
   -webkit-backdrop-filter: var(--newtab-glass-filter);
   backdrop-filter: var(--newtab-glass-filter);
+}
+
+.bookmark-menu-surface[data-starting-style] {
+  opacity: 0;
+  transform: translate3d(
+    var(--bookmark-menu-enter-x, 0px),
+    var(--bookmark-menu-enter-y, -4px),
+    0
+  ) scale(var(--dropdown-pre-scale));
+}
+
+.bookmark-menu-surface[data-ending-style],
+.bookmark-menu-surface.is-closing {
+  opacity: 0;
+  transform: translate3d(
+    calc(var(--bookmark-menu-enter-x, 0px) * 0.5),
+    calc(var(--bookmark-menu-enter-y, -4px) * 0.5),
+    0
+  ) scale(var(--dropdown-closing-scale));
+  transition-duration: var(--ds-motion-exit-opacity), var(--dropdown-close-dur);
+  transition-timing-function: var(--ds-ease-standard), var(--dropdown-ease);
+}
+
+@starting-style {
+  .bookmark-menu-surface {
+    opacity: 0;
+    transform: translate3d(
+      var(--bookmark-menu-enter-x, 0px),
+      var(--bookmark-menu-enter-y, -4px),
+      0
+    ) scale(var(--dropdown-pre-scale));
+  }
 }
 
 .bookmark-edit-menu,
@@ -526,10 +558,6 @@ body {
   filter: var(--newtab-glass-drop);
 }
 
-.bookmark-add-menu.expanded {
-  min-height: 148px;
-}
-
 .bookmark-menu-popover-shell,
 .bookmark-menu-fields,
 .bookmark-add-menu-shell,
@@ -537,6 +565,12 @@ body {
 .bookmark-add-menu-fields {
   display: grid;
   min-width: 0;
+}
+
+.bookmark-menu-actions-wrap {
+  display: grid;
+  min-width: 0;
+  gap: 0;
 }
 
 .bookmark-menu-popover-shell,
@@ -550,8 +584,8 @@ body {
 
 .bookmark-add-menu-content {
   opacity: 1;
-  transform: translateY(0) scale(1);
-  transform-origin: top right;
+  transform: translateY(0);
+  transform-origin: var(--transform-origin, top left);
 }
 
 .bookmark-add-menu-content.is-collapsed {
@@ -561,14 +595,14 @@ body {
 .bookmark-add-menu[data-expanded="true"] .bookmark-add-menu-content.is-expanded {
   /* A transition (not keyframes) so a quick re-expand retargets mid-flight. */
   transition:
-    opacity var(--duration-quick) var(--dropdown-ease),
-    transform var(--dropdown-open-dur) var(--dropdown-open-ease);
+    opacity var(--ds-motion-enter-opacity) var(--ds-ease-standard),
+    transform var(--ds-motion-fast) var(--ds-ease-settle);
 }
 
 @starting-style {
   .bookmark-add-menu[data-expanded="true"] .bookmark-add-menu-content.is-expanded {
     opacity: 0;
-    transform: translateY(var(--distance-small)) scale(var(--dropdown-pre-scale));
+    transform: translateY(4px);
   }
 }
 
@@ -582,8 +616,8 @@ body {
   color: rgba(245, 245, 247, 0.58);
   box-shadow: none;
   transition:
-    color var(--ui-motion-fast) var(--ui-ease-standard),
-    opacity var(--ui-motion-fast) var(--ui-ease-standard);
+    color var(--ds-motion-fast) var(--ds-ease-standard),
+    opacity var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 .bookmark-menu-surface .bookmark-menu-row > span {
@@ -654,8 +688,8 @@ body {
   background: rgba(245, 245, 247, 0.08);
   color: rgba(245, 245, 247, 0.94);
   transition:
-    background-color var(--ui-motion-fast) var(--ui-ease-standard),
-    color var(--ui-motion-fast) var(--ui-ease-standard),
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    color var(--ds-motion-fast) var(--ds-ease-standard),
     transform var(--dropdown-open-dur) var(--dropdown-open-ease);
 }
 
@@ -681,8 +715,7 @@ body {
   transition:
     background-color var(--ds-motion-fast) var(--ds-ease-standard),
     color var(--ds-motion-fast) var(--ds-ease-standard),
-    opacity var(--ds-motion-fast) var(--ds-ease-standard),
-    transform var(--ds-motion-control) var(--ds-ease-standard);
+    opacity var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 .bookmark-edit-menu .bookmark-menu-action,
@@ -711,31 +744,79 @@ body {
   color: #ffb7b0;
 }
 
-.bookmark-edit-menu .bookmark-menu-feedback {
-  margin: 4px 0 0;
+.bookmark-menu-feedback-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--ds-motion-standard) var(--ds-ease-settle);
+}
+
+.bookmark-menu-feedback-collapse[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.bookmark-menu-feedback-collapse-inner {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translate3d(0, -4px, 0);
+  transition:
+    opacity var(--ds-motion-exit-opacity) var(--ds-ease-standard),
+    transform var(--ds-motion-fast) var(--ds-ease-standard);
+}
+
+.bookmark-menu-feedback-collapse[data-open="true"] > .bookmark-menu-feedback-collapse-inner {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  transition:
+    opacity var(--ds-motion-enter-opacity) var(--ds-ease-standard),
+    transform var(--ds-motion-standard) var(--ds-ease-settle);
+}
+
+:root[data-motion-input="keyboard"] .bookmark-menu-feedback-collapse,
+:root[data-motion-input="keyboard"] .bookmark-menu-feedback-collapse-inner {
+  transition: none;
+  transform: none;
+}
+
+.bookmark-edit-menu .bookmark-menu-feedback-box {
+  margin: 8px 0 0;
   padding: 7px 9px;
   border-color: rgba(245, 245, 247, 0.1);
   background: rgba(245, 245, 247, 0.055);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.bookmark-edit-menu .bookmark-menu-feedback-box[data-tone="warning"] {
+  border-color: rgba(245, 245, 247, 0.1);
+  background: rgba(245, 245, 247, 0.052);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.bookmark-edit-menu .bookmark-menu-feedback-box[data-tone="error"] {
+  border-color: rgba(255, 86, 95, 0.18);
+  background: rgba(255, 86, 95, 0.08);
+}
+
+.bookmark-edit-menu .bookmark-menu-feedback {
+  block-size: auto;
+  max-block-size: calc(3 * 1lh);
+  margin: 0;
+  padding: 0;
   color: rgba(245, 245, 247, 0.7);
   line-height: 1.35;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 .bookmark-edit-menu .bookmark-menu-warning {
-  border-color: rgba(245, 245, 247, 0.1);
-  background: rgba(245, 245, 247, 0.052);
   color: rgba(245, 245, 247, 0.68);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 .bookmark-edit-menu .bookmark-menu-error {
-  border-color: rgba(255, 86, 95, 0.18);
-  background: rgba(255, 86, 95, 0.08);
   color: #ffb7b0;
 }
 
+.bookmark-edit-menu .bookmark-menu-action:not(:disabled):not([data-disabled]):active,
 .bookmark-add-menu.expanded .bookmark-menu-action:active {
-  transform: scale(var(--ui-press-scale));
+  background: rgba(245, 245, 247, 0.13);
 }
 
 .bookmark-add-menu.expanded .bookmark-menu-action:disabled,
@@ -745,17 +826,31 @@ body {
   transform: none;
 }
 
-.bookmark-add-menu .bookmark-menu-feedback {
-  margin: 9px 0 0;
+.bookmark-add-menu .bookmark-menu-feedback-box {
+  margin: 8px 0 0;
   padding: 7px 9px;
   border-color: rgba(245, 245, 247, 0.12);
   background: rgba(0, 0, 0, 0.18);
+}
+
+.bookmark-add-menu .bookmark-menu-feedback-box[data-tone="error"] {
+  border-color: rgba(255, 86, 95, 0.18);
+  background: rgba(255, 86, 95, 0.08);
+}
+
+.bookmark-add-menu .bookmark-menu-feedback {
+  block-size: auto;
+  max-block-size: calc(3 * 1lh);
+  margin: 0;
+  padding: 0;
+  line-height: 1.35;
 }
 
 .bookmark-add-menu .bookmark-menu-error {
   color: #ffb7b0;
 }
 
+.bookmark-menu-feedback-box[data-empty="true"],
 .bookmark-menu-feedback[data-empty="true"] {
   visibility: hidden;
 }
@@ -783,11 +878,14 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .bookmark-menu-surface,
+  .bookmark-menu-surface.is-closing,
   .bookmark-menu-surface .bookmark-menu-row,
   .bookmark-menu-surface .base-input,
   .bookmark-menu-surface .base-select-trigger,
   .bookmark-add-menu-trigger-icon,
-  .bookmark-menu-surface .bookmark-menu-action {
+  .bookmark-menu-surface .bookmark-menu-action,
+  .bookmark-menu-feedback-collapse,
+  .bookmark-menu-feedback-collapse-inner {
     transition: none !important;
   }
 
@@ -805,7 +903,8 @@ body {
   .bookmark-add-menu-content,
   .bookmark-add-menu-trigger .bookmark-add-menu-trigger-icon,
   .bookmark-add-menu.expanded .bookmark-menu-action:hover,
-  .bookmark-add-menu.expanded .bookmark-menu-action:focus-visible {
+  .bookmark-add-menu.expanded .bookmark-menu-action:focus-visible,
+  .bookmark-menu-feedback-collapse-inner {
     transform: none !important;
   }
 }
@@ -853,6 +952,27 @@ body {
   filter: var(--newtab-glass-drop-hover);
   outline: var(--newtab-focus-outline);
   outline-offset: 2px;
+}
+
+.settings-trigger svg {
+  transition: transform var(--ds-motion-state) var(--ds-ease-settle);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .settings-trigger:hover svg {
+    transform: rotate(24deg);
+  }
+}
+
+.settings-trigger[aria-expanded="true"] svg {
+  transform: rotate(45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-trigger svg {
+    transform: none !important;
+    transition: none !important;
+  }
 }
 
 .newtab-speed-dial,
@@ -910,7 +1030,9 @@ body {
   z-index: 1;
 }
 
-.bookmark-icon-shell {
+/* Folder cards share the bookmark icon shell's states so the icon moves and
+   lights with its card instead of staying frozen inside it. */
+:is(.bookmark-icon-shell, .bookmark-folder-card-icon) {
   border-color: rgba(245, 245, 247, 0.07);
   background: var(--bookmark-icon-rest-bg, rgba(0, 0, 0, 0.24));
   box-shadow: none;
@@ -960,12 +1082,10 @@ body {
     opacity: 1;
   }
 
-  .bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover .bookmark-icon-shell {
-    border-color: rgba(245, 245, 247, 0.24);
-    background: var(--bookmark-icon-hover-bg, rgba(0, 0, 0, 0.32));
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.075),
-      0 5px 10px -8px rgba(0, 0, 0, 0.72);
+  :is(.bookmark-tile, .newtab-speed-dial-card):not(.curator-motion-disabled):not(.dragging):hover :is(.bookmark-icon-shell, .bookmark-folder-card-icon) {
+    border-color: rgba(245, 245, 247, 0.18);
+    background: var(--bookmark-icon-hover-bg, rgba(0, 0, 0, 0.28));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 
   .bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover .bookmark-title {
@@ -981,10 +1101,20 @@ body {
   filter: none;
 }
 
+/* Lift with `top` like bookmark tiles; a transform lift re-snaps glyphs and
+   favicons when it settles. The icon shell follows the card's own timing. */
+:is(.newtab-speed-dial-card, .newtab-quick-link):not(.speed-dial-drag-ghost) {
+  --bookmark-hover-duration: var(--ui-motion-fast);
+  top: 0;
+}
+
 @media (hover: hover) and (pointer: fine) {
-  .newtab-speed-dial-card:hover,
-  .newtab-quick-link:hover {
-    transform: translateY(-1px);
+  :is(.newtab-speed-dial-card, .newtab-quick-link):not(.curator-motion-disabled):not(.dragging):hover {
+    top: var(--ds-hover-lift);
+  }
+
+  .newtab-speed-dial-card:not(.curator-motion-disabled):not(.dragging):hover {
+    border-color: var(--newtab-glass-border-hover);
   }
 }
 
@@ -1001,7 +1131,7 @@ body {
   transition: none;
 }
 
-.bookmark-tile:focus-visible .bookmark-icon-shell {
+:is(.bookmark-tile, .newtab-speed-dial-card):focus-visible :is(.bookmark-icon-shell, .bookmark-folder-card-icon) {
   border-color: rgba(245, 245, 247, 0.24);
   background: var(--bookmark-icon-hover-bg, rgba(0, 0, 0, 0.32));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.075);
@@ -1035,9 +1165,17 @@ body {
   transition-duration: var(--ds-motion-feedback, 80ms);
 }
 
-.newtab-speed-dial-card:active,
-.newtab-quick-link:active {
+:is(.newtab-speed-dial-card, .newtab-quick-link):not(.curator-motion-disabled):not(.dragging):active {
+  top: 0;
   transform: scale(var(--ui-press-scale));
+  transition-duration: var(--ds-motion-feedback, 80ms);
+}
+
+:is(.bookmark-tile, .newtab-speed-dial-card):not(.curator-motion-disabled):not(.dragging):active :is(.bookmark-icon-shell, .bookmark-folder-card-icon) {
+  border-color: var(--bookmark-icon-active-border, rgba(245, 245, 247, 0.24));
+  background: var(--bookmark-icon-active-bg, rgba(0, 0, 0, 0.48));
+  box-shadow: none;
+  transition-duration: var(--ds-motion-feedback, 80ms);
 }
 
 .bookmark-tile.dragging,
@@ -1656,14 +1794,6 @@ body {
   color: var(--ds-text-primary);
 }
 
-.featured-wallpaper-action:where(:not(:disabled):not([aria-disabled="true"]):not([data-disabled])):active,
-.featured-wallpaper-close:where(:not(:disabled):not([aria-disabled="true"]):not([data-disabled])):active {
-  scale: 1;
-  transform: scale(var(--ds-press-scale));
-  transition-duration: var(--ds-motion-feedback);
-  transition-timing-function: var(--ds-ease-standard);
-}
-
 .featured-wallpaper-close {
   width: 36px;
   min-width: 36px;
@@ -1730,8 +1860,9 @@ body {
   gap: 12px;
 }
 
-.featured-wallpaper-card {
+.featured-wallpaper-card.curator-control {
   position: relative;
+  top: 0;
   display: grid;
   min-width: 0;
   min-height: 140px;
@@ -1742,7 +1873,7 @@ body {
   background: var(--newtab-panel-bg-raised);
   box-shadow: none;
   transition:
-    transform var(--ds-motion-control) var(--ds-ease-standard),
+    top var(--ds-motion-control) var(--ds-ease-standard),
     scale var(--ds-motion-control) var(--ds-ease-standard),
     border-color var(--ds-motion-fast) var(--ds-ease-standard),
     background-color var(--ds-motion-fast) var(--ds-ease-standard),
@@ -1762,8 +1893,8 @@ body {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .featured-wallpaper-card:hover {
-    transform: translateY(var(--ds-hover-lift));
+  .featured-wallpaper-card.curator-control:hover {
+    top: var(--ds-hover-lift);
   }
 
   .featured-wallpaper-card:hover .featured-wallpaper-preview-image {
@@ -1771,11 +1902,13 @@ body {
   }
 }
 
-.featured-wallpaper-card:where(:not(:disabled):not([aria-disabled="true"]):not([data-disabled])):active {
-  scale: 1;
-  transform: translateY(0) scale(var(--ds-press-scale));
+.featured-wallpaper-card.curator-control:active:not(:has(.featured-wallpaper-card-action:active)) {
+  top: 0;
   transition-duration: var(--ds-motion-feedback);
-  transition-timing-function: var(--ds-ease-standard);
+}
+
+.featured-wallpaper-card:has(.featured-wallpaper-card-action:active) {
+  scale: 1;
 }
 
 .featured-wallpaper-preview {
@@ -1893,9 +2026,14 @@ body {
   filter: var(--newtab-glass-drop);
   opacity: 0;
   pointer-events: none;
-  transform: translateY(4px) scale(var(--dropdown-pre-scale));
+  transform-origin: var(--preview-origin, center center);
+  transform: translate3d(
+    var(--preview-enter-x, 0px),
+    var(--preview-enter-y, 4px),
+    0
+  ) scale(var(--dropdown-pre-scale));
   transition:
-    opacity var(--dropdown-close-dur) var(--dropdown-ease),
+    opacity var(--ds-motion-exit-opacity) var(--ds-ease-standard),
     transform var(--dropdown-close-dur) var(--dropdown-ease);
   -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
   backdrop-filter: var(--newtab-glass-backdrop-filter);
@@ -1903,10 +2041,21 @@ body {
 
 .featured-wallpaper-hover-preview.is-visible {
   opacity: 1;
-  transform: translateY(0) scale(1);
+  transform: translate3d(0, 0, 0) scale(1);
   transition:
-    opacity var(--duration-quick) var(--dropdown-ease),
+    opacity var(--ds-motion-enter-opacity) var(--ds-ease-standard),
     transform var(--dropdown-open-dur) var(--dropdown-open-ease);
+}
+
+@starting-style {
+  .featured-wallpaper-hover-preview.is-visible {
+    opacity: 0;
+    transform: translate3d(
+      var(--preview-enter-x, 0px),
+      var(--preview-enter-y, 4px),
+      0
+    ) scale(var(--dropdown-pre-scale));
+  }
 }
 
 .featured-wallpaper-hover-preview-image {
@@ -2035,13 +2184,6 @@ body {
 .newtab-delete-toast-actions button:focus-visible {
   outline: 2px solid var(--ds-focus);
   outline-offset: 2px;
-}
-
-.newtab-delete-toast-actions button:where(:not(:disabled):not([aria-disabled="true"]):not([data-disabled])):active {
-  scale: 1;
-  transform: scale(var(--ds-press-scale));
-  transition-duration: var(--ds-motion-feedback);
-  transition-timing-function: var(--ds-ease-standard);
 }
 
 .newtab-delete-toast-actions button:disabled {

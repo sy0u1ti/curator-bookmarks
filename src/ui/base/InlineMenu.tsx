@@ -15,6 +15,7 @@ export interface InlineMenuAction {
   closeOnSelect?: boolean
   disabled?: boolean
   destructive?: boolean
+  separatorBefore?: boolean
   itemRef?: Ref<HTMLElement>
   onSelect?: () => void | Promise<void>
 }

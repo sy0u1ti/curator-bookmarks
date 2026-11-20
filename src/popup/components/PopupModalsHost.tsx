@@ -171,11 +171,63 @@ export function PopupModalsHost() {
   )
 }
 
-function PopupModalFeedback({ id = 'popup-modal-error', message = '', className = '' }: {
-  id?: string; message?: string; className?: string
+function PopupModalFeedback({
+  id = 'popup-modal-error',
+  message = '',
+  className = '',
+  inline = false,
+  overlay = false
+}: {
+  id?: string
+  message?: string
+  className?: string
+  inline?: boolean
+  overlay?: boolean
 }) {
   const { error } = usePopupModalsView()
-  return <StatusMessage id={id} tone="error" className={cx('m-0 shrink-0 text-xs leading-normal', className)}>{message || error}</StatusMessage>
+  const text = message || error
+  if (!text) return null
+  if (inline) {
+    return (
+      <StatusMessage
+        id={id}
+        tone="error"
+        style={{ blockSize: 'auto', maxBlockSize: '34px' }}
+        className={cx('m-0 min-w-0 text-xs leading-[1.4]', className)}
+      >
+        {text}
+      </StatusMessage>
+    )
+  }
+  if (overlay) {
+    return (
+      <div
+        className={cx(
+          'absolute inset-x-0 bottom-0 z-[2] rounded-b-ds-sm border-t border-ds-danger/35 bg-[color-mix(in_srgb,var(--ds-danger)_14%,var(--ds-surface-1))] px-3 py-2 shadow-[0_-6px_16px_rgba(0,0,0,0.35)]',
+          className
+        )}
+      >
+        <StatusMessage
+          id={id}
+          tone="error"
+          style={{ blockSize: 'auto', maxBlockSize: 'calc(3 * 1lh)' }}
+          className="m-0 shrink-0 text-xs leading-normal"
+        >
+          {text}
+        </StatusMessage>
+      </div>
+    )
+  }
+  return (
+    <StatusMessage
+      id={id}
+      tone="error"
+      style={{ blockSize: 'auto', maxBlockSize: 'calc(3 * 1lh)' }}
+      className={cx('m-0 shrink-0 text-xs leading-normal', className)}
+    >
+      {text}
+    </StatusMessage>
+  )
 }
 
 function FolderSearch({
@@ -247,6 +299,7 @@ function MoveBookmarkModal({
   searchRef: RefObject<HTMLInputElement | null>
   view: PopupModalsView['move']
 }) {
+  const { error } = usePopupModalsView()
   return (
     <section id="move-modal" className={modalWideCardClass} aria-labelledby="move-modal-title" tabIndex={-1}>
       <header className={modalHeaderClass}>
@@ -273,8 +326,10 @@ function MoveBookmarkModal({
         value={view.query}
         action="move-query-change"
       />
-      <PopupFolderPickerHost id="move-folder-list" className={modalListClass} mode="move" />
-      <PopupModalFeedback />
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <PopupFolderPickerHost id="move-folder-list" className={cx(modalListClass, error && 'pb-14')} mode="move" />
+        <PopupModalFeedback overlay />
+      </div>
     </section>
   )
 }
@@ -288,6 +343,8 @@ function SmartFolderModal({
   searchRef: RefObject<HTMLInputElement | null>
   view: PopupModalsView['smartFolder']
 }) {
+  const { error } = usePopupModalsView()
+  const hasError = Boolean(view.error || error)
   return (
     <section id="smart-folder-modal" className={modalWideCardClass} aria-labelledby="smart-folder-modal-title" tabIndex={-1}>
       <header className={cx(modalHeaderClass, 'shrink-0')}>
@@ -337,8 +394,10 @@ function SmartFolderModal({
         action="smart-folder-query-change"
         disabled={view.saving}
       />
-      <PopupFolderPickerHost id="smart-folder-list" className={modalListClass} mode="smart" />
-      <PopupModalFeedback id="smart-folder-error" message={view.error} />
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <PopupFolderPickerHost id="smart-folder-list" className={cx(modalListClass, hasError && 'pb-14')} mode="smart" />
+        <PopupModalFeedback id="smart-folder-error" message={view.error} overlay />
+      </div>
       <footer className={cx(modalActionsClass, 'shrink-0')}>
         <div className="min-w-0 flex-1">
           <p className={modalCardLabelClass}>保存到</p>
@@ -385,10 +444,14 @@ function AiProviderPromptModal({
         titleClassName="sr-only"
         title="AI 服务配置提示"
       />
-      <PopupModalFeedback />
-      <footer className={modalActionsClass}>
-        <Button id="cancel-ai-provider-prompt" className={modalSecondaryButtonClass} type="button" onClick={() => dispatchPopupModalAction('close')} unstyled>暂不配置</Button>
-        <Button ref={settingsButtonRef} id="open-ai-provider-settings" className={modalPrimaryButtonClass} type="button" onClick={() => dispatchPopupModalAction('open-ai-settings')} unstyled>配置 AI 服务</Button>
+      <footer className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5">
+        <div className="min-w-0">
+          <PopupModalFeedback inline />
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          <Button id="cancel-ai-provider-prompt" className={modalSecondaryButtonClass} type="button" onClick={() => dispatchPopupModalAction('close')} unstyled>暂不配置</Button>
+          <Button ref={settingsButtonRef} id="open-ai-provider-settings" className={modalPrimaryButtonClass} type="button" onClick={() => dispatchPopupModalAction('open-ai-settings')} unstyled>配置 AI 服务</Button>
+        </div>
       </footer>
     </section>
   )
@@ -404,6 +467,7 @@ function EditBookmarkModal({
   view: PopupModalsView['edit']
 }) {
   const modalRef = useRef<HTMLElement | null>(null)
+  const { error } = usePopupModalsView()
 
   useLayoutEffect(() => {
     const modal = modalRef.current
@@ -424,7 +488,7 @@ function EditBookmarkModal({
       if (modal.style.getPropertyValue('--popup-edit-rest-height') !== value) {
         modal.style.setProperty('--popup-edit-rest-height', value)
       }
-      const panelHeight = Math.max(0, Math.min(226, window.innerHeight - height - 64))
+      const panelHeight = Math.floor(Math.max(0, Math.min(226, window.innerHeight - height - 64)) / 2) * 2
       const openHeight = height + panelHeight
       const surfaceScale = height > 0 ? openHeight / height : 1
       modal.style.setProperty('--popup-edit-panel-height', `${panelHeight}px`)
@@ -435,7 +499,11 @@ function EditBookmarkModal({
     measure()
     const observer = new ResizeObserver(measure)
     fixedBlocks.forEach(element => observer.observe(element))
-    return () => observer.disconnect()
+    window.addEventListener('resize', measure)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', measure)
+    }
   }, [])
 
   return (
@@ -471,7 +539,7 @@ function EditBookmarkModal({
           <span className={modalLabelClass}>网址</span>
           <Input
             id="edit-url-input"
-            aria-describedby="popup-modal-error"
+            aria-describedby={error ? 'popup-modal-error' : undefined}
             className={modalInputClass}
             type="url"
             spellCheck={false}
@@ -484,11 +552,17 @@ function EditBookmarkModal({
           />
         </label>
       </div>
-      <PopupModalFeedback className="popup-edit-lower" />
-      <footer className={cx(modalActionsClass, 'popup-edit-lower')}>
-        <Button id="cancel-edit" className={modalSecondaryButtonClass} type="button" disabled={view.cancelDisabled} onClick={() => dispatchPopupModalAction('close')} unstyled>取消</Button>
-        <Button id="save-edit" className={modalPrimaryButtonClass} type="button" disabled={view.saveDisabled} onClick={() => dispatchPopupModalAction('save-edit')} unstyled>{view.saveLabel}</Button>
-      </footer>
+      <div className="popup-edit-lower">
+        <footer className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5">
+          <div className="min-w-0">
+            <PopupModalFeedback inline />
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <Button id="cancel-edit" className={modalSecondaryButtonClass} type="button" disabled={view.cancelDisabled} onClick={() => dispatchPopupModalAction('close')} unstyled>取消</Button>
+            <Button id="save-edit" className={modalPrimaryButtonClass} type="button" disabled={view.saveDisabled} onClick={() => dispatchPopupModalAction('save-edit')} unstyled>{view.saveLabel}</Button>
+          </div>
+        </footer>
+      </div>
     </section>
   )
 }

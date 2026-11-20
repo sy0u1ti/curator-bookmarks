@@ -7,8 +7,18 @@ export function SelectionDock({ open, children, label }: {
   children: ReactNode
   label: string
 }) {
+  const [rendered, setRendered] = useState(open)
   const [bounds, setBounds] = useState({ left: 16, width: 320, bottom: 16 })
   const panelRef = useRef<HTMLDivElement>(null)
+  const latestChildrenRef = useRef<ReactNode>(children)
+
+  if (open) {
+    latestChildrenRef.current = children
+    if (!rendered) {
+      setRendered(true)
+    }
+  }
+
   useLayoutEffect(() => {
     if (!open) return
     const main = document.getElementById('options-main')
@@ -38,11 +48,31 @@ export function SelectionDock({ open, children, label }: {
       if (focusInDock) (opener?.isConnected ? opener : main)?.focus({ preventScroll: true })
     }
   }, [open])
-  if (!open) return null
+
+  useLayoutEffect(() => {
+    if (open || !rendered) return
+    let cancelled = false
+    const animations = panelRef.current?.getAnimations() ?? []
+    void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+      if (!cancelled) setRendered(false)
+    })
+    return () => { cancelled = true }
+  }, [open, rendered])
+
+  if (!rendered) return null
 
   return createPortal(
-    <div ref={panelRef} className="options-selection-dock" role="region" aria-label={label} style={bounds}>
-      {children}
+    <div
+      ref={panelRef}
+      className="options-selection-dock"
+      role="region"
+      aria-label={label}
+      data-open={open ? 'true' : undefined}
+      data-ending-style={open ? undefined : ''}
+      inert={!open || undefined}
+      style={bounds}
+    >
+      {open ? children : latestChildrenRef.current}
     </div>,
     document.body
   )

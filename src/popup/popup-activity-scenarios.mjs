@@ -51,13 +51,7 @@ export async function runPopupActivityChecks(page, origin, directory, { cases } 
     return { card: rect('#popup-activity'), pane: rect('.popup-main-pane'), search: rect('#search-input') }
   })
   const remove = async title => {
-    const sidepanel = await page.evaluate(() => document.documentElement.dataset.curatorSurface === 'sidepanel')
-    if (sidepanel) {
-      const id = await page.evaluate(title => window.__popupFixture.all().find(item => item.title === title).id, title)
-      await page.click(`[data-bookmark-id="${id}"] .sidepanel-bookmark-menu`)
-    } else {
-      await page.click(`button[aria-label="打开 ${title} 的操作菜单"]`)
-    }
+    await page.click(`button[aria-label="打开 ${title} 的操作菜单"]`)
     await page.click(`button[aria-label="删除书签：${title}"]`)
     await active(`已删除 ${title}`)
     await settled()

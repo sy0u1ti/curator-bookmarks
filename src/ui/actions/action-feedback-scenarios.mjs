@@ -269,17 +269,17 @@ export async function runActionFeedbackChecks(page, origin, directory, startAt =
   }
 
   if (shouldRun('sidepanel')) {
-  await viewport(720, 520)
+  await viewport(390, 520)
   await navigate('sidepanel')
-  await page.click('button[aria-label="打开书签操作"]')
   await page.click(copy)
   await phase(copy, 'pending')
   await complete(true)
   await phase(copy, 'success')
-  assert.ok(await page.evaluate(() => Boolean(document.querySelector('[data-popup-row-menu]'))))
+  assert.equal(await page.evaluate(selector => document.querySelector(selector).title, copy), '已复制')
+  assert.ok(await page.evaluate(() => Boolean(document.querySelector('.popup-row-actions[data-open="true"] .popup-row-actions-menu'))))
   await shot('sidepanel-copy')
   await assertNoErrors()
-  pass('sidepanel copy stays open to show its result')
+  pass('sidepanel action rail matches popup and stays open to show its copy result')
   }
 
   await viewport(1000, 800)

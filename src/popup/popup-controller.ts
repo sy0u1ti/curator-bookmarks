@@ -3714,7 +3714,7 @@ function handleDocumentKeydown(event) {
     if (event.key === 'Escape') { event.preventDefault(); setPopupKeyboardHelpOpen(false) }
     return
   }
-  if (event.target instanceof HTMLElement && event.target.closest('#popup-keyboard-help-dialog, [data-popup-row-menu]')) return
+  if (event.target instanceof HTMLElement && event.target.closest('#popup-keyboard-help-dialog')) return
   if (!hasOpenModal() && !isSmartOverlayActive() && (
     ((event.ctrlKey || event.metaKey) && event.key === '/') ||
     (event.key === '?' && !event.ctrlKey && !event.metaKey && !isEditableTarget(event.target))

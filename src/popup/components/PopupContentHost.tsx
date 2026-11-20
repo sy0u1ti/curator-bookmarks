@@ -630,7 +630,7 @@ export function PopupContentHost() {
     }
     surface.addEventListener('transitionend', settled)
     // Hidden smart workflows do not dispatch transitionend. This also covers
-    // an interrupted close without measuring the compressed bookmark rows.
+    // an interrupted close without measuring the displaced bookmark rows.
     const duration = Math.max(...getComputedStyle(surface).transitionDuration.split(',').map(value =>
       parseFloat(value) * (value.trim().endsWith('ms') ? 1 : 1000)))
     const timer = setTimeout(restoreGeometry, duration + 50)
