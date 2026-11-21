@@ -1,20 +1,17 @@
-import { OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { Button } from '../../ui/base/Button'
 import { TextSwap } from '../../ui/motion/TextSwap'
 import { SelectionDock } from './SelectionDock'
 import { handleRecycleAction } from '../options-controller'
 import { useRecycleControlsState } from './recycle-controls-store.js'
 
-const RECYCLE_HEADER_CLASS = 'flex flex-wrap items-center justify-between gap-3'
+const RECYCLE_HEADER_CLASS = 'mt-6 flex flex-wrap items-center justify-between gap-3 max-[760px]:mt-4'
 const RECYCLE_HEADER_COPY_CLASS = 'min-w-0'
 const RECYCLE_HEADER_TITLE_CLASS =
-  'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
+  'block text-sm font-semibold leading-5 tracking-[-0.01em] text-ds-text-primary'
 const RECYCLE_HEADER_SUBTITLE_CLASS =
-  'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
+  'mt-1 mb-0 text-xs leading-[1.5] text-ds-text-secondary'
 const RECYCLE_HEADER_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:items-start max-[760px]:justify-start'
-const RECYCLE_SELECTION_GROUP_CLASS =
-  `mb-[18px] ${OPTION_INSET_CLASS} p-[16px]`
 
 export function RecycleControls() {
   const state = useRecycleControlsState()
@@ -24,47 +21,45 @@ export function RecycleControls() {
   return (
     <>
       <SelectionDock open={hasSelection} label="已选回收站条目操作">
-        <div className={RECYCLE_SELECTION_GROUP_CLASS}>
-          <div className={RECYCLE_HEADER_CLASS}>
-            <div className={RECYCLE_HEADER_COPY_CLASS}>
-              <strong className={RECYCLE_HEADER_TITLE_CLASS}>
-                <TextSwap animate={hasSelection} text={`${state.selectedCount} 条已选择`} />
-              </strong>
-            </div>
-            <div className={RECYCLE_HEADER_ACTIONS_CLASS}>
-              <Button
-                size="sm"
-                type="button"
-                variant="secondary"
-                aria-label="取消选择回收站书签"
-                disabled={state.locked}
-                focusableWhenDisabled={state.locked}
-                onClick={() => handleRecycleAction('clear-selection')}
-              >
-                取消选择
-              </Button>
-              <Button
-                size="sm"
-                type="button"
-                aria-label="批量恢复回收站已选书签"
-                disabled={state.locked || !hasSelection}
-                focusableWhenDisabled={state.locked}
-                onClick={() => handleRecycleAction('restore-selected')}
-              >
-                恢复所选
-              </Button>
-              <Button
-                size="sm"
-                type="button"
-                variant="danger"
-                aria-label="清除回收站已选记录"
-                disabled={state.locked || !hasSelection}
-                focusableWhenDisabled={state.locked}
-                onClick={() => handleRecycleAction('clear-selected')}
-              >
-                清除所选
-              </Button>
-            </div>
+        <div className="options-selection-bar">
+          <div className="options-selection-summary">
+            <strong className={RECYCLE_HEADER_TITLE_CLASS}>
+              <TextSwap animate={hasSelection} text={`${state.selectedCount} 条已选择`} />
+            </strong>
+          </div>
+          <div className="options-selection-actions">
+            <Button
+              size="sm"
+              type="button"
+              variant="secondary"
+              aria-label="取消选择回收站书签"
+              disabled={state.locked}
+              focusableWhenDisabled={state.locked}
+              onClick={() => handleRecycleAction('clear-selection')}
+            >
+              取消选择
+            </Button>
+            <Button
+              size="sm"
+              type="button"
+              aria-label="批量恢复回收站已选书签"
+              disabled={state.locked || !hasSelection}
+              focusableWhenDisabled={state.locked}
+              onClick={() => handleRecycleAction('restore-selected')}
+            >
+              恢复所选
+            </Button>
+            <Button
+              size="sm"
+              type="button"
+              variant="danger"
+              aria-label="清除回收站已选记录"
+              disabled={state.locked || !hasSelection}
+              focusableWhenDisabled={state.locked}
+              onClick={() => handleRecycleAction('clear-selected')}
+            >
+              清除所选
+            </Button>
           </div>
         </div>
       </SelectionDock>

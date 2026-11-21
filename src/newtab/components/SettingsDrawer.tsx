@@ -4,6 +4,7 @@ import {
   useEffect,
   useEffectEvent,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -53,12 +54,8 @@ import {
   type NewtabIconSettingsFieldKey
 } from '../newtab-icon-preview-store'
 import {
-  dispatchNewtabTimeSettingFieldChange,
-  dispatchNewtabTimeSettingToggle,
-  useNewtabTimeSettingsView
-} from '../newtab-time-settings-store'
-import {
   dispatchNewtabSearchLayoutReset,
+  dispatchNewtabSearchSettingCommit,
   dispatchNewtabSearchSettingFieldChange,
   dispatchNewtabSearchSettingToggle,
   useNewtabSearchSettingsView
@@ -139,7 +136,6 @@ const SETTINGS_TABS_INDICATOR_CLASS = 't-tabs-pill'
 const SETTINGS_TAB_PANELS_CLASS = 'settings-tab-panels grid min-w-0 items-start'
 const SETTINGS_TAB_PANEL_CLASS = 'grid min-w-0 gap-4 outline-none [grid-area:1/1]'
 const SETTINGS_NESTED_SURFACE_CLASS = 'border-0 rounded-ds-lg bg-[rgba(245,245,247,0.045)] shadow-none'
-const SETTINGS_SELECTED_SURFACE_CLASS = 'border-[rgba(245,245,247,0.24)] bg-[rgba(245,245,247,0.14)] text-ds-text-primary shadow-none'
 const SETTINGS_SEGMENTED_BUTTON_CLASS = 'min-h-7 min-w-20 rounded-ds-sm border border-transparent bg-transparent px-2 text-xs font-semibold text-ds-text-secondary shadow-none data-[pressed]:border-ds-border-hover data-[pressed]:bg-ds-selected data-[pressed]:text-ds-text-primary data-[pressed]:shadow-none'
 const SETTINGS_PSEUDO_SHADOW_RESET_CLASS = '[&::before]:shadow-none [&::after]:shadow-none'
 const SETTINGS_SECTION_CLASS = 'grid min-w-0 gap-2.5'
@@ -178,10 +174,10 @@ const SETTINGS_STATUS_CLASS = 'block min-h-8 rounded-ds-sm border border-ds-bord
 const FOLDER_STACK_CLASS = 'grid min-w-0 gap-2'
 const FOLDER_SUMMARY_CLASS = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-ds-lg border-0 bg-ds-surface-2 p-2'
 const FOLDER_SELECTED_COPY_CLASS = 'grid min-w-0 gap-0.5 p-1 text-xs leading-[18px] text-ds-text-secondary'
-const FOLDER_REMOVE_BUTTON_CLASS = 'curator-compact-hit-target group/folder-remove inline-flex size-8 min-h-8 min-w-8 items-center justify-center rounded-ds-sm border border-[rgba(245,245,247,0.07)] bg-[rgba(245,245,247,0.045)] p-0 text-[rgba(245,245,247,0.9)] outline-none transition-[background-color,border-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard hover:border-[rgba(255,138,130,0.24)] hover:bg-[rgba(255,138,130,0.11)] hover:text-[rgba(255,210,205,0.95)] focus-visible:border-[rgba(255,138,130,0.28)] focus-visible:bg-[rgba(255,138,130,0.12)] focus-visible:text-[rgba(255,210,205,0.95)] focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] motion-reduce:transition-colors motion-reduce:duration-[80ms] motion-reduce:active:scale-100 [&_svg]:size-[15px] [&_svg]:stroke-[1.9]'
+const FOLDER_REMOVE_BUTTON_CLASS = 'curator-compact-hit-target group/folder-remove inline-flex size-8 min-h-8 min-w-8 items-center justify-center rounded-ds-sm border border-ds-border-subtle bg-ds-surface-2 p-0 text-ds-text-secondary outline-none transition-[background-color,border-color,color,scale] duration-ds-fast ease-ds-standard hover:border-ds-danger/45 hover:bg-ds-danger-soft hover:text-ds-danger-text focus-visible:border-ds-danger/55 focus-visible:bg-ds-danger-soft focus-visible:text-ds-danger-text focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] motion-reduce:transition-colors motion-reduce:active:scale-100 [&_svg]:size-[15px] [&_svg]:stroke-[1.9]'
 const FOLDER_EMPTY_CLASS = SETTINGS_NOTE_CLASS
 const FOLDER_CANDIDATES_PANEL_CLASS = cx('grid gap-2 p-2', SETTINGS_NESTED_SURFACE_CLASS)
-const FOLDER_CANDIDATE_LIST_CLASS = 'grid max-h-56 gap-1 overflow-y-auto [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-width:thin]'
+const FOLDER_CANDIDATE_LIST_CLASS = 'ds-scrollbar grid max-h-56 gap-1 overflow-y-auto'
 const FOLDER_CANDIDATE_CARD_CLASS = 'folder-candidate-card grid min-h-14 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 overflow-hidden rounded-ds-sm border border-transparent bg-transparent px-2.5 py-2 text-left text-ds-text-primary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover active:bg-ds-active aria-pressed:border-ds-border-hover aria-pressed:bg-ds-selected aria-pressed:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:shadow-ds-focus'
 const FOLDER_CANDIDATE_COPY_CLASS = 'grid min-w-0 gap-0.5'
 const FOLDER_CANDIDATE_TITLE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold leading-snug text-ds-text-primary'
@@ -194,13 +190,26 @@ const SETTING_COLOR_INPUT_CLASS = 'h-7 min-h-7 w-8 min-w-8 overflow-hidden round
 const ICON_PREVIEW_PANEL_CLASS = 'grid gap-3 rounded-ds-card border-0 bg-ds-surface-2 p-2'
 const ICON_PREVIEW_HEADER_CLASS = 'grid gap-1 px-2 pt-1 text-xs font-semibold leading-5 text-ds-text-primary'
 const ICON_PREVIEW_SUMMARY_CLASS = 'min-w-0 text-xs font-medium leading-relaxed text-ds-text-secondary'
-const ICON_LIVE_PREVIEW_CLASS = 'm-0 overflow-x-auto rounded-ds-lg border border-ds-border bg-ds-app px-2.5 py-4 outline-none focus-visible:shadow-ds-focus [scrollbar-width:thin] [scrollbar-color:var(--ds-border-hover)_transparent]'
+const ICON_LIVE_PREVIEW_CLASS = 'ds-scrollbar m-0 overflow-x-auto rounded-ds-lg border border-ds-border bg-ds-app px-2.5 py-4 outline-none focus-visible:shadow-ds-focus'
 const ICON_LIVE_PREVIEW_GRID_CLASS = 'mx-auto grid w-[var(--preview-grid-max-width)] content-center [column-gap:var(--preview-column-gap)] [row-gap:var(--preview-row-gap)]'
 const ICON_PRESET_ROW_CLASS = 'grid grid-cols-3 gap-2'
-const ICON_PRESET_CARD_CLASS = 'curator-control grid min-h-24 min-w-0 content-center gap-3 rounded-ds-lg border border-ds-border bg-ds-surface-1 ds-inset-panel text-left text-ds-text-secondary outline-none hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-ds-focus'
-const ICON_PRESET_PREVIEW_CLASS = 'grid min-h-11 content-center rounded-ds-sm bg-ds-app'
-const ICON_PRESET_PREVIEW_CELL_CLASS = 'block rounded-ds-xs bg-ds-surface-2'
-const ICON_PRESET_NAME_CLASS = 'min-w-0 overflow-hidden text-ellipsis px-1 pb-1 text-xs font-semibold leading-5 text-ds-text-primary'
+const ICON_PRESET_CARD_CLASS = 'curator-control group/preset grid min-h-[104px] min-w-0 content-center gap-2.5 rounded-ds-lg border border-ds-border-subtle bg-ds-surface-1 ds-inset-panel text-left text-ds-text-secondary outline-none hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary aria-pressed:border-ds-focus aria-pressed:bg-ds-selected aria-pressed:text-ds-text-primary aria-pressed:shadow-[inset_0_1px_0_rgba(245,245,247,0.16)] focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-ds-focus'
+const ICON_PRESET_PREVIEW_CLASS = 'grid h-[52px] content-center rounded-ds-sm bg-ds-app ring-1 ring-inset ring-ds-border-subtle/60 group-aria-pressed/preset:ring-ds-border'
+const ICON_PRESET_PREVIEW_CELL_CLASS = 'block rounded-ds-xs bg-ds-text-primary/20 transition-colors duration-ds-fast ease-ds-standard group-hover/preset:bg-ds-text-primary/32 group-aria-pressed/preset:bg-ds-text-primary/58'
+const ICON_PRESET_NAME_CLASS = 'min-w-0 overflow-hidden text-ellipsis px-1 pb-1 text-xs font-semibold leading-5 text-ds-text-secondary transition-colors duration-ds-fast ease-ds-standard group-hover/preset:text-ds-text-primary group-aria-pressed/preset:text-ds-text-primary'
+
+const BROWSE_MODE_ITEMS = [
+  { value: 'expanded', label: '平铺书签', attributes: { 'data-browse-mode': 'expanded' } },
+  { value: 'navigation', label: '逐级浏览', attributes: { 'data-browse-mode': 'navigation' } }
+]
+const ICON_LAYOUT_MODE_ITEMS = [
+  { value: 'auto', label: '自动适配', attributes: { 'data-icon-layout-mode': 'auto' } },
+  { value: 'fixed', label: '固定列数', attributes: { 'data-icon-layout-mode': 'fixed' } }
+]
+const ICON_TITLE_LINES_ITEMS = [
+  { value: '1', label: '1 行', attributes: { 'data-icon-title-lines': '1' } },
+  { value: '2', label: '2 行', attributes: { 'data-icon-title-lines': '2' } }
+]
 const SETTINGS_SEGMENTED_CLASS = 'inline-flex min-h-9 items-center gap-1 rounded-ds-menu border border-ds-border bg-ds-surface-2 ds-inset-menu @max-[440px]/settings:w-full'
 const ICON_CONTROL_ROW_CLASS = 'grid-cols-[minmax(0,1fr)_auto]'
 const SETTINGS_SCROLLBAR_MIN_THUMB_HEIGHT = 40
@@ -774,9 +783,11 @@ const AdvancedSettingsSection = memo(function AdvancedSettingsSection({
 })
 
 const SourceSettingsSection = memo(function SourceSettingsSection({
+  firstControlRef,
   folderCandidateSearchRef,
   sectionRef
 }: {
+  firstControlRef?: Ref<HTMLElement>
   folderCandidateSearchRef: RefObject<HTMLInputElement | null>
   sectionRef?: SettingsSectionRef
 }) {
@@ -813,6 +824,7 @@ const SourceSettingsSection = memo(function SourceSettingsSection({
           >
             <CollapsibleTrigger
               id="folder-candidates-toggle"
+              ref={firstControlRef as Ref<HTMLButtonElement>}
               className={settingsControlClassName(SETTINGS_WIDE_BUTTON_CLASS)}
               type="button"
               aria-controls="folder-candidates-panel"
@@ -863,6 +875,8 @@ const SourceSettingsSection = memo(function SourceSettingsSection({
             </CollapsiblePanel>
           </CollapsibleRoot>
         </div>
+      </Surface>
+      <Surface className={cx(SETTINGS_LIST_CLASS, 'mt-1.5')} variant="plain">
         <div className={settingRowClassName(ICON_CONTROL_ROW_CLASS)}>
           <SettingLabelStack
             title="浏览方式"
@@ -879,10 +893,7 @@ const SourceSettingsSection = memo(function SourceSettingsSection({
                 dispatchNewtabBrowseModeChange(nextValue)
               }
             }}
-            items={[
-              { value: 'expanded', label: '平铺书签', attributes: { 'data-browse-mode': 'expanded' } },
-              { value: 'navigation', label: '逐级浏览', attributes: { 'data-browse-mode': 'navigation' } }
-            ]}
+            items={BROWSE_MODE_ITEMS}
             unstyled
             value={folderSource.browseMode}
           />
@@ -1273,7 +1284,78 @@ const IconSettingSliderRow = memo(function IconSettingSliderRow({
   field,
   ...props
 }: Omit<Parameters<typeof SliderRow>[0], 'onValueChange'> & { field: NewtabIconSettingsFieldKey }) {
-  return <SliderRow {...props} onValueChange={(value) => dispatchNewtabIconSettingFieldChange(field, value)} />
+  const handleValueChange = useCallback((value: number) => {
+    dispatchNewtabIconSettingFieldChange(field, value)
+  }, [field])
+  return <SliderRow {...props} onValueChange={handleValueChange} />
+})
+
+const IconPresetRow = memo(function IconPresetRow({
+  firstControlRef,
+  preset
+}: {
+  firstControlRef?: Ref<HTMLElement>
+  preset: string
+}) {
+  return (
+    <div id="icon-preset-row" className={ICON_PRESET_ROW_CLASS} role="group" aria-label="书签卡片密度">
+      {iconPresetCards.map((card, index) => (
+        <Button
+          ref={index === 0 ? firstControlRef : undefined}
+          className={cx(ICON_PRESET_CARD_CLASS, SETTINGS_PSEUDO_SHADOW_RESET_CLASS)}
+          type="button"
+          data-preset={card.key}
+          aria-pressed={preset === card.key}
+          aria-label={`${card.name}布局`}
+          onClick={() => dispatchNewtabIconPresetApply(card.key)}
+          key={card.key}
+          unstyled
+        >
+          <span
+            className={ICON_PRESET_PREVIEW_CLASS}
+            aria-hidden="true"
+            style={card.previewGridStyle}
+          >
+            {card.previewCells.map((cellKey) => (
+              <span
+                className={ICON_PRESET_PREVIEW_CELL_CLASS}
+                style={card.previewCellStyle}
+                key={cellKey}
+              />
+            ))}
+          </span>
+          <span className={ICON_PRESET_NAME_CLASS}>{card.name}</span>
+        </Button>
+      ))}
+    </div>
+  )
+})
+
+const IconPreviewTile = memo(function IconPreviewTile({
+  iconSource,
+  mark,
+  showTitles,
+  title
+}: {
+  iconSource: string
+  mark: string
+  showTitles: boolean
+  title: string
+}) {
+  const favicon = useMemo(
+    () => ({ src: iconSource, pageUrl: '', fetchpriority: 'low' as const, loading: 'eager' as const }),
+    [iconSource]
+  )
+  return (
+    <NewtabGlassSurface as="span" className={getBookmarkTileClass({ showTitles, preview: true })}>
+      <BookmarkIconShell
+        customIcon={false}
+        fallbackLabel={mark}
+        favicon={favicon}
+      />
+      {showTitles ? <span className={getBookmarkTitleClass()} title={title}>{title}</span> : null}
+    </NewtabGlassSurface>
+  )
 })
 
 const IconSettingsSection = memo(function IconSettingsSection({
@@ -1304,44 +1386,7 @@ const IconSettingsSection = memo(function IconSettingsSection({
         <Button id="icon-reset-defaults" variant="ghost" size="sm" onClick={dispatchNewtabIconResetDefaults}>恢复默认布局</Button>
       </SettingsSectionHeader>
       <Surface className={SETTINGS_LIST_CLASS} variant="plain">
-        <div id="icon-preset-row" className={ICON_PRESET_ROW_CLASS} role="group" aria-label="书签卡片密度">
-          {iconPresetCards.map((card, index) => (
-            <Button
-              ref={index === 0 ? firstControlRef : undefined}
-              className={cx(
-                ICON_PRESET_CARD_CLASS,
-                SETTINGS_PSEUDO_SHADOW_RESET_CLASS,
-                iconPreview.preset === card.key ? SETTINGS_SELECTED_SURFACE_CLASS : undefined
-              )}
-              type="button"
-              data-preset={card.key}
-              aria-pressed={iconPreview.preset === card.key}
-              aria-label={`${card.name}布局`}
-              onClick={() => dispatchNewtabIconPresetApply(card.key)}
-              key={card.key}
-              unstyled
-            >
-              <span
-                className={ICON_PRESET_PREVIEW_CLASS}
-                aria-hidden="true"
-                style={{
-                  gap: card.previewGap,
-                  gridTemplateColumns: `repeat(${card.previewColumnCount}, 1fr)`,
-                  padding: card.previewPadding
-                }}
-              >
-                {Array.from({ length: card.previewColumnCount * card.previewRowCount }, (_, index) => (
-                  <span
-                    className={ICON_PRESET_PREVIEW_CELL_CLASS}
-                    style={{ height: card.previewCellHeight }}
-                    key={`${card.key}:${index}`}
-                  />
-                ))}
-              </span>
-              <span className={ICON_PRESET_NAME_CLASS}>{card.name}</span>
-            </Button>
-          ))}
-        </div>
+        <IconPresetRow firstControlRef={firstControlRef} preset={iconPreview.preset} />
         <IconSettingSwitchRow
           id="icon-show-titles"
           title="显示标题"
@@ -1361,10 +1406,7 @@ const IconSettingsSection = memo(function IconSettingsSection({
                 const nextValue = value[0]
                 if (nextValue) dispatchNewtabIconSettingFieldChange('layoutMode', nextValue)
               }}
-              items={[
-                { value: 'auto', label: '自动适配', attributes: { 'data-icon-layout-mode': 'auto' } },
-                { value: 'fixed', label: '固定列数', attributes: { 'data-icon-layout-mode': 'fixed' } }
-              ]}
+              items={ICON_LAYOUT_MODE_ITEMS}
               unstyled
               value={iconPreview.layoutMode}
             />
@@ -1392,10 +1434,7 @@ const IconSettingsSection = memo(function IconSettingsSection({
                   const nextValue = value[0]
                   if (nextValue) dispatchNewtabIconSettingFieldChange('titleLines', Number(nextValue))
                 }}
-                items={[
-                  { value: '1', label: '1 行', attributes: { 'data-icon-title-lines': '1' } },
-                  { value: '2', label: '2 行', attributes: { 'data-icon-title-lines': '2' } }
-                ]}
+                items={ICON_TITLE_LINES_ITEMS}
                 unstyled
                 value={String(iconPreview.titleLines)}
               />
@@ -1422,14 +1461,13 @@ const IconSettingsSection = memo(function IconSettingsSection({
                 style={{ minWidth: tileWidth, gridTemplateColumns: 'repeat(auto-fit, var(--preview-tile-width))' }}
               >
                 {iconPreview.tiles.map((item) => (
-                  <NewtabGlassSurface as="span" className={getBookmarkTileClass({ showTitles: iconPreview.showTitles, preview: true })} key={item.id}>
-                    <BookmarkIconShell
-                      customIcon={false}
-                      fallbackLabel={item.mark}
-                      favicon={{ src: item.iconSource, pageUrl: '', fetchpriority: 'low', loading: 'eager' }}
-                    />
-                    {iconPreview.showTitles ? <span className={getBookmarkTitleClass()} title={item.title}>{item.title}</span> : null}
-                  </NewtabGlassSurface>
+                  <IconPreviewTile
+                    iconSource={item.iconSource}
+                    key={item.id}
+                    mark={item.mark}
+                    showTitles={iconPreview.showTitles}
+                    title={item.title}
+                  />
                 ))}
               </div>
             </figure>
@@ -1443,96 +1481,20 @@ const IconSettingsSection = memo(function IconSettingsSection({
 const iconPresetCards = (Object.entries(ICON_PRESET_META) as Array<[
   IconLayoutPresetKey,
   typeof ICON_PRESET_META[IconLayoutPresetKey]
-]>).map(([key, meta]) => ({
-  key,
-  name: meta.name,
-  previewCellHeight: key === 'compact' ? '8px' : key === 'spacious' ? '12px' : '10px',
-  previewColumnCount: meta.cols,
-  previewGap: key === 'compact' ? '3px' : key === 'spacious' ? '5px' : '4px',
-  previewPadding: '0 4px',
-  previewRowCount: meta.rows
-}))
-
-const TimeSettingsSection = memo(function TimeSettingsSection({ panelElement }: { panelElement: HTMLElement | null }) {
-  const timeSettings = useNewtabTimeSettingsView()
-
-  return (
-    <section className={SETTINGS_SECTION_CLASS} data-settings-group="appearance" aria-labelledby="settings-time-title">
-      <h2 id="settings-time-title" className={SETTINGS_SECTION_TITLE_CLASS}>时间和日期</h2>
-      <Surface className={SETTINGS_LIST_CLASS} variant="plain">
-        <SwitchRow
-          id="time-enabled"
-          title="显示时间和日期"
-          checked={timeSettings.enabled}
-          onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('enabled', checked)}
-        />
-        {timeSettings.enabled ? <>
-          <SettingsSelect
-            id="time-display-mode"
-            label="显示内容"
-            ariaLabel="时间显示内容"
-            onValueChange={(value) => {
-              if (value) dispatchNewtabTimeSettingFieldChange('displayMode', value)
-            }}
-            portalContainer={panelElement}
-            value={timeSettings.displayMode}
-            options={[['time-date', '时间和日期'], ['time', '仅时间'], ['date', '仅日期']]}
-          />
-          <SettingsSelect
-            id="time-density"
-            label="样式"
-            ariaLabel="时间布局密度"
-            onValueChange={(value) => {
-              if (value) dispatchNewtabTimeSettingFieldChange('density', value)
-            }}
-            portalContainer={panelElement}
-            value={timeSettings.density}
-            options={[['compact', '单行'], ['balanced', '胶囊'], ['comfortable', '卡片']]}
-          />
-          <SettingsDetails id="time-details" title="时间格式">
-            <SettingsSelect
-              id="time-time-zone"
-              label="时区"
-              ariaLabel="时区"
-              onValueChange={(value) => {
-                if (value) dispatchNewtabTimeSettingFieldChange('timeZone', value)
-              }}
-              portalContainer={panelElement}
-              value={timeSettings.timeZone}
-              options={[['auto', '自动跟随系统'], ['UTC', 'UTC'], ['Asia/Shanghai', '北京'], ['Asia/Hong_Kong', '香港'], ['Asia/Tokyo', '东京'], ['Asia/Singapore', '新加坡'], ['Europe/London', '伦敦'], ['Europe/Paris', '巴黎'], ['America/New_York', '纽约'], ['America/Los_Angeles', '洛杉矶']]}
-            />
-            {timeSettings.displayMode !== 'time' ? (
-              <SettingsSelect
-                id="time-date-format"
-                label="日期格式"
-                ariaLabel="日期格式"
-                onValueChange={(value) => {
-                  if (value) dispatchNewtabTimeSettingFieldChange('dateFormat', value)
-                }}
-                portalContainer={panelElement}
-                value={timeSettings.dateFormat}
-                options={[['year-month-day-weekday', '2026.05.01 周五'], ['chinese-date-weekday', '2026年5月1日 周五'], ['month-day-weekday', '05.01 周五'], ['weekday-month-day', '周五 05/01'], ['weekday-day-month', '周五 01/05'], ['year-month-day', '2026.05.01']]}
-              />
-            ) : null}
-            {timeSettings.displayMode !== 'date' ? <>
-              <SwitchRow
-                id="time-show-seconds"
-                title="显示秒数"
-                checked={timeSettings.showSeconds}
-                onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('showSeconds', checked)}
-              />
-              <SwitchRow
-                id="time-hour12"
-                title="12 小时制"
-                checked={timeSettings.hour12}
-                onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('hour12', checked)}
-              />
-            </> : null}
-          </SettingsDetails>
-        </> : null}
-      </Surface>
-    </section>
-  )
+]>).map(([key, meta]) => {
+  const previewCellHeight = key === 'compact' ? '6px' : key === 'spacious' ? '11px' : '8.5px'
+  const previewGap = key === 'compact' ? '2.5px' : key === 'spacious' ? '4px' : '3.5px'
+  return {
+    key,
+    name: meta.name,
+    previewCellStyle: { height: previewCellHeight } as React.CSSProperties,
+    previewCells: Array.from({ length: meta.cols * meta.rows }, (_, index) => `${key}:${index}`),
+    previewGridStyle: {
+      gap: previewGap,
+      gridTemplateColumns: `repeat(${meta.cols}, 1fr)`,
+      padding: '4.5px 6px'
+    } as React.CSSProperties
+  }
 })
 
 const SearchSettingsSection = memo(function SearchSettingsSection({
@@ -1586,6 +1548,7 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
               defaultValue={String(DEFAULT_SEARCH_LAYOUT.height)}
               ariaLabel="搜索栏高度"
               onValueChange={(value) => dispatchNewtabSearchSettingFieldChange('height', value)}
+              onValueCommitted={dispatchNewtabSearchSettingCommit}
               sliderValue={searchSettings.height}
             />
             {!searchSettings.widthDisabled ? (
@@ -1599,6 +1562,7 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
                 defaultValue="44"
                 ariaLabel="搜索栏宽度"
                 onValueChange={(value) => dispatchNewtabSearchSettingFieldChange('width', value)}
+                onValueCommitted={dispatchNewtabSearchSettingCommit}
                 sliderValue={searchSettings.width}
               />
             ) : null}
@@ -1744,11 +1708,15 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
       })
 
       if (layoutRequest.section === 'source') {
-        folderCandidateSearchRef.current?.focus()
+        const searchInput = folderCandidateSearchRef.current
+        const target = searchInput && searchInput.offsetParent !== null
+          ? searchInput
+          : firstControlRefs.current.source
+        target?.focus({ preventScroll: true })
         return
       }
 
-      firstControlRefs.current[layoutRequest.section]?.focus()
+      firstControlRefs.current[layoutRequest.section]?.focus({ preventScroll: true })
     }
   }, [layoutRequest, open, panelElement])
 
@@ -1769,6 +1737,9 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
   }, [])
   const setSourceSectionRef = useCallback<SettingsSectionRef>((element) => {
     sectionRefs.current.source = element
+  }, [])
+  const setSourceFirstControlRef = useCallback((element: HTMLElement | null) => {
+    firstControlRefs.current.source = element
   }, [])
   const setAdvancedFirstControlRef = useCallback((element: HTMLElement | null) => {
     firstControlRefs.current.advanced = element
@@ -1832,6 +1803,7 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
                 </SettingsTabPanel>
                 <SettingsTabPanel value="source" active={activeGroup === 'source'} visited={visitedGroups.has('source')}>
                   <SourceSettingsSection
+                    firstControlRef={setSourceFirstControlRef}
                     folderCandidateSearchRef={folderCandidateSearchRef}
                     sectionRef={setSourceSectionRef}
                   />
@@ -1842,7 +1814,6 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
                     sectionRef={setAppearanceSectionRef}
                   />
                   <BackgroundSettingsSection panelElement={panelElement} />
-                  <TimeSettingsSection panelElement={panelElement} />
                 </SettingsTabPanel>
                 <SettingsTabPanel value="glass" active={activeGroup === 'glass'} visited={visitedGroups.has('glass')}>
                   <GlassSettingsSection

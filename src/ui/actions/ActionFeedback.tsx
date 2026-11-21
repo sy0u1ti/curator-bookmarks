@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ACTION_FEEDBACK_DURATION_MS,
   getActionFeedbackStatus,
@@ -63,12 +63,19 @@ export const COPY_ACTION_LABELS: ActionLabels = {
 }
 
 export function ActionFeedbackLabel({ status, labels }: { status: ActionStatus; labels: ActionLabels }) {
+  const previousStatusRef = useRef<ActionStatus>(status)
+  const hasChangedRef = useRef(false)
+  if (previousStatusRef.current !== status) {
+    hasChangedRef.current = true
+    previousStatusRef.current = status
+  }
+
   return (
     <span className="curator-action-label">
       <span className="curator-action-label-reserve" aria-hidden="true">
         {Object.values(labels).map((label, index) => <span key={index}>{label}</span>)}
       </span>
-      <TextSwap animate={status !== 'idle'} text={labels[status]} />
+      <TextSwap animate={hasChangedRef.current} text={labels[status]} />
     </span>
   )
 }

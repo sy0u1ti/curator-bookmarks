@@ -33,8 +33,16 @@ const toneByStatus = {
   error: 'danger'
 } as const
 
+const labelByStatus = {
+  idle: '空闲',
+  running: '进行中',
+  success: '已完成',
+  warning: '注意',
+  error: '失败'
+} as const
+
 const AI_TASK_STATUS_LABEL_CLASS =
-  'block text-xs font-semibold uppercase tracking-[0] text-ds-text-disabled'
+  'block text-xs font-semibold uppercase tracking-[0] text-ds-text-muted'
 
 export function AiTaskStatus({
   children,
@@ -58,14 +66,14 @@ export function AiTaskStatus({
   ...props
 }: AiTaskStatusProps) {
   return (
-    <section className={cx('grid gap-2 rounded-ds-card border-0 bg-ds-surface-1 p-4 text-ds-text-primary', className)} {...props}>
+    <section className={cx('grid gap-2 rounded-ds-md border-0 bg-ds-surface-1 p-4 text-ds-text-primary', className)} {...props}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           {label ? <span className={AI_TASK_STATUS_LABEL_CLASS}>{label}</span> : null}
           {status === 'running' ? <Spinner /> : null}
           {typeof title === 'string' ? <strong className="text-sm">{title}</strong> : title}
         </div>
-        {statusNode || <Badge key={status} animate tone={toneByStatus[status]}>{status}</Badge>}
+        {statusNode || <Badge tone={toneByStatus[status]}>{labelByStatus[status]}</Badge>}
       </div>
       {description ? (
         typeof description === 'string' ? (

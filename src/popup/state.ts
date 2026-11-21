@@ -111,6 +111,7 @@ export interface PopupState {
   editSaving: boolean
   pendingActionIds: Set<string>
   currentTab: chrome.tabs.Tab | null
+  currentTabHydrated: boolean
   currentPageBookmarkId: string | null
   newTabPinnedIds: Set<string>
   smartStatus: string
@@ -224,6 +225,7 @@ export const state: PopupState = {
   editSaving: false,
   pendingActionIds: new Set(),
   currentTab: null,
+  currentTabHydrated: false,
   currentPageBookmarkId: null,
   newTabPinnedIds: new Set(),
   smartStatus: 'idle',

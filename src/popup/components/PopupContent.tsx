@@ -24,6 +24,7 @@ import { cx } from '../../ui/base/utils'
 import { getMotionDurationMs, prefersReducedMotion } from '../../shared/motion'
 import { HighlightedText } from '../../ui/base/HighlightedText'
 import { PopupEmptyState } from './PopupEmptyState'
+import { PopupScrollToTop } from './PopupScrollToTop'
 import { getPopupVirtualRange, getPopupHeldRange, includePopupVirtualSelection, POPUP_VIRTUAL_OVERSCAN } from '../popup-virtual-window'
 import {
   subscribeNoPopupNavigation,
@@ -80,28 +81,37 @@ export interface PopupContentActionHandlers {
 }
 
 const POPUP_CONTENT_SKELETON_FOLDER_ROWS = [
-  { depth: 0, width: 0.72, count: 0.34 },
-  { depth: 1, width: 0.64, count: 0.26 },
-  { depth: 1, width: 0.76, count: 0.22 },
-  { depth: 2, width: 0.52, count: 0.3 },
-  { depth: 1, width: 0.58, count: 0.24 },
-  { depth: 2, width: 0.68, count: 0.2 },
-  { depth: 2, width: 0.46, count: 0.28 },
-  { depth: 1, width: 0.7, count: 0.18 }
+  { depth: 0, width: 0.44, count: 0.24 },
+  { depth: 1, width: 0.52, count: 0.22 },
+  { depth: 2, width: 0.62, count: 0.2 },
+  { depth: 2, width: 0.48, count: 0.18 },
+  { depth: 2, width: 0.56, count: 0.16 },
+  { depth: 2, width: 0.42, count: 0.2 },
+  { depth: 2, width: 0.66, count: 0.16 },
+  { depth: 2, width: 0.46, count: 0.18 },
+  { depth: 2, width: 0.54, count: 0.22 },
+  { depth: 1, width: 0.64, count: 0.2 },
+  { depth: 1, width: 0.48, count: 0.18 }
 ] as const
 
 const POPUP_CONTENT_SKELETON_BOOKMARK_ROWS = [
-  { title: '44px', url: '66px', path: '94px' },
-  { title: '16px', url: '36px', path: '94px' },
-  { title: '62px', url: '72px', path: '94px' },
-  { title: '48px', url: '56px', path: '94px' },
-  { title: '74px', url: '68px', path: '94px' }
+  { title: '116px', url: '176px' },
+  { title: '154px', url: '208px' },
+  { title: '98px', url: '156px' },
+  { title: '168px', url: '196px' },
+  { title: '128px', url: '164px' },
+  { title: '146px', url: '188px' },
+  { title: '112px', url: '152px' }
 ] as const
 const POPUP_CONTENT_SKELETON_ACTION_COUNT = 5
 
 const workspaceShellClass =
   't-skel popup-t-skel popup-workspace-reveal relative h-full min-h-0'
 const workspaceLayerClass = 'absolute inset-0 min-h-0'
+const workspaceBackdropLayerClass = cx(
+  workspaceLayerClass,
+  'popup-workspace-backdrop pointer-events-none z-0 [contain:layout_paint]'
+)
 const workspaceSkeletonLayerClass = cx(
   workspaceLayerClass,
   't-skel-skeleton pointer-events-none z-[1] [contain:layout_paint]'
@@ -116,41 +126,41 @@ const workspaceClass =
 const workspacePlaceholderClass = 'pointer-events-none'
 const paneClass =
   'popup-surface flex min-h-0 min-w-0 flex-col overflow-hidden border-0 bg-ds-surface-1'
-const mainPaneClass = cx(paneClass, 'popup-main-pane bg-ds-surface-1')
+const mainPaneClass = cx(paneClass, 'popup-main-pane relative bg-ds-surface-1')
 const paneHeaderClass =
-  'flex min-h-[42px] flex-none items-center justify-between gap-2 border-b border-ds-border px-[11px] text-xs font-semibold text-ds-text-primary'
+  'flex h-[42px] min-h-[42px] flex-none items-center justify-between gap-2 border-b border-ds-border px-[11px] text-xs font-semibold text-ds-text-primary'
 const paneHeaderTitleClass = 'min-w-0 truncate'
 const paneTitleMetaClass = 'font-medium text-ds-text-muted'
 const paneCaptionClass = 'ml-auto min-w-0 truncate text-right font-medium text-ds-text-secondary'
 const paneHeaderActionClass = [
   'inline-flex h-7 flex-none items-center gap-1.5 rounded-ds-sm border border-transparent bg-transparent px-2 text-xs font-semibold text-ds-text-secondary outline-none',
-  'transition-[border-color,background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,scale,opacity] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)] disabled:cursor-default disabled:opacity-40'
 ].join(' ')
 const folderTreeClass =
-  'popup-folder-tree min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
+  'popup-folder-tree ds-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2 [scrollbar-gutter:stable]'
 const mainListClass =
-  'popup-main-list relative m-0 min-h-0 flex-1 list-none overflow-x-hidden overflow-y-auto p-2 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
+  'popup-main-list ds-scrollbar relative m-0 min-h-0 flex-1 list-none overflow-x-hidden overflow-y-auto p-2 [scrollbar-gutter:stable]'
 // The filter lives in the existing 42px pane header, so it adds no height and
 // no new pane. Geometry matches the folder rows' 34px rhythm, not the 40px
 // main search shell, which would make the header grow.
 const folderFilterShellClass = [
   'popup-folder-filter group/filter relative flex h-7 min-h-7 w-full min-w-0 items-center gap-1 rounded-ds-sm border border-transparent bg-ds-text-primary/[0.055] ds-inset-menu pl-2 text-ds-text-primary',
-  'shadow-[0_0_0_3px_transparent] transition-[background-color,border-color,box-shadow] duration-ds-standard ease-ds-standard',
+  'shadow-[0_0_0_3px_transparent] transition-[background-color,border-color] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border hover:bg-ds-text-primary/[0.085]',
   'focus-within:border-ds-border-hover focus-within:bg-ds-text-primary/[0.085] focus-within:shadow-[0_0_0_3px_var(--ds-accent-soft)]'
 ].join(' ')
 const folderFilterIconClass =
   'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard group-focus-within/filter:text-ds-text-secondary'
 const folderFilterInputClass =
-  'min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-xs font-medium leading-[1.3] text-ds-text-primary outline-none placeholder:font-normal placeholder:text-ds-text-muted [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
+  'min-w-0 flex-auto self-stretch border-0 bg-transparent pl-1 pr-0.5 py-0 text-xs font-medium leading-[1.3] text-ds-text-primary outline-none placeholder:font-normal placeholder:text-ds-text-muted [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
 const folderFilterClearClass = [
-  'inline-flex h-[18px] w-[18px] flex-none items-center justify-center rounded-ds-xs border-0 bg-transparent p-0 text-ds-text-muted',
-  'transition-[background-color,color,opacity,transform,scale] duration-ds-fast ease-ds-standard',
-  'hover:bg-ds-active hover:text-ds-text-primary focus-visible:bg-ds-active focus-visible:text-ds-text-primary focus-visible:outline-none',
+  'inline-flex h-5 w-5 flex-none items-center justify-center rounded-ds-xs border-0 bg-transparent p-0 text-ds-text-muted outline-none',
+  'transition-[background-color,color,opacity,scale,visibility] [transition-behavior:allow-discrete] duration-ds-fast ease-ds-standard',
+  'hover:bg-ds-active hover:text-ds-text-primary focus-visible:bg-ds-active focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)]',
-  'data-[visible=false]:invisible data-[visible=false]:pointer-events-none data-[visible=false]:opacity-0'
+  'data-[visible=false]:invisible data-[visible=false]:pointer-events-none data-[visible=false]:opacity-0 data-[visible=false]:scale-95 motion-reduce:data-[visible=false]:scale-100'
 ].join(' ')
 const folderFilterEmptyClass =
   'grid place-items-center rounded-ds-sm px-3 py-6 text-center text-xs leading-[1.55] text-ds-text-muted'
@@ -161,10 +171,11 @@ const POPUP_FOLDER_ROW_HEIGHT = 34
 const POPUP_VIRTUALIZATION_THRESHOLD = 24
 const activeResultIndicatorClass = 'popup-active-result-indicator'
 const folderCardDimmedClass = 'opacity-55 hover:opacity-100 focus-visible:opacity-100'
-const rootFolderBranchClass = 'rounded-full border border-white/30'
+const rootFolderBranchClass =
+  'relative inline-grid h-2 w-2 flex-none place-items-center justify-self-center rounded-full border border-white/35 bg-transparent'
 const listButtonClass = [
   'popup-list-button flex min-h-12 w-full min-w-0 items-center gap-2.5 rounded-ds-sm border border-transparent bg-transparent text-left text-ds-text-primary outline-none',
-  'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1 active:scale-[0.993]'
 ].join(' ')
 const listButtonBaseStyle: CSSProperties = {
@@ -184,13 +195,13 @@ const rowActionsClass = 'popup-row-actions'
 const rowActionRailClass = 'popup-row-actions-menu'
 const rowActionButtonClass = [
   'inline-flex h-7 w-7 flex-none items-center justify-center rounded-ds-sm border-0 bg-ds-surface-3 text-ds-text-primary outline-none',
-  'transition-[background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
-  'hover:bg-ds-surface-3 focus-visible:bg-ds-surface-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
+  'transition-[background-color,color,scale,opacity] duration-ds-fast ease-ds-standard',
+  'hover:bg-ds-active hover:text-ds-accent-hover focus-visible:bg-ds-active focus-visible:text-ds-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)] disabled:cursor-default disabled:opacity-45'
 ].join(' ')
 const rowActionTriggerClass = cx(rowActionButtonClass, 'popup-row-actions-trigger')
 const rowActionDangerClass =
-  'hover:text-ds-danger-text focus-visible:text-ds-danger-text'
+  'hover:bg-ds-danger-soft hover:text-ds-danger-text focus-visible:bg-ds-danger-soft focus-visible:text-ds-danger-text'
 const rowReorderHandleClass = [
   'popup-bookmark-reorder-handle absolute right-[7px] top-1/2 z-[3] inline-flex h-10 w-10 -translate-y-1/2 touch-none select-none items-center justify-center rounded-ds-sm border border-transparent bg-transparent text-ds-text-muted outline-none',
   'transition-[border-color,background-color,color,opacity] duration-ds-fast ease-ds-standard',
@@ -208,13 +219,14 @@ const skeletonBarClass = cx(
 )
 const skeletonTextBarClass = cx(skeletonBarBaseClass, 'block max-w-full')
 const skeletonDotClass =
-  'popup-skeleton-pulse block h-7 w-7 rounded-ds-sm bg-[rgba(255,255,255,0.065)]'
+  'popup-skeleton-pulse block h-7 w-7 rounded-ds-sm bg-[rgba(255,255,255,0.055)]'
 const skeletonFolderTitleClass = cx(skeletonBarClass, 'min-w-[54px]')
 const skeletonFolderCountClass =
   cx(skeletonBarClass, 'max-w-[30px] min-w-4 justify-self-end')
-const skeletonHeaderMetaClass = cx(skeletonBarBaseClass, 'inline-block h-[7px] w-[68px] align-[1px]')
-const skeletonBookmarkTitleClass = cx(skeletonTextBarClass, 'h-2')
-const skeletonBookmarkUrlClass = cx(skeletonTextBarClass, 'h-[6px] opacity-75')
+const skeletonHeaderMetaClass = cx(skeletonBarBaseClass, 'inline-block h-[8px] w-[64px] align-[0.5px]')
+const skeletonBookmarkTitleClass = cx(skeletonTextBarClass, 'h-[10px]')
+const skeletonBookmarkUrlClass = cx(skeletonTextBarClass, 'h-[7px] opacity-75')
+const skeletonFolderBranchPlaceholderClass = 'inline-block h-2.5 w-2.5 flex-none'
 const skeletonBookmarkTitleLineClass = cx(rowTitleClass, 'flex h-4 items-center')
 const skeletonBookmarkSubtitleLineClass = cx(rowSubtitleClass, 'flex h-[15px] items-center')
 const skeletonActionButtonClass = skeletonDotClass
@@ -450,7 +462,10 @@ function usePopupBookmarkReorderDrag({
     }, settleDuration)
   }, [mainListRef, onCommit, releasePointer, stopAutoScroll, toDragView])
 
-  useEffect(() => {
+  const dragListenersActive = view?.phase === 'pending' || view?.phase === 'dragging'
+
+  useLayoutEffect(() => {
+    if (!dragListenersActive) return
     const handlePointerMove = (event: PointerEvent) => {
       const session = sessionRef.current
       if (!session || event.pointerId !== session.pointerId) return
@@ -515,7 +530,7 @@ function usePopupBookmarkReorderDrag({
       window.removeEventListener('pointercancel', handlePointerCancel)
       window.removeEventListener('keydown', handleKeyDown, true)
     }
-  }, [beginDrag, cancelDrag, resolveTargetIndex, settleDrag, toDragView])
+  }, [beginDrag, cancelDrag, dragListenersActive, resolveTargetIndex, settleDrag, toDragView])
 
   useEffect(() => {
     if (!active || (busy && sessionRef.current)) {
@@ -835,6 +850,7 @@ export function PopupContent({
   const title = state.title || (mode === 'search' ? '搜索结果' : '全部书签')
   const meta = state.meta || `${mainRows.length} 条`
   const isLoading = Boolean(state.loading)
+  const workspaceReveal = useDecoupledWorkspaceReveal(isLoading)
   const scrollLayerRef = usePopupScrollLayer(isLoading)
   const reorderActive = Boolean(state.reorder?.active && mode === 'tree')
   const reorderDrag = usePopupBookmarkReorderDrag({
@@ -885,7 +901,7 @@ export function PopupContent({
 
   return (
     <div
-      className={cx(workspaceShellClass, isLoading ? '' : 'is-revealed')}
+      className={cx(workspaceShellClass, workspaceReveal.revealed ? 'is-revealed' : '')}
       data-state={isLoading ? 'loading' : 'ready'}
       style={{ '--popup-bookmark-row-height': `${POPUP_BOOKMARK_ROW_HEIGHT}px` } as CSSProperties}
       ref={scrollLayerRef}
@@ -977,7 +993,7 @@ export function PopupContent({
               aria-label={mode === 'search' ? '书签搜索结果' : reorderActive ? `${state.reorder?.folderTitle || '当前文件夹'}直属书签排序` : undefined}
             >
               {state.mainState ? (
-                <ul className="m-0 list-none p-0" role="presentation">
+                <ul className="m-0 h-full list-none p-0" role="presentation">
                   <PopupMainStatePanel onEmptyAction={handlers?.onEmptyAction} state={state.mainState} />
                 </ul>
               ) : mainRows.length ? (
@@ -1023,6 +1039,11 @@ export function PopupContent({
                 </ul>
               )}
             </div>
+            <PopupScrollToTop
+              listRef={mainListRef}
+              suppressed={isLoading || reorderActive || reorderDrag.dragging || Boolean(state.mainState)}
+              syncKey={`${mode}:${title}:${mainRows.length}`}
+            />
             {reorderActive ? (
               <p className="sr-only" aria-live="polite" aria-atomic="true">
                 {state.reorder?.announcement}
@@ -1040,11 +1061,67 @@ export function PopupContent({
           {reorderDrag.ghost}
         </div>
       </div>
+      {workspaceReveal.settled ? null : (
+        <div className={workspaceBackdropLayerClass} aria-hidden="true">
+          <MemoPopupWorkspaceBackdrop mode={mode} title={title} />
+        </div>
+      )}
     </div>
   )
 }
 
 export const MemoPopupContent = memo(PopupContent)
+
+function useDecoupledWorkspaceReveal(loading: boolean): { revealed: boolean; settled: boolean } {
+  const [revealed, setRevealed] = useState(!loading)
+  const [settled, setSettled] = useState(!loading)
+
+  useLayoutEffect(() => {
+    if (loading) {
+      setRevealed(false)
+      setSettled(false)
+      return
+    }
+    if (prefersReducedMotion() || document.documentElement.dataset.motionInput === 'keyboard') {
+      setRevealed(true)
+      setSettled(true)
+    }
+  }, [loading])
+
+  useEffect(() => {
+    if (loading || revealed) {
+      return
+    }
+    let firstFrame = 0
+    let secondFrame = 0
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        setRevealed(true)
+      })
+    })
+    return () => {
+      window.cancelAnimationFrame(firstFrame)
+      window.cancelAnimationFrame(secondFrame)
+    }
+  }, [loading, revealed])
+
+  useEffect(() => {
+    if (loading || !revealed || settled) {
+      return
+    }
+    const durationMs = getMotionDurationMs('--reveal-dur', 240)
+    if (durationMs <= 1) {
+      setSettled(true)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      setSettled(true)
+    }, durationMs + 60)
+    return () => window.clearTimeout(timer)
+  }, [loading, revealed, settled])
+
+  return { revealed: !loading && revealed, settled: !loading && settled }
+}
 
 function usePopupScrollLayer(loading: boolean): RefObject<HTMLDivElement | null> {
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -1108,13 +1185,15 @@ function useFixedRowWindow({
   rowHeight: number
 }): FixedRowWindow {
   const navigation = usePopupNavigationStore()
+  const initialVisibleCount = pane === 'folders' ? 12 : 7
+  const initialOverscan = Math.max(POPUP_VIRTUAL_OVERSCAN, initialVisibleCount)
   // Scroll pixels are not render state. Only publish a new window when rows
   // enter or leave the overscan; both panes share this component.
-  const [rowWindow, setRowWindow] = useState({ start: 0, count: 8 + POPUP_VIRTUAL_OVERSCAN * 2 })
+  const [rowWindow, setRowWindow] = useState({ start: 0, count: initialVisibleCount + initialOverscan * 2 })
   const windowRef = useRef(rowWindow)
   const heldDirectionRef = useRef(heldDirection)
   const revealedVersionRef = useRef<PopupContentViewModel | null>(null)
-  const viewportRef = useRef({ height: rowHeight * 8, paddingTop: 0 })
+  const viewportRef = useRef({ height: rowHeight * initialVisibleCount, paddingTop: 0 })
   // Rows are adjacent (no gap), so the first painted row's height is the true
   // pitch. Measuring it keeps the spacers exact when a larger browser font
   // size or a wrapped title makes rows taller than the design constant.
@@ -1261,6 +1340,46 @@ function useFixedRowWindow({
   }
 }
 
+function PopupWorkspaceBackdrop({
+  mode,
+  title
+}: {
+  mode: 'search' | 'tree'
+  title: string
+}) {
+  return (
+    <div className={cx(workspaceClass, workspacePlaceholderClass)}>
+      <div className={paneClass}>
+        <header className={paneHeaderClass}>
+          <span className="shrink-0">全部文件夹</span>
+          <div className={cx(folderFilterShellClass, 'pointer-events-none')}>
+            <Icon name="Search" className={folderFilterIconClass} size={13} aria-hidden="true" />
+            <span className="min-w-0 flex-auto truncate pl-1 pr-0.5 text-xs font-normal leading-[1.3] text-ds-text-muted">
+              筛选文件夹
+            </span>
+            <span className="inline-flex h-5 w-5 flex-none" aria-hidden="true" />
+          </div>
+        </header>
+      </div>
+      <div className={mainPaneClass}>
+        <header className={paneHeaderClass}>
+          <span className={paneHeaderTitleClass}>
+            {title} <span className={paneTitleMetaClass}>·</span>
+          </span>
+          {mode === 'tree' ? (
+            <span className={cx(paneHeaderActionClass, 'pointer-events-none opacity-40')}>
+              <Icon name="GripVertical" size={14} aria-hidden="true" />
+              <span>调整顺序</span>
+            </span>
+          ) : null}
+        </header>
+      </div>
+    </div>
+  )
+}
+
+const MemoPopupWorkspaceBackdrop = memo(PopupWorkspaceBackdrop)
+
 function PopupContentSkeleton({
   mode,
   title
@@ -1272,7 +1391,7 @@ function PopupContentSkeleton({
     <div className={cx(workspaceClass, workspacePlaceholderClass)}>
       <aside className={paneClass} aria-label="文件夹树加载占位">
         <header className={paneHeaderClass}>
-          <span>全部文件夹</span>
+          <span className="invisible shrink-0">全部文件夹</span>
         </header>
         <div className={folderTreeClass} role="presentation">
           {POPUP_CONTENT_SKELETON_FOLDER_ROWS.map((row, index) => (
@@ -1282,10 +1401,14 @@ function PopupContentSkeleton({
               key={`folder-skeleton:${index}`}
             >
               <div className={cx(folderCardClass, 'cursor-default')} style={getFolderDepthStyle(row.depth)}>
-                <span className={folderBranchClass} aria-hidden="true"></span>
+                {row.depth === 0 ? (
+                  <span className={cx(rootFolderBranchClass, 'popup-skeleton-pulse')} data-origin="center" aria-hidden="true"></span>
+                ) : (
+                  <span className={skeletonFolderBranchPlaceholderClass} aria-hidden="true"></span>
+                )}
                 <span className={folderMainClass}>
                   <span className={skeletonFolderTitleClass} style={{ '--skeleton-width': row.width } as CSSProperties}></span>
-                  <span className={skeletonFolderCountClass} style={{ '--skeleton-width': row.count } as CSSProperties}></span>
+                  <span className={skeletonFolderCountClass} data-origin="right" style={{ '--skeleton-width': row.count } as CSSProperties}></span>
                 </span>
               </div>
             </div>
@@ -1294,18 +1417,16 @@ function PopupContentSkeleton({
       </aside>
       <section className={mainPaneClass} aria-label={`${title}加载占位`}>
         <header className={paneHeaderClass}>
-          <span>
-            {title}{' '}
-            <span className={paneTitleMetaClass}>
-              · <span className={skeletonHeaderMetaClass}></span>
-            </span>
+          <span className={paneHeaderTitleClass}>
+            <span className="invisible">{title} · </span>
+            <span className={skeletonHeaderMetaClass}></span>
           </span>
         </header>
         <ul className={mainListClass} role="presentation">
           {POPUP_CONTENT_SKELETON_BOOKMARK_ROWS.map((row, index) => (
             <li
               className={cx(mainRowClass, index === 0 && 'border-t-0')}
-              key={`bookmark-skeleton:${row.title}:${row.url}:${row.path}`}
+              key={`bookmark-skeleton:${index}:${row.title}:${row.url}`}
               style={{ height: POPUP_BOOKMARK_ROW_HEIGHT }}
             >
               <div className={cx(listButtonClass, 'cursor-default')} style={getBookmarkButtonStyle()}>
@@ -1334,12 +1455,14 @@ function PopupSkeletonRowActions({ expanded }: { expanded: boolean }) {
       data-active={expanded ? 'true' : undefined}
       data-open={expanded ? 'true' : 'false'}
     >
-      <div className={rowActionRailClass}>
-        {Array.from({ length: POPUP_CONTENT_SKELETON_ACTION_COUNT }, (_, index) => (
-          <span className={skeletonActionButtonClass} key={`bookmark-skeleton-action:${index}`}></span>
-        ))}
-      </div>
-      <span className={cx(skeletonActionButtonClass, 'popup-row-actions-trigger')}></span>
+      {expanded ? (
+        <div className={rowActionRailClass}>
+          {Array.from({ length: POPUP_CONTENT_SKELETON_ACTION_COUNT }, (_, index) => (
+            <span className={skeletonActionButtonClass} key={`bookmark-skeleton-action:${index}`}></span>
+          ))}
+        </div>
+      ) : null}
+      <span className={cx(skeletonActionButtonClass, 'popup-row-actions-trigger')} data-origin="center"></span>
     </div>
   )
 }
@@ -1426,7 +1549,7 @@ function PopupFolderRow({
         onClick={() => onFolderFilter?.(row.root ? 'all' : row.folderId)}
         unstyled
       >
-        <span className={cx(folderBranchClass, row.root ? rootFolderBranchClass : '')} aria-hidden="true"></span>
+        <span className={row.root ? rootFolderBranchClass : folderBranchClass} aria-hidden="true"></span>
         <span className={folderMainClass}>
           <span className={folderTitleClass}>{row.title}</span>
           <span className={cx(folderCountClass, row.active ? folderCountActiveClass : '')} title={`${row.countLabel} 个书签`}>

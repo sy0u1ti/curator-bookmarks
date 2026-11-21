@@ -323,7 +323,7 @@ try {
   await page.getByRole('switch', { name: '显示标题', exact: true }).click()
   await assertPreviewMatches(page, 'restored-titles')
   await page.locator('.settings-drawer-scroll').evaluate(element => { element.scrollTop = element.scrollHeight })
-  await capture(page, 'settings-time')
+  await capture(page, 'settings-appearance-bottom')
   await page.getByRole('tab', { name: '搜索', exact: true }).click()
   await capture(page, 'settings-search')
   reports.drawer = { desktop, scrolled, middle, narrow, switchLayout }

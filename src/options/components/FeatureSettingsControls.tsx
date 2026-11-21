@@ -47,7 +47,7 @@ export function FeatureSettingsControls() {
         className={AI_SETTINGS_CARD_CLASS}
         title={<h2 className={AI_SETTINGS_TITLE_CLASS}>保存与整理</h2>}
         headerClassName={AI_SETTINGS_HEADER_CLASS}
-        iconName="Sparkles"
+        iconName={false}
         bodyClassName={`${AI_SETTINGS_BODY_CLASS} ${state.loading ? '' : AI_SETTINGS_READY_BODY_CLASS}`}
         aria-busy={state.loading ? 'true' : undefined}
       >
@@ -79,7 +79,7 @@ function InboxWorkflowControl({ state }: { state: FeatureSettingsControlsState['
   return (
     <div
       id="settings-inbox-workflow"
-      className="grid min-h-[56px] grid-cols-[minmax(0,1fr)_auto] items-center gap-6 px-5 py-3.5 max-[760px]:grid-cols-1 max-[760px]:items-stretch max-[760px]:gap-3 max-[760px]:px-4"
+      className={`${AI_SETTINGS_ROW_CLASS} max-[760px]:grid-cols-1 max-[760px]:items-stretch max-[760px]:gap-3`}
       aria-hidden={!state || undefined}
     >
       <div className={AI_SETTINGS_COPY_CLASS}>
@@ -92,7 +92,7 @@ function InboxWorkflowControl({ state }: { state: FeatureSettingsControlsState['
         <Select
           ariaLabel="保存到待整理后的整理方式"
           className="w-[268px] shrink-0 max-[760px]:w-full"
-          triggerClassName="w-full text-[13px]"
+          triggerClassName="w-full border-ds-border bg-ds-bg-page text-[13px] hover:border-ds-border-hover hover:bg-ds-surface-2"
           value={state.value}
           disabled={state.disabled}
           options={[

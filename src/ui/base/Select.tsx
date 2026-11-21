@@ -79,6 +79,7 @@ export function Select({
   const resolvedDefaultValue = defaultValue ?? null
   const [valueState, setValueState] = useState<string | null>(() => value !== undefined ? value : resolvedDefaultValue)
   const [disabledState, setDisabledState] = useState(() => Boolean(disabledProp))
+  const [portalMounted, setPortalMounted] = useState(false)
   const inputElementRef = useRef<HTMLInputElement | null>(null)
   const valueRef = useRef<string | null>(value !== undefined ? value : resolvedDefaultValue)
   const disabledRef = useRef(Boolean(disabledProp))
@@ -87,6 +88,10 @@ export function Select({
 
   const currentValue = value !== undefined ? value : valueState
   const disabled = disabledProp ?? disabledState
+  const optionLabelByValue = useMemo(
+    () => new Map(options.map((option) => [option.value, option.label])),
+    [options]
+  )
 
   const commitInputState = () => {
     valueRef.current = currentValue
@@ -186,6 +191,12 @@ export function Select({
       inputRef={handleInputRef}
       disabled={disabled}
       modal={modal}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) setPortalMounted(true)
+      }}
+      onOpenChangeComplete={(nextOpen) => {
+        if (!nextOpen) setPortalMounted(false)
+      }}
       onValueChange={(nextValue) => handleValueChange(nextValue)}
     >
       <div className={cx('base-select grid gap-1.5', className)}>
@@ -201,41 +212,43 @@ export function Select({
           )}
         >
           <BaseSelect.Value className={cx('base-select-value min-w-0 flex-1 truncate text-left', valueClassName)} placeholder={placeholder}>
-            {(selectedValue: string | null) => options.find((option) => option.value === selectedValue)?.label ?? placeholder}
+            {(selectedValue: string | null) => (selectedValue !== null ? optionLabelByValue.get(selectedValue) : undefined) ?? placeholder}
           </BaseSelect.Value>
         </BaseSelect.Trigger>
       </div>
-      <BaseSelect.Portal container={portalContainer}>
-        <BaseSelect.Positioner className={positionerClassName} sideOffset={6} alignItemWithTrigger={false}>
-          <BaseSelect.Popup
-            render={<SurfaceMaterial />}
-            {...popupAttributes}
-            className={unstyled ? cx('base-select-popup t-dropdown overflow-y-auto overscroll-contain', popupClassName) : cx(
-            'base-select-popup t-dropdown z-50 max-h-64 min-w-[var(--anchor-width)] overflow-y-auto overscroll-contain rounded-ds-menu border border-ds-border bg-ds-surface-2 ds-inset-menu text-ds-text-primary [filter:var(--ds-filter-popover)] outline-none',
-            popupClassName
-          )}
-          >
-            <BaseSelect.List className={cx('base-select-list', listClassName ?? (unstyled ? undefined : 'contents'))}>
-              {options.map((option) => (
-                <BaseSelect.Item
-                  key={option.value}
-                  value={option.value}
-                  disabled={option.disabled}
-                  className={itemClassNameResolver ?? cx(
-                    'base-select-option flex cursor-default items-center justify-between gap-3 rounded-ds-sm px-3 py-2 text-sm outline-none transition-colors duration-ds-fast ease-ds-standard data-[highlighted]:bg-ds-hover data-[disabled]:opacity-45 motion-reduce:transition-none',
-                    itemClassName
-                  )}
-                >
-                  <BaseSelect.ItemText>{option.label}</BaseSelect.ItemText>
-                  <BaseSelect.ItemIndicator className="base-select-indicator inline-flex shrink-0">
-                    <Icon name="Check" size={14} aria-hidden="true" />
-                  </BaseSelect.ItemIndicator>
-                </BaseSelect.Item>
-              ))}
-            </BaseSelect.List>
-          </BaseSelect.Popup>
-        </BaseSelect.Positioner>
-      </BaseSelect.Portal>
+      {portalMounted ? (
+        <BaseSelect.Portal container={portalContainer}>
+          <BaseSelect.Positioner className={positionerClassName} sideOffset={6} alignItemWithTrigger={false}>
+            <BaseSelect.Popup
+              render={<SurfaceMaterial />}
+              {...popupAttributes}
+              className={unstyled ? cx('base-select-popup t-dropdown overflow-y-auto overscroll-contain', popupClassName) : cx(
+                'base-select-popup t-dropdown z-50 max-h-64 min-w-[var(--anchor-width)] overflow-y-auto overscroll-contain rounded-ds-menu border border-ds-border bg-ds-surface-2 ds-inset-menu text-ds-text-primary [filter:var(--ds-filter-popover)] outline-none',
+                popupClassName
+              )}
+            >
+              <BaseSelect.List className={cx('base-select-list', listClassName ?? (unstyled ? undefined : 'contents'))}>
+                {options.map((option) => (
+                  <BaseSelect.Item
+                    key={option.value}
+                    value={option.value}
+                    disabled={option.disabled}
+                    className={itemClassNameResolver ?? cx(
+                      'base-select-option flex cursor-default items-center justify-between gap-3 rounded-ds-sm px-3 py-2 text-sm outline-none transition-colors duration-ds-fast ease-ds-standard data-[highlighted]:bg-ds-hover data-[disabled]:opacity-45 motion-reduce:transition-none',
+                      itemClassName
+                    )}
+                  >
+                    <BaseSelect.ItemText>{option.label}</BaseSelect.ItemText>
+                    <BaseSelect.ItemIndicator className="base-select-indicator inline-flex shrink-0">
+                      <Icon name="Check" size={14} aria-hidden="true" />
+                    </BaseSelect.ItemIndicator>
+                  </BaseSelect.Item>
+                ))}
+              </BaseSelect.List>
+            </BaseSelect.Popup>
+          </BaseSelect.Positioner>
+        </BaseSelect.Portal>
+      ) : null}
     </BaseSelect.Root>
   </>
 }

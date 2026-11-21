@@ -132,7 +132,7 @@ const classes = readFileSync('src/newtab/components/searchWidgetClasses.ts', 'ut
 const widget = readFileSync('src/newtab/components/NewtabSearchWidget.tsx', 'utf8')
 const controller = readFileSync('src/newtab/newtab-controller.ts', 'utf8')
 const css = readFileSync('src/newtab/newtab.css', 'utf8')
-for (const id of ['search-offset-y', 'icon-tile-width', 'icon-shell-size', 'icon-column-gap', 'icon-row-gap', 'icon-folder-gap', 'time-clock-size']) {
+for (const id of ['search-offset-y', 'icon-tile-width', 'icon-shell-size', 'icon-column-gap', 'icon-row-gap', 'icon-folder-gap', 'time-enabled', 'time-clock-size']) {
   assert.ok(!drawer.includes(`id="${id}"`), `${id} is no longer an independent user decision.`)
 }
 assert.ok(
@@ -140,7 +140,7 @@ assert.ok(
     drawer.includes('step={SEARCH_HEIGHT_STEP}') &&
     drawer.includes("dispatchNewtabSearchSettingFieldChange('height', value)")
 )
-assert.ok(drawer.includes('searchSettings.enabled ? <>') && drawer.includes('timeSettings.enabled ? <>'))
+assert.ok(drawer.includes('searchSettings.enabled ? <>') && !drawer.includes('settings-time-title'))
 assert.ok(drawer.includes('searchSettings.webSearchEnabled ? <>'))
 assert.ok(drawer.includes("iconPreview.layoutMode === 'fixed' ? (") && drawer.includes('iconPreview.showTitles ? ('))
 assert.ok(classes.includes('h-[var(--search-control-size)]') && !classes.includes('inline-flex h-[30px]'))

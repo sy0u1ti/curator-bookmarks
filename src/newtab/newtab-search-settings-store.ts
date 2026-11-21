@@ -55,6 +55,7 @@ interface NewtabSearchSettingsSource {
 
 export interface NewtabSearchSettingsActions {
   onFieldChange: (key: NewtabSearchSettingsFieldKey, value: number | string | string[]) => void
+  onFieldCommit?: () => void
   onResetLayout: () => void
   onToggle: (key: NewtabSearchSettingsToggleKey, enabled: boolean) => void
 }
@@ -172,6 +173,10 @@ export function dispatchNewtabSearchSettingFieldChange(
   value: number | string | string[]
 ): void {
   searchSettingsActions.onFieldChange(key, value)
+}
+
+export function dispatchNewtabSearchSettingCommit(): void {
+  searchSettingsActions.onFieldCommit?.()
 }
 
 export function dispatchNewtabSearchLayoutReset(): void {

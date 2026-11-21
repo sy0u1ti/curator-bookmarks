@@ -202,7 +202,13 @@ function ProfileCockpit({ profile, presentation, pending, onOptions, onAutoChang
             : state.state === 'authorize' ? '连接后继续'
               : state.state === 'folder' ? '需重新选择'
                 : profile.data.lastSync ? lastSync : ''
-  const runIcon: IconName = isBusy ? 'X' : 'RefreshCw'
+  const runIcon: IconName = isBusy
+    ? 'X'
+    : state.state === 'folder'
+      ? 'Folder'
+      : state.state === 'authorize'
+        ? 'ExternalLink'
+        : 'RefreshCw'
   return <li className="popup-sync-profile popup-sync-cockpit" data-sync-profile={profile.id}>
     <div className="popup-sync-cockpit-card" data-tone={orbTone}>
       <div className="popup-sync-cockpit-main">

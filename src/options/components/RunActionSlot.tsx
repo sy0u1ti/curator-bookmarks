@@ -17,8 +17,8 @@ export function RunActionSlot({ active, primary, children }: {
 
   return (
     <div className="options-run-action-slot" ref={ref}>
-      <div className={active ? 'invisible' : undefined} aria-hidden={active}>{primary}</div>
-      <div className={active ? 'options-run-secondary-actions' : 'options-run-secondary-actions invisible'} aria-hidden={!active}>
+      <div className={active ? 'invisible' : undefined} aria-hidden={active} inert={active || undefined}>{primary}</div>
+      <div className={active ? 'options-run-secondary-actions' : 'options-run-secondary-actions invisible'} aria-hidden={!active} inert={!active || undefined}>
         {children}
       </div>
     </div>

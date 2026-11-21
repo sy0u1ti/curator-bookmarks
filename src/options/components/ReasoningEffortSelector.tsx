@@ -44,11 +44,11 @@ interface TrackMetrics {
   span: number
 }
 
-type SelectorView = 'menu' | 'advanced'
-
 const FALLBACK_LEVEL: ReasoningEffortLevel = { id: 'default', label: '—' }
 const FALLBACK_LEVELS: ReasoningEffortLevel[] = [FALLBACK_LEVEL]
 const KNOB_DIAMETER_PX = 34
+const TRACK_HEIGHT_PX = 28
+const TRACK_CAP_INSET_PX = (KNOB_DIAMETER_PX - TRACK_HEIGHT_PX) / 2
 
 const PANEL_CLASS = cx(
   'reasoning-effort-popover !block !w-[var(--anchor-width)] !min-w-0 !max-w-[calc(100vw-24px)] !overflow-hidden !rounded-ds-lg !border-ds-border !bg-ds-surface-2 !p-0',
@@ -58,21 +58,17 @@ const PANEL_CLASS = cx(
 
 const TRIGGER_CLASS = cx(
   'reasoning-effort-trigger group relative inline-flex min-h-[42px] w-full min-w-0 touch-manipulation select-none items-center rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3.5 text-sm text-ds-text-primary outline-none',
-  'transition-[background-color,border-color,transform] duration-ds-fast ease-ds-standard',
+  'transition-[background-color,border-color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:not-disabled:border-ds-border-hover hover:not-disabled:bg-ds-surface-3 active:not-disabled:scale-[var(--ds-press-scale)]',
   'focus-visible:border-ds-focus focus-visible:bg-ds-surface-3 focus-visible:shadow-ds-focus',
   'disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-colors motion-reduce:duration-[80ms] motion-reduce:active:not-disabled:scale-100'
 )
 
-const VIEW_TRACK_CLASS = 'reasoning-selector-view-track grid min-w-0'
-
-const MENU_ROW_CLASS =
-  'reasoning-selector-menu-row grid min-h-9 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-ds-sm px-3 text-sm'
-
 const HEADER_LAYER_CLASS = cx(
   'absolute inset-0 flex items-center opacity-0 translate-y-[3px] pointer-events-none',
   'transition-[opacity,transform] duration-[var(--text-swap-dur)] ease-[var(--text-swap-ease)]',
-  'data-[active=true]:translate-y-0 data-[active=true]:opacity-100 data-[active=true]:pointer-events-auto'
+  'data-[active=true]:translate-y-0 data-[active=true]:opacity-100',
+  'motion-reduce:translate-y-0 motion-reduce:transition-opacity motion-reduce:duration-[80ms]'
 )
 
 const SLIDER_CLASS = cx(
@@ -104,15 +100,17 @@ export function ReasoningEffortSelector({
   const maxIndex = Math.max(0, resolvedLevels.length - 1)
   const valueIndex = Math.max(0, resolvedLevels.findIndex((level) => level.id === value))
   const [open, setOpen] = useState(false)
-  const [view, setView] = useState<SelectorView>('menu')
   const [previewIndex, setPreviewIndex] = useState(valueIndex)
   const [dragging, setDragging] = useState(false)
-  const [hoveringSlider, setHoveringSlider] = useState(false)
+  const [trackElement, setTrackElement] = useState<HTMLDivElement | null>(null)
 
-  const advancedButtonRef = useRef<HTMLButtonElement | null>(null)
   const tierLabelRef = useRef<HTMLSpanElement | null>(null)
   const sliderRef = useRef<HTMLDivElement | null>(null)
   const trackRef = useRef<HTMLDivElement | null>(null)
+  const handleTrackRef = useCallback((node: HTMLDivElement | null) => {
+    trackRef.current = node
+    setTrackElement(node)
+  }, [])
   const fillRef = useRef<HTMLDivElement | null>(null)
   const knobRef = useRef<HTMLDivElement | null>(null)
   const previewIndexRef = useRef(valueIndex)
@@ -121,6 +119,8 @@ export function ReasoningEffortSelector({
   const activePointerRef = useRef<number | null>(null)
   const trackMetricsRef = useRef<TrackMetrics | null>(null)
   const dragWeightRef = useRef<SliderWeightState | null>(null)
+  const dragSampleRef = useRef<{ progress: number; time: number; velocity: number } | null>(null)
+  const releaseVelocityRef = useRef(0)
   const grabOffsetRef = useRef(0)
   const springFrameRef = useRef(0)
   const previousAnimatedIndexRef = useRef(valueIndex)
@@ -142,8 +142,11 @@ export function ReasoningEffortSelector({
     if (!track) {
       return null
     }
-    const rect = track.getBoundingClientRect()
     const width = track.clientWidth
+    if (width <= 0) {
+      return null
+    }
+    const rect = track.getBoundingClientRect()
     return {
       rect,
       width,
@@ -164,16 +167,17 @@ export function ReasoningEffortSelector({
     const progress = Math.min(1, Math.max(0, nextProgress))
     positionRef.current = progress
     const metrics = trackMetricsRef.current ?? readTrackMetrics()
-    if (metrics) {
+    if (metrics && metrics.width > 0) {
       trackMetricsRef.current = metrics
       const knobOffset = progress * metrics.span
-      const fillWidth = KNOB_DIAMETER_PX + progress * metrics.span
       if (knobRef.current) {
-        knobRef.current.style.transform = `translate3d(${knobOffset}px, 0, 0)`
+        knobRef.current.style.translate = `${knobOffset}px -50%`
       }
       if (fillRef.current) {
-        const clippedRight = Math.max(0, metrics.width - fillWidth)
-        fillRef.current.style.clipPath = `inset(0 ${clippedRight}px 0 0 round 9999px)`
+        const fillRight = Math.min(metrics.width, knobOffset + KNOB_DIAMETER_PX - TRACK_CAP_INSET_PX)
+        const clippedLeft = Math.min(fillRight, Math.max(0, TRACK_CAP_INSET_PX - knobOffset))
+        const clippedRight = Math.max(0, metrics.width - fillRight)
+        fillRef.current.style.clipPath = `inset(0 ${clippedRight}px 0 ${clippedLeft}px round 9999px)`
       }
     }
     sliderRef.current?.style.setProperty('--reasoning-progress', String(progress))
@@ -197,6 +201,8 @@ export function ReasoningEffortSelector({
   const startSpring = useCallback((targetIndex: number) => {
     cancelSpring()
     const targetProgress = maxIndex > 0 ? targetIndex / maxIndex : 0
+    const rawVelocity = releaseVelocityRef.current
+    releaseVelocityRef.current = 0
     const settle = () => {
       updateVisualProgress(targetProgress)
       springFrameRef.current = 0
@@ -206,11 +212,20 @@ export function ReasoningEffortSelector({
       return
     }
 
+    const responseSeconds = getMotionDurationMs('--slider-grip-settle', 150) / 1000
+    const displacement = targetProgress - positionRef.current
+    const maxMonotonicVelocity = Math.min(
+      12,
+      0.75 * (2 * Math.PI / Math.max(0.05, responseSeconds)) * Math.abs(displacement)
+    )
+    const initialVelocity = rawVelocity * displacement > 0
+      ? Math.sign(displacement) * Math.min(Math.abs(rawVelocity), maxMonotonicVelocity)
+      : 0
     const axis = {
       position: positionRef.current,
-      velocity: 0
+      velocity: initialVelocity
     }
-    const spring = { response: getMotionDurationMs('--slider-grip-settle', 150) / 1000, damping: 1 }
+    const spring = { response: responseSeconds, damping: 1 }
     let previousTime = performance.now()
     const step = (time: number) => {
       if (shouldSkipMotion() || document.hidden) { settle(); return }
@@ -229,7 +244,7 @@ export function ReasoningEffortSelector({
 
   const progressFromPointer = useCallback((clientX: number) => {
     const metrics = trackMetricsRef.current ?? readTrackMetrics()
-    if (!metrics || metrics.width <= KNOB_DIAMETER_PX) {
+    if (!metrics || metrics.width <= KNOB_DIAMETER_PX || metrics.rect.width <= 0) {
       return positionRef.current
     }
     trackMetricsRef.current = metrics
@@ -256,6 +271,8 @@ export function ReasoningEffortSelector({
     event.currentTarget.focus({ preventScroll: true })
     const progress = progressFromPointer(event.clientX)
     dragWeightRef.current = createSliderWeight(progress)
+    dragSampleRef.current = { progress, time: performance.now(), velocity: 0 }
+    releaseVelocityRef.current = 0
     updateVisualProgress(progress)
   }, [cancelSpring, disabled, progressFromPointer, readTrackMetrics, updateVisualProgress])
 
@@ -271,6 +288,19 @@ export function ReasoningEffortSelector({
       detents: maxIndex > 0 ? resolvedLevels.map((_, index) => index / maxIndex) : []
     })
     dragWeightRef.current = weighted
+    const now = performance.now()
+    const sample = dragSampleRef.current
+    if (sample) {
+      const elapsedSeconds = (now - sample.time) / 1000
+      if (elapsedSeconds > 0.004) {
+        const instantVelocity = (weighted.value - sample.progress) / elapsedSeconds
+        const smoothedVelocity = sample.velocity * 0.35 + instantVelocity * 0.65
+        const clampedVelocity = Math.max(-12, Math.min(12, smoothedVelocity))
+        dragSampleRef.current = { progress: weighted.value, time: now, velocity: clampedVelocity }
+      }
+    } else {
+      dragSampleRef.current = { progress: weighted.value, time: now, velocity: 0 }
+    }
     updateVisualProgress(weighted.value)
   }, [maxIndex, progressFromPointer, resolvedLevels, updateVisualProgress])
 
@@ -285,6 +315,11 @@ export function ReasoningEffortSelector({
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
     dragWeightRef.current = null
+    const sample = dragSampleRef.current
+    dragSampleRef.current = null
+    releaseVelocityRef.current = sample && performance.now() - sample.time < 80
+      ? sample.velocity
+      : 0
     const targetIndex = maxIndex > 0 ? Math.round(positionRef.current * maxIndex) : 0
     // 语义状态在指针释放时立即提交；弹簧只负责随后跟手的视觉收尾。
     // 这样用户马上点击“保存/测试连接”时，请求不会仍读取上一个强度。
@@ -298,6 +333,8 @@ export function ReasoningEffortSelector({
     activePointerRef.current = null
     draggingRef.current = false
     dragWeightRef.current = null
+    dragSampleRef.current = null
+    releaseVelocityRef.current = 0
     setDragging(false)
     cancelSpring()
     if (pointerId !== null && sliderRef.current?.hasPointerCapture(pointerId)) {
@@ -334,8 +371,8 @@ export function ReasoningEffortSelector({
 
   useLayoutEffect(() => {
     trackMetricsRef.current = readTrackMetrics()
-    updateVisualProgress(positionRef.current)
-  }, [open, readTrackMetrics, updateVisualProgress, view])
+    updateVisualProgress(positionRef.current, false)
+  }, [open, trackElement, readTrackMetrics, updateVisualProgress])
 
   useEffect(() => {
     if (draggingRef.current || springFrameRef.current) {
@@ -376,27 +413,24 @@ export function ReasoningEffortSelector({
       return undefined
     }
     const focusFrame = window.requestAnimationFrame(() => {
-      if (view === 'advanced') {
-        sliderRef.current?.focus({ preventScroll: true })
-      } else {
-        advancedButtonRef.current?.focus({ preventScroll: true })
-      }
+      trackMetricsRef.current = readTrackMetrics()
+      updateVisualProgress(positionRef.current, false)
+      sliderRef.current?.focus({ preventScroll: true })
     })
     return () => window.cancelAnimationFrame(focusFrame)
-  }, [open, view])
+  }, [open, readTrackMetrics, updateVisualProgress])
 
   useEffect(() => {
-    const track = trackRef.current
-    if (!track || typeof ResizeObserver === 'undefined') {
+    if (!trackElement || typeof ResizeObserver === 'undefined') {
       return undefined
     }
     const observer = new ResizeObserver(() => {
       trackMetricsRef.current = readTrackMetrics()
       updateVisualProgress(positionRef.current, false)
     })
-    observer.observe(track)
+    observer.observe(trackElement)
     return () => observer.disconnect()
-  }, [readTrackMetrics, updateVisualProgress])
+  }, [trackElement, readTrackMetrics, updateVisualProgress])
 
   useEffect(() => () => {
     cancelSpring()
@@ -413,17 +447,11 @@ export function ReasoningEffortSelector({
     if (disabled && nextOpen) {
       return
     }
-    if (nextOpen) {
-      setView('menu')
-      setHoveringSlider(false)
-    } else {
+    if (!nextOpen) {
       cancelDrag()
     }
     setOpen(nextOpen)
   }
-
-  const showHoverLabels = !isHighestLevel && (hoveringSlider || dragging)
-  const showDefaultHeader = !isHighestLevel && !showHoverLabels
 
   const trigger = (
     <Button
@@ -436,7 +464,7 @@ export function ReasoningEffortSelector({
       <ZapIcon
         className={cx(
           'mr-2 size-3.5 flex-none fill-current',
-          isHighestLevel ? 'text-[#c472fb]' : 'text-ds-text-primary'
+          isHighestLevel ? 'text-ds-warning' : 'text-ds-text-primary'
         )}
         aria-hidden="true"
       />
@@ -445,7 +473,7 @@ export function ReasoningEffortSelector({
         <span
           className={cx(
             'col-start-1 row-start-1 truncate text-left',
-            isHighestLevel ? 'text-[#c472fb]' : ''
+            isHighestLevel ? 'text-ds-warning-text' : ''
           )}
           ref={tierLabelRef}
         >
@@ -472,162 +500,81 @@ export function ReasoningEffortSelector({
       trigger={trigger}
       triggerNativeButton
     >
-      <div className="min-w-0" data-selector-view={view}>
-        <div
-          className={VIEW_TRACK_CLASS}
-          data-active={view === 'menu'}
-          style={{
-            gridTemplateRows: view === 'menu' ? '1fr' : '0fr',
-            opacity: view === 'menu' ? 1 : 0,
-            pointerEvents: view === 'menu' ? 'auto' : 'none',
-            transform: `translate3d(${view === 'menu' ? 0 : -10}px, 0, 0)`
-          }}
-          aria-hidden={view !== 'menu'}
-          inert={view !== 'menu'}
-        >
-          <div className="min-h-0 overflow-hidden">
+      <div className="px-4 pb-3.5 pt-3">
+        <div className="mb-2.5 flex h-5 items-center justify-between gap-2">
+          <span className="whitespace-nowrap text-xs text-ds-text-secondary">更快</span>
+          <div className="relative flex h-5 min-w-0 flex-1 items-center justify-end">
             <div
-              className="reasoning-selector-menu p-[8px_8px_6px]"
+              className={cx(HEADER_LAYER_CLASS, 'justify-end')}
+              data-active={!isHighestLevel}
+              aria-hidden={isHighestLevel}
             >
-              <div className={MENU_ROW_CLASS}>
-                <span className="font-semibold text-ds-text-primary">模型</span>
-                <span className="min-w-0 truncate text-right text-ds-text-secondary">{modelName}</span>
-              </div>
-              <div className={MENU_ROW_CLASS}>
-                <span className="font-semibold text-ds-text-primary">推理强度</span>
-                <span className={cx('text-right text-ds-text-secondary', isHighestLevel ? 'text-[#c472fb]' : '')}>
-                  {currentLevel?.label ?? '—'}
-                </span>
-              </div>
-              <div className={MENU_ROW_CLASS}>
-                <span className="font-semibold text-ds-text-primary">响应速度</span>
-                <span className="text-right text-ds-text-secondary">{speedLabel}</span>
-              </div>
-              <hr className="mx-1 my-[5px] h-px border-0 bg-ds-border-subtle" />
-              <div className="reasoning-selector-menu-action-wrap">
-                <Button
-                  unstyled
-                  ref={advancedButtonRef}
-                  type="button"
-                  className="inline-flex min-h-8 items-center gap-1 rounded-ds-sm px-3 text-sm text-ds-text-secondary outline-none transition-colors duration-ds-fast hover:bg-ds-hover hover:text-ds-text-primary focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-ds-focus motion-reduce:transition-none"
-                  onClick={() => setView('advanced')}
-                >
-                  高级设置
-                </Button>
-              </div>
+              <span className="whitespace-nowrap text-xs text-ds-text-secondary">更深入</span>
+            </div>
+            <div
+              className={cx(HEADER_LAYER_CLASS, 'justify-end')}
+              data-active={isHighestLevel}
+              aria-hidden={!isHighestLevel}
+            >
+              <span className="whitespace-nowrap text-xs font-semibold text-ds-warning-text">消耗更多用量</span>
             </div>
           </div>
         </div>
 
         <div
-          className={VIEW_TRACK_CLASS}
-          data-active={view === 'advanced'}
-          style={{
-            gridTemplateRows: view === 'advanced' ? '1fr' : '0fr',
-            opacity: view === 'advanced' ? 1 : 0,
-            pointerEvents: view === 'advanced' ? 'auto' : 'none',
-            transform: `translate3d(${view === 'advanced' ? 0 : 10}px, 0, 0)`
-          }}
-          aria-hidden={view !== 'advanced'}
-          inert={view !== 'advanced'}
+          className={SLIDER_CLASS}
+          ref={sliderRef}
+          role="slider"
+          tabIndex={disabled ? -1 : 0}
+          aria-label={ariaLabel}
+          aria-describedby={sliderDescriptionId}
+          aria-valuemin={0}
+          aria-valuemax={maxIndex}
+          aria-valuenow={safePreviewIndex}
+          aria-valuetext={currentLevel?.hint
+            ? `${currentLevel.label} — ${currentLevel.hint}`
+            : currentLevel?.label ?? '—'}
+          aria-orientation="horizontal"
+          data-dragging={dragging}
+          data-highest={isHighestLevel}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerRelease}
+          onPointerCancel={cancelDrag}
+          onLostPointerCapture={() => { if (draggingRef.current) cancelDrag() }}
+          onKeyDown={handleSliderKeyDown}
         >
-          <div className="min-h-0 overflow-hidden">
-            <div className="px-4 pb-[15px] pt-[13px]">
-              <div className="relative mb-[13px] h-8">
-                <div
-                  className={cx(HEADER_LAYER_CLASS, 'justify-between')}
-                  data-active={showDefaultHeader}
-                  aria-hidden={!showDefaultHeader}
-                  inert={!showDefaultHeader}
-                >
-                  <Button
-                    unstyled
-                    type="button"
-                    className="-ml-2 inline-flex min-h-8 items-center gap-1 rounded-ds-sm px-2 text-sm text-ds-text-secondary outline-none transition-colors duration-ds-fast hover:bg-ds-hover hover:text-ds-text-primary focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-ds-focus motion-reduce:transition-none"
-                    onClick={() => setView('menu')}
-                  >
-                    高级设置
-                  </Button>
-                  <ZapIcon className="size-4 fill-current text-[#47a8ff]" aria-hidden="true" />
-                </div>
-                <div
-                  className={cx(HEADER_LAYER_CLASS, 'justify-between')}
-                  data-active={showHoverLabels}
-                  aria-hidden={!showHoverLabels}
-                  inert={!showHoverLabels}
-                >
-                  <span className="text-sm text-ds-text-secondary">更快</span>
-                  <span className="text-sm text-ds-text-secondary">更深入</span>
-                </div>
-                <div
-                  className={cx(HEADER_LAYER_CLASS, 'justify-center')}
-                  data-active={isHighestLevel}
-                  aria-hidden={!isHighestLevel}
-                  inert={!isHighestLevel}
-                >
-                  <span className="text-sm font-semibold text-[#c472fb]">消耗更多用量</span>
-                </div>
-              </div>
-
-              <div
-                className={SLIDER_CLASS}
-                ref={sliderRef}
-                role="slider"
-                tabIndex={disabled ? -1 : 0}
-                aria-label={ariaLabel}
-                aria-describedby={sliderDescriptionId}
-                aria-valuemin={0}
-                aria-valuemax={maxIndex}
-                aria-valuenow={safePreviewIndex}
-                aria-valuetext={currentLevel?.hint
-                  ? `${currentLevel.label} — ${currentLevel.hint}`
-                  : currentLevel?.label ?? '—'}
-                aria-orientation="horizontal"
-                data-dragging={dragging}
-                data-highest={isHighestLevel}
-                onPointerEnter={() => setHoveringSlider(true)}
-                onPointerLeave={() => setHoveringSlider(false)}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerRelease}
-                onPointerCancel={cancelDrag}
-                onLostPointerCapture={() => { if (draggingRef.current) cancelDrag() }}
-                onKeyDown={handleSliderKeyDown}
-              >
-                <span className="sr-only" id={sliderDescriptionId}>
-                  向左获得更快响应，向右获得更深入推理。
-                </span>
-                <div
-                  className="reasoning-effort-track absolute inset-x-0 top-1/2 h-7 -translate-y-1/2 overflow-hidden rounded-full bg-ds-surface-3 shadow-[inset_0_1px_1px_rgba(6,9,14,0.22)]"
-                  ref={trackRef}
-                  aria-hidden="true"
-                >
-                  <div className="absolute inset-0 z-0">
-                    {resolvedLevels.map((level, index) => (
-                      <span
-                        key={level.id}
-                        className="absolute top-1/2 size-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-ds-text-muted"
-                        style={{
-                          left: getTickPosition(index, maxIndex)
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <div
-                    ref={fillRef}
-                    className="absolute inset-0 z-10 overflow-hidden rounded-full bg-[#006efe] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-[linear-gradient(90deg,#006efe_0%,#9440d5_68%,#c472fb_100%)] after:opacity-0 after:transition-opacity after:duration-[var(--ds-motion-state)] after:ease-ds-standard data-[highest=true]:after:opacity-100 motion-reduce:after:transition-none"
-                    data-highest={isHighestLevel}
-                  />
-                </div>
-                <div
-                  className={KNOB_CLASS}
-                  ref={knobRef}
-                  data-dragging={dragging}
-                  aria-hidden="true"
+          <span className="sr-only" id={sliderDescriptionId}>
+            向左获得更快响应，向右获得更深入推理。
+          </span>
+          <div
+            className="reasoning-effort-track absolute inset-x-0 top-1/2 h-7 -translate-y-1/2 overflow-hidden rounded-full bg-ds-surface-3 shadow-[inset_0_1px_1px_rgba(6,9,14,0.22)]"
+            ref={handleTrackRef}
+            aria-hidden="true"
+          >
+            <div className="absolute inset-0 z-0">
+              {resolvedLevels.map((level, index) => (
+                <span
+                  key={level.id}
+                  className="absolute top-1/2 size-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-ds-text-muted"
+                  style={{
+                    left: getTickPosition(index, maxIndex)
+                  }}
                 />
-              </div>
+              ))}
             </div>
+            <div
+              ref={fillRef}
+              className="reasoning-effort-fill absolute inset-0 z-10 overflow-hidden rounded-full bg-ds-accent after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-ds-warning after:opacity-0 after:transition-opacity after:duration-[var(--ds-motion-state)] after:ease-ds-standard data-[highest=true]:after:opacity-100 motion-reduce:after:transition-opacity motion-reduce:after:duration-[80ms]"
+              data-highest={isHighestLevel}
+            />
           </div>
+          <div
+            className={KNOB_CLASS}
+            ref={knobRef}
+            data-dragging={dragging}
+            aria-hidden="true"
+          />
         </div>
       </div>
     </Popover>

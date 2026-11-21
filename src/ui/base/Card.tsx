@@ -8,7 +8,7 @@ export function Card({ className, ...props }: CardProps) {
   return (
     <article
       className={cx(
-        'curator-card border-0 bg-ds-surface-1 text-ds-text-primary transition-[background-color,border-color,box-shadow] duration-ds-fast ease-ds-standard motion-reduce:transition-none',
+        'curator-card border-0 bg-ds-surface-1 text-ds-text-primary transition-[background-color,border-color] duration-ds-fast ease-ds-standard motion-reduce:transition-none',
         className
       )}
       {...props}

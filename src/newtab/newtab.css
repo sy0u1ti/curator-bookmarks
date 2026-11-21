@@ -126,6 +126,11 @@ body {
   /* The drawer is portaled to <body>, outside .newtab-app, so the focus token
      has to be redeclared here for drawer-scoped focus rings. */
   --newtab-focus-outline: 2px solid rgba(245, 245, 247, 0.42);
+  --slider-thumb-bg: #ededed;
+  --slider-indicator-bg: rgba(245, 245, 247, 0.72);
+  --slider-detent-color: rgba(245, 245, 247, 0.88);
+  --slider-grip-border: rgba(255, 255, 255, 0.28);
+  --slider-grip-shadow: 0 1px 3px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(0, 0, 0, 0.14);
 }
 
 #newtab-settings-drawer .settings-drawer-panel {
@@ -178,9 +183,14 @@ body {
   transform: translateX(0);
 }
 
-#newtab-settings-drawer .settings-drawer-panel:hover .settings-drawer-scrollbar[data-visible="true"],
 #newtab-settings-drawer .settings-drawer-scrollbar[data-dragging="true"] {
   opacity: 0.92;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  #newtab-settings-drawer .settings-drawer-panel:hover .settings-drawer-scrollbar[data-visible="true"] {
+    opacity: 0.92;
+  }
 }
 
 #newtab-settings-drawer .settings-drawer-scrollbar-track {
@@ -230,10 +240,15 @@ body {
   will-change: transform;
 }
 
-#newtab-settings-drawer .settings-drawer-scrollbar-track:hover .settings-drawer-scrollbar-thumb,
-#newtab-settings-drawer .settings-drawer-scrollbar-thumb:hover,
 #newtab-settings-drawer .settings-drawer-scrollbar[data-dragging="true"] .settings-drawer-scrollbar-thumb {
   background: rgba(245, 245, 247, 0.64);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  #newtab-settings-drawer .settings-drawer-scrollbar-track:hover .settings-drawer-scrollbar-thumb,
+  #newtab-settings-drawer .settings-drawer-scrollbar-thumb:hover {
+    background: rgba(245, 245, 247, 0.64);
+  }
 }
 
 #newtab-settings-drawer .settings-drawer-scrollbar[data-dragging="true"] .settings-drawer-scrollbar-thumb {
@@ -283,21 +298,23 @@ body {
   position: relative;
   z-index: 1;
   color: var(--tabs-text-muted);
-  transition:
-    color var(--ds-motion-fast) var(--ds-ease-standard),
-    transform var(--ds-motion-control) var(--ds-ease-standard),
-    scale var(--ds-motion-control) var(--ds-ease-standard);
+  transition: color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
-.newtab-app .t-tab:not([data-active]):hover,
 .newtab-app .t-tab[data-active],
 .newtab-app .t-tab[data-selected],
 .newtab-app .t-tab[data-state="active"],
-#newtab-settings-drawer .t-tab:not([data-active]):hover,
 #newtab-settings-drawer .t-tab[data-active],
 #newtab-settings-drawer .t-tab[data-selected],
 #newtab-settings-drawer .t-tab[data-state="active"] {
   color: var(--tabs-text-active);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .newtab-app .t-tab:not([data-active]):hover,
+  #newtab-settings-drawer .t-tab:not([data-active]):hover {
+    color: var(--tabs-text-active);
+  }
 }
 
 .newtab-app .t-tabs-pill,
@@ -436,6 +453,7 @@ body {
 @media (prefers-contrast: more) {
   :where(
     .newtab-button,
+    .newtab-scroll-to-top,
     .bookmark-menu-surface,
     .newtab-search-engine-menu,
     .newtab-delete-toast-panel,
@@ -447,6 +465,7 @@ body {
 
   :where(
     .settings-trigger,
+    .newtab-scroll-to-top,
     .newtab-button,
     .bookmark-menu-surface button,
     .newtab-search-engine-menu button,
@@ -478,9 +497,9 @@ body {
 
 .bookmark-menu-surface,
 .newtab-search-surface,
-.newtab-clock,
 .newtab-onboarding-strip,
 .settings-trigger,
+.newtab-scroll-to-top,
 .newtab-delete-toast-panel,
 .newtab-speed-dial,
 .newtab-portal,
@@ -511,8 +530,7 @@ body {
     opacity var(--ds-motion-enter-opacity) var(--ds-ease-standard),
     transform var(--dropdown-open-dur) var(--dropdown-open-ease),
     border-color var(--ds-motion-fast) var(--dropdown-ease),
-    background-color var(--ds-motion-fast) var(--dropdown-ease),
-    box-shadow var(--ds-motion-fast) var(--dropdown-ease);
+    background-color var(--ds-motion-fast) var(--dropdown-ease);
   -webkit-backdrop-filter: var(--newtab-glass-filter);
   backdrop-filter: var(--newtab-glass-filter);
 }
@@ -621,15 +639,19 @@ body {
 }
 
 .bookmark-menu-surface .bookmark-menu-row > span {
-  padding-left: 0;
   font-size: 12px;
   font-weight: 650;
   letter-spacing: 0;
 }
 
-.bookmark-menu-surface .bookmark-menu-row:hover,
 .bookmark-menu-surface .bookmark-menu-row:focus-within {
   color: rgba(245, 245, 247, 0.76);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bookmark-menu-surface .bookmark-menu-row:hover {
+    color: rgba(245, 245, 247, 0.76);
+  }
 }
 
 .bookmark-menu-surface .base-input,
@@ -640,16 +662,16 @@ body {
   box-shadow: none;
   filter: none;
   transition:
-    border-color var(--ds-motion-standard) var(--ds-ease-standard),
-    background-color var(--ds-motion-standard) var(--ds-ease-standard),
-    transform var(--ds-motion-control) var(--ds-ease-standard),
-    scale var(--ds-motion-control) var(--ds-ease-standard);
+    border-color var(--ds-motion-fast) var(--ds-ease-standard),
+    background-color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
-.bookmark-menu-surface .base-input:hover,
-.bookmark-menu-surface .base-select-trigger:hover {
-  border-color: rgba(245, 245, 247, 0.22);
-  background: var(--bookmark-control-bg-hover);
+@media (hover: hover) and (pointer: fine) {
+  .bookmark-menu-surface .base-input:hover,
+  .bookmark-menu-surface .base-select-trigger:hover {
+    border-color: rgba(245, 245, 247, 0.22);
+    background: var(--bookmark-control-bg-hover);
+  }
 }
 
 .bookmark-menu-surface .base-input:focus,
@@ -673,10 +695,16 @@ body {
   box-shadow: none;
 }
 
-.bookmark-add-menu-trigger:hover,
 .bookmark-add-menu-trigger:focus-visible {
   background: rgba(245, 245, 247, 0.065);
   box-shadow: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bookmark-add-menu-trigger:hover {
+    background: rgba(245, 245, 247, 0.065);
+    box-shadow: none;
+  }
 }
 
 .bookmark-add-menu-trigger-icon {
@@ -855,27 +883,6 @@ body {
   visibility: hidden;
 }
 
-@keyframes newtab-bookmark-add-error-enter {
-  0% {
-    opacity: 0;
-    transform: translateX(0);
-  }
-
-  34% {
-    opacity: 1;
-    transform: translateX(4px);
-  }
-
-  68% {
-    transform: translateX(-3px);
-  }
-
-  100% {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .bookmark-menu-surface,
   .bookmark-menu-surface.is-closing,
@@ -917,17 +924,9 @@ body {
   outline: none;
 }
 
-.newtab-clock {
-  border-color: var(--newtab-glass-border);
-  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-hero));
-  box-shadow: var(--newtab-glass-inset);
-  filter: var(--newtab-glass-drop);
-  -webkit-backdrop-filter: var(--newtab-glass-filter-hero);
-  backdrop-filter: var(--newtab-glass-filter-hero);
-}
-
 .newtab-onboarding-strip,
 .settings-trigger,
+.newtab-scroll-to-top,
 .newtab-delete-toast-panel {
   border-color: var(--newtab-glass-border);
   background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg));
@@ -937,7 +936,6 @@ body {
   backdrop-filter: var(--newtab-glass-filter);
 }
 
-.settings-trigger:hover,
 .settings-trigger[aria-expanded="true"] {
   border-color: var(--newtab-glass-border-hover);
   background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-hover));
@@ -945,11 +943,24 @@ body {
   filter: var(--newtab-glass-drop-hover);
 }
 
-.settings-trigger:focus-visible {
+@media (hover: hover) and (pointer: fine) {
+  .settings-trigger:hover,
+  .newtab-scroll-to-top[data-visible="true"]:hover {
+    border-color: var(--newtab-glass-border-hover);
+    background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-hover));
+    box-shadow: var(--newtab-glass-inset-hover);
+    filter: var(--newtab-glass-drop-hover);
+    color: var(--ui-text-primary);
+  }
+}
+
+.settings-trigger:focus-visible,
+.newtab-scroll-to-top:focus-visible {
   border-color: var(--newtab-glass-border-hover);
   background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-hover));
   box-shadow: var(--newtab-glass-inset-hover);
   filter: var(--newtab-glass-drop-hover);
+  color: var(--ui-text-primary);
   outline: var(--newtab-focus-outline);
   outline-offset: 2px;
 }
@@ -1093,12 +1104,14 @@ body {
   }
 }
 
-.newtab-speed-dial-card:hover,
-.newtab-quick-link:hover {
-  border-color: var(--newtab-glass-border-hover);
-  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-hover));
-  box-shadow: var(--newtab-glass-inset-hover);
-  filter: none;
+@media (hover: hover) and (pointer: fine) {
+  .newtab-speed-dial-card:hover,
+  .newtab-quick-link:hover {
+    border-color: var(--newtab-glass-border-hover);
+    background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-hover));
+    box-shadow: var(--newtab-glass-inset-hover);
+    filter: none;
+  }
 }
 
 /* Lift with `top` like bookmark tiles; a transform lift re-snaps glyphs and
@@ -1204,12 +1217,18 @@ body {
   backdrop-filter: var(--newtab-glass-backdrop-filter);
 }
 
-.source-navigation-link:hover,
 .source-navigation-link:focus-visible,
 .folder-section-header:focus-visible,
 .folder-section-add:focus-visible {
   border-color: var(--newtab-glass-border-hover);
   background: rgba(245, 245, 247, 0.1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .source-navigation-link:hover {
+    border-color: var(--newtab-glass-border-hover);
+    background: rgba(245, 245, 247, 0.1);
+  }
 }
 
 .source-navigation-link:focus-visible,
@@ -1266,9 +1285,11 @@ body {
   color: var(--ds-accent-contrast);
 }
 
-#newtab-settings-drawer .search-engine-toggle:has([data-checked]):hover {
-  border-color: var(--ds-accent-hover);
-  background-color: var(--ds-accent-hover);
+@media (hover: hover) and (pointer: fine) {
+  #newtab-settings-drawer .search-engine-toggle:has([data-checked]):hover {
+    border-color: var(--ds-accent-hover);
+    background-color: var(--ds-accent-hover);
+  }
 }
 
 #newtab-settings-drawer .search-engine-toggle:has([data-disabled]) {
@@ -1338,18 +1359,27 @@ body {
   cursor: grabbing;
 }
 
-.folder-section-header:hover,
 .folder-section-header:focus-visible {
   background: rgba(245, 245, 247, 0.095);
 }
 
 .folder-section-add {
-  opacity: 0.48;
+  opacity: 0.72;
+  transition: opacity var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
-.folder-section-add:hover,
 .folder-section-add:focus-visible {
-  opacity: 0.96;
+  opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .folder-section-header:hover {
+    background: rgba(245, 245, 247, 0.095);
+  }
+
+  .folder-section-add:hover {
+    opacity: 1;
+  }
 }
 
 .newtab-search-engine-menu {
@@ -1499,8 +1529,6 @@ body {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: var(--search-control-inset, var(--ds-inset-panel));
-  scrollbar-color: rgba(245, 245, 247, 0.22) transparent;
-  scrollbar-width: thin;
 }
 @container newtab-search (max-width: 400px) {
   .newtab-search {
@@ -1786,12 +1814,18 @@ body {
     color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
-.featured-wallpaper-action:hover,
 .featured-wallpaper-action:focus-visible,
-.featured-wallpaper-close:hover,
 .featured-wallpaper-close:focus-visible {
   background: var(--ds-active);
   color: var(--ds-text-primary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .featured-wallpaper-action:hover,
+  .featured-wallpaper-close:hover {
+    background: var(--ds-active);
+    color: var(--ds-text-primary);
+  }
 }
 
 .featured-wallpaper-close {
@@ -1804,8 +1838,52 @@ body {
   min-height: 0;
   overflow-y: auto;
   padding: calc(var(--ds-inset-card) - var(--newtab-glass-stroke-width));
-  scrollbar-color: rgba(245, 245, 247, 0.22) transparent;
-  scrollbar-width: thin;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .newtab-shell,
+  .newtab-search-panel-content,
+  .featured-wallpaper-grid {
+    scrollbar-color: rgba(245, 245, 247, 0.22) transparent;
+    scrollbar-width: thin;
+  }
+}
+
+.newtab-search-panel-content::-webkit-scrollbar,
+.featured-wallpaper-grid::-webkit-scrollbar,
+.newtab-shell::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.newtab-search-panel-content::-webkit-scrollbar-button,
+.featured-wallpaper-grid::-webkit-scrollbar-button,
+.newtab-shell::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.newtab-search-panel-content::-webkit-scrollbar-track,
+.featured-wallpaper-grid::-webkit-scrollbar-track,
+.newtab-shell::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.newtab-search-panel-content::-webkit-scrollbar-thumb,
+.featured-wallpaper-grid::-webkit-scrollbar-thumb,
+.newtab-shell::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--ds-radius-full);
+  background: rgba(245, 245, 247, 0.22);
+  background-clip: padding-box;
+}
+
+.newtab-search-panel-content::-webkit-scrollbar-thumb:hover,
+.featured-wallpaper-grid::-webkit-scrollbar-thumb:hover,
+.newtab-shell::-webkit-scrollbar-thumb:hover {
+  background: rgba(245, 245, 247, 0.36);
+  background-clip: padding-box;
 }
 
 .featured-wallpaper-state,
@@ -1876,11 +1954,9 @@ body {
     top var(--ds-motion-control) var(--ds-ease-standard),
     scale var(--ds-motion-control) var(--ds-ease-standard),
     border-color var(--ds-motion-fast) var(--ds-ease-standard),
-    background-color var(--ds-motion-fast) var(--ds-ease-standard),
-    box-shadow var(--ds-motion-fast) var(--ds-ease-standard);
+    background-color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
-.featured-wallpaper-card:hover,
 .featured-wallpaper-card:focus-visible,
 .featured-wallpaper-card[aria-pressed="true"] {
   background: var(--ds-hover);
@@ -1893,12 +1969,20 @@ body {
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .featured-wallpaper-card:hover {
+    background: var(--ds-hover);
+  }
+
   .featured-wallpaper-card.curator-control:hover {
     top: var(--ds-hover-lift);
   }
 
   .featured-wallpaper-card:hover .featured-wallpaper-preview-image {
     transform: scale(1.025);
+  }
+
+  .featured-wallpaper-card:hover .featured-wallpaper-card-action {
+    opacity: 1;
   }
 }
 
@@ -2002,7 +2086,6 @@ body {
     color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
-.featured-wallpaper-card:hover .featured-wallpaper-card-action,
 .featured-wallpaper-card:focus-visible .featured-wallpaper-card-action,
 .featured-wallpaper-card-action:focus-visible,
 .featured-wallpaper-card-action[aria-pressed="true"] {
@@ -2174,11 +2257,18 @@ body {
     color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
-.newtab-delete-toast-actions button:hover,
 .newtab-delete-toast-actions button:focus-visible {
   border-color: var(--ds-border-hover);
   background: var(--ds-active);
   color: var(--ds-text-primary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .newtab-delete-toast-actions button:hover {
+    border-color: var(--ds-border-hover);
+    background: var(--ds-active);
+    color: var(--ds-text-primary);
+  }
 }
 
 .newtab-delete-toast-actions button:focus-visible {

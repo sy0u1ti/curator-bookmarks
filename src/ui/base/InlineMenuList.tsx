@@ -9,10 +9,11 @@ export interface InlineMenuListProps {
   className?: string
   label: string
   active?: boolean
+  animated?: boolean
   submenuAttributes?: Record<string, string>
 }
 
-export function InlineMenuList({ actions, active = true, className, label, submenuAttributes }: InlineMenuListProps) {
+export function InlineMenuList({ actions, active = true, animated = true, className, label, submenuAttributes }: InlineMenuListProps) {
   const portalContainerRef = useRef<HTMLSpanElement>(null)
   const cascade = useMenuCascade({ actions, open: active })
 
@@ -48,7 +49,8 @@ export function InlineMenuList({ actions, active = true, className, label, subme
         >
           <BaseMenu.Popup
             aria-label={label}
-            render={<MotionPanel variant="menu" material={false} className={className} />}
+            className={animated ? undefined : className}
+            render={animated ? <MotionPanel variant="menu" material={false} className={className} /> : undefined}
           >
             <InlineMenuItems
               actions={actions}

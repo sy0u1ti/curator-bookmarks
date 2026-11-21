@@ -1,17 +1,77 @@
+import { POPUP_PREBOOT_SHELL_ID } from './popup-preboot-input.js'
+
 let shellPaint: Promise<void> | undefined
+const SHELL_VISIBILITY_FALLBACK_MS = 320
+
+function isPopupShellVisible(root: HTMLElement): boolean {
+  if (!root.firstElementChild || root.dataset.popupReady !== 'true') {
+    return false
+  }
+  const prebootShell = root.ownerDocument.getElementById(POPUP_PREBOOT_SHELL_ID)
+  if (!prebootShell) {
+    return true
+  }
+  return prebootShell.hasAttribute('hidden') || prebootShell.dataset.popupPrebootAdopted === 'true'
+}
 
 export function preparePopupShellPaint(root: HTMLElement): void {
   shellPaint ??= new Promise<void>(resolve => {
-    const afterCommit = () => {
-      if (!root.firstElementChild) return false
-      requestAnimationFrame(() => { window.setTimeout(resolve, 0) })
-      return true
+    let settled = false
+    let fallbackTimer = 0
+    let rootObserver: MutationObserver | null = null
+    let prebootObserver: MutationObserver | null = null
+
+    const cleanup = () => {
+      if (fallbackTimer) {
+        window.clearTimeout(fallbackTimer)
+        fallbackTimer = 0
+      }
+      rootObserver?.disconnect()
+      prebootObserver?.disconnect()
+      rootObserver = null
+      prebootObserver = null
     }
-    if (afterCommit()) return
-    const observer = new MutationObserver(() => {
-      if (afterCommit()) observer.disconnect()
+
+    const settleAfterPaint = () => {
+      if (settled) return
+      settled = true
+      cleanup()
+      requestAnimationFrame(() => { window.setTimeout(resolve, 0) })
+    }
+
+    const checkReady = () => {
+      if (settled) return true
+      if (isPopupShellVisible(root)) {
+        settleAfterPaint()
+        return true
+      }
+      if (root.firstElementChild && !fallbackTimer) {
+        fallbackTimer = window.setTimeout(settleAfterPaint, SHELL_VISIBILITY_FALLBACK_MS)
+      }
+      return false
+    }
+
+    if (checkReady()) return
+
+    rootObserver = new MutationObserver(() => {
+      checkReady()
     })
-    observer.observe(root, { childList: true })
+    rootObserver.observe(root, {
+      attributes: true,
+      attributeFilter: ['data-popup-ready'],
+      childList: true
+    })
+
+    const prebootShell = root.ownerDocument.getElementById(POPUP_PREBOOT_SHELL_ID)
+    if (prebootShell) {
+      prebootObserver = new MutationObserver(() => {
+        checkReady()
+      })
+      prebootObserver.observe(prebootShell, {
+        attributes: true,
+        attributeFilter: ['hidden', 'data-popup-preboot-adopted']
+      })
+    }
   })
 }
 

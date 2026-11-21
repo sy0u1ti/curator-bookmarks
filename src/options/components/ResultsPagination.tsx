@@ -1,5 +1,6 @@
 import { Button } from '../../ui/base/Button'
 import { NumberPop } from '../../ui/motion/NumberPop'
+import { cx } from '../../ui/base/utils'
 import { handleResultsPagination } from '../options-controller'
 import { useResultsPaginationState } from './results-pagination-store.js'
 import {
@@ -12,18 +13,20 @@ import {
 
 export function ResultsPagination({
   ariaLabel,
+  className,
   kind
 }: {
   ariaLabel: string
+  className?: string
   kind: string
 }) {
   const state = useResultsPaginationState(kind)
   if (!state.visible) return null
 
   return (
-    <div aria-label={ariaLabel}>
+    <nav aria-label={ariaLabel}>
       <div
-        className={OPTION_PAGINATION_CLASS}
+        className={cx(OPTION_PAGINATION_CLASS, className)}
       >
         <span className={OPTION_PAGINATION_LABEL_CLASS}>
           {state.label} <NumberPop className={OPTION_PAGINATION_RANGE_VALUE_CLASS} text={`${state.start}-${state.end} / ${state.totalCount}`} />
@@ -50,6 +53,6 @@ export function ResultsPagination({
           下一页
         </Button>
       </div>
-    </div>
+    </nav>
   )
 }

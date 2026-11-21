@@ -179,14 +179,6 @@
   --badge-pop-scale: var(--scale-large);
   --badge-pop-ease: var(--ds-ease-standard);
 
-  --digit-dur: var(--ds-motion-fast);
-  --digit-distance: var(--distance-base);
-  --digit-stagger: 0ms;
-  --digit-blur: 0px;
-  --digit-ease: var(--ds-ease-standard);
-  --digit-dir-x: 0;
-  --digit-dir-y: 1;
-
   --dropdown-open-dur: var(--ds-motion-standard);
   --dropdown-close-dur: var(--ds-motion-fast);
   --popover-open-dur: var(--ds-motion-fast);
@@ -275,6 +267,9 @@
   --slider-grip-border: var(--ds-border-hover);
   --slider-grip-shadow: 0 1px 2px rgb(0 0 0 / 24%);
   --slider-grip-pressed-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-accent) 14%, transparent);
+  --slider-thumb-bg: var(--ds-accent);
+  --slider-indicator-bg: var(--ds-accent);
+  --slider-detent-color: var(--ds-accent);
 
   --ds-row-height: 52px;
   --ds-row-height-compact: 40px;
@@ -354,7 +349,6 @@
     --toggle-dur: 1ms;
     --badge-pop-dur: 1ms;
     --badge-pop-scale: 1;
-    --digit-dur: 80ms;
     --dropdown-open-dur: 80ms;
     --dropdown-close-dur: 80ms;
     --toast-open-dur: 80ms;

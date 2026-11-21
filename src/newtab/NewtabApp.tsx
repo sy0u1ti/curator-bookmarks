@@ -10,6 +10,7 @@ import { NewtabBackgroundLayer } from './components/NewtabBackgroundLayer'
 import { useNewtabAppChromeAttributes } from './components/NewtabBodyClassesHost'
 import { NewtabContentHost } from './components/NewtabContentHost'
 import { NewtabInstantWallpaperHost } from './components/NewtabInstantWallpaperHost'
+import { NewtabScrollToTop } from './components/NewtabScrollToTop'
 import {
   dispatchNewtabBookmarkChanged,
   dispatchNewtabBookmarkChildrenReordered,
@@ -28,9 +29,6 @@ import {
   dispatchNewtabVisibilityChange
 } from './newtab-lifecycle-store'
 import {
-  dispatchNewtabWindowPointerCancel,
-  dispatchNewtabWindowPointerMove,
-  dispatchNewtabWindowPointerUp,
   dispatchNewtabWindowResize
 } from './newtab-window-store'
 import {
@@ -77,7 +75,7 @@ const WALLPAPER_LOADING_INDICATOR_VISIBLE_CLASS = 'opacity-100 visible translate
 const WALLPAPER_LOADING_CARD_CLASS = 'wallpaper-loading-card grid h-12 w-12 place-items-center rounded-ds-sm border border-[rgba(245,245,247,0.14)] bg-[rgba(18,18,19,0.9)] text-[rgba(245,245,247,0.78)]'
 const WALLPAPER_LOADING_LOADER_CLASS = 'wallpaper-loading-loader inline-flex h-3.5 w-[30px] items-center gap-1'
 const WALLPAPER_LOADING_DOT_CLASS = 'block h-1.5 w-1.5 rounded-full bg-current opacity-[0.32] animate-[wallpaper-loading-loader-pulse_900ms_var(--ui-ease-standard)_infinite_both] motion-reduce:animate-none'
-const NEWTAB_SHELL_CLASS = `newtab-shell relative z-[1] grid h-screen h-dvh items-start justify-items-center overflow-x-hidden overflow-y-auto px-[clamp(14px,5vw,72px)] pt-[clamp(18px,5vh,46px)] pb-[clamp(24px,6vh,64px)] select-none [-webkit-user-select:none] [scrollbar-color:rgba(245,245,247,0.18)_transparent] [scrollbar-width:thin] [line-break:strict] [hanging-punctuation:allow-end] [text-spacing-trim:trim-start] [text-autospace:normal] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[text-spacing-trim:space-all] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[text-autospace:no-autospace] [&_a]:[-webkit-user-drag:none] [&_img]:[-webkit-user-drag:none] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[rgba(245,245,247,0.18)] [&::-webkit-scrollbar-thumb]:bg-clip-padding ${LOADING_VISIBILITY_CLASS} ${NEWTAB_REDUCED_MOTION_DESCENDANTS_CLASS}`
+const NEWTAB_SHELL_CLASS = `newtab-shell relative z-[1] grid h-screen h-dvh items-start justify-items-center overflow-x-hidden overflow-y-auto px-[clamp(14px,5vw,72px)] pt-[clamp(18px,5vh,46px)] pb-[clamp(24px,6vh,64px)] select-none [-webkit-user-select:none] [line-break:strict] [hanging-punctuation:allow-end] [text-spacing-trim:trim-start] [text-autospace:normal] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[text-spacing-trim:space-all] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[text-autospace:no-autospace] [&_a]:[-webkit-user-drag:none] [&_img]:[-webkit-user-drag:none] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-button]:hidden [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[rgba(245,245,247,0.18)] [&::-webkit-scrollbar-thumb]:bg-clip-padding ${LOADING_VISIBILITY_CLASS} ${NEWTAB_REDUCED_MOTION_DESCENDANTS_CLASS}`
 
 type SettingsDrawerHostComponent = (typeof import('./components/SettingsDrawer'))['SettingsDrawerHost']
 type NewtabDeferredHostsComponent = (typeof import('./components/NewtabDeferredHosts'))['NewtabDeferredHosts']
@@ -220,18 +218,12 @@ function NewtabShell({ onOpenSettings }: { onOpenSettings: () => void }) {
     document.addEventListener('keydown', dispatchNewtabDocumentKeyDown)
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('pagehide', dispatchNewtabPageHide)
-    window.addEventListener('pointercancel', dispatchNewtabWindowPointerCancel)
-    window.addEventListener('pointermove', dispatchNewtabWindowPointerMove)
-    window.addEventListener('pointerup', dispatchNewtabWindowPointerUp)
     window.addEventListener('resize', dispatchNewtabWindowResize)
     return () => {
       unsubscribeBookmarkEvents()
       document.removeEventListener('keydown', dispatchNewtabDocumentKeyDown)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('pagehide', dispatchNewtabPageHide)
-      window.removeEventListener('pointercancel', dispatchNewtabWindowPointerCancel)
-      window.removeEventListener('pointermove', dispatchNewtabWindowPointerMove)
-      window.removeEventListener('pointerup', dispatchNewtabWindowPointerUp)
       window.removeEventListener('resize', dispatchNewtabWindowResize)
     }
   }, [])
@@ -302,6 +294,7 @@ function NewtabShell({ onOpenSettings }: { onOpenSettings: () => void }) {
       >
         <NewtabContentHost shellRef={shellRef} />
       </div>
+      <NewtabScrollToTop shellRef={shellRef} suppressed={settingsDrawerOpen} />
       <DeferredSettingsDrawerHost requested={settingsDrawerHostRequested || settingsDrawerRequested || settingsDrawerOpen} />
       <DeferredNewtabHosts />
     </div>

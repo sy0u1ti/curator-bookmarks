@@ -5,7 +5,6 @@ export const NEWTAB_PENDING_SETTINGS_PREFIX = 'curatorNewTabPendingSettings:'
 export const NEWTAB_SYNCED_SETTING_KEYS = [
   STORAGE_KEYS.newTabSearchSettings,
   STORAGE_KEYS.newTabIconSettings,
-  STORAGE_KEYS.newTabTimeSettings,
   STORAGE_KEYS.newTabGeneralSettings,
   STORAGE_KEYS.newTabFolderSettings,
   STORAGE_KEYS.newTabBackgroundSettings,

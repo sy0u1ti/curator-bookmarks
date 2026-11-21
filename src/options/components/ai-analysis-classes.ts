@@ -1,7 +1,10 @@
-import { OPTION_RESULT_CHECKBOX_CLASS, OPTION_SURFACE_CLASS } from './option-layout-classes.js'
+import {
+  OPTION_LIST_SECTION_CLASS,
+  OPTION_RESULT_CHECKBOX_CLASS,
+  OPTION_SURFACE_CLASS
+} from './option-layout-classes.js'
 
-export const AI_ANALYSIS_RESULTS_GROUP_CLASS =
-  `mt-5 ${OPTION_SURFACE_CLASS} p-[18px_20px_20px] max-[760px]:p-4`
+export const AI_ANALYSIS_RESULTS_GROUP_CLASS = OPTION_LIST_SECTION_CLASS
 
 export const AI_ANALYSIS_SELECTION_GROUP_CLASS =
   `mt-7 ${OPTION_SURFACE_CLASS} p-[18px_20px_20px] max-[760px]:mt-5 max-[760px]:p-4`
@@ -19,14 +22,14 @@ export const AI_ANALYSIS_METRIC_LABEL_CLASS =
   'block text-xs font-medium leading-4 text-ds-text-secondary'
 
 export const AI_ANALYSIS_STATUS_BADGE_CLASS =
-  'inline-flex min-h-7 flex-none items-center justify-center whitespace-nowrap rounded-full border px-[11px] text-xs font-semibold leading-none tracking-[0]'
+  'inline-flex min-h-6 flex-none items-center justify-center whitespace-nowrap rounded-full border px-2.5 text-xs font-medium leading-none tracking-[0]'
 
 const AI_ANALYSIS_STATUS_TONE_CLASS: Record<string, string> = {
   danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
-  muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',
+  muted: 'border-ds-border bg-ds-bg-page text-ds-text-secondary',
   ready: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text',
   success: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text',
-  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
+  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning-text'
 }
 
 export const AI_ANALYSIS_CHECKBOX_CLASS = OPTION_RESULT_CHECKBOX_CLASS

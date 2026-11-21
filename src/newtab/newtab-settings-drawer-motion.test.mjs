@@ -103,9 +103,9 @@ async function verifyNewtabAccessibilityMaterials(page, context) {
   )
 
   await page.locator('.newtab-search').waitFor({ state: 'visible' })
-  await page.locator('.newtab-clock').waitFor({ state: 'visible' })
-  const utilityGlass = await Promise.all((await page.locator('.newtab-search-surface, .newtab-clock').all()).map(element => element.evaluate(readGlassMaterial)))
-  assert.equal(utilityGlass.length, 2, `Search and clock glass surfaces should both be present: ${JSON.stringify(utilityGlass)}`)
+  assert.equal(await page.locator('.newtab-clock').count(), 0, 'The retired clock widget must not render.')
+  const utilityGlass = await Promise.all((await page.locator('.newtab-search-surface').all()).map(element => element.evaluate(readGlassMaterial)))
+  assert.equal(utilityGlass.length, 1, `Search glass surface should be present: ${JSON.stringify(utilityGlass)}`)
   for (const material of utilityGlass) {
     assert.equal(material.blur, 12, `Primary utility glass should retain its configured blur: ${JSON.stringify(material)}`)
     assert.match(material.backgroundColor, /^rgba\(0, 0, 0, 0\.[0-9]+\)$/, `Primary utility glass should remain translucent: ${JSON.stringify(material)}`)
@@ -1575,10 +1575,15 @@ async function verifyOptions(page, extensionId) {
   const reasoningTriggerBox = await reasoningTrigger.boundingBox()
   assert.ok(reasoningTriggerBox, 'Reasoning effort trigger should be measurable')
   await reasoningTrigger.click()
-  const advancedReasoningButton = page.getByRole('button', { name: '高级设置' })
-  await advancedReasoningButton.waitFor({ state: 'visible' })
+  const reasoningSlider = page.getByRole('slider', { name: '推理强度' })
+  await reasoningSlider.waitFor({ state: 'visible' })
   const reasoningPopover = page.locator('.reasoning-effort-popover')
   await page.waitForFunction(() => document.querySelector('.reasoning-effort-popover')?.getAnimations().length === 0)
+  assert.equal(
+    await reasoningPopover.getByRole('button', { name: '高级设置' }).count(),
+    0,
+    'Reasoning effort trigger should open directly to the slider without an intermediate menu'
+  )
   const reasoningPopoverBox = await reasoningPopover.boundingBox()
   assert.ok(reasoningPopoverBox, 'Reasoning effort popover should be measurable')
   assert.ok(
@@ -1586,12 +1591,6 @@ async function verifyOptions(page, extensionId) {
       Math.abs(reasoningPopoverBox.width - reasoningTriggerBox.width) <= 1,
     `Reasoning effort popover should align to and match its trigger: ${JSON.stringify({ reasoningPopoverBox, reasoningTriggerBox })}`
   )
-  await captureVisual(page, 'options-reasoning-menu')
-  await advancedReasoningButton.click()
-  const reasoningSlider = page.getByRole('slider', { name: '推理强度' })
-  await reasoningSlider.waitFor({ state: 'visible' })
-  await page.waitForFunction(() => [...document.querySelectorAll('.reasoning-selector-view-track')]
-    .every((track) => track.getAnimations().length === 0))
   const reasoningTrackGeometry = await page.locator('.reasoning-effort-track').boundingBox()
   const reasoningKnobGeometry = await page.locator('.reasoning-effort-knob').boundingBox()
   assert.ok(reasoningTrackGeometry && reasoningKnobGeometry, 'Reasoning effort track and knob should be measurable')
@@ -1600,6 +1599,34 @@ async function verifyOptions(page, extensionId) {
   assert.ok(
     Math.abs(trackCenterY - knobCenterY) <= 1,
     `Reasoning effort knob should be vertically centered on its track: ${JSON.stringify({ knobCenterY, trackCenterY })}`
+  )
+  const initialAlignment = await page.evaluate(() => {
+    const slider = document.querySelector('.reasoning-effort-slider')
+    const track = document.querySelector('.reasoning-effort-track')?.getBoundingClientRect()
+    const knob = document.querySelector('.reasoning-effort-knob')?.getBoundingClientRect()
+    const fill = document.querySelector('.reasoning-effort-fill')
+    if (!slider || !track || !knob || !fill) return null
+    const fillRect = fill.getBoundingClientRect()
+    const clip = getComputedStyle(fill).clipPath
+    const insetMatch = clip.match(/^inset\(([^)]+)\)$/)
+    const lengths = (insetMatch?.[1].split('round')[0] ?? '').trim().split(/\s+/).map((token) => Number.parseFloat(token))
+    const rightInset = lengths.length >= 2 ? lengths[1] : (lengths[0] ?? 0)
+    const progress = Number(slider.style.getPropertyValue('--reasoning-progress'))
+    return {
+      progress,
+      clip,
+      knobCenter: knob.left + knob.width / 2,
+      expectedCenter: track.left + 17 + progress * (track.width - 34),
+      knobRight: knob.right,
+      fillRight: fillRect.right - rightInset
+    }
+  })
+  assert.ok(
+    initialAlignment &&
+      initialAlignment.clip.startsWith('inset(') &&
+      Math.abs(initialAlignment.knobCenter - initialAlignment.expectedCenter) <= 1 &&
+      initialAlignment.fillRight <= initialAlignment.knobRight,
+    `Reasoning slider knob and fill should align immediately on open: ${JSON.stringify(initialAlignment)}`
   )
   assert.equal(
     await reasoningSlider.locator('canvas').count(),
@@ -1610,6 +1637,7 @@ async function verifyOptions(page, extensionId) {
   const reasoningTrackBox = await reasoningSlider.boundingBox()
   assert.ok(reasoningTrackBox, 'Reasoning effort track should be measurable')
   const reasoningBefore = await reasoningSlider.getAttribute('aria-valuenow')
+  let dragAlignment = null
   await recordAnimationFrames(page, 'reasoning effort drag and spring settle', 800, async () => {
     const startX = reasoningTrackBox.x + 28
     const endX = reasoningTrackBox.x + reasoningTrackBox.width - 34
@@ -1617,8 +1645,34 @@ async function verifyOptions(page, extensionId) {
     await page.mouse.move(startX, y)
     await page.mouse.down()
     await page.mouse.move(endX, y, { steps: 8 })
+    dragAlignment = await page.evaluate(() => {
+      const slider = document.querySelector('.reasoning-effort-slider')
+      const track = document.querySelector('.reasoning-effort-track')?.getBoundingClientRect()
+      const knob = document.querySelector('.reasoning-effort-knob')?.getBoundingClientRect()
+      const fill = document.querySelector('.reasoning-effort-fill')
+      if (!slider || !track || !knob || !fill) return null
+      const fillRect = fill.getBoundingClientRect()
+      const clip = getComputedStyle(fill).clipPath
+      const insetMatch = clip.match(/^inset\(([^)]+)\)$/)
+      const lengths = (insetMatch?.[1].split('round')[0] ?? '').trim().split(/\s+/).map((token) => Number.parseFloat(token))
+      const rightInset = lengths.length >= 2 ? lengths[1] : (lengths[0] ?? 0)
+      const progress = Number(slider.style.getPropertyValue('--reasoning-progress'))
+      return {
+        progress,
+        knobCenter: knob.left + knob.width / 2,
+        expectedCenter: track.left + 17 + progress * (track.width - 34),
+        knobRight: knob.right,
+        fillRight: fillRect.right - rightInset
+      }
+    })
     await page.mouse.up()
   })
+  assert.ok(
+    dragAlignment &&
+      Math.abs(dragAlignment.knobCenter - dragAlignment.expectedCenter) <= 1 &&
+      dragAlignment.fillRight <= dragAlignment.knobRight,
+    `Reasoning slider fill must stay inside the knob while dragging: ${JSON.stringify(dragAlignment)}`
+  )
   await page.waitForFunction((previous) => document.querySelector('[role="slider"][aria-label="推理强度"]')?.getAttribute('aria-valuenow') !== previous, reasoningBefore)
   await captureVisual(page, 'options-reasoning-highest')
   const modelLayoutAfter = await modelRow.evaluate((row) => {

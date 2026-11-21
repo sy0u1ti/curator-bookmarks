@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@source not "../vendor/floccus";
+@source not "../**/*.test.*";
+@source not "../**/*{-scenarios,-browser}*.mjs";
+@source not "../../scripts";
 
 @custom-variant dark (&:where(.dark, .dark *));
 

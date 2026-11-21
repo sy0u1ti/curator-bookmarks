@@ -133,6 +133,10 @@ function BookmarkContent({
   const [prebootHandoffStatus, setPrebootHandoffStatus] = useState<'checking' | 'ready' | 'timeout'>('checking')
   const sectionsRootRef = useRef<HTMLDivElement | null>(null)
   const sectionRefs = useRef(new Map<string, HTMLElement>())
+  const gridMetricsKey = useMemo(
+    () => `${state.content.columns}:${state.content.columnGap}:${state.content.rowGap}:${state.content.tileWidth}:${state.content.iconShellSize}:${state.content.titleLines}`,
+    [state.content.columns, state.content.columnGap, state.content.rowGap, state.content.tileWidth, state.content.iconShellSize, state.content.titleLines]
+  )
   const setSectionElement = useCallback((anchorId: string, element: HTMLElement | null) => {
     if (element) {
       sectionRefs.current.set(anchorId, element)
@@ -238,6 +242,7 @@ function BookmarkContent({
         <BookmarkNavigationView
           dragUi={dragUi}
           fixedLayout={state.content.layoutMode === 'fixed'}
+          metricsKey={gridMetricsKey}
           navigation={state.navigation}
           showTitles={state.content.showTitles}
         />
@@ -254,6 +259,7 @@ function BookmarkContent({
                 dragUi={dragUi}
                 fixedLayout={state.content.layoutMode === 'fixed'}
                 hideFolderNames={folderSource.hideFolderNames}
+                metricsKey={gridMetricsKey}
                 section={section}
                 showTitles={state.content.showTitles}
                 onSectionRef={setSectionElement}
@@ -312,6 +318,7 @@ function BookmarkFolderSection({
   dragUi,
   fixedLayout,
   hideFolderNames,
+  metricsKey,
   onSectionRef,
   section,
   showTitles,
@@ -319,6 +326,7 @@ function BookmarkFolderSection({
   dragUi: NewtabDragUiView
   fixedLayout: boolean
   hideFolderNames: boolean
+  metricsKey: string
   onSectionRef: (anchorId: string, element: HTMLElement | null) => void
   section: BookmarkFolderSectionViewModel
   showTitles: boolean
@@ -356,7 +364,7 @@ function BookmarkFolderSection({
         }} />
       </div>
       {section.grid ? (
-        <BookmarkFolderGrid dragUi={dragUi} fixedLayout={fixedLayout} grid={section.grid} showTitles={showTitles} title={section.title} />
+        <BookmarkFolderGrid dragUi={dragUi} fixedLayout={fixedLayout} grid={section.grid} metricsKey={metricsKey} showTitles={showTitles} title={section.title} />
       ) : (
         <div className={EMPTY_FOLDER_STATE_CLASS}>
           <EmptyFolder state={{
@@ -374,12 +382,14 @@ function BookmarkFolderGrid({
   dragUi,
   fixedLayout,
   grid,
+  metricsKey,
   showTitles,
   title
 }: {
   dragUi: NewtabDragUiView
   fixedLayout: boolean
   grid: BookmarkFolderGridViewModel
+  metricsKey: string
   showTitles: boolean
   title: string
 }) {
@@ -392,6 +402,7 @@ function BookmarkFolderGrid({
     dragging: dragUi.bookmarkDragging || dragUi.folderOrderDragging || dragUi.speedDialDragging,
     fixedLayout,
     initialWindowSize: initialVisibleCount,
+    metricsKey,
     onGridElement: registerGridNode,
     showTitles,
     totalSlots: totalCount
@@ -439,6 +450,78 @@ interface BookmarkGridWindow {
   start: number
 }
 
+interface BookmarkGridMetrics {
+  columns: number
+  measuredTileHeight: number
+  pitch: number
+  rowGap: number
+}
+
+interface ShellViewportSnapshot {
+  clientHeight: number
+  shellTop: number
+}
+
+interface ShellViewportCoordinator {
+  frame: number
+  observer: ResizeObserver | null
+  schedule: () => void
+  subscribers: Set<(snapshot: ShellViewportSnapshot) => void>
+}
+
+const shellViewportCoordinators = new WeakMap<HTMLElement, ShellViewportCoordinator>()
+
+function subscribeShellViewport(
+  shell: HTMLElement,
+  listener: (snapshot: ShellViewportSnapshot) => void
+): () => void {
+  let coordinator = shellViewportCoordinators.get(shell)
+  if (!coordinator) {
+    const subscribers = new Set<(snapshot: ShellViewportSnapshot) => void>()
+    const entry: ShellViewportCoordinator = {
+      frame: 0,
+      observer: null,
+      schedule: () => {
+        if (entry.frame) return
+        entry.frame = window.requestAnimationFrame(() => {
+          entry.frame = 0
+          if (document.hidden || !shell.isConnected) return
+          const rect = shell.getBoundingClientRect()
+          const snapshot: ShellViewportSnapshot = {
+            clientHeight: shell.clientHeight || window.innerHeight || 800,
+            shellTop: rect.top
+          }
+          for (const subscriber of subscribers) {
+            subscriber(snapshot)
+          }
+        })
+      },
+      subscribers
+    }
+    shell.addEventListener('scroll', entry.schedule, { passive: true })
+    window.addEventListener('resize', entry.schedule)
+    if (typeof ResizeObserver !== 'undefined') {
+      entry.observer = new ResizeObserver(entry.schedule)
+      entry.observer.observe(shell)
+    }
+    shellViewportCoordinators.set(shell, entry)
+    coordinator = entry
+  }
+  coordinator.subscribers.add(listener)
+  return () => {
+    coordinator.subscribers.delete(listener)
+    if (coordinator.subscribers.size > 0) return
+    if (coordinator.frame) {
+      window.cancelAnimationFrame(coordinator.frame)
+      coordinator.frame = 0
+    }
+    shell.removeEventListener('scroll', coordinator.schedule)
+    window.removeEventListener('resize', coordinator.schedule)
+    coordinator.observer?.disconnect()
+    shellViewportCoordinators.delete(shell)
+  }
+}
+
 /** Row-level windowing for a bookmark grid: only the rows around the viewport
  * stay mounted, and spacer padding keeps the page height exact so scrolling
  * never jumps. Replaces the old grow-only incremental renderer, which kept
@@ -448,6 +531,7 @@ function useBookmarkGridWindow({
   dragging,
   fixedLayout,
   initialWindowSize,
+  metricsKey,
   onGridElement,
   showTitles,
   totalSlots
@@ -455,11 +539,13 @@ function useBookmarkGridWindow({
   dragging: boolean
   fixedLayout: boolean
   initialWindowSize: number
+  metricsKey: string
   onGridElement?: (element: HTMLElement | null) => void
   showTitles: boolean
   totalSlots: number
 }): { gridWindow: BookmarkGridWindow; setGridElement: (element: HTMLElement | null) => void } {
   const elementRef = useRef<HTMLElement | null>(null)
+  const metricsRef = useRef<BookmarkGridMetrics | null>(null)
   const [gridWindow, setGridWindow] = useState<BookmarkGridWindow>(() => ({
     columns: 1,
     end: Math.max(0, initialWindowSize),
@@ -475,44 +561,64 @@ function useBookmarkGridWindow({
 
   const setGridElement = useCallback((element: HTMLElement | null) => {
     elementRef.current = element
+    metricsRef.current = null
     onGridElement?.(element)
   }, [onGridElement])
 
-  const measureWindow = useCallback(() => {
-    const element = elementRef.current
-    if (!element || document.hidden) {
-      return
+  const readMetrics = useCallback((element: HTMLElement, gridWidth: number): BookmarkGridMetrics => {
+    const cached = metricsRef.current
+    if (cached && cached.measuredTileHeight > 0) {
+      return cached
     }
-    const shell = element.closest<HTMLElement>('.newtab-shell')
+    const firstTile = element.querySelector<HTMLElement>(':scope > .bookmark-tile:not(.bookmark-drag-ghost)')
+    const measuredTileHeight = firstTile?.offsetHeight || 0
+    if (cached && measuredTileHeight === 0) {
+      return cached
+    }
     const styles = getComputedStyle(element)
     const configuredColumns = Math.max(1, Math.round(Number(styles.getPropertyValue('--icon-columns')) || 1))
     const rowGap = Number.parseFloat(styles.rowGap) || 0
     const shellSize = Number.parseFloat(styles.getPropertyValue('--icon-shell-size')) || 48
-    // Tile height is deterministic: the icon shell plus its fixed vertical
-    // padding (titles add two more pixels than the icon-only variant).
-    // offsetHeight ignores the hover lift transform.
-    const firstTile = element.querySelector<HTMLElement>(':scope > .bookmark-tile:not(.bookmark-drag-ghost)')
-    const measuredTileHeight = firstTile?.offsetHeight || 0
     const pitch = (measuredTileHeight || shellSize + (showTitles ? 18 : 16)) + rowGap
-    // The fluid layout lets CSS auto-fill pick the column count, so the
-    // configured --icon-columns would over-count rows (and the spacer height).
     const columnGap = Number.parseFloat(styles.getPropertyValue('--icon-column-gap')) || 0
     const tileWidth = Number.parseFloat(styles.getPropertyValue('--icon-tile-width')) || 0
-    const gridWidth = element.getBoundingClientRect().width
     const columns = fixedLayout
       ? configuredColumns
       : Math.max(1, tileWidth > 0 && gridWidth > 0
         ? Math.floor((gridWidth + columnGap) / (tileWidth + columnGap))
         : configuredColumns)
+    const nextMetrics: BookmarkGridMetrics = {
+      columns,
+      measuredTileHeight,
+      pitch,
+      rowGap
+    }
+    metricsRef.current = nextMetrics
+    return nextMetrics
+  }, [fixedLayout, showTitles])
+
+  const measureWindow = useCallback((shellSnapshot?: ShellViewportSnapshot) => {
+    const element = elementRef.current
+    if (!element || document.hidden) {
+      return
+    }
+    const gridRect = element.getBoundingClientRect()
+    const { columns, pitch, rowGap } = readMetrics(element, gridRect.width)
     const totalRows = Math.max(1, Math.ceil(totalSlots / columns))
-    const viewportHeight = shell?.clientHeight || window.innerHeight || 800
+    let viewportHeight = shellSnapshot?.clientHeight || window.innerHeight || 800
     let viewTop = 0
     let gridHeight = totalRows * pitch
-    if (shell) {
-      const shellRect = shell.getBoundingClientRect()
-      const gridRect = element.getBoundingClientRect()
-      viewTop = shell.scrollTop - (gridRect.top - shellRect.top + shell.scrollTop)
+    if (shellSnapshot) {
+      viewTop = shellSnapshot.shellTop - gridRect.top
       gridHeight = gridRect.height || gridHeight
+    } else {
+      const shell = element.closest<HTMLElement>('.newtab-shell')
+      if (shell) {
+        const shellRect = shell.getBoundingClientRect()
+        viewportHeight = shell.clientHeight || viewportHeight
+        viewTop = shellRect.top - gridRect.top
+        gridHeight = gridRect.height || gridHeight
+      }
     }
     const viewBottom = viewTop + viewportHeight
     // A small margin mounts the next grid just before it scrolls into view
@@ -556,41 +662,65 @@ function useBookmarkGridWindow({
       }
       return next
     })
-  }, [fixedLayout, initialWindowSize, showTitles, totalSlots])
+  }, [initialWindowSize, readMetrics, totalSlots])
 
   useLayoutEffect(() => {
+    metricsRef.current = null
+    const allPinnedVisible = initialWindowSize >= totalSlots
+    if (allPinnedVisible) {
+      setGridWindow((previous) => {
+        if (previous.start === 0 && previous.end === totalSlots) {
+          return previous
+        }
+        return {
+          columns: previous.columns,
+          end: totalSlots,
+          pitch: previous.pitch,
+          rowGap: previous.rowGap,
+          start: 0
+        }
+      })
+      return
+    }
     const element = elementRef.current
     if (!element) {
       return
     }
     const shell = element.closest<HTMLElement>('.newtab-shell')
-    let frame = 0
-    const schedule = () => {
-      if (frame) {
-        return
-      }
-      frame = window.requestAnimationFrame(() => {
-        frame = 0
+    let resizeFrame = 0
+    const scheduleElementResize = () => {
+      metricsRef.current = null
+      if (resizeFrame) return
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = 0
         measureWindow()
       })
     }
     measureWindow()
-    shell?.addEventListener('scroll', schedule, { passive: true })
-    window.addEventListener('resize', schedule)
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
-    observer?.observe(element)
-    if (shell) {
-      observer?.observe(shell)
+    const unsubscribeShell = shell
+      ? subscribeShellViewport(shell, (snapshot) => {
+          measureWindow(snapshot)
+        })
+      : null
+    const handleWindowResize = !shell ? scheduleElementResize : null
+    if (handleWindowResize) {
+      window.addEventListener('resize', handleWindowResize)
     }
+    const observer = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(scheduleElementResize)
+    observer?.observe(element)
     return () => {
-      if (frame) {
-        window.cancelAnimationFrame(frame)
+      if (resizeFrame) {
+        window.cancelAnimationFrame(resizeFrame)
       }
-      shell?.removeEventListener('scroll', schedule)
-      window.removeEventListener('resize', schedule)
+      unsubscribeShell?.()
+      if (handleWindowResize) {
+        window.removeEventListener('resize', handleWindowResize)
+      }
       observer?.disconnect()
     }
-  }, [measureWindow])
+  }, [initialWindowSize, measureWindow, metricsKey, totalSlots])
 
   return { gridWindow, setGridElement }
 }
@@ -716,11 +846,13 @@ const BookmarkTile = memo(function BookmarkTile({
 function BookmarkNavigationView({
   dragUi,
   fixedLayout,
+  metricsKey,
   navigation,
   showTitles
 }: {
   dragUi: NewtabDragUiView
   fixedLayout: boolean
+  metricsKey: string
   navigation: BookmarkNavigationViewModel
   showTitles: boolean
 }) {
@@ -734,6 +866,7 @@ function BookmarkNavigationView({
     dragging: dragUi.bookmarkDragging || dragUi.folderOrderDragging || dragUi.speedDialDragging,
     fixedLayout,
     initialWindowSize: folderCardCount + initialVisibleCount,
+    metricsKey,
     showTitles,
     totalSlots
   })

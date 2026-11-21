@@ -13,15 +13,15 @@ import { RunActionSlot } from './RunActionSlot'
 import {
   OPTION_RUN_ACTIONS_CLASS,
   OPTION_RUN_ACTION_BUTTON_CLASS,
-  OPTION_RUN_CELL_CLASS
+  OPTION_RUN_CELL_CLASS,
+  OPTION_RUN_CELL_TITLE_CLASS
 } from './option-layout-classes.js'
 
 const AVAILABILITY_PERMISSION_CARD_CLASS =
   OPTION_RUN_CELL_CLASS
 const AVAILABILITY_PERMISSION_META_CLASS =
   'flex min-w-0 items-center justify-between gap-3'
-const AVAILABILITY_PERMISSION_TITLE_CLASS =
-  'block text-[15px] font-[650] leading-normal tracking-[0] text-ds-text-primary'
+const AVAILABILITY_PERMISSION_TITLE_CLASS = OPTION_RUN_CELL_TITLE_CLASS
 const AVAILABILITY_PERMISSION_COPY_CLASS =
   'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 const AVAILABILITY_PERMISSION_COPY_RESERVE = [
@@ -34,12 +34,12 @@ const AVAILABILITY_SETTINGS_NOTE_RESERVE = ['超时或 HTTP 429 时会自动降�
 const AVAILABILITY_CONTROLS_ACTIONS_CLASS =
   OPTION_RUN_ACTIONS_CLASS
 const AVAILABILITY_BADGE_BASE_CLASS =
-  'inline-flex min-h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-[11px] text-xs font-semibold leading-none tracking-[0]'
+  'inline-flex min-h-6 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-2.5 text-xs font-medium leading-none tracking-[0]'
 const AVAILABILITY_BADGE_TONE_CLASSES: Record<string, string> = {
   danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
   muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',
   success: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text',
-  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
+  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning-text'
 }
 const AVAILABILITY_BUTTON_MOBILE_FULL_CLASS = OPTION_RUN_ACTION_BUTTON_CLASS
 const SETTINGS_ANCHOR_CLASS = 'relative w-full shrink-0'
@@ -48,12 +48,12 @@ const SETTINGS_POPOVER_CLASS =
 const SETTINGS_HEAD_CLASS = 'flex items-center justify-between gap-2.5'
 const SETTINGS_TITLE_CLASS = 'text-sm font-bold text-ds-text-primary'
 const SETTINGS_STATUS_BASE_CLASS =
-  'min-w-11 text-right text-xs font-[650] leading-[1.4] text-ds-text-disabled max-[760px]:text-left'
+  'min-w-11 text-right text-xs font-[650] leading-[1.4] text-ds-text-muted max-[760px]:text-left'
 const SETTINGS_STATUS_TONE_CLASSES: Record<string, string> = {
   danger: 'text-ds-danger-text',
-  muted: 'text-ds-text-disabled',
+  muted: 'text-ds-text-muted',
   success: 'text-ds-success-text',
-  warning: 'text-ds-warning'
+  warning: 'text-ds-warning-text'
 }
 const SETTINGS_FIELD_CLASS =
   'mt-3.5 grid grid-cols-[minmax(0,1fr)_96px] items-center gap-3 text-[13px] font-semibold text-ds-text-secondary max-[760px]:grid-cols-[minmax(0,1fr)]'

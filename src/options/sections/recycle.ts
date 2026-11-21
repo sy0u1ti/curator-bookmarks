@@ -256,17 +256,21 @@ async function restoreRecycleEntriesByIds(recycleIds, callbacks, { fromUndo = fa
   const committedRecycleIds = new Set<string>()
 
   try {
-    await runRecycleEntriesSequentially(targetEntries, async (entry) => {
-      const currentTree = await getBookmarkTree()
-      const currentFolders = buildBookmarkCatalogSnapshot({ rootNode: currentTree[0] }).extracted.folderMap
-      const fallbackParentId = resolveRecoveryFolder(String(entry.parentId || ''), String(entry.path || ''), currentFolders) || BOOKMARKS_BAR_ID
-      const nodes = [...currentTree]
-      let childCount = 0
-      while (nodes.length) {
-        const node = nodes.pop()!
-        if (node.id === fallbackParentId) { childCount = node.children?.length || 0; break }
-        nodes.push(...node.children || [])
+    const currentTree = await getBookmarkTree()
+    const currentFolders = buildBookmarkCatalogSnapshot({ rootNode: currentTree[0] }).extracted.folderMap
+    const folderChildCountById = new Map<string, number>()
+    const stack = [...currentTree]
+    while (stack.length) {
+      const node = stack.pop()!
+      if (Array.isArray(node.children)) {
+        folderChildCountById.set(String(node.id), node.children.length)
+        stack.push(...node.children)
       }
+    }
+
+    await runRecycleEntriesSequentially(targetEntries, async (entry) => {
+      const fallbackParentId = resolveRecoveryFolder(String(entry.parentId || ''), String(entry.path || ''), currentFolders) || BOOKMARKS_BAR_ID
+      const childCount = folderChildCountById.get(fallbackParentId) ?? 0
 
       await restoreBookmarkFromRecycleEntry(
         String(entry.recycleId),
@@ -277,6 +281,7 @@ async function restoreRecycleEntriesByIds(recycleIds, callbacks, { fromUndo = fa
           url: entry.url
         })
       )
+      folderChildCountById.set(fallbackParentId, childCount + 1)
       committedRecycleIds.add(String(entry.recycleId))
       committedRestoredCount += 1
     })

@@ -52,7 +52,7 @@ const INPUT_CLASS = 'bg-ds-surface-3 placeholder:text-ds-text-disabled'
 const SELECT_TRIGGER_CLASS = 'w-full bg-ds-surface-3 text-left'
 // The list is portalled to the body; it has to sit above the dialog that opened it.
 const SELECT_POSITIONER_CLASS = 'z-[10000]'
-const BODY_CLASS = 'grid gap-5 pr-1 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-width:thin]'
+const BODY_CLASS = 'ds-scrollbar grid gap-5 pr-1'
 const GRID_CLASS = 'grid grid-cols-2 items-start gap-x-3.5 gap-y-4 @max-[560px]/sync-editor:grid-cols-1'
 const SECTION_CLASS = 'grid gap-4 border-t border-ds-border-subtle pt-5'
 const NOTE_CLASS = 'm-0 text-[13px] leading-[1.6] text-ds-text-secondary'
@@ -383,7 +383,7 @@ export function SyncProfileEditor({ profile, onClose, onSaved, embedded = false,
           <Field
             label="本地文件夹"
             action={!tabs && !creatingFolder ? (
-              <Button unstyled className="inline-flex h-5 items-center gap-1 rounded-ds-xs px-1.5 text-[11px] font-medium text-ds-text-secondary hover:bg-ds-hover hover:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus"
+              <Button unstyled className="inline-flex h-5 items-center gap-1 rounded-ds-xs px-1.5 text-[11px] font-medium text-ds-text-secondary transition-colors duration-ds-fast hover:bg-ds-hover hover:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus motion-reduce:duration-[80ms]"
                 onClick={() => setCreatingFolder(true)}>
                 <Icon name="Plus" size={12} aria-hidden="true" />新建文件夹
               </Button>
@@ -397,7 +397,7 @@ export function SyncProfileEditor({ profile, onClose, onSaved, embedded = false,
 
         {!tabs ? (
           creatingFolder ? (
-            <div className="flex min-w-0 items-center gap-2">
+            <div className="sync-inline-reveal flex min-w-0 items-center gap-2">
               <Input className={`${INPUT_CLASS} min-w-0 flex-1`} aria-label="新文件夹名称" value={folderName}
                 placeholder="在所选文件夹内新建" onValueChange={setFolderName}
                 onKeyDown={event => {
@@ -433,7 +433,7 @@ export function SyncProfileEditor({ profile, onClose, onSaved, embedded = false,
               </Field> : null}
               <div className={layoutGrid}>{adapter.fields.map(textField)}</div>
               {type === 's3' ? (
-                <Toggle label="路径式访问" detail="关闭后以存储桶名作为子域名" checked={draft.pathStyle !== false} onChange={pathStyle => set({ pathStyle })} />
+                <Toggle label="路径式访问" checked={draft.pathStyle !== false} onChange={pathStyle => set({ pathStyle })} />
               ) : null}
               {insecure ? <p className={`${NOTE_CLASS} text-ds-warning`}>地址使用 http，密码和书签会以明文传输。</p> : null}
               <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -496,10 +496,12 @@ export function SyncProfileEditor({ profile, onClose, onSaved, embedded = false,
           </div>
           <Toggle label={tabs ? '标签页变化后同步' : '书签变化后同步'} checked={Boolean(draft.enabled)} onChange={enabled => set({ enabled })} />
           <Toggle label="浏览器启动时同步" checked={Boolean(draft.syncOnStartupEnabled)} onChange={syncOnStartupEnabled => set({ syncOnStartupEnabled })} />
-          <Toggle label="只检查，不自动同步" detail="发现待同步的更改后由你决定何时同步"
+          <Toggle label="只检查，不自动同步"
             checked={Boolean(draft.notifyOnly)} onChange={notifyOnly => set(notifyOnly ? { notifyOnly } : { notifyOnly, notificationsEnabled: false })} />
           {draft.notifyOnly ? (
-            <Toggle label="有待同步的更改时发系统通知" checked={Boolean(draft.notificationsEnabled)} onChange={notificationsEnabled => set({ notificationsEnabled })} />
+            <div className="sync-inline-reveal">
+              <Toggle label="有待同步的更改时发系统通知" checked={Boolean(draft.notificationsEnabled)} onChange={notificationsEnabled => set({ notificationsEnabled })} />
+            </div>
           ) : null}
         </section>
 
@@ -516,7 +518,7 @@ export function SyncProfileEditor({ profile, onClose, onSaved, embedded = false,
             </Field>
             {adapter.oauth ? <>
               <Toggle label="使用自定义 OAuth 客户端" checked={customOAuth} disabled={pending !== null} onChange={setCustomOAuth} />
-              {customOAuth ? <div className="grid gap-4">
+              {customOAuth ? <div className="sync-inline-reveal grid gap-4">
                 <p className={NOTE_CLASS}>更换客户端后，此服务的其他同步项需要重新登录。</p>
                 <div className={FIELD_CLASS}>
                   <span className={LABEL_CLASS}>重定向 URI</span>
@@ -553,7 +555,7 @@ export function SyncProfileEditor({ profile, onClose, onSaved, embedded = false,
             <Toggle label="安全保护" detail="一次同步会删除或新增大量书签时停止，等你确认"
               checked={draft.failsafe !== false} onChange={failsafe => set({ failsafe })} />
             {!tabs ? (
-              <Toggle label="包含其他同步项的文件夹" detail="子文件夹另有同步项时，仍把它同步到这里"
+              <Toggle label="包含其他同步项的文件夹"
                 checked={Boolean(draft.nestedSync)} onChange={nestedSync => set({ nestedSync })} />
             ) : null}
             {type === 'linkwarden' ? (

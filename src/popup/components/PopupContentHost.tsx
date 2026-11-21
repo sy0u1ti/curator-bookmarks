@@ -526,21 +526,27 @@ export function PopupContentHost() {
     const observer = resizeObserverRef.current ||= new ResizeObserver(entries => {
       const measurement = indicatorMeasurementRef.current
       const contentSizes = observedContentSizesRef.current
-      const changed = entries.some(entry => {
+      let changed = false
+      for (const entry of entries) {
         // The feedback scroll tail changes padding, not the border box. The
         // cached scroll range must still be rebuilt when it appears or goes.
         const content = entry.contentBoxSize[0]
         const previous = contentSizes.get(entry.target)
         if (content) contentSizes.set(entry.target, { inline: content.inlineSize, block: content.blockSize })
         if (previous && content && (Math.abs(previous.inline - content.inlineSize) > 0.5 ||
-          Math.abs(previous.block - content.blockSize) > 0.5)) return true
+          Math.abs(previous.block - content.blockSize) > 0.5)) {
+          changed = true
+          continue
+        }
         const rect = entry.target === measurement?.workspace ? measurement.workspaceRect
           : entry.target === measurement?.viewport ? measurement.viewportRect
             : entry.target === measurement?.target ? measurement.targetRect : null
         const size = entry.borderBoxSize[0]
-        return !rect || !size || Math.abs(size.inlineSize - (rect.right - rect.left)) > 0.5 ||
-          Math.abs(size.blockSize - (rect.bottom - rect.top)) > 0.5
-      })
+        if (!rect || !size || Math.abs(size.inlineSize - (rect.right - rect.left)) > 0.5 ||
+          Math.abs(size.blockSize - (rect.bottom - rect.top)) > 0.5) {
+          changed = true
+        }
+      }
       if (changed) {
         scrollFollowRef.current?.follow.cancel()
         releasePinnedEdge()

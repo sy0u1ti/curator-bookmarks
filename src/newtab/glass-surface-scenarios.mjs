@@ -4,7 +4,7 @@ import { verifySearchReturnContour } from './newtab-search-return-scenarios.mjs'
 
 export function readGlassSurfaceInventory() {
   const selectors = [
-    '.newtab-search-surface', '.newtab-clock', '.bookmark-tile', '.newtab-speed-dial',
+    '.newtab-search-surface', '.bookmark-tile', '.newtab-speed-dial',
     '.newtab-speed-dial-card', '.settings-trigger', '.folder-section-header',
     '.bookmark-menu-surface', '.settings-drawer-panel',
     '[data-drawer-content]', '.custom-select-list', '.newtab-glass-preview'
@@ -44,7 +44,7 @@ export async function runGlassSurfaceChecks(page, origin, directory) {
   const checks = []
   const url = `${origin}/src/newtab/newtab.html`
   const ready = () => page.waitForFunction(() =>
-    document.querySelector('.bookmark-tile') && document.querySelector('.newtab-clock') &&
+    document.querySelector('.bookmark-tile') && document.querySelector('.newtab-search-surface') &&
     !document.getElementById('newtab-bookmark-preboot'), undefined, { timeout: 12000 })
   const inspect = async label => {
     const inventory = await page.evaluate(readGlassSurfaceInventory)

@@ -4,8 +4,7 @@ import { DuplicateGroups } from './DuplicateGroups.js'
 import { IgnoreRules } from './IgnoreRules.js'
 import {
   OPTION_PANEL_CLASS,
-  OPTION_PANEL_SETTINGS_CLASS,
-  OPTION_TOOL_PANEL_CLASS
+  OPTION_PANEL_SETTINGS_CLASS
 } from './option-layout-classes.js'
 import { OptionPanelHeader } from './OptionPanelHeader.js'
 import { RedirectControls } from './RedirectControls.js'
@@ -31,15 +30,6 @@ export function TaskPanel({ hidden, sectionKey }: OptionsPanelVisibilityProps & 
   return <RecyclePanel hidden={hidden} />
 }
 
-const AVAILABILITY_HISTORY_GROUP_CLASS =
-  OPTION_TOOL_PANEL_CLASS
-const REDIRECTS_GROUP_CLASS =
-  OPTION_TOOL_PANEL_CLASS
-const RECYCLE_GROUP_CLASS =
-  OPTION_TOOL_PANEL_CLASS
-const DUPLICATES_GROUP_CLASS =
-  OPTION_TOOL_PANEL_CLASS
-
 export function HistoryPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="history" className={OPTION_PANEL_CLASS} aria-labelledby="history-title" hidden={hidden}>
@@ -47,9 +37,7 @@ export function HistoryPanel({ hidden }: OptionsPanelVisibilityProps) {
 
       <ScopePickerTrigger source="history" />
 
-      <div className={AVAILABILITY_HISTORY_GROUP_CLASS}>
-        <AvailabilityHistory />
-      </div>
+      <AvailabilityHistory />
     </section>
   )
 }
@@ -69,11 +57,9 @@ export function RedirectsPanel({ hidden }: OptionsPanelVisibilityProps) {
     <section id="redirects" className={OPTION_PANEL_CLASS} aria-labelledby="redirects-title" hidden={hidden}>
       <OptionPanelHeader titleId="redirects-title" title="网址更新" />
 
-      <div className={REDIRECTS_GROUP_CLASS}>
-        <RedirectControls />
-        <RedirectResults />
-        <ResultsPagination kind="redirects" ariaLabel="重定向结果分页" />
-      </div>
+      <RedirectControls />
+      <RedirectResults />
+      <ResultsPagination kind="redirects" ariaLabel="重定向结果分页" />
     </section>
   )
 }
@@ -84,11 +70,8 @@ export function DuplicatesPanel({ hidden }: OptionsPanelVisibilityProps) {
       <OptionPanelHeader titleId="duplicates-title" title="重复书签检测" />
 
       <DuplicateControls />
-
-      <div className={DUPLICATES_GROUP_CLASS}>
-        <DuplicateResultsControls />
-        <DuplicateGroups />
-      </div>
+      <DuplicateResultsControls />
+      <DuplicateGroups />
     </section>
   )
 }
@@ -108,10 +91,8 @@ export function RecyclePanel({ hidden }: OptionsPanelVisibilityProps) {
     <section id="recycle" className={OPTION_PANEL_CLASS} aria-labelledby="recycle-title" hidden={hidden}>
       <OptionPanelHeader titleId="recycle-title" title="回收站" />
 
-      <div className={RECYCLE_GROUP_CLASS}>
-        <RecycleControls />
-        <RecycleBin />
-      </div>
+      <RecycleControls />
+      <RecycleBin />
     </section>
   )
 }

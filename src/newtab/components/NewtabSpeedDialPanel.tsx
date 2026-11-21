@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useLayoutEffect,
   type CSSProperties,
@@ -137,13 +138,29 @@ function SpeedDialItemsGrid({
   return (
     <div className={SPEED_DIAL_GRID_CLASS} aria-busy={state.busy ? 'true' : 'false'} ref={setGridRef}>
       {state.items.map((item) => (
-        <SpeedDialCard dragUi={dragUi} item={item} key={item.id} />
+        <SpeedDialCard
+          dragActive={dragUi.speedDialDragging}
+          isPending={dragUi.speedDialPendingId === item.id}
+          item={item}
+          key={item.id}
+          previewInitializing={dragUi.previewInitializing}
+        />
       ))}
     </div>
   )
 }
 
-function SpeedDialCard({ dragUi, item }: { dragUi: NewtabDragUiView; item: SpeedDialCardViewModel }) {
+const SpeedDialCard = memo(function SpeedDialCard({
+  dragActive,
+  isPending,
+  item,
+  previewInitializing
+}: {
+  dragActive: boolean
+  isPending: boolean
+  item: SpeedDialCardViewModel
+  previewInitializing: boolean
+}) {
   const setCardRef = useCallback((element: HTMLAnchorElement | null) => {
     setNewtabSpeedDialCardNode(item.id, element)
   }, [item.id])
@@ -161,9 +178,9 @@ function SpeedDialCard({ dragUi, item }: { dragUi: NewtabDragUiView; item: Speed
   return (
     <NewtabGlassSurface as="a"
       className={getSpeedDialCardClass({
-        dragActive: dragUi.speedDialDragging,
+        dragActive,
         dragging: item.dragging,
-        previewInitializing: dragUi.previewInitializing
+        previewInitializing
       })}
       href={item.url}
       title={item.title}
@@ -197,7 +214,7 @@ function SpeedDialCard({ dragUi, item }: { dragUi: NewtabDragUiView; item: Speed
       <span
         className={SPEED_DIAL_DRAG_HANDLE_CLASS}
         data-speed-dial-drag-handle=""
-        data-drag-pending={dragUi.speedDialPendingId === item.id ? 'true' : undefined}
+        data-drag-pending={isPending ? 'true' : undefined}
         aria-hidden="true"
         onClick={(event) => {
           event.preventDefault()
@@ -213,4 +230,4 @@ function SpeedDialCard({ dragUi, item }: { dragUi: NewtabDragUiView; item: Speed
       </span>
     </NewtabGlassSurface>
   )
-}
+})

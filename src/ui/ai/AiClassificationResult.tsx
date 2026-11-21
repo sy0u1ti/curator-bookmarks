@@ -35,7 +35,7 @@ export function AiClassificationResult({
         </div>
         {confidence || actions ? (
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2.5">
-            {confidence ? <Badge key={String(confidence)} animate>{confidence}</Badge> : null}
+            {confidence ? <Badge>{confidence}</Badge> : null}
             {actions}
           </div>
         ) : null}

@@ -3,7 +3,11 @@ import { Button } from '../../ui/base/Button'
 import { useListExit } from '../../ui/motion/useListExit'
 import { handleIgnoreRuleAction } from '../options-controller'
 import { useIgnoreRulesState } from './ignore-rules-store.js'
-import { OPTION_INSET_CLASS, OPTION_SURFACE_CLASS } from './option-layout-classes.js'
+import {
+  OPTION_LIST_HEADER_CLASS,
+  OPTION_LIST_ROW_CLASS,
+  OPTION_LIST_SECTION_CLASS
+} from './option-layout-classes.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
 import type {
   IgnoreRuleKind,
@@ -21,33 +25,27 @@ const ignoreSummaryMetrics = [
 }>
 
 const IGNORE_SUMMARY_GRID_CLASS =
-  `mt-5 grid grid-cols-[minmax(150px,0.65fr)_minmax(0,2fr)] gap-4 ${OPTION_SURFACE_CLASS} p-4 max-[760px]:grid-cols-1`
-const IGNORE_SUMMARY_PRIMARY_CLASS = 'grid content-center gap-1 border-r border-ds-border-subtle pr-4 max-[760px]:border-r-0 max-[760px]:border-b max-[760px]:pb-3 max-[760px]:pr-0'
-const IGNORE_SUMMARY_LIST_CLASS = 'grid grid-cols-3 gap-x-5 gap-y-2 max-[620px]:grid-cols-1'
-const IGNORE_SUMMARY_ITEM_CLASS = 'flex items-baseline justify-between gap-3 border-b border-ds-border-subtle py-1.5'
+  'options-interactive-surface m-0 mt-6 grid grid-cols-4 gap-px overflow-hidden rounded-ds-md border border-ds-border-subtle bg-ds-border-subtle max-[760px]:mt-4 max-[760px]:grid-cols-2'
+const IGNORE_SUMMARY_ITEM_CLASS = 'grid content-center gap-2 bg-ds-surface-1 px-5 py-4 max-[760px]:px-4'
 const IGNORE_SUMMARY_LABEL_CLASS =
-  'block text-xs font-semibold leading-[1.3] text-ds-text-muted'
+  'block text-xs font-medium leading-4 text-ds-text-muted'
 const IGNORE_SUMMARY_VALUE_CLASS =
-  'text-sm font-semibold leading-none text-ds-text-primary tabular-nums'
-const IGNORE_SUMMARY_PRIMARY_VALUE_CLASS = 'text-2xl font-[650] leading-none tracking-[-0.03em] text-ds-text-primary tabular-nums'
-const IGNORE_RULE_GROUP_CLASS =
-  `mt-5 ${OPTION_SURFACE_CLASS} p-[18px_20px_20px] shadow-none max-[760px]:p-4`
-const IGNORE_RULE_HEADER_CLASS =
-  'flex min-w-0 flex-wrap items-center justify-between gap-3'
+  'm-0 text-2xl font-semibold leading-none tracking-[-0.03em] text-ds-text-primary tabular-nums'
+const IGNORE_RULE_GROUP_CLASS = OPTION_LIST_SECTION_CLASS
+const IGNORE_RULE_HEADER_CLASS = OPTION_LIST_HEADER_CLASS
 const IGNORE_RULE_HEADER_COPY_CLASS = 'min-w-0'
 const IGNORE_RULE_TITLE_CLASS =
-  'block text-[15px] font-semibold leading-[1.35] tracking-[0] text-ds-text-primary'
+  'block text-sm font-semibold leading-5 tracking-[-0.01em] text-ds-text-primary'
 const IGNORE_RULE_SUBTITLE_CLASS =
-  'mt-2 text-[13px] leading-[1.7] text-ds-text-secondary'
+  'mt-1 mb-0 text-xs leading-[1.5] text-ds-text-secondary'
 const IGNORE_RULE_CLEAR_BUTTON_CLASS =
   'justify-center whitespace-nowrap max-[760px]:w-full'
-const IGNORE_RULE_LIST_CLASS = 'mt-4 flex flex-col [--list-exit-gap:0.75rem]'
+const IGNORE_RULE_LIST_CLASS = 'flex flex-col divide-y divide-ds-border-subtle [--list-exit-gap:0px]'
 const IGNORE_RULE_EMPTY_CLASS =
-  `${OPTION_INSET_CLASS} px-4 py-[18px] text-[13px] leading-[1.7] text-ds-text-secondary`
-const IGNORE_RULE_CARD_CLASS =
-  `${OPTION_INSET_CLASS} p-[14px_16px]`
+  'px-5 py-5 text-[13px] leading-[1.6] text-ds-text-secondary max-[760px]:px-4'
+const IGNORE_RULE_CARD_CLASS = OPTION_LIST_ROW_CLASS
 const IGNORE_RULE_CARD_HEAD_CLASS =
-  'flex min-w-0 items-start justify-between gap-3'
+  'flex min-w-0 items-center justify-between gap-3 max-[760px]:items-start'
 const IGNORE_RULE_ACTIONS_CLASS =
   'flex min-w-0 flex-none flex-wrap items-center justify-end gap-2.5'
 const IGNORE_RULE_DELETE_BUTTON_CLASS = 'shrink-0'
@@ -138,20 +136,18 @@ export function IgnoreRules() {
 function IgnoreRulesSummary({ state }: { state: IgnoreRulesSummaryState }) {
   const total = state.bookmarkCount + state.domainCount + state.folderCount
   return (
-    <div className={IGNORE_SUMMARY_GRID_CLASS}>
-      <div className={IGNORE_SUMMARY_PRIMARY_CLASS}>
-        <span className={IGNORE_SUMMARY_LABEL_CLASS}>规则总数</span>
-        <strong className={IGNORE_SUMMARY_PRIMARY_VALUE_CLASS}>{total}</strong>
+    <dl className={IGNORE_SUMMARY_GRID_CLASS}>
+      <div className={IGNORE_SUMMARY_ITEM_CLASS}>
+        <dt className={IGNORE_SUMMARY_LABEL_CLASS}>规则总数</dt>
+        <dd className={IGNORE_SUMMARY_VALUE_CLASS}>{total}</dd>
       </div>
-      <dl className={IGNORE_SUMMARY_LIST_CLASS}>
-        {ignoreSummaryMetrics.map((metric) => (
-          <div className={IGNORE_SUMMARY_ITEM_CLASS} key={metric.key}>
-            <dt className={IGNORE_SUMMARY_LABEL_CLASS}>{metric.label}</dt>
-            <dd className={IGNORE_SUMMARY_VALUE_CLASS}>{state[metric.key]}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
+      {ignoreSummaryMetrics.map((metric) => (
+        <div className={IGNORE_SUMMARY_ITEM_CLASS} key={metric.key}>
+          <dt className={IGNORE_SUMMARY_LABEL_CLASS}>{metric.label}</dt>
+          <dd className={IGNORE_SUMMARY_VALUE_CLASS}>{state[metric.key]}</dd>
+        </div>
+      ))}
+    </dl>
   )
 }
 

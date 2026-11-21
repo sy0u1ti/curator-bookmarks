@@ -49,22 +49,29 @@
   position: absolute;
   right: 10px;
   bottom: 10px;
-  color: var(--ds-accent);
+  color: var(--ds-accent-text);
   opacity: 0;
+  transform: scale(0.85);
+  transition:
+    opacity var(--ds-motion-feedback) var(--ds-ease-standard),
+    transform var(--ds-motion-feedback) var(--ds-ease-standard);
 }
 
-.texture-preset:hover {
-  border-color: var(--ds-border-hover);
+@media (hover: hover) and (pointer: fine) {
+  .texture-preset:hover {
+    border-color: var(--ds-border-hover);
+  }
 }
 
 .texture-preset[data-pressed] {
   color: var(--ds-text-primary);
-  border-color: var(--ds-accent);
+  border-color: var(--ds-focus);
   background: var(--ds-accent-soft);
 }
 
 .texture-preset[data-pressed] .texture-preset-check {
   opacity: 1;
+  transform: scale(1);
 }
 
 .texture-preset:focus-visible {
@@ -73,8 +80,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .texture-preset {
+  .texture-preset,
+  .texture-preset-check {
     transition: none;
+  }
+
+  .texture-preset-check {
+    transform: none;
   }
 }
 

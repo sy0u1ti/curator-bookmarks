@@ -30,41 +30,51 @@ export const OPTION_PANEL_SETTINGS_CLASS =
   `${OPTION_PANEL_SETTINGS_LAYOUT_CLASS} ${OPTION_PANEL_SURFACE_RESET_CLASS}`
 
 export const OPTION_SURFACE_CLASS =
-  'rounded-ds-card border-0 bg-ds-surface-1 shadow-none'
+  'rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 shadow-none'
 
 export const OPTION_INSET_CLASS =
-  'rounded-ds-lg border-0 bg-ds-surface-2 shadow-none'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-bg-page/70 shadow-none'
 
 export const OPTION_GROUP_CLASS =
-  `options-interactive-surface curator-motion-surface mt-5 ${OPTION_SURFACE_CLASS} py-1 max-[760px]:mt-4`
+  `options-interactive-surface curator-motion-surface mt-6 ${OPTION_SURFACE_CLASS} py-0.5 max-[760px]:mt-4`
 
 export const OPTION_TOOL_PANEL_CLASS =
-  `options-interactive-surface curator-motion-surface mt-5 ${OPTION_SURFACE_CLASS} p-5 max-[760px]:p-4`
+  `options-interactive-surface curator-motion-surface mt-5 ${OPTION_SURFACE_CLASS} p-5 max-[760px]:mt-4 max-[760px]:p-4`
+
+export const OPTION_LIST_SECTION_CLASS =
+  'options-interactive-surface curator-motion-surface mt-5 overflow-hidden rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 shadow-none max-[760px]:mt-4'
+
+export const OPTION_LIST_HEADER_CLASS =
+  'flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-ds-border-subtle bg-ds-bg-page/45 px-5 py-3.5 max-[760px]:flex-col max-[760px]:items-start max-[760px]:px-4'
+
+export const OPTION_LIST_ROW_CLASS =
+  'min-w-0 bg-transparent px-5 py-3.5 transition-colors duration-ds-fast ease-ds-standard hover:bg-ds-hover/40 max-[760px]:px-4'
 
 export const OPTION_RUN_HEADER_CLASS = [
-  'curator-motion-surface mt-6 grid grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)_auto] items-stretch gap-3',
+  'options-interactive-surface curator-motion-surface mt-5 grid grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)_auto] items-stretch overflow-hidden',
+  'rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 divide-x divide-ds-border-subtle',
   'max-[1180px]:grid-cols-[minmax(0,1fr)_auto]',
-  'max-[860px]:grid-cols-1'
+  'max-[860px]:grid-cols-1 max-[860px]:divide-x-0 max-[860px]:divide-y'
 ].join(' ')
 
 export const OPTION_RUN_CELL_CLASS =
-  `options-interactive-surface curator-motion-surface min-w-0 ${OPTION_SURFACE_CLASS} p-4 max-[760px]:p-4`
+  'min-w-0 bg-transparent px-5 py-4 max-[760px]:p-4'
 
 export const OPTION_RUN_CELL_TITLE_CLASS =
-  'block text-[15px] font-[650] leading-normal tracking-[0] text-ds-text-primary'
+  'block text-xs font-medium leading-4 tracking-[0.01em] text-ds-text-secondary'
 
 export const OPTION_RUN_CELL_TEXT_CLASS =
   'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 
 export const OPTION_RUN_ACTIONS_CLASS =
-  `options-interactive-surface curator-motion-surface grid min-w-0 grid-cols-1 content-start gap-2.5 ${OPTION_SURFACE_CLASS} p-4`
+  'grid min-w-0 grid-cols-1 content-center gap-2 bg-ds-surface-2/40 px-5 py-4 max-[760px]:p-4'
 
 export const OPTION_RUN_ACTION_BUTTON_CLASS =
   'max-[860px]:w-full'
 
 export const OPTION_ROW_CLASS = [
-  'grid min-h-[66px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 p-4',
-  'border-ds-border-subtle bg-transparent',
+  'grid min-h-[60px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-5 py-4',
+  'border-ds-border-subtle bg-transparent transition-colors duration-ds-fast ease-ds-standard hover:bg-ds-hover/50',
   'max-[1180px]:grid-cols-1 max-[1180px]:items-start',
   'max-[760px]:gap-3 max-[760px]:p-4'
 ].join(' ')
@@ -72,13 +82,13 @@ export const OPTION_ROW_CLASS = [
 export const OPTION_COPY_CLASS = 'min-w-0 font-[var(--font-sans)]'
 
 export const OPTION_COPY_TITLE_CLASS =
-  'm-0 block text-[15px] font-[650] leading-normal tracking-[0] text-ds-text-primary'
+  'm-0 block text-sm font-semibold leading-[1.4] tracking-[-0.01em] text-ds-text-primary'
 
 export const OPTION_COPY_TEXT_CLASS =
-  'mt-[7px] mb-0 text-[13px] leading-[1.65] text-ds-text-muted'
+  'mt-1.5 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 
 export const OPTION_EMPTY_STATE_CLASS =
-  'options-interactive-surface curator-motion-surface rounded-ds-card border-0 bg-ds-surface-1 p-5 text-left shadow-none'
+  'options-interactive-surface curator-motion-surface rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 px-6 py-7 text-left shadow-none'
 
 export const OPTION_EMPTY_STATE_TITLE_CLASS =
   'm-0 text-sm font-semibold leading-[1.4] text-ds-text-primary'
@@ -90,13 +100,13 @@ export const OPTION_EMPTY_STATE_ACTIONS_CLASS =
   'mt-4 flex flex-wrap items-center gap-2.5'
 
 export const OPTION_PANEL_TITLE_CLASS =
-  'm-0 max-w-[780px] text-2xl font-semibold leading-[1.15] tracking-[-0.025em] text-ds-text-primary'
+  'm-0 max-w-[780px] text-[22px] font-semibold leading-[1.2] tracking-[-0.025em] text-ds-text-primary'
 
 export const OPTION_PANEL_DESCRIPTION_CLASS =
-  'mt-[10px] mb-0 max-w-[720px] text-sm leading-[1.7] tracking-[0] text-ds-text-secondary'
+  'mt-2 mb-0 max-w-[720px] text-[13px] leading-[1.6] tracking-[0] text-ds-text-secondary'
 
 export const OPTION_PANEL_HEADER_CLASS =
-  'mb-2 pb-1'
+  'mb-5 border-b border-ds-border-subtle pb-3.5'
 
 export const OPTION_VALUE_CLASS = [
   'inline-flex min-h-5 min-w-0 max-w-full items-center overflow-hidden text-ellipsis whitespace-nowrap',
@@ -121,10 +131,10 @@ export const OPTION_RESULT_CHECKBOX_CLASS =
 
 export const SCOPE_PICKER_TRIGGER_CLASS = [
   'curator-motion-chip relative inline-flex min-h-9 min-w-[220px] max-w-full items-center justify-start gap-2 overflow-visible',
-  'rounded-ds-sm border border-ds-border bg-ds-surface-2 p-[0_12px]',
-  'font-[var(--font-sans)] text-[13px] font-semibold leading-[1.25] text-ds-text-primary text-left',
+  'rounded-ds-sm border border-ds-border bg-ds-bg-page px-3',
+  'font-[var(--font-sans)] text-[13px] font-medium leading-[1.25] text-ds-text-primary text-left',
   'transition-[background-color,border-color,color,transform,opacity] duration-ds-standard ease-ds-standard',
-  'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
+  'hover:border-ds-border-hover hover:bg-ds-surface-2 hover:text-ds-text-primary',
   'focus-visible:border-ds-focus focus-visible:bg-ds-surface-2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-ds-focus focus-visible:shadow-none',
   'active:scale-[var(--ds-press-scale)] motion-reduce:active:scale-100 disabled:cursor-default disabled:opacity-55 data-disabled:cursor-default data-disabled:opacity-55',
   'max-[1180px]:w-full max-[1180px]:min-w-0'

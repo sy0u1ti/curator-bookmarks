@@ -4,8 +4,7 @@ import {
   CURATOR_DATA_STORES,
   applyCuratorDataStoreDeltaWithMeta,
   isCuratorDataDbAvailable,
-  readCuratorDataStore,
-  readCuratorDataStoreMeta,
+  readCuratorDataStoreWithMeta,
   resetCuratorDataDbForTest,
   replaceCuratorDataStoreWithMeta,
   type CuratorDataStoreMeta
@@ -54,11 +53,8 @@ export function normalizeNewTabActivityRepositoryState(value: unknown): NewTabAc
 
 export async function loadNewTabActivityFromRepository(
   normalizeActivity: (rawActivity: unknown) => NewTabActivityRepositoryState,
-  transaction?: LocalStorageTransaction
+  _transaction?: LocalStorageTransaction
 ): Promise<NewTabActivityRepositoryState> {
-  if (!transaction) {
-    return withLocalStorageTransaction(active => loadNewTabActivityFromRepository(normalizeActivity, active))
-  }
   const stored = await getLocalStorage([STORAGE_KEYS.newTabActivity])
   const raw = stored[STORAGE_KEYS.newTabActivity] as { migratedTo?: string; records?: unknown } | undefined
   const localActivity = normalizeNewTabActivityRepositoryState(raw)
@@ -161,12 +157,14 @@ async function loadNewTabActivityFromIndexedDb(
     return null
   }
 
-  const meta = await readCuratorDataStoreMeta(NEW_TAB_ACTIVITY_REPOSITORY_META_KEY)
+  const { meta, records } = await readCuratorDataStoreWithMeta<NewTabActivityRepositoryRecord>(
+    CURATOR_DATA_STORES.activityRecords,
+    NEW_TAB_ACTIVITY_REPOSITORY_META_KEY
+  )
   if (!meta) {
     return null
   }
 
-  const records = await readCuratorDataStore<NewTabActivityRepositoryRecord>(CURATOR_DATA_STORES.activityRecords)
   if (records.length < meta.recordCount) {
     return null
   }

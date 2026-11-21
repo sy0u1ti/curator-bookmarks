@@ -36,7 +36,12 @@ export function AiModelSelector({
   const [query, setQuery] = useState('')
   const catalogModels = state.fetchedModels.length ? state.fetchedModels : state.models
   const selectedModel = state.currentModel || catalogModels[0] || ''
-  const selectedMeta = getModelMeta(selectedModel, state)
+  const modelSets = useMemo(() => ({
+    fetched: new Set(state.fetchedModels),
+    preset: new Set(state.presetModels),
+    custom: new Set(state.customModels)
+  }), [state.customModels, state.fetchedModels, state.presetModels])
+  const selectedMeta = getModelMeta(selectedModel, state, modelSets)
   const filteredModels = useMemo(() => {
     const normalizedQuery = normalizeModelSearchText(query)
     if (!normalizedQuery) {
@@ -97,6 +102,7 @@ export function AiModelSelector({
         >
           <ModelSelectorInput
             autoFocus
+            aria-label="搜索模型"
             onClear={() => setQuery('')}
             placeholder="Search models…"
           />
@@ -111,7 +117,7 @@ export function AiModelSelector({
                 key={group.key}
               >
                 {group.models.map((model) => {
-                  const meta = getModelMeta(model, state)
+                  const meta = getModelMeta(model, state, modelSets)
                   return (
                     <ModelSelectorItem
                       key={model}
@@ -162,15 +168,19 @@ function groupModels(models: string[], state: AiModelSelectorState) {
     : [...groups.values()]
 }
 
-function getModelMeta(model: string, state: AiModelSelectorState) {
+function getModelMeta(
+  model: string,
+  state: AiModelSelectorState,
+  modelSets: { fetched: Set<string>; preset: Set<string>; custom: Set<string> }
+) {
   const tags: string[] = []
-  if (state.fetchedModels.length && state.fetchedModels.includes(model)) {
+  if (modelSets.fetched.size && modelSets.fetched.has(model)) {
     tags.push('已拉取')
   } else {
-    if (state.presetModels.includes(model)) {
+    if (modelSets.preset.has(model)) {
       tags.push('预设')
     }
-    if (state.customModels.includes(model)) {
+    if (modelSets.custom.has(model)) {
       tags.push('自定义')
     }
   }

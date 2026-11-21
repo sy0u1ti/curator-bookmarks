@@ -8,3 +8,23 @@
   width: 100%;
 }
 .sync-profile-editor > .curator-dialog-body { flex: 1 1 auto; }
+
+.sync-inline-reveal {
+  transition:
+    opacity var(--ds-motion-enter-opacity) var(--ds-ease-standard),
+    transform var(--ds-motion-fast) var(--ds-ease-settle);
+}
+
+@starting-style {
+  .sync-inline-reveal {
+    opacity: 0;
+    transform: translate3d(0, -4px, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-inline-reveal {
+    transform: none;
+    transition: opacity 80ms linear;
+  }
+}

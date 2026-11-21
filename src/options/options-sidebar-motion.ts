@@ -13,11 +13,15 @@ export function attachSidebarMotion(sidebar: HTMLElement, indicator: HTMLElement
   let previousTime = 0
   let placed = false
   let readyFrame = 0
+  let lastWidth = -1
+  let lastHeight = -1
   const sublists = [...sidebar.querySelectorAll<HTMLElement>('.options-nav-sublist')].map(list => ({
     list,
     indicator: list.querySelector<HTMLElement>(':scope > .options-nav-sub-indicator')!,
     row: null as HTMLElement | null,
-    readyFrame: 0
+    readyFrame: 0,
+    lastWidth: -1,
+    lastHeight: -1
   }))
 
   const geometry = (target: HTMLElement, host = sidebar): Rect | null => {
@@ -36,8 +40,14 @@ export function attachSidebarMotion(sidebar: HTMLElement, indicator: HTMLElement
 
   const paint = () => {
     indicator.style.transform = `translate3d(${position.x.position}px, ${position.y.position}px, 0)`
-    indicator.style.width = `${position.width.position}px`
-    indicator.style.height = `${position.height.position}px`
+    if (position.width.position !== lastWidth) {
+      lastWidth = position.width.position
+      indicator.style.width = `${lastWidth}px`
+    }
+    if (position.height.position !== lastHeight) {
+      lastHeight = position.height.position
+      indicator.style.height = `${lastHeight}px`
+    }
   }
 
   const positionSublists = (instant = false) => {
@@ -55,8 +65,14 @@ export function attachSidebarMotion(sidebar: HTMLElement, indicator: HTMLElement
       if (instant || !sub.row || shouldSkipMotion()) delete sub.indicator.dataset.ready
       sub.indicator.hidden = false
       sub.indicator.style.transform = `translate3d(${rect.x}px, ${rect.y}px, 0)`
-      sub.indicator.style.width = `${rect.width}px`
-      sub.indicator.style.height = `${rect.height}px`
+      if (rect.width !== sub.lastWidth) {
+        sub.lastWidth = rect.width
+        sub.indicator.style.width = `${rect.width}px`
+      }
+      if (rect.height !== sub.lastHeight) {
+        sub.lastHeight = rect.height
+        sub.indicator.style.height = `${rect.height}px`
+      }
       sub.row = next
       if (!sub.indicator.dataset.ready && !sub.readyFrame) {
         sub.readyFrame = requestAnimationFrame(() => {

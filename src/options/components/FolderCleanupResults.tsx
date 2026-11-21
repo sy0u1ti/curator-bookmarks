@@ -22,7 +22,7 @@ const FOLDER_CLEANUP_EMPTY_CLASS =
 const FOLDER_CLEANUP_CARD_CLASS =
   `${OPTION_INSET_CLASS} p-[14px_16px]`
 const SPLIT_UNDO_CARD_CLASS =
-  'rounded-ds-card border border-ds-border bg-ds-surface-1 ds-inset-card'
+  `${OPTION_INSET_CLASS} p-[14px_16px]`
 const FOLDER_CLEANUP_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3'
 const FOLDER_CLEANUP_ACTIONS_CLASS =
@@ -44,11 +44,11 @@ const FOLDER_CLEANUP_TITLE_CLASS =
 const FOLDER_CLEANUP_PATH_CLASS =
   'mt-1 min-w-0 [overflow-wrap:anywhere] text-[13px] leading-[1.55] text-ds-text-secondary'
 const FOLDER_CLEANUP_DETAIL_CLASS =
-  'mt-1 min-w-0 [overflow-wrap:anywhere] text-[13px] leading-[1.55] text-ds-text-disabled'
+  'mt-1 min-w-0 [overflow-wrap:anywhere] text-[13px] leading-[1.55] text-ds-text-muted'
 const SPLIT_PREVIEW_CLASS = 'mt-3 flex flex-wrap gap-2'
 const PREVIEW_CLASS = 'mt-3 grid gap-2 border-t border-ds-border-subtle pt-3'
 const PREVIEW_ROW_CLASS =
-  'flex min-w-0 items-center justify-between gap-3 text-xs leading-[1.5] text-ds-text-disabled'
+  'flex min-w-0 items-center justify-between gap-3 text-xs leading-[1.5] text-ds-text-muted'
 const PREVIEW_ROW_TITLE_CLASS =
   'min-w-0 [overflow-wrap:anywhere] text-[13px] font-semibold text-ds-text-secondary'
 

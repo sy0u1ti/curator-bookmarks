@@ -302,6 +302,46 @@
 .popup-workspace-reveal .popup-skeleton-pulse {
   animation: t-skel-pulse var(--pulse-dur) ease-in-out var(--pulse-count);
   --pulse-min: 0.72;
+  transform: scale3d(1, 1, 1);
+  transform-origin: left center;
+  transition: transform var(--reveal-dur) var(--reveal-ease);
+}
+
+.popup-page-reveal .popup-skeleton-pulse {
+  animation: t-skel-pulse var(--pulse-dur) ease-in-out var(--pulse-count);
+  --pulse-min: 0.72;
+  transform: scale3d(1, 1, 1);
+  transform-origin: left center;
+  transition: transform var(--reveal-dur) var(--reveal-ease);
+}
+
+.popup-t-skel .popup-skeleton-pulse[data-origin="right"] {
+  transform-origin: right center;
+}
+
+.popup-t-skel .popup-skeleton-pulse[data-origin="center"] {
+  transform-origin: center;
+}
+
+.popup-t-skel.is-revealed .popup-skeleton-pulse {
+  transform: scale3d(0.96, 0.84, 1);
+}
+
+.popup-t-skel.is-resetting .popup-skeleton-pulse {
+  transition: none !important;
+}
+
+.t-skel-skeleton .ds-scrollbar::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+.popup-t-skel .t-skel-skeleton.popup-surface,
+.popup-t-skel .t-skel-skeleton .popup-surface {
+  background: transparent;
+}
+
+.popup-t-skel .t-skel-skeleton .popup-surface > header {
+  border-bottom-color: transparent;
 }
 
 html,
@@ -331,8 +371,11 @@ html:not([data-curator-surface="sidepanel"]) body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .popup-workspace-reveal .popup-skeleton-pulse {
+  .popup-workspace-reveal .popup-skeleton-pulse,
+  .popup-page-reveal .popup-skeleton-pulse {
     animation: none;
+    transform: none;
+    transition: none;
   }
 
   /* popup.css :root wins over the reduced-motion block in tokens.css,
@@ -626,8 +669,6 @@ body::after {
    groups animate with compositor properties. This avoids per-frame relayout. */
 .popup-edit-modal {
   --popup-edit-open-shift: 0px;
-  --popup-edit-surface-scale: 1;
-  --popup-edit-surface-inverse-scale: 1;
   isolation: isolate;
   overflow: visible;
   will-change: opacity, transform;
@@ -715,13 +756,14 @@ body::after {
   display: block;
   height: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   transition: none;
 }
 
 .edit-folder-accordion .t-acc-panel[data-open] {
   height: 0;
   overflow: visible;
+  transition: none;
 }
 
 .edit-folder-accordion .t-acc-panel-inner {
@@ -733,23 +775,27 @@ body::after {
   height: var(--popup-edit-panel-height);
   overflow: visible;
   contain: layout;
-  /* The tree is kept mounted, painted at sub-pixel opacity, and clipped by
-     its zero-height panel. Opening therefore only composites existing
-     textures instead of rasterizing the whole picker on the first frame. */
+  /* The tree is kept mounted and painted at sub-pixel opacity so opening
+     only composites existing textures while staying unclipped during close. */
   opacity: 0.001;
-  transform: translateZ(0);
+  transform: translate3d(0, -4px, 0);
   visibility: visible;
   pointer-events: none;
   will-change: opacity, transform;
   backface-visibility: hidden;
-  transition: none;
+  transition:
+    opacity 100ms var(--ds-ease-standard) 0ms,
+    transform 100ms var(--ds-ease-standard) 0ms;
 }
 
-.edit-folder-accordion .t-acc-panel[data-open] .t-acc-panel-inner {
+.edit-folder-accordion .t-acc-panel[data-open]:not([data-ending-style]) .t-acc-panel-inner {
   opacity: 1;
+  transform: translate3d(0, 0, 0);
   visibility: visible;
   pointer-events: auto;
-  transition: none;
+  transition:
+    opacity 180ms var(--ds-ease-standard) 60ms,
+    transform 180ms var(--ds-ease-standard) 60ms;
 }
 
 
@@ -772,6 +818,11 @@ body::after {
   .popup-edit-lower,
   .edit-folder-accordion .t-acc-panel-inner {
     transition: none;
+    transition-delay: 0ms;
+  }
+
+  .edit-folder-accordion .t-acc-panel-inner {
+    transform: translate3d(0, 0, 0);
   }
 }
 
@@ -864,9 +915,11 @@ body::after {
   outline: none;
 }
 
-.popup-folder-card:hover {
-  border-color: var(--ds-border-hover);
-  background: var(--ds-hover);
+@media (hover: hover) and (pointer: fine) {
+  .popup-folder-card:hover {
+    border-color: var(--ds-border-hover);
+    background: var(--ds-hover);
+  }
 }
 
 .popup-folder-picker-card {
@@ -883,7 +936,6 @@ body::after {
   transition: opacity var(--duration-micro) var(--ds-ease-standard);
 }
 
-.popup-folder-picker-card:hover,
 .popup-folder-picker-card:focus-visible,
 .popup-folder-picker-card[aria-selected="true"] {
   border-color: transparent;
@@ -892,9 +944,20 @@ body::after {
 }
 
 .popup-folder-picker-card[aria-selected="true"]::after,
-.popup-folder-picker-row:focus-within .popup-folder-picker-card::after,
-.popup-folder-picker-row:hover .popup-folder-picker-card:not(:disabled)::after {
+.popup-folder-picker-row:focus-within .popup-folder-picker-card::after {
   opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .popup-folder-picker-card:hover {
+    border-color: transparent;
+    background: transparent;
+    outline: none;
+  }
+
+  .popup-folder-picker-row:hover .popup-folder-picker-card:not(:disabled)::after {
+    opacity: 1;
+  }
 }
 
 #popup-app-shell[data-keyboard-nav="true"] .popup-row-actions:not([data-pinned="true"]):not(:focus-within) .popup-row-actions-menu {
@@ -942,6 +1005,34 @@ body::after {
   width: 100%;
   height: 100%;
   min-height: 0;
+}
+
+.popup-scroll-to-top {
+  border: var(--ds-stroke-width) solid var(--ds-border);
+  background: color-mix(in srgb, var(--ds-surface-3) 92%, transparent);
+  color: var(--ds-text-secondary);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.08),
+    0 6px 18px rgba(0, 0, 0, 0.48);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.popup-scroll-to-top:focus-visible {
+  border-color: var(--ds-border-hover);
+  background: var(--ds-surface-3);
+  color: var(--ds-text-primary);
+  box-shadow:
+    var(--ds-shadow-focus),
+    0 6px 18px rgba(0, 0, 0, 0.48);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .popup-scroll-to-top[data-visible="true"]:hover {
+    border-color: var(--ds-border-hover);
+    background: var(--ds-surface-3);
+    color: var(--ds-text-primary);
+  }
 }
 
 /* 智能分类「已保存」成功时刻：对勾描画（success check 简化版，纯动画）。

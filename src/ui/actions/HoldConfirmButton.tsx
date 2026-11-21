@@ -45,6 +45,7 @@ export function HoldConfirmButton({ label, onConfirm, disabled, className, style
   useEffect(() => { if (disabled) cancel() }, [disabled])
 
   const visibleLabel = phase === 'ready' ? (assistive ? '再次确认' : '松开确认') : phase === 'holding' ? '继续按住' : `按住${label}`
+  const labelStatus = phase === 'ready' ? (assistive ? 'error' : 'success') : phase === 'holding' ? 'pending' : 'idle'
   return (
     <>
       <Button
@@ -55,6 +56,7 @@ export function HoldConfirmButton({ label, onConfirm, disabled, className, style
         aria-label={visibleLabel}
         aria-describedby={[props['aria-describedby'], descriptionId].filter(Boolean).join(' ')}
         data-hold-phase={phase}
+        data-motion-keyboard="preserve"
         onPointerDown={(event) => {
           if (disabled || !event.isPrimary || event.button !== 0 || key.current) return
           setAssistive(false)
@@ -106,8 +108,8 @@ export function HoldConfirmButton({ label, onConfirm, disabled, className, style
         onContextMenu={(event) => { event.preventDefault(); cancel() }}
       >
         <span className="curator-hold-fill" aria-hidden="true" />
-        <ActionFeedbackLabel status="idle" labels={{
-          idle: visibleLabel, pending: `按住${label}`, success: '松开确认', error: '再次确认'
+        <ActionFeedbackLabel status={labelStatus} labels={{
+          idle: `按住${label}`, pending: '继续按住', success: '松开确认', error: '再次确认'
         }} />
       </Button>
       <span id={descriptionId} className="sr-only">

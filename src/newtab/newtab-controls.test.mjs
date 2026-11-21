@@ -14,54 +14,25 @@ const page = await context.newPage()
 const errors = []
 page.on('pageerror', error => errors.push(error.message))
 context.setDefaultTimeout(12000)
-const report = { timeZones: [], dates: [] }
+const report = {}
 try {
   const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker')
-  await worker.evaluate(() => chrome.storage.local.set({ curatorBookmarkNewTabBackgroundSettings: { type: 'color', color: '#111111' } }))
-  // Playwright's clock also fakes requestIdleCallback, which the search index waits on.
-  // The clock display only needs wall time, so fix Date and leave the scheduler real.
-  await page.addInitScript(fixed => {
-    const RealDate = Date
-    globalThis.Date = class extends RealDate {
-      constructor(...args) { super(...(args.length ? args : [fixed])) }
-      static now() { return fixed }
-    }
-  }, Date.parse('2026-10-06T15:24:35Z'))
+  await worker.evaluate(() => chrome.storage.local.set({
+    curatorBookmarkNewTabBackgroundSettings: { type: 'color', color: '#111111' },
+    curatorBookmarkNewTabTimeSettings: { enabled: true, showSeconds: true }
+  }))
   await page.goto(`chrome-extension://${new URL(worker.url()).host}/src/newtab/newtab.html`)
-  const select = async (name, value) => {
-    await page.getByRole('combobox', { name, exact: true }).click()
-    await page.getByRole('option', { name: value, exact: true }).click()
-  }
   const toggle = id => page.locator(`[role="switch"][aria-labelledby="${id}-label"]`).click()
   const query = 'GitHub settings regression'
   await page.waitForFunction(() => performance.getEntriesByName('newtab.searchReady', 'mark').length > 0)
   await page.locator('.newtab-search-input').fill(query)
   await page.getByRole('button', { name: '打开设置', exact: true }).click()
   await page.getByRole('tab', { name: '外观', exact: true }).click()
-  await page.locator('#time-details-toggle').click()
-  for (const [zone, expected] of [['UTC','15:24'],['北京','23:24'],['香港','23:24'],['东京','00:24'],['新加坡','23:24'],['伦敦','16:24'],['巴黎','17:24'],['纽约','11:24'],['洛杉矶','08:24']]) {
-    await select('时区', zone)
-    await page.waitForFunction(expected => document.querySelector('.newtab-clock [data-clock-time]')?.textContent === expected, expected)
-    report.timeZones.push({ zone, expected })
-  }
-  await select('时区', 'UTC')
-  for (const [format, expected] of [['2026.05.01 周五','2026.10.06 周二'],['2026年5月1日 周五','2026年10月6日 周二'],['05.01 周五','10.06 周二'],['周五 05/01','周二 10/06'],['周五 01/05','周二 06/10'],['2026.05.01','2026.10.06']]) {
-    await select('日期格式', format)
-    await page.waitForFunction(expected => document.querySelector('.newtab-clock [data-clock-date]')?.textContent === expected, expected)
-    report.dates.push(expected)
-  }
-  await toggle('time-show-seconds')
-  await page.waitForFunction(() => document.querySelector('.newtab-clock [data-clock-time]')?.textContent === '15:24:35')
-  await toggle('time-hour12')
-  await page.waitForFunction(() => document.querySelector('.newtab-clock [data-clock-time]')?.textContent === '03:24:35' && document.querySelector('.newtab-clock [data-clock-period]')?.textContent === 'PM')
-  await toggle('time-enabled')
-  // Hiding the clock is an async React commit; assert on the settled state
-  // instead of racing it with a zero-wait visibility check.
-  await page.locator('.newtab-clock').waitFor({ state: 'hidden' })
-  assert.equal(await page.locator('.newtab-clock').isVisible(), false)
-  await toggle('time-enabled')
-  await page.locator('.newtab-clock').waitFor()
-  report.secondsAndPeriod = true
+  assert.equal(await page.locator('.newtab-clock').count(), 0,
+    'Legacy stored time settings must not render a clock widget.')
+  assert.equal(await page.locator('#settings-time-title, #time-enabled').count(), 0,
+    'Time and date settings must not remain in Appearance.')
+  report.clockRemoved = true
   await page.getByRole('tab', { name: '搜索', exact: true }).click()
   await page.getByRole('slider', { name: '搜索栏高度', exact: true }).waitFor()
   assert.equal(await page.locator('.newtab-search-engine, [data-search-engine-toggle]').count(), 0,

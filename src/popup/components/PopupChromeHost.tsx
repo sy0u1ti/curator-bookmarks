@@ -70,28 +70,29 @@ const searchShellClass = [
 const searchIconClass =
   'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard group-focus-within/search:text-ds-text-secondary'
 const searchInputClass =
-  'popup-search-input min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-[14px] font-normal leading-[1.4] tracking-normal text-ds-text-primary outline-none placeholder:text-ds-text-muted @max-[520px]/popup:min-h-8 [font-optical-sizing:auto] [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
+  'popup-search-input min-w-0 flex-auto self-stretch border-0 bg-transparent pl-1 pr-0.5 py-0 text-[14px] font-normal leading-[1.4] tracking-normal text-ds-text-primary outline-none placeholder:text-ds-text-muted @max-[520px]/popup:min-h-8 [font-optical-sizing:auto] [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
 const clearSearchButtonClass = [
-  'inline-flex h-8 w-8 flex-none items-center justify-center rounded-ds-sm border-0 bg-transparent p-0 text-ds-text-muted',
-  'transition-[background-color,color,opacity,transform,scale] duration-ds-fast ease-ds-standard',
+  'inline-flex h-8 w-8 flex-none items-center justify-center rounded-ds-sm border-0 bg-transparent p-0 text-ds-text-muted outline-none',
+  'transition-[background-color,color,opacity,scale,visibility] [transition-behavior:allow-discrete] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-active hover:text-ds-text-primary',
-  'focus-visible:bg-ds-active focus-visible:text-ds-text-primary focus-visible:outline-none',
+  'focus-visible:bg-ds-active focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)]',
-  'data-[visible=false]:invisible data-[visible=false]:pointer-events-none data-[visible=false]:opacity-0'
+  'data-[visible=false]:invisible data-[visible=false]:pointer-events-none data-[visible=false]:opacity-0 data-[visible=false]:scale-95 motion-reduce:data-[visible=false]:scale-100'
 ].join(' ')
 const semanticSearchBaseClass = [
-  'relative inline-flex h-8 w-[76px] min-w-[76px] flex-none items-center justify-center gap-[5px] whitespace-nowrap rounded-ds-sm border-0 bg-transparent px-3.5 text-xs font-medium tracking-[0.01em] text-ds-text-secondary @max-[520px]/popup:h-8 @max-[520px]/popup:px-2.5',
-  'transition-[background-color,color,box-shadow,transform,scale] duration-ds-fast ease-ds-standard',
-  'hover:bg-ds-hover hover:text-ds-text-primary',
-  'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:[outline:3px_solid_var(--ds-accent-soft)] focus-visible:outline-offset-0',
+  'relative inline-flex h-8 w-[76px] min-w-[76px] flex-none items-center justify-center gap-[5px] whitespace-nowrap rounded-ds-sm border-0 px-3.5 text-xs font-medium tracking-[0.01em] @max-[520px]/popup:h-8 @max-[520px]/popup:px-2.5',
+  'transition-[background-color,color,box-shadow,scale] duration-ds-fast ease-ds-standard',
+  'focus-visible:[outline:3px_solid_var(--ds-accent-soft)] focus-visible:outline-offset-0',
   'active:scale-[var(--ds-press-scale)]'
 ].join(' ')
+const semanticSearchDefaultClass =
+  'bg-transparent text-ds-text-secondary hover:bg-ds-hover hover:text-ds-text-primary focus-visible:bg-ds-hover focus-visible:text-ds-text-primary'
 const semanticSearchNotConfiguredClass =
-  'text-ds-text-disabled hover:text-ds-text-secondary focus-visible:text-ds-text-secondary'
+  'bg-transparent text-ds-text-muted hover:bg-ds-hover hover:text-ds-text-secondary focus-visible:bg-ds-hover focus-visible:text-ds-text-secondary'
 const semanticSearchActiveClass =
   'bg-ds-accent text-ds-accent-contrast hover:bg-ds-accent-hover hover:text-ds-accent-contrast focus-visible:bg-ds-accent-hover focus-visible:text-ds-accent-contrast'
 const semanticSearchFallbackClass =
-  'bg-ds-warning-soft text-ds-warning hover:bg-ds-warning-soft hover:text-ds-warning focus-visible:bg-ds-warning-soft focus-visible:text-ds-warning'
+  'bg-ds-warning-soft text-ds-warning-text hover:bg-ds-warning/25 hover:text-ds-warning-text focus-visible:bg-ds-warning/25 focus-visible:text-ds-warning-text'
 const semanticSearchPendingDotClass =
   'h-1.5 w-1.5 rounded-full bg-current animate-[cb-search-pulse_1s_var(--ds-ease-standard)_infinite] motion-reduce:animate-none'
 
@@ -256,12 +257,17 @@ export function PopupChromeHost({
     commandPanelBaseClass,
     smartActive ? commandPanelSmartClass : commandPanelDefaultClass
   ].join(' ')
+  const naturalSearchToneClass = state.search.fallback
+    ? semanticSearchFallbackClass
+    : state.search.pressed
+      ? semanticSearchActiveClass
+      : state.search.notConfigured
+        ? semanticSearchNotConfiguredClass
+        : semanticSearchDefaultClass
   const naturalSearchClassName = [
     semanticSearchBaseClass,
-    state.search.notConfigured ? semanticSearchNotConfiguredClass : '',
-    state.search.pressed ? semanticSearchActiveClass : '',
-    state.search.fallback ? semanticSearchFallbackClass : ''
-  ].filter(Boolean).join(' ')
+    naturalSearchToneClass
+  ].join(' ')
 
   return (
     <>

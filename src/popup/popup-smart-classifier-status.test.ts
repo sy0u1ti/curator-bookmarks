@@ -7,12 +7,24 @@ import {
 import { assessSensitiveExternalUrl } from '../shared/sensitive-url.js'
 
 function run(): void {
+  testColdOpenUsesPageLoadingUntilActiveTabHydrates()
   testBaseRefreshDoesNotRenderPageLoading()
   testActiveSmartStatesArePreserved()
   testUnavailableUrlsUseIdleShell()
   testSensitiveWebPagesKeepTheirPageIdentity()
   testOrdinaryPagesKeepAllActions()
   testInvalidAndBrowserUrlsCannotBeSaved()
+}
+
+function testColdOpenUsesPageLoadingUntilActiveTabHydrates(): void {
+  const status = getPopupSmartClassifierRenderStatus({
+    currentTabHydrated: false,
+    currentUrl: '',
+    isLoading: true,
+    smartStatus: 'idle'
+  })
+
+  assert(status === 'page-loading', `cold open before active tab resolves should show page-loading skeleton, got ${status}`)
 }
 
 function testBaseRefreshDoesNotRenderPageLoading(): void {

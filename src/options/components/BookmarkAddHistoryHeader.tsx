@@ -3,7 +3,7 @@ import { handleBookmarkAddHistoryClear } from '../options-controller'
 import type { BookmarkAddHistoryHeaderState } from './BookmarkAddHistoryTypes.js'
 
 const BOOKMARK_ADD_HISTORY_HEADER_CLASS =
-  'flex flex-wrap items-center justify-between gap-3'
+  'mt-6 flex flex-wrap items-center justify-between gap-3 max-[760px]:mt-4'
 const BOOKMARK_ADD_HISTORY_HEADER_COPY_CLASS = 'min-w-0'
 const BOOKMARK_ADD_HISTORY_SUBTITLE_CLASS =
   'm-0 text-[13px] leading-[1.55] text-ds-text-secondary'

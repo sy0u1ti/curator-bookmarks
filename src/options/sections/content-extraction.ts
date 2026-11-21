@@ -196,6 +196,17 @@ export function sanitizeHtmlForInertParsing(html: unknown): string {
     .replace(/\s+(href|src)\s*=\s*javascript:[^\s"'=<>`]+/gi, '')
 }
 
+function decodePathnameSegmentSafely(segment: string): string {
+  if (!segment) {
+    return ''
+  }
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    return segment
+  }
+}
+
 export function buildFallbackPageContentFromUrl(
   url: unknown,
   options: FallbackOptions = {}
@@ -204,7 +215,7 @@ export function buildFallbackPageContentFromUrl(
   const parsedUrl = parseUrlSafely(finalUrl)
   const hostname = parsedUrl?.hostname.replace(/^www\./i, '') || ''
   const pathname = parsedUrl?.pathname || ''
-  const filename = decodeURIComponent(pathname.split('/').filter(Boolean).at(-1) || '')
+  const filename = decodePathnameSegmentSafely(pathname.split('/').filter(Boolean).at(-1) || '')
   const readableFilename = cleanText(
     filename
       .replace(/\.[a-z0-9]{1,8}$/i, '')

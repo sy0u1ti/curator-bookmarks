@@ -1,3 +1,20 @@
+:root {
+  --ds-bg-page: #000000;
+  --ds-bg-app: #000000;
+  --ds-surface-1: #0a0a0a;
+  --ds-surface-2: #111111;
+  --ds-surface-3: #181818;
+  --ds-hover: rgba(255, 255, 255, 0.055);
+  --ds-active: rgba(255, 255, 255, 0.095);
+  --ds-selected: rgba(255, 255, 255, 0.085);
+  --ds-border-subtle: #1f1f1f;
+  --ds-border: #2e2e2e;
+  --ds-border-hover: #474747;
+  --ds-text-primary: #ededed;
+  --ds-text-secondary: #a1a1a1;
+  --ds-text-muted: #8a8a8a;
+}
+
 html {
   background: var(--ds-bg-page);
   overflow: hidden;
@@ -90,6 +107,7 @@ body {
 }
 
 @supports not selector(::-webkit-scrollbar) {
+  .options-shell,
   .options-main-scroll,
   .options-shell aside,
   .options-mobile-sidebar {
@@ -98,6 +116,7 @@ body {
   }
 }
 
+.options-shell::-webkit-scrollbar,
 .options-main-scroll::-webkit-scrollbar,
 .options-shell aside::-webkit-scrollbar,
 .options-mobile-sidebar::-webkit-scrollbar {
@@ -105,6 +124,7 @@ body {
   height: 10px;
 }
 
+.options-shell::-webkit-scrollbar-button,
 .options-main-scroll::-webkit-scrollbar-button,
 .options-shell aside::-webkit-scrollbar-button,
 .options-mobile-sidebar::-webkit-scrollbar-button {
@@ -113,12 +133,14 @@ body {
   height: 0;
 }
 
+.options-shell::-webkit-scrollbar-track,
 .options-main-scroll::-webkit-scrollbar-track,
 .options-shell aside::-webkit-scrollbar-track,
 .options-mobile-sidebar::-webkit-scrollbar-track {
   background: transparent;
 }
 
+.options-shell::-webkit-scrollbar-thumb,
 .options-main-scroll::-webkit-scrollbar-thumb,
 .options-shell aside::-webkit-scrollbar-thumb,
 .options-mobile-sidebar::-webkit-scrollbar-thumb {
@@ -133,9 +155,7 @@ body {
 }
 
 .options-interactive-surface {
-  transition:
-    border-color var(--ds-motion-standard) var(--ds-ease-standard),
-    box-shadow var(--ds-motion-standard) var(--ds-ease-standard);
+  transition: border-color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 .options-interactive-surface:focus-within {
@@ -173,16 +193,16 @@ body {
     color: var(--ds-text-primary);
   }
 
-  .options-shell .curator-button:not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active {
-    scale: 1;
-    transform: scale(var(--control-press-scale, var(--ds-press-scale)));
-  }
-
   .options-interactive-surface:has(
     :where(button, input, textarea, select, [role="switch"]):not(:disabled):not([data-disabled])
   ):hover {
     border-color: var(--ds-border);
   }
+}
+
+.options-shell .curator-button:not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active {
+  scale: 1;
+  transform: scale(var(--control-press-scale, var(--ds-press-scale)));
 }
 
 .options-shell :where(
@@ -201,6 +221,49 @@ body {
   background: var(--ds-surface-2);
   color: var(--ds-text-disabled);
   opacity: 1;
+}
+
+.options-shell .curator-button[data-variant="secondary"] {
+  border-color: var(--ds-border);
+  background: var(--ds-surface-2);
+  color: var(--ds-text-primary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .options-shell .curator-button[data-variant="secondary"]:not(:disabled):not([aria-disabled="true"]):not([data-disabled]):hover {
+    border-color: var(--ds-border-hover);
+    background: var(--ds-surface-3);
+  }
+}
+
+.options-details-panel {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows var(--ds-motion-state) var(--ds-ease-settle),
+    opacity var(--ds-motion-enter-opacity) var(--ds-ease-standard);
+}
+
+.options-details-panel[data-starting-style],
+.options-details-panel[data-ending-style] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.options-details-panel[data-ending-style] {
+  transition-duration: var(--ds-motion-standard), var(--ds-motion-exit-opacity);
+}
+
+.options-details-panel-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .options-details-panel {
+    transition: none;
+  }
 }
 
 .options-settings-ready-body {
@@ -227,9 +290,10 @@ body {
   overflow: auto;
   overscroll-behavior: contain;
   border: var(--ds-stroke-width) solid var(--ds-border);
-  border-radius: var(--ds-radius-card);
-  background: var(--ds-surface-2);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3);
+  border-radius: var(--ds-radius-md);
+  background: color-mix(in srgb, var(--ds-surface-2) 92%, transparent);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
   transform-origin: center bottom;
   opacity: 1;
   transform: translate3d(0, 0, 0) scale(1);
@@ -259,6 +323,41 @@ body {
   border: 0;
   background: transparent;
   filter: none;
+}
+
+.options-scroll-to-top {
+  border: var(--ds-stroke-width) solid var(--ds-border);
+  background: color-mix(in srgb, var(--ds-surface-2) 92%, transparent);
+  color: var(--ds-text-secondary);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.08),
+    0 10px 28px rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.options-scroll-to-top:focus-visible {
+  border-color: var(--ds-border-hover);
+  background: var(--ds-surface-3);
+  color: var(--ds-text-primary);
+  box-shadow:
+    var(--ds-shadow-focus),
+    0 10px 28px rgba(0, 0, 0, 0.55);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .options-scroll-to-top[data-visible="true"]:hover {
+    border-color: var(--ds-border-hover);
+    background: var(--ds-surface-3);
+    color: var(--ds-text-primary);
+  }
+}
+
+@media (prefers-contrast: more) {
+  .options-scroll-to-top {
+    border-color: rgba(255, 255, 255, 0.72);
+    color: var(--ds-text-primary);
+  }
 }
 
 .options-selection-bar {
@@ -421,31 +520,6 @@ body {
   }
 }
 
-/* The popover and view tracks carry their rows together; menu/advanced swaps
-   keep the provider form layout-stable without replaying a nested row stagger. */
-.reasoning-selector-view-track {
-  transition:
-    grid-template-rows var(--ds-motion-standard) var(--ds-ease-settle),
-    transform var(--ds-motion-standard) var(--ds-ease-settle),
-    opacity var(--ds-motion-exit-opacity) var(--ds-ease-standard);
-}
-
-.reasoning-selector-view-track[data-active="true"] {
-  transition:
-    grid-template-rows var(--ds-motion-standard) var(--ds-ease-settle),
-    transform var(--ds-motion-standard) var(--ds-ease-settle),
-    opacity var(--ds-motion-enter-opacity) var(--ds-ease-standard);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .reasoning-selector-view-track {
-    transform: none !important;
-    transition:
-      grid-template-rows 1ms linear,
-      opacity 80ms linear !important;
-  }
-}
-
 /* Focus rings here are box-shadow based; forced colours drop shadows, so the
    keyboard focus indicator has to come from an outline in that mode. */
 @media (forced-colors: active) {
@@ -460,20 +534,60 @@ body {
 }
 
 .options-settings-search-field {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   height: 36px;
   padding: 0 10px;
-  border: 1px solid var(--ds-border);
+  border: 1px solid var(--ds-border-subtle);
   border-radius: var(--ds-radius-sm);
   background: var(--ds-surface-1);
   color: var(--ds-text-secondary);
-  transition: border-color var(--ds-motion-standard) var(--ds-ease-standard);
+  transition:
+    border-color var(--ds-motion-fast) var(--ds-ease-standard),
+    background-color var(--ds-motion-fast) var(--ds-ease-standard);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .options-settings-search-field:hover {
+    border-color: var(--ds-border);
+  }
 }
 
 .options-settings-search-field:focus-within {
   border-color: var(--ds-focus);
+  background: var(--ds-bg-page);
+}
+
+.options-settings-search-kbd {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--ds-border-subtle);
+  border-radius: var(--ds-radius-xs);
+  background: var(--ds-bg-page);
+  color: var(--ds-text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity var(--ds-motion-fast) var(--ds-ease-standard);
+}
+
+.options-settings-search-kbd[data-hidden="true"] {
+  opacity: 0;
 }
 
 .options-settings-search-field input {
@@ -505,7 +619,7 @@ body {
   padding: 4px;
   border: 1px solid var(--ds-border);
   border-radius: var(--ds-radius-menu);
-  background: var(--ds-surface-2);
+  background: var(--ds-surface-1);
   color: var(--ds-text-primary);
   box-shadow: var(--ds-shadow-popover);
 }

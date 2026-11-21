@@ -122,6 +122,21 @@ import { getStorageUsage } from '../shared/storage-maintenance.js'
 import { BACKGROUND_INFO_MESSAGE, CURATOR_BUILD_ID, type BackgroundInfoMessage } from '../shared/background-runtime.js'
 
 registerModelsDevSync()
+let bookmarkMutationSuppressionDepth = 0
+function isBookmarkMutationSuppressed(): boolean {
+  return bookmarkMutationSuppressionDepth > 0
+}
+async function withBookmarkMutationSuppressed<T>(task: () => Promise<T>): Promise<T> {
+  bookmarkMutationSuppressionDepth += 1
+  try {
+    return await task()
+  } finally {
+    bookmarkMutationSuppressionDepth = Math.max(0, bookmarkMutationSuppressionDepth - 1)
+    if (bookmarkMutationSuppressionDepth === 0) {
+      invalidateAutoAnalyzeTreeContext()
+    }
+  }
+}
 const bookmarkSync = registerBookmarkSync({
   whenBookmarksSettled: async () => {
     await backupRestoreRecoveryReady
@@ -133,7 +148,8 @@ const bookmarkSync = registerBookmarkSync({
       source: 'service-worker',
       reason: `同步前：以服务器为准（${profileLabel}）`
     })
-  }
+  },
+  isBookmarkMutationSuppressed
 })
 
 interface PendingCheckState {
@@ -459,6 +475,10 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
     return undefined
   }
   if (message?.type === 'inbox:review') {
+    if (!isTrustedExtensionPageSender(sender)) {
+      sendResponse({ ok: false, error: '无权处理待整理书签。' })
+      return undefined
+    }
     void backupRestoreRecoveryReady.then(() => {
       if (backupRestoreRecoveryError) throw backupRestoreRecoveryError
       return withAvailabilityMutationLock(() => reviewInboxItem(message, {
@@ -481,6 +501,10 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
     return true
   }
   if (message?.type === 'bookmark:save') {
+    if (!isTrustedExtensionPageSender(sender)) {
+      sendResponse({ ok: false, error: '无权保存书签。' })
+      return undefined
+    }
     backupRestoreRecoveryReady.then(() => {
       if (backupRestoreRecoveryError) throw backupRestoreRecoveryError
       return withAvailabilityMutationLock(() => saveBookmarkFromMessage(message), {
@@ -502,6 +526,10 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
   }
 
   if (message?.type === 'inbox:undo-last-move') {
+    if (!isTrustedExtensionPageSender(sender)) {
+      sendResponse({ ok: false, error: '无权撤销自动移动。' })
+      return undefined
+    }
     undoLastInboxAutoMove()
       .then((result) => {
         sendResponse({ ok: true, result })
@@ -623,6 +651,10 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
   }
 
   if (message?.type === 'notification:create') {
+    if (!isTrustedExtensionPageSender(sender)) {
+      sendResponse({ ok: false, error: '无权发送扩展通知。' })
+      return undefined
+    }
     showRuntimeNotification(message)
       .then(() => {
         sendResponse({ ok: true })
@@ -681,20 +713,22 @@ async function performJournaledBackupRestore(
   const backup = parseCuratorBackupFile(message.backup)
   scheduleBackupRestoreRecoveryAlarm()
   try {
-    return await executeJournaledCuratorBackupRestore(
-      backup,
-      message.mode,
-      {
-        operationId: message.operationId,
-        withMutationLock: withAvailabilityRestoreMutationLock,
-        beforeApply: async () => {
-          await createAutoBackupBeforeDangerousOperation({
-            kind: 'restore',
-            source: 'service-worker',
-            reason: `恢复备份：${formatBackupRestoreMode(message.mode)}`
-          })
+    return await withBookmarkMutationSuppressed(() =>
+      executeJournaledCuratorBackupRestore(
+        backup,
+        message.mode,
+        {
+          operationId: message.operationId,
+          withMutationLock: withAvailabilityRestoreMutationLock,
+          beforeApply: async () => {
+            await createAutoBackupBeforeDangerousOperation({
+              kind: 'restore',
+              source: 'service-worker',
+              reason: `恢复备份：${formatBackupRestoreMode(message.mode)}`
+            })
+          }
         }
-      }
+      )
     )
   } finally {
     await runBackupRestoreRecovery().catch(() => {})
@@ -1134,7 +1168,13 @@ async function showTransientCommandBadge(text: string, color: string): Promise<v
   })
   await badgeRefresh
   scheduleCommandFeedbackBadgeClear()
-  setTimeout(() => void refreshRestingActionBadge(), COMMAND_FEEDBACK_BADGE_TTL_MS)
+  if (commandBadgeTimer) {
+    self.clearTimeout(commandBadgeTimer)
+  }
+  commandBadgeTimer = self.setTimeout(() => {
+    commandBadgeTimer = 0
+    void refreshRestingActionBadge()
+  }, COMMAND_FEEDBACK_BADGE_TTL_MS)
 }
 
 function scheduleCommandFeedbackBadgeClear(): void {
@@ -1149,6 +1189,9 @@ function scheduleCommandFeedbackBadgeClear(): void {
 
 chrome.bookmarks.onCreated.addListener((bookmarkId, node) => {
   invalidateAutoAnalyzeTreeContext()
+  if (isBookmarkMutationSuppressed()) {
+    return
+  }
   if (!node.url || !/^https?:\/\//i.test(node.url)) {
     return
   }
@@ -1182,12 +1225,18 @@ const enqueueBookmarkRemoval = createBookmarkRemovalQueue(async (bookmarkIds) =>
     }),
     removeContentSnapshotsForBookmarks(bookmarkIds).catch((error) => {
       console.warn('[Curator] 网页快照清理失败', error)
+    }),
+    removeAutoAnalyzeQueueEntries(bookmarkIds).catch((error) => {
+      console.warn('[Curator] 自动分析队列清理失败', error)
     })
   ])
 })
 
 chrome.bookmarks.onRemoved.addListener((bookmarkId, removeInfo) => {
   invalidateAutoAnalyzeTreeContext()
+  if (isBookmarkMutationSuppressed()) {
+    return
+  }
   void enqueueBookmarkRemoval(collectRemovedBookmarkIds(bookmarkId, removeInfo?.node))
 })
 
@@ -1197,6 +1246,17 @@ chrome.bookmarks.onChanged.addListener(() => {
 
 chrome.bookmarks.onMoved.addListener(() => {
   invalidateAutoAnalyzeTreeContext()
+})
+
+chrome.bookmarks.onImportBegan?.addListener(() => {
+  bookmarkMutationSuppressionDepth += 1
+})
+
+chrome.bookmarks.onImportEnded?.addListener(() => {
+  bookmarkMutationSuppressionDepth = Math.max(0, bookmarkMutationSuppressionDepth - 1)
+  if (bookmarkMutationSuppressionDepth === 0) {
+    invalidateAutoAnalyzeTreeContext()
+  }
 })
 
 chrome.webNavigation.onCommitted.addListener((details) => {
@@ -2459,6 +2519,21 @@ function updateAutoAnalyzeQueue(
   })
 }
 
+async function removeAutoAnalyzeQueueEntries(bookmarkIds: string[]): Promise<void> {
+  const removedSet = new Set(bookmarkIds.map((id) => String(id || '').trim()).filter(Boolean))
+  if (!removedSet.size) {
+    return
+  }
+  const currentQueue = await loadAutoAnalyzeQueue()
+  if (!currentQueue.some((entry) => removedSet.has(entry.bookmarkId))) {
+    return
+  }
+  const nextQueue = await updateAutoAnalyzeQueue((entries) => {
+    return entries.filter((entry) => !removedSet.has(entry.bookmarkId))
+  })
+  scheduleNextAutoAnalyzeQueueWake(nextQueue)
+}
+
 async function loadAutoAnalyzeQueue(): Promise<AutoAnalyzeQueueEntry[]> {
   const stored = await getLocalStorage([STORAGE_KEYS.autoAnalyzeQueue])
   return normalizeAutoAnalyzeQueue(stored[STORAGE_KEYS.autoAnalyzeQueue])
@@ -3319,10 +3394,24 @@ async function restoreAutoAnalyzeStatusBadge(): Promise<void> {
 }
 
 async function clearExpiredAutoAnalyzeStatus(): Promise<void> {
+  const initialStatus = await loadAutoAnalyzeStatus()
+  if (!initialStatus) {
+    lastPersistedAutoAnalyzeStatusKey = ''
+    await clearActionBadge().catch(() => {})
+    return
+  }
+  if (initialStatus.expiresAt > Date.now()) {
+    if (initialStatus.badgeVisible) await applyAutoAnalyzeStatusBadge(initialStatus).catch(() => {})
+    else await clearActionBadge().catch(() => {})
+    scheduleAutoAnalyzeStatusClear(initialStatus.expiresAt)
+    return
+  }
   await withLocalStorageTransaction(async transaction => {
     const status = await loadAutoAnalyzeStatus()
     if (!status || status.expiresAt <= Date.now()) {
-      await removeLocalStorage([STORAGE_KEYS.autoAnalyzeStatus, STORAGE_KEYS.pendingAutoAnalyzeNotice], { transaction })
+      if (status) {
+        await removeLocalStorage([STORAGE_KEYS.autoAnalyzeStatus, STORAGE_KEYS.pendingAutoAnalyzeNotice], { transaction })
+      }
       lastPersistedAutoAnalyzeStatusKey = ''
       await clearActionBadge().catch(() => {})
       clearAutoAnalyzeStatusAlarm()
@@ -3376,19 +3465,36 @@ function clearAutoAnalyzeStatusAlarm(): void {
 
 let lastAppliedBadgeText: string | null = null
 let lastAppliedBadgeColor: string | null = null
+let lastAppliedBadgeTitle: string | null = null
+let lastAppliedBadgeTextColor: string | null = null
 let commandBadgeUntil = 0
+let commandBadgeTimer = 0
 let badgeRefresh = Promise.resolve()
+let pendingRestingBadgeRefresh: Promise<void> | null = null
 
 // The action lives outside any document. Read the same semantic CSS tokens at
 // build time instead of inventing a second color palette for browser chrome.
-const badgeToken = (name: string) => designTokens.match(new RegExp(`--ds-${name}:\\s*(#[0-9a-fA-F]+)`))?.[1] || 'transparent'
+const badgeTokenCache = new Map<string, string>()
+const badgeToken = (name: string): string => {
+  const cached = badgeTokenCache.get(name)
+  if (cached !== undefined) return cached
+  const resolved = designTokens.match(new RegExp(`--ds-${name}:\\s*(#[0-9a-fA-F]+)`))?.[1] || 'transparent'
+  badgeTokenCache.set(name, resolved)
+  return resolved
+}
 
 function clearActionBadge(): Promise<void> {
   return refreshRestingActionBadge()
 }
 
 function refreshRestingActionBadge(): Promise<void> {
-  badgeRefresh = badgeRefresh.catch(() => {}).then(async () => {
+  if (pendingRestingBadgeRefresh) {
+    return pendingRestingBadgeRefresh
+  }
+  const run = badgeRefresh.catch(() => {}).then(async () => {
+    if (pendingRestingBadgeRefresh === run) {
+      pendingRestingBadgeRefresh = null
+    }
     if (!chrome.action?.setBadgeText || Date.now() < commandBadgeUntil) return
     const stored = await getLocalStorage([SYNC_ACCOUNTS_STORAGE_KEY, STORAGE_KEYS.autoAnalyzeStatus])
     if (Date.now() < commandBadgeUntil) return
@@ -3397,9 +3503,18 @@ function refreshRestingActionBadge(): Promise<void> {
     const auto = status?.badgeVisible && status.expiresAt > Date.now() ? getAutoAnalyzeStatusBadge(status.status) : null
     await setActionBadgeText(auto?.text ?? sync.text)
     await setActionBadgeBackgroundColor(auto?.color ?? badgeToken(sync.tone))
-    await chrome.action.setTitle({ title: sync.title })
-    await chrome.action.setBadgeTextColor?.({ color: badgeToken('accent-contrast') })
+    if (lastAppliedBadgeTitle !== sync.title) {
+      await chrome.action.setTitle({ title: sync.title })
+      lastAppliedBadgeTitle = sync.title
+    }
+    const badgeTextColor = badgeToken('accent-contrast')
+    if (chrome.action.setBadgeTextColor && lastAppliedBadgeTextColor !== badgeTextColor) {
+      await chrome.action.setBadgeTextColor({ color: badgeTextColor })
+      lastAppliedBadgeTextColor = badgeTextColor
+    }
   })
+  pendingRestingBadgeRefresh = run
+  badgeRefresh = run
   return badgeRefresh
 }
 
@@ -4983,9 +5098,18 @@ async function syncNavigationProbeCleanupAlarm(activeCount: number): Promise<voi
     if (activeCount > 0) {
       await chrome.alarms.create(NAVIGATION_PROBE_CLEANUP_ALARM, { delayInMinutes: 1 })
     } else {
-      await chrome.alarms.clear(NAVIGATION_PROBE_CLEANUP_ALARM)
+      if (await chrome.alarms.get(NAVIGATION_PROBE_CLEANUP_ALARM)) {
+        await chrome.alarms.clear(NAVIGATION_PROBE_CLEANUP_ALARM)
+      }
     }
   } catch { /* alarms are best effort */ }
+}
+
+let navigationProbeRegistryQueue: Promise<unknown> = Promise.resolve()
+function withNavigationProbeRegistryLock<T>(task: () => Promise<T>): Promise<T> {
+  const run = navigationProbeRegistryQueue.catch(() => {}).then(task)
+  navigationProbeRegistryQueue = run.catch(() => {})
+  return run
 }
 
 /** Probe tabs live in worker memory only, so a recycled worker used to leave
@@ -4993,42 +5117,60 @@ async function syncNavigationProbeCleanupAlarm(activeCount: number): Promise<voi
  * registry across worker restarts; this sweep closes anything no longer backed
  * by a live check (and, when asked, anything older than the check timeout). */
 async function sweepOrphanNavigationProbeTabs({ maxAgeMs = 0 }: { maxAgeMs?: number } = {}): Promise<void> {
-  const records = await readNavigationProbeTabs()
-  const now = Date.now()
-  const kept: Record<string, NavigationProbeTabRecord> = {}
-  let closed = 0
-  for (const [checkId, record] of Object.entries(records)) {
-    const tabId = Number(record?.tabId)
-    const startedAt = Number(record?.startedAt) || 0
-    if (!Number.isInteger(tabId)) continue
-    const live = [...pendingChecks.values()].some((state) => state.checkId === checkId)
-    const stale = maxAgeMs > 0 ? now - startedAt > maxAgeMs : true
-    if (live || !stale) {
-      kept[checkId] = { tabId, startedAt }
-      continue
+  return withNavigationProbeRegistryLock(async () => {
+    const records = await readNavigationProbeTabs()
+    const entries = Object.entries(records)
+    if (!entries.length) {
+      await syncNavigationProbeCleanupAlarm(0)
+      return
     }
-    await closeTab(tabId).catch(() => {})
-    await removeNavigationOriginFirewall(tabId).catch(() => {})
-    closed += 1
-  }
-  if (closed) console.warn(`[Curator] 已清理 ${closed} 个中断检测遗留的标签页。`)
-  await writeNavigationProbeTabs(kept)
-  await syncNavigationProbeCleanupAlarm(Object.keys(kept).length)
+    const now = Date.now()
+    const kept: Record<string, NavigationProbeTabRecord> = {}
+    let closed = 0
+    let changed = false
+    for (const [checkId, record] of entries) {
+      const tabId = Number(record?.tabId)
+      const startedAt = Number(record?.startedAt) || 0
+      if (!Number.isInteger(tabId)) {
+        changed = true
+        continue
+      }
+      const live = [...pendingChecks.values()].some((state) => state.checkId === checkId)
+      const stale = maxAgeMs > 0 ? now - startedAt > maxAgeMs : true
+      if (live || !stale) {
+        kept[checkId] = { tabId, startedAt }
+        continue
+      }
+      await closeTab(tabId).catch(() => {})
+      await removeNavigationOriginFirewall(tabId).catch(() => {})
+      closed += 1
+      changed = true
+    }
+    if (closed) console.warn(`[Curator] 已清理 ${closed} 个中断检测遗留的标签页。`)
+    if (changed) {
+      await writeNavigationProbeTabs(kept)
+    }
+    await syncNavigationProbeCleanupAlarm(Object.keys(kept).length)
+  })
 }
 
 async function registerNavigationProbeTab(checkId: string, tabId: number): Promise<void> {
-  const records = await readNavigationProbeTabs()
-  records[checkId] = { tabId, startedAt: Date.now() }
-  await writeNavigationProbeTabs(records)
-  await syncNavigationProbeCleanupAlarm(Object.keys(records).length)
+  return withNavigationProbeRegistryLock(async () => {
+    const records = await readNavigationProbeTabs()
+    records[checkId] = { tabId, startedAt: Date.now() }
+    await writeNavigationProbeTabs(records)
+    await syncNavigationProbeCleanupAlarm(Object.keys(records).length)
+  })
 }
 
 async function unregisterNavigationProbeTab(checkId: string): Promise<void> {
-  const records = await readNavigationProbeTabs()
-  if (!(checkId in records)) return
-  delete records[checkId]
-  await writeNavigationProbeTabs(records)
-  await syncNavigationProbeCleanupAlarm(Object.keys(records).length)
+  return withNavigationProbeRegistryLock(async () => {
+    const records = await readNavigationProbeTabs()
+    if (!(checkId in records)) return
+    delete records[checkId]
+    await writeNavigationProbeTabs(records)
+    await syncNavigationProbeCleanupAlarm(Object.keys(records).length)
+  })
 }
 
 async function clearStaleNavigationOriginFirewalls(): Promise<void> {
@@ -5185,6 +5327,10 @@ function isTrustedAvailabilityMessageSender(sender: chrome.runtime.MessageSender
   } catch {
     return false
   }
+}
+
+function isTrustedExtensionPageSender(sender: chrome.runtime.MessageSender): boolean {
+  return sender.id === chrome.runtime.id && Boolean(sender.url?.startsWith(chrome.runtime.getURL('')))
 }
 
 function reserveNavigationCheck(checkId: string): PendingCheckReservation {

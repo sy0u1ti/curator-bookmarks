@@ -1,5 +1,5 @@
-import { OPTION_INSET_CLASS } from './option-layout-classes.js'
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { OPTION_LIST_ROW_CLASS } from './option-layout-classes.js'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { displayUrl } from '../../shared/text.js'
 import { AiClassificationResult } from '../../ui/ai/AiClassificationResult'
 import { Button } from '../../ui/base/Button'
@@ -15,12 +15,11 @@ import { handleAiAnalysisResultAction } from '../options-controller'
 import { useAiAnalysisResults } from './ai-analysis-status-store.js'
 import type { AiNamingResultCardViewModel } from './AiAnalysisResultsTypes.js'
 
-const AI_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
+const AI_RESULTS_LIST_CLASS = 'flex flex-col divide-y divide-ds-border-subtle'
 const AI_RESULTS_EMPTY_CLASS =
-  `${OPTION_INSET_CLASS} p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-secondary`
+  'px-5 py-6 text-[13px] leading-[1.7] text-ds-text-secondary max-[760px]:px-4'
 const AI_RESULT_CARD_CLASS =
-  `${OPTION_INSET_CLASS} p-[14px_16px] [transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:border-ds-border-hover hover:bg-ds-hover`
-const AI_RESULT_CARD_SELECTED_CLASS = 'border-ds-border-hover bg-ds-selected'
+  `${OPTION_LIST_ROW_CLASS} rounded-none border-0 shadow-none data-[selected=true]:bg-ds-selected`
 const AI_RESULT_HEAD_LEFT_CLASS = 'flex min-w-0 flex-wrap items-center gap-2.5'
 const AI_RESULT_CHECK_CLASS =
   'inline-flex items-center gap-2 text-xs font-semibold text-ds-text-secondary'
@@ -30,13 +29,13 @@ const AI_RESULT_CONFIRM_ACTION_CLASS =
   'text-ds-success-text hover:text-ds-success-text focus-visible:text-ds-success-text'
 const AI_RESULT_COPY_CLASS = 'mt-3 min-w-0'
 const AI_RESULT_CURRENT_TITLE_CLASS =
-  'block min-w-0 text-[13px] font-semibold leading-[1.4] text-ds-text-disabled [overflow-wrap:anywhere]'
+  'block min-w-0 text-[13px] font-semibold leading-[1.4] text-ds-text-secondary [overflow-wrap:anywhere]'
 const AI_RESULT_SUGGESTED_TITLE_CLASS =
   'mt-2.5 mb-0 text-base font-semibold leading-[1.45] tracking-[0] text-ds-text-primary'
 const AI_RESULT_ERROR_CLASS =
   'mt-2.5 mb-0 text-[13px] font-medium leading-[1.6] text-ds-danger-text [overflow-wrap:anywhere] [word-break:break-word]'
 const AI_RESULT_META_CLASS =
-  'mt-2.5 flex flex-wrap gap-y-1.5 gap-x-3 text-xs font-semibold leading-normal text-ds-text-disabled'
+  'mt-2.5 flex flex-wrap gap-y-1.5 gap-x-3 text-xs font-semibold leading-normal text-ds-text-muted'
 const AI_RESULT_META_ITEM_CLASS = 'min-w-0 [overflow-wrap:anywhere]'
 const AI_RESULT_FOLDER_CLASS =
   'mt-[9px] flex flex-wrap items-center gap-2.5 text-[13px] leading-normal text-ds-text-secondary'
@@ -57,6 +56,47 @@ const AI_RESULT_TAG_TOGGLE_CLASS = 'mt-2'
 const AI_RESULT_DETAILS_CLASS = 'mt-3'
 const AI_RESULT_DETAIL_CLASS =
   'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
+
+const tagPreviewObserverCallbacks = new Map<Element, () => void>()
+let sharedTagPreviewObserver: ResizeObserver | null = null
+const pendingTagPreviewMeasurements = new Set<() => void>()
+let tagPreviewMeasureFrame = 0
+
+function observeTagPreviewElement(element: Element, callback: () => void): () => void {
+  if (typeof ResizeObserver === 'undefined') {
+    return () => {}
+  }
+  if (!sharedTagPreviewObserver) {
+    sharedTagPreviewObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        tagPreviewObserverCallbacks.get(entry.target)?.()
+      }
+    })
+  }
+  tagPreviewObserverCallbacks.set(element, callback)
+  sharedTagPreviewObserver.observe(element)
+  return () => {
+    tagPreviewObserverCallbacks.delete(element)
+    sharedTagPreviewObserver?.unobserve(element)
+  }
+}
+
+function scheduleTagPreviewMeasurement(callback: () => void): () => void {
+  pendingTagPreviewMeasurements.add(callback)
+  if (!tagPreviewMeasureFrame && typeof requestAnimationFrame === 'function') {
+    tagPreviewMeasureFrame = requestAnimationFrame(() => {
+      tagPreviewMeasureFrame = 0
+      const callbacks = [...pendingTagPreviewMeasurements]
+      pendingTagPreviewMeasurements.clear()
+      for (const run of callbacks) {
+        run()
+      }
+    })
+  }
+  return () => {
+    pendingTagPreviewMeasurements.delete(callback)
+  }
+}
 
 export function AiAnalysisResults() {
   const state = useAiAnalysisResults()
@@ -157,10 +197,9 @@ function AiNamingResultCard({ result }: { result: AiNamingResultCardViewModel })
 
   return (
     <AiClassificationResult
-      className={[
-        AI_RESULT_CARD_CLASS,
-        result.isSelected ? AI_RESULT_CARD_SELECTED_CLASS : ''
-      ].filter(Boolean).join(' ')}
+      variant="plain"
+      data-selected={result.isSelected ? 'true' : undefined}
+      className={AI_RESULT_CARD_CLASS}
       title={title}
       confidence={confidence}
       actions={actions}
@@ -226,7 +265,11 @@ function TagPreview({ result }: { result: AiNamingResultCardViewModel }) {
   const listRef = useRef<HTMLDivElement | null>(null)
   const [hasOverflow, setHasOverflow] = useState(false)
 
-  useLayoutEffect(() => {
+  useEffect(() => {
+    if (!result.tags.length || result.expandedTags) {
+      setHasOverflow(false)
+      return undefined
+    }
     const list = listRef.current
     if (!list) {
       setHasOverflow(false)
@@ -237,14 +280,14 @@ function TagPreview({ result }: { result: AiNamingResultCardViewModel }) {
       setHasOverflow(list.scrollHeight > list.clientHeight + 1)
     }
 
-    updateOverflow()
-    if (typeof ResizeObserver === 'undefined') {
-      return undefined
+    const cancelMeasure = typeof requestAnimationFrame === 'function'
+      ? scheduleTagPreviewMeasurement(updateOverflow)
+      : (updateOverflow(), () => {})
+    const unobserve = observeTagPreviewElement(list, updateOverflow)
+    return () => {
+      cancelMeasure()
+      unobserve()
     }
-
-    const observer = new ResizeObserver(updateOverflow)
-    observer.observe(list)
-    return () => observer.disconnect()
   }, [result.id, result.tags, result.expandedTags])
 
   if (!result.tags.length) {

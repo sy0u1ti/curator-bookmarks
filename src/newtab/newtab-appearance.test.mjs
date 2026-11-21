@@ -209,40 +209,8 @@ try {
   await page.getByRole('button', { name: '自动适配', exact: true }).click()
   await page.locator('#icon-live-preview').screenshot({ path: path.join(output, 'card-preview.png') })
 
-  const densityHeights = []
-  for (const [density, value] of [['单行', 'compact'], ['胶囊', 'balanced'], ['卡片', 'comfortable']]) {
-    await select(page, '时间布局密度', density)
-    await page.waitForFunction(value => document.querySelector('.newtab-clock')?.dataset.clockDensity === value, value)
-    densityHeights.push(await page.locator('.newtab-clock').evaluate(el => el.getBoundingClientRect().height))
-  }
-  assert.ok(densityHeights[0] < densityHeights[1] && densityHeights[1] < densityHeights[2], `Clock densities must change layout: ${densityHeights}`)
-  await select(page, '时间布局密度', '胶囊')
-  const restoreLegacyClockSize = async size => page.evaluate(async size => {
-    const key = 'curatorBookmarkNewTabTimeSettings'
-    const stored = await chrome.storage.local.get(key)
-    await chrome.storage.local.set({ [key]: { ...stored[key], clockSize: size } })
-  }, size)
-  assert.equal(await page.locator('#time-clock-size-root').count(), 0)
-  await restoreLegacyClockSize(70)
-  await page.waitForFunction(() => document.querySelector('.newtab-clock')?.style.getPropertyValue('--clock-scale') === '0.7')
-  const smallFont = await page.locator('[data-clock-time]').evaluate(el => parseFloat(getComputedStyle(el).fontSize))
-  await restoreLegacyClockSize(140)
-  await page.waitForFunction(() => document.querySelector('.newtab-clock')?.style.getPropertyValue('--clock-scale') === '1.4')
-  assert.ok(await page.locator('[data-clock-time]').evaluate(el => parseFloat(getComputedStyle(el).fontSize)) > smallFont)
-  await select(page, '时间显示内容', '仅日期')
-  await page.waitForFunction(() => document.querySelector('.newtab-clock')?.dataset.clockDisplayMode === 'date')
-  assert.equal(await page.locator('[data-clock-time]').count(), 0)
-  assert.ok(Math.abs(await page.locator('[data-clock-date]').evaluate(el => parseFloat(getComputedStyle(el).fontSize)) - 22.4) < 0.1, 'Date-only mode uses its 16px base size at 140%')
-  await select(page, '时间布局密度', '卡片')
-  await page.waitForFunction(() => document.querySelector('.newtab-clock')?.dataset.clockDensity === 'comfortable')
-  assert.ok(Math.abs(await page.locator('.newtab-clock').evaluate(el => el.getBoundingClientRect().height) - 75.6) < 1, 'Date-only card uses the compact 54px height at 140%')
-  await select(page, '时间布局密度', '胶囊')
-  await select(page, '时间显示内容', '仅时间')
-  await page.waitForFunction(() => document.querySelector('.newtab-clock')?.dataset.clockDisplayMode === 'time')
-  assert.equal(await page.locator('[data-clock-date]').count(), 0)
-  await select(page, '时间显示内容', '时间和日期')
-  await restoreLegacyClockSize(100)
-  report.time = { densityHeights, fontSize: true, displayMode: true }
+  assert.equal(await page.locator('.newtab-clock').count(), 0, 'The retired clock widget must not render.')
+  assert.equal(await page.locator('#settings-time-title, #time-enabled').count(), 0, 'The retired time and date settings must not render.')
 
   await select(page, '背景类型', '纯色')
   assert.equal(await page.locator('#wallpaper-dim-row').isVisible(), false, 'A solid color has nothing to dim')

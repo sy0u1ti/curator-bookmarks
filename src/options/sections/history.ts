@@ -316,6 +316,20 @@ export function getHistoryRunsForScope(callbacks, scopeKey = callbacks.getCurren
   })
 }
 
+const historyRunResultMapCache = new WeakMap<object, Map<string, any>>()
+
+function getHistoryRunResultMap(run: any): Map<string, any> {
+  const cached = historyRunResultMapCache.get(run)
+  if (cached) {
+    return cached
+  }
+  const resultById = new Map<string, any>(
+    (run.results || []).map((result: any): [string, any] => [String(result.id), result])
+  )
+  historyRunResultMapCache.set(run, resultById)
+  return resultById
+}
+
 export function getHistoricalAbnormalStreak(bookmarkId, bookmarkUrl, callbacks) {
   const normalizedId = String(bookmarkId || '').trim()
   const normalizedUrl = String(bookmarkUrl || '').trim()
@@ -331,7 +345,7 @@ export function getHistoricalAbnormalStreak(bookmarkId, bookmarkUrl, callbacks) 
       continue
     }
 
-    const resultById = new Map((run.results || []).map((result) => [String(result.id), result]))
+    const resultById = getHistoryRunResultMap(run)
     const entry = resultById.get(normalizedId)
     if (!isSameHistoryEntryIdentity(entry, {
       id: normalizedId,

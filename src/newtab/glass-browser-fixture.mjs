@@ -25,7 +25,6 @@
   const defaults = {
     curatorBookmarkOnboardingState: { completed: true, dismissed: true },
     curatorBookmarkNewTabBackgroundSettings: { type: 'urls', color: '#101013', url: `${location.origin}/wallpaper.svg`, maskEnabled: false },
-    curatorBookmarkNewTabTimeSettings: { enabled: true },
     curatorBookmarkNewTabSearchSettings: { enabled: true, height: 48, width: 48, autoVerticalCenter: false, webSearchEnabled: true, engine: 'google' },
     curatorBookmarkNewTabFolderSettings: { selectedFolderIds: ['10', '20'], hideFolderNames: false },
     curatorBookmarkNewTabModuleSettings: { version: 1, speedDial: true, order: ['speedDial'] },

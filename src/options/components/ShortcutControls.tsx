@@ -6,6 +6,7 @@ import { handleShortcutAction } from '../options-controller'
 import {
   AI_SETTINGS_BODY_CLASS,
   AI_SETTINGS_CARD_CLASS,
+  AI_SETTINGS_FOOTER_CLASS,
   AI_SETTINGS_HEADER_CLASS,
   AI_SETTINGS_READY_BODY_CLASS,
   AI_SETTINGS_SUBTITLE_CLASS,
@@ -15,15 +16,15 @@ import { ShortcutList } from './ShortcutList.js'
 import { useShortcutControlsState } from './shortcut-store.js'
 
 const SHORTCUT_STATUS_BASE_CLASS =
-  'inline-flex min-h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-[11px] text-xs font-semibold leading-none tracking-[0]'
+  'inline-flex min-h-6 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-2.5 text-xs font-medium leading-none tracking-[0]'
 const SHORTCUT_STATUS_TONE_CLASSES: Record<string, string> = {
   danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
-  muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',
+  muted: 'border-ds-border bg-ds-bg-page text-ds-text-secondary',
   success: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text',
-  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
+  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning-text'
 }
 const SHORTCUT_ACTIONS_CLASS =
-  'flex flex-wrap items-center justify-end gap-2.5 px-5 py-3.5 max-[760px]:flex-col max-[760px]:items-stretch max-[760px]:px-4'
+  `${AI_SETTINGS_FOOTER_CLASS} max-[760px]:flex-col max-[760px]:items-stretch`
 const SHORTCUT_ACTION_BUTTON_CLASS = 'max-[760px]:w-full'
 const SHORTCUT_DEFAULT_DETAIL = '快捷键在 Chrome 扩展设置中修改。'
 const SHORTCUT_DETAIL_RESERVE = [SHORTCUT_DEFAULT_DETAIL, '快捷键未配置，可在 Chrome 扩展快捷键页设置。']
@@ -42,7 +43,7 @@ export function ShortcutControls() {
       className={AI_SETTINGS_CARD_CLASS}
       title={shortcutTitle}
       description={
-        <StatusMessage className={AI_SETTINGS_SUBTITLE_CLASS} reserve={SHORTCUT_DETAIL_RESERVE} tone={state.statusTone === 'warning' ? 'warning' : state.statusTone === 'danger' ? 'error' : 'neutral'}>
+        <StatusMessage className={AI_SETTINGS_SUBTITLE_CLASS} reserve={SHORTCUT_DETAIL_RESERVE} tone={state.statusTone === 'danger' ? 'error' : 'neutral'}>
           {state.detail || SHORTCUT_DEFAULT_DETAIL}
         </StatusMessage>
       }
@@ -52,7 +53,7 @@ export function ShortcutControls() {
         </span>
       }
       headerClassName={AI_SETTINGS_HEADER_CLASS}
-      iconName="Keyboard"
+      iconName={false}
       bodyClassName={`${AI_SETTINGS_BODY_CLASS} ${state.loading ? '' : AI_SETTINGS_READY_BODY_CLASS}`}
       aria-busy={state.loading ? 'true' : undefined}
     >

@@ -42,6 +42,38 @@ export async function readCuratorDataStore<T extends object>(
   return runCuratorDataValueRequest<T[]>(db, storeName, 'readonly', (store) => store.getAll())
 }
 
+export async function readCuratorDataStoreWithMeta<T extends object>(
+  storeName: CuratorDataStoreName,
+  metaKey: string
+): Promise<{ meta: CuratorDataStoreMeta | null; records: T[] }> {
+  const db = await openCuratorDataDb()
+  return new Promise<{ meta: CuratorDataStoreMeta | null; records: T[] }>((resolve, reject) => {
+    const transaction = db.transaction([storeName, CURATOR_DATA_STORES.metadata], 'readonly')
+    const metaRequest = transaction.objectStore(CURATOR_DATA_STORES.metadata).get(metaKey)
+    let recordsRequest: IDBRequest<T[]> | null = null
+    metaRequest.addEventListener('success', () => {
+      const rawMeta = metaRequest.result as CuratorDataStoreMeta | undefined
+      if (rawMeta && typeof rawMeta === 'object') {
+        recordsRequest = transaction.objectStore(storeName).getAll() as IDBRequest<T[]>
+      }
+    })
+    transaction.addEventListener('complete', () => {
+      const rawMeta = metaRequest.result as CuratorDataStoreMeta | undefined
+      const meta = rawMeta && typeof rawMeta === 'object' ? rawMeta : null
+      resolve({
+        meta,
+        records: meta && recordsRequest ? (recordsRequest.result || []) : []
+      })
+    })
+    transaction.addEventListener('error', () => {
+      reject(transaction.error || new Error('数据仓库读取失败。'))
+    })
+    transaction.addEventListener('abort', () => {
+      reject(transaction.error || new Error('数据仓库读取中断。'))
+    })
+  })
+}
+
 export async function replaceCuratorDataStoreWithMeta<T extends object>(
   storeName: CuratorDataStoreName,
   records: T[],
@@ -189,7 +221,7 @@ function openCuratorDataDb(): Promise<IDBDatabase> {
     return Promise.reject(new Error('IndexedDB is unavailable.'))
   }
 
-  curatorDataDbPromise = new Promise((resolve, reject) => {
+  const openingPromise = new Promise<IDBDatabase>((resolve, reject) => {
     const request = factory.open(CURATOR_DATA_DB_NAME, CURATOR_DATA_DB_VERSION)
     request.addEventListener('upgradeneeded', () => {
       const db = request.result
@@ -201,21 +233,32 @@ function openCuratorDataDb(): Promise<IDBDatabase> {
     })
     request.addEventListener('success', () => {
       const db = request.result
+      const clearCachedPromise = () => {
+        if (curatorDataDbPromise === openingPromise) {
+          curatorDataDbPromise = null
+        }
+      }
       db.addEventListener?.('versionchange', () => {
         db.close()
-        curatorDataDbPromise = null
+        clearCachedPromise()
       })
+      db.addEventListener?.('close', clearCachedPromise)
       resolve(db)
     })
     request.addEventListener('error', () => {
-      curatorDataDbPromise = null
+      if (curatorDataDbPromise === openingPromise) {
+        curatorDataDbPromise = null
+      }
       reject(request.error || new Error('无法打开数据仓库。'))
     })
     request.addEventListener('blocked', () => {
-      curatorDataDbPromise = null
+      if (curatorDataDbPromise === openingPromise) {
+        curatorDataDbPromise = null
+      }
       reject(new Error('数据仓库升级被其他页面阻塞。'))
     })
   })
+  curatorDataDbPromise = openingPromise
 
   return curatorDataDbPromise
 }

@@ -40,8 +40,8 @@ const MENU_CLOSING_CLASS = 'is-closing pointer-events-none'
 const MENU_FULL_WIDTH_CLASS = 'w-[276px]'
 const MENU_ADD_EXPANDED_CLASS = 'w-[300px]'
 const MENU_ADD_COLLAPSED_CLASS = 'w-[236px]'
-const MENU_ROW_CLASS = 'grid min-h-9 grid-cols-[42px_minmax(0,1fr)] items-center gap-2 border-0 bg-transparent px-0 py-[3px] text-[13px] leading-[1.3] text-[var(--ui-text-secondary)]'
-const MENU_ROW_LABEL_CLASS = 'min-w-0 pl-0.5 leading-[1.3]'
+const MENU_ROW_CLASS = 'grid min-h-9 grid-cols-[46px_minmax(0,1fr)] items-center gap-2 border-0 bg-transparent px-0 py-1 text-[13px] leading-[1.3] text-[var(--ui-text-secondary)]'
+const MENU_ROW_LABEL_CLASS = 'min-w-0 pl-2 leading-[1.3]'
 const MENU_CONTROL_CLASS = 'min-h-[30px] w-full min-w-0 rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] px-[9px] text-[13px] text-[var(--ui-text-primary)] placeholder:text-[var(--ui-text-disabled)] focus:border-[var(--ui-focus-ring)] disabled:opacity-60'
 const MENU_SELECT_TRIGGER_CLASS = 'base-select-trigger flex min-h-[30px] w-full min-w-0 items-center justify-start rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] px-2 text-[13px] text-[var(--ui-text-primary)] outline-none [transition:background-color_var(--ds-motion-fast)_var(--ds-ease-standard),border-color_var(--ds-motion-fast)_var(--ds-ease-standard),color_var(--ds-motion-fast)_var(--ds-ease-standard)] data-[popup-open]:border-[var(--ui-focus-ring)] hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] focus-visible:border-[var(--ui-focus-ring)] disabled:opacity-60 motion-reduce:transition-none'
 const MENU_SELECT_POPUP_CLASS = 'custom-select-list z-[10040] max-h-60 min-w-[var(--anchor-width)] overflow-hidden rounded-ds-menu border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] ds-inset-menu text-[13px] text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] outline-none'
@@ -520,6 +520,7 @@ function BookmarkMenuActions({
     <InlineMenuList
       actions={actions.map((action) => toInlineMenuAction(action, actionRefs))}
       active={active}
+      animated={false}
       className={MENU_ACTIONS_CLASS}
       label={label}
       submenuAttributes={{ 'data-newtab-bookmark-menu-surface': '' }}

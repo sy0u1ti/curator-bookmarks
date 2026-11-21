@@ -17,16 +17,13 @@ const BOOKMARK_GRID_FIXED_CLASS = 'w-[min(var(--icon-fixed-grid-width),100%)] ju
 export const BOOKMARK_FOLDER_SECTIONS_CLASS = 'bookmark-folder-sections grid w-full content-start gap-[var(--icon-folder-gap)]'
 
 export function getNewtabPageClass({
-  hasClock,
   hasSearch
 }: {
-  hasClock: boolean
   hasSearch: boolean
 }): string {
   return cx(
     NEWTAB_PAGE_BASE_CLASS,
-    hasSearch && 'has-search',
-    hasClock && 'has-clock'
+    hasSearch && 'has-search'
   )
 }
 

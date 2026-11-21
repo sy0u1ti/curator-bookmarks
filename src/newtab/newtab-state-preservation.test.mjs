@@ -34,7 +34,6 @@ try {
       curatorBookmarkNewTabFolderSettings: { selectedFolderIds: [source.id], browseMode: 'expanded' },
       curatorBookmarkNewTabBackgroundSettings: { type: 'color', color: '#101013' },
       curatorBookmarkNewTabIconSettings: { showTitles: true },
-      curatorBookmarkNewTabTimeSettings: { enabled: true, showSeconds: false },
       curatorBookmarkNewTabSearchSettings: { enabled: true, webSearchEnabled: true, openInNewTab: true },
       curatorBookmarkNewTabWorkspaceSettings: { activeWorkspaceId: 'default', workspaces: [{ id: 'default', pinnedIds: [] }] }
     })
@@ -250,16 +249,6 @@ try {
   await a.waitForURL('about:blank')
   await expect.poll(async () => (await readStorage('curatorBookmarkNewTabIconSettings')).showTitles).toBe(false)
 
-  await openPage(a)
-  await settings(a, 'appearance')
-  await a.locator('#time-details-toggle').click()
-  await a.locator('[role="switch"][aria-labelledby="time-show-seconds-label"]').scrollIntoViewIfNeeded()
-  await a.evaluate(() => {
-    document.querySelector('[role="switch"][aria-labelledby="time-show-seconds-label"]').click()
-    location.assign('about:blank')
-  })
-  await a.waitForURL('about:blank')
-  await expect.poll(async () => (await readStorage('curatorBookmarkNewTabTimeSettings')).showSeconds).toBe(true)
   await expect.poll(() => worker.evaluate(async () => Object.keys(await chrome.storage.local.get(null))
     .filter((key) => key.startsWith('curatorNewTabPendingSettings:')).length)).toBe(0)
   assert.deepEqual(failures, [], 'State synchronization must not introduce page errors.')

@@ -11,7 +11,7 @@ export interface SurfaceProps extends HTMLAttributes<HTMLElement> {
 
 const variantClass: Record<SurfaceVariant, string> = {
   plain: 'bg-transparent text-ds-text-primary',
-  group: 'curator-surface-group border-0 bg-ds-surface-1 text-ds-text-primary shadow-none',
+  group: 'curator-surface-group bg-ds-surface-1 text-ds-text-primary shadow-none',
   panel: 'curator-surface-panel border border-ds-border bg-ds-surface-2 text-ds-text-primary [filter:var(--ds-filter-dialog)]',
   row: 'border-ds-border bg-transparent text-ds-text-primary'
 }
@@ -26,7 +26,7 @@ export function Surface({
     <Component
       className={cx(
         variantClass[variant],
-        'transition-[background-color,border-color,box-shadow] duration-ds-fast ease-ds-standard motion-reduce:transition-none',
+        'transition-[background-color,border-color] duration-ds-fast ease-ds-standard motion-reduce:transition-none',
         className
       )}
       {...props}

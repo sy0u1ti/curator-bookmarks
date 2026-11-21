@@ -163,7 +163,7 @@ import { mark as perfMark, measure as perfMeasure } from '../shared/perf.js'
 import { writeClipboardText } from '../shared/clipboard.js'
 import { runIdle } from '../shared/idle.js'
 import { createPopupContentRowCache } from './popup-content-row-cache.js'
-import { consumePopupBookmarkTree } from './popup-startup-data.js'
+import { consumePopupActiveTab, consumePopupBookmarkTree } from './popup-startup-data.js'
 import {
   SMART_LOADING_PROGRESS_COMPLETE_MS,
   SMART_LOADING_PROGRESS_FINISH_MS,
@@ -270,6 +270,9 @@ interface PopupRefreshBaseData {
   bookmarksBarNode: chrome.bookmarks.BookmarkTreeNode | null
   catalog: BookmarkCatalogSnapshot
   indexedBookmarks: ReturnType<typeof buildLightPopupSearchIndex>
+  initialTab?: chrome.tabs.Tab | null
+  initialTabHydrated?: boolean
+  initialPinnedStorage?: Record<string, unknown> | null
 }
 interface PopupRefreshDeferredData {
   tagIndex: Awaited<ReturnType<typeof loadBookmarkTagIndex>> | null
@@ -304,6 +307,16 @@ function loadRecycleBinModule(): Promise<typeof import('../shared/recycle-bin.js
   return recycleBinModulePromise
 }
 let popupControllerStarted = false
+let pendingInitialPinnedStorage: {
+  session: number
+  promise: Promise<Record<string, unknown>>
+} | null = null
+const POPUP_COLD_START_STORAGE_KEYS = [
+  STORAGE_KEYS.popupPreferences,
+  STORAGE_KEYS.aiProviderSettings,
+  STORAGE_KEYS.autoAnalyzeStatus,
+  STORAGE_KEYS.newTabWorkspaceSettings
+] as const
 
 export function usePopupController(): void {
   useEffect(() => startPopupController(), [])
@@ -322,6 +335,8 @@ export function startPopupController(): () => void {
   render()
   perfMark('popup.firstRender')
   perfMeasure('popup.shellReady', 'popup.domContentLoaded', 'popup.firstRender')
+  const coldStartStoragePromise = getLocalStorage([...POPUP_COLD_START_STORAGE_KEYS]).catch(() => null)
+  pendingInitialPinnedStorage = { session, promise: coldStartStoragePromise.then((stored) => stored ?? {}) }
   // 偏好加载与书签加载并行。
   // hydratePopupPreferences 最终只得出两个布尔值（语义搜索开关及其 AI 是否已配置），
   // 书签列表不读它们。但它里的 AI 配置检查要动态 import natural-search-ai
@@ -329,7 +344,7 @@ export function startPopupController(): () => void {
   // 首屏数据就要白等一百多毫秒。
   const initialNaturalSearchEnabled = state.naturalSearchEnabled
   const initialNaturalSearchAiConfigured = state.naturalSearchAiConfigured
-  void hydratePopupPreferences().finally(() => {
+  void hydratePopupPreferences(coldStartStoragePromise).finally(() => {
     if (session !== popupSessionId || !popupControllerStarted) return
     if (
       state.naturalSearchEnabled !== initialNaturalSearchEnabled ||
@@ -347,7 +362,7 @@ export function startPopupController(): () => void {
       }
     })
   })
-  void hydrateAutoAnalyzeStatus()
+  void hydrateAutoAnalyzeStatus(coldStartStoragePromise)
 
   return cleanupPopupController
 }
@@ -384,17 +399,19 @@ function adoptInitialPopupPrebootSearchQuery(): void {
   state.debouncedQuery = nextQuery.trim()
 }
 
-async function hydratePopupPreferences() {
+async function hydratePopupPreferences(prefetchedStoragePromise?: Promise<Record<string, unknown> | null>) {
   const version = ++popupPreferencesVersion
+  let prefetchedStorage: Record<string, unknown> | null = null
   try {
-    const stored = await getLocalStorage([STORAGE_KEYS.popupPreferences])
+    prefetchedStorage = prefetchedStoragePromise ? await prefetchedStoragePromise : null
+    const stored = prefetchedStorage ?? await getLocalStorage([STORAGE_KEYS.popupPreferences])
     if (version !== popupPreferencesVersion) return
     const preferences = normalizePopupPreferences(stored[STORAGE_KEYS.popupPreferences])
     state.naturalSearchEnabled = preferences.naturalSearchEnabled
   } catch {
     return
   }
-  const naturalSearchAiConfigured = await refreshNaturalSearchAiConfiguredState()
+  const naturalSearchAiConfigured = await refreshNaturalSearchAiConfiguredState(prefetchedStorage ?? undefined)
   if (version !== popupPreferencesVersion) return
   if (state.naturalSearchAiConfigChecked && !naturalSearchAiConfigured && state.naturalSearchEnabled) {
     state.naturalSearchEnabled = false
@@ -413,12 +430,12 @@ async function savePopupPreferences() {
     }, { transaction })
   })
 }
-async function refreshNaturalSearchAiConfiguredState(): Promise<boolean> {
+async function refreshNaturalSearchAiConfiguredState(prefetchedStorage?: Record<string, unknown>): Promise<boolean> {
   const version = ++popupAiConfigVersion
   try {
     // An unconfigured popup can answer this without loading the AI runtime
     // and provider editor while its first interactive frame is being painted.
-    const stored = await getLocalStorage([STORAGE_KEYS.aiProviderSettings])
+    const stored = prefetchedStorage ?? await getLocalStorage([STORAGE_KEYS.aiProviderSettings])
     if (version !== popupAiConfigVersion) return state.naturalSearchAiConfigured
     if (!stored[STORAGE_KEYS.aiProviderSettings]) {
       state.naturalSearchAiConfigured = false
@@ -464,10 +481,11 @@ async function openBookmarkHistoryPage() {
     })
   }
 }
-async function hydrateAutoAnalyzeStatus() {
+async function hydrateAutoAnalyzeStatus(prefetchedStoragePromise?: Promise<Record<string, unknown> | null>) {
   const version = ++popupAutoAnalyzeStatusVersion
   try {
-    const stored = await getLocalStorage([STORAGE_KEYS.autoAnalyzeStatus])
+    const prefetched = prefetchedStoragePromise ? await prefetchedStoragePromise : null
+    const stored = prefetched ?? await getLocalStorage([STORAGE_KEYS.autoAnalyzeStatus])
     if (version !== popupAutoAnalyzeStatusVersion || !popupControllerStarted) return
     const currentStatus = normalizeAutoAnalyzeStatus(stored[STORAGE_KEYS.autoAnalyzeStatus])
     state.autoAnalyzeStatus = currentStatus
@@ -546,6 +564,7 @@ function handlePopupStorageChanged(
     }, 100)
   }
   if (changes[STORAGE_KEYS.newTabWorkspaceSettings]) {
+    pendingInitialPinnedStorage = null
     popupPinnedVersion += 1
     const settings = normalizeNewTabWorkspaceSettings(changes[STORAGE_KEYS.newTabWorkspaceSettings].newValue, {
       validBookmarkIds: state.bookmarkMap.keys()
@@ -843,7 +862,7 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
   render()
   try {
     const { deferredHydration } = await hydratePopupBaseData({
-      loadBaseData: () => loadPopupBaseRefreshData(refreshRunId),
+      loadBaseData: () => loadPopupBaseRefreshData(refreshRunId, { initial }),
       applyBaseData: (baseData) => {
         if (refreshRunId !== popupRefreshRunId) {
           return
@@ -881,8 +900,59 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
     render()
   }
 }
-async function loadPopupBaseRefreshData(refreshRunId: number): Promise<PopupRefreshBaseData> {
-  const [tree] = await Promise.all([consumePopupBookmarkTree(), waitForPopupShellPaint()])
+const POPUP_COLD_START_ACTIVE_TAB_WAIT_MS = 150
+const POPUP_COLD_START_PINNED_WAIT_MS = 60
+
+function waitForOptionalStartupValue<T>(
+  promise: Promise<T>,
+  timeoutMs: number
+): Promise<{ ready: true; value: T } | { ready: false }> {
+  return new Promise((resolve) => {
+    let settled = false
+    const timer = window.setTimeout(() => {
+      if (settled) return
+      settled = true
+      resolve({ ready: false })
+    }, timeoutMs)
+    promise.then(
+      (value) => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timer)
+        resolve({ ready: true, value })
+      },
+      () => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timer)
+        resolve({ ready: false })
+      }
+    )
+  })
+}
+
+async function loadPopupBaseRefreshData(
+  refreshRunId: number,
+  { initial = false }: { initial?: boolean } = {}
+): Promise<PopupRefreshBaseData> {
+  const activeTabPromise = initial
+    ? waitForOptionalStartupValue(consumePopupActiveTab().catch(() => null), POPUP_COLD_START_ACTIVE_TAB_WAIT_MS)
+    : Promise.resolve({ ready: false } as const)
+  const initialPinnedEntry = initial && pendingInitialPinnedStorage && pendingInitialPinnedStorage.session === popupSessionId
+    ? pendingInitialPinnedStorage
+    : null
+  const pinnedStoragePromise = initialPinnedEntry
+    ? waitForOptionalStartupValue(initialPinnedEntry.promise, POPUP_COLD_START_PINNED_WAIT_MS)
+    : Promise.resolve({ ready: false } as const)
+  const [tree, , activeTabResult, pinnedStorageResult] = await Promise.all([
+    consumePopupBookmarkTree(),
+    waitForPopupShellPaint(),
+    activeTabPromise,
+    pinnedStoragePromise
+  ])
+  if (pinnedStorageResult.ready && pendingInitialPinnedStorage === initialPinnedEntry) {
+    pendingInitialPinnedStorage = null
+  }
   perfMark('popup.bookmarkTreeLoaded')
   const rootNode = Array.isArray(tree) ? tree[0] : tree
   const bookmarksBarNode = findBookmarksBar(rootNode)
@@ -900,7 +970,10 @@ async function loadPopupBaseRefreshData(refreshRunId: number): Promise<PopupRefr
     rootNode,
     bookmarksBarNode,
     catalog,
-    indexedBookmarks
+    indexedBookmarks,
+    initialTab: activeTabResult.ready ? activeTabResult.value : undefined,
+    initialTabHydrated: activeTabResult.ready,
+    initialPinnedStorage: pinnedStorageResult.ready ? pinnedStorageResult.value : null
   }
 }
 function applyPopupBaseRefreshData(
@@ -917,6 +990,20 @@ function applyPopupBaseRefreshData(
   syncPopupExpandedFolderState(baseData.catalog.extracted, initial)
   reconcileBookmarkReorderModeAfterRefresh()
   resetSearchForPopupRefresh(preserveSearch)
+  if (baseData.initialPinnedStorage) {
+    const settings = normalizeNewTabWorkspaceSettings(
+      baseData.initialPinnedStorage[STORAGE_KEYS.newTabWorkspaceSettings] || POPUP_DEFAULT_WORKSPACE_STORAGE,
+      { validBookmarkIds: state.bookmarkMap.keys() }
+    )
+    state.newTabPinnedIds = new Set(getActiveNewTabWorkspace(settings).pinnedIds)
+  }
+  if (baseData.initialTabHydrated) {
+    state.currentTab = baseData.initialTab ?? null
+    state.currentTabHydrated = true
+    applyCurrentTabBookmarkMatch()
+  } else if (state.currentTabHydrated) {
+    applyCurrentTabBookmarkMatch()
+  }
 }
 function applyPopupIndexedBookmarkData({
   catalog,
@@ -1010,24 +1097,28 @@ function hydratePopupDeferredRefreshData(baseData: PopupRefreshBaseData): Promis
     loadDeferredData: loadPopupSearchEnhancementData,
     applyDeferredData: applyPopupSearchEnhancementData
   })
-  const currentTabHydration = hydrateCurrentTabState(baseData.refreshRunId)
-  currentTabHydrationPromise = currentTabHydration
-  void currentTabHydration.then(() => {
-    if (baseData.refreshRunId !== popupRefreshRunId) {
-      return
-    }
-    render()
-  }).finally(() => {
-    if (currentTabHydrationPromise === currentTabHydration) {
-      currentTabHydrationPromise = null
-    }
-  })
-  void hydrateNewTabPinnedState(baseData.refreshRunId).then(() => {
-    if (baseData.refreshRunId !== popupRefreshRunId) {
-      return
-    }
-    render()
-  })
+  if (!baseData.initialTabHydrated) {
+    const currentTabHydration = hydrateCurrentTabState(baseData.refreshRunId)
+    currentTabHydrationPromise = currentTabHydration
+    void currentTabHydration.then(() => {
+      if (baseData.refreshRunId !== popupRefreshRunId) {
+        return
+      }
+      render()
+    }).finally(() => {
+      if (currentTabHydrationPromise === currentTabHydration) {
+        currentTabHydrationPromise = null
+      }
+    })
+  }
+  if (!baseData.initialPinnedStorage) {
+    void hydrateNewTabPinnedState(baseData.refreshRunId).then(() => {
+      if (baseData.refreshRunId !== popupRefreshRunId) {
+        return
+      }
+      render()
+    })
+  }
   return indexHydration
 }
 async function loadPopupSearchEnhancementData(): Promise<PopupRefreshDeferredData> {
@@ -1155,6 +1246,7 @@ async function hydrateCurrentTabState(refreshRunId = popupRefreshRunId) {
     resetSmartClassification()
   }
   state.currentTab = currentTab
+  state.currentTabHydrated = true
   applyCurrentTabBookmarkMatch()
 }
 export function refreshPopupCurrentTabContext(): void {
@@ -1202,7 +1294,14 @@ async function hydrateNewTabPinnedState(refreshRunId = popupRefreshRunId) {
     if (refreshRunId !== popupRefreshRunId) {
       return
     }
-    const stored = await getLocalStorage([STORAGE_KEYS.newTabWorkspaceSettings])
+    let stored: Record<string, unknown>
+    if (pendingInitialPinnedStorage && pendingInitialPinnedStorage.session === popupSessionId) {
+      const initialRead = pendingInitialPinnedStorage.promise
+      pendingInitialPinnedStorage = null
+      stored = await initialRead
+    } else {
+      stored = await getLocalStorage([STORAGE_KEYS.newTabWorkspaceSettings])
+    }
     if (refreshRunId !== popupRefreshRunId || version !== popupPinnedVersion) return
     const settings = normalizeNewTabWorkspaceSettings(
       stored[STORAGE_KEYS.newTabWorkspaceSettings] || POPUP_DEFAULT_WORKSPACE_STORAGE,
@@ -1229,6 +1328,7 @@ function buildPopupBookmarkDuplicateKeyMap(bookmarks) {
 function cleanupPopupController() {
   popupAutoAnalyzeStatusVersion++
   popupSessionId += 1
+  pendingInitialPinnedStorage = null
   popupCopyFeedback.clear()
   popupPreferencesVersion += 1
   popupAiConfigVersion += 1
@@ -1280,6 +1380,7 @@ function resetPopupSessionStateForNextOpen() {
   state.isLoading = true
   state.loadError = ''
   state.currentTab = null
+  state.currentTabHydrated = false
   state.currentPageBookmarkId = null
   state.smartStatus = 'idle'
   state.smartError = ''
@@ -2072,6 +2173,7 @@ function hasBlockingPopupActionPending() {
 function renderSmartClassifier() {
   const currentUrl = String(state.currentTab?.url || '').trim()
   const status = getPopupSmartClassifierRenderStatus({
+    currentTabHydrated: state.currentTabHydrated,
     currentUrl,
     isLoading: state.isLoading,
     smartStatus: state.smartStatus
@@ -2273,7 +2375,7 @@ function getPopupEmptyStateViewModel({
     : (hasFolderFilter ? '当前文件夹未找到相关书签' : '未找到相关书签')
   const hint = naturalSearchActive
     ? '可以清除筛选、查看全部，或关闭 AI 语义搜索改用普通搜索。'
-    : '可以清除筛选、查看全部，或试试 site:github.com、folder:"前端 资料"、最近 2 周、-视频 等高级语法。'
+    : '可以清除筛选、查看全部，或试试 site:github.com、folder:"前端资料"、最近 2 周、-视频 等高级语法。'
   const actions = [
     {
       action: 'clear-query',

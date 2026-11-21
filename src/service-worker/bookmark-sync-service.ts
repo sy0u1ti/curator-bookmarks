@@ -23,6 +23,8 @@ export interface BookmarkSyncHooks {
   whenBookmarksSettled(): Promise<void>
   /** Runs before a sync that makes the local bookmarks match the server. */
   beforeLocalOverwrite(profileLabel: string): Promise<void>
+  /** Returns true while bulk local bookmark mutations (restore/import) should not trigger sync. */
+  isBookmarkMutationSuppressed?(): boolean
 }
 
 export interface BookmarkSync {
@@ -49,6 +51,7 @@ export function registerBookmarkSync(hooks: BookmarkSyncHooks): BookmarkSync {
   let summaryPromise: Promise<SyncProfileSummary> | null = null
   let enginePromise: Promise<SyncEngine> | null = null
   const createdBySync = new Map<string, number[]>()
+  let lastCreatedSweepAt = 0
 
   const readSummary = (): Promise<SyncProfileSummary> => {
     summaryPromise ??= chrome.storage.local.get(SYNC_ACCOUNTS_STORAGE_KEY)
@@ -71,13 +74,21 @@ export function registerBookmarkSync(hooks: BookmarkSyncHooks): BookmarkSync {
         onLocalBookmarkCreate(details) {
           if (!details.url) return
           const now = Date.now()
-          for (const [key, times] of createdBySync) {
-            const fresh = times.filter(time => now - time < CREATED_BOOKMARK_TTL_MS)
-            if (fresh.length) createdBySync.set(key, fresh)
-            else createdBySync.delete(key)
+          if (
+            now - lastCreatedSweepAt >= CREATED_BOOKMARK_TTL_MS ||
+            createdBySync.size >= 512
+          ) {
+            lastCreatedSweepAt = now
+            for (const [key, times] of createdBySync) {
+              const fresh = times.filter(time => now - time < CREATED_BOOKMARK_TTL_MS)
+              if (fresh.length) createdBySync.set(key, fresh)
+              else createdBySync.delete(key)
+            }
           }
           const key = `${details.parentId}\n${canonicalUrl(details.url)}`
-          createdBySync.set(key, [...(createdBySync.get(key) || []), now])
+          const existing = createdBySync.get(key)
+          if (existing) existing.push(now)
+          else createdBySync.set(key, [now])
         }
       })
       return engine
@@ -127,6 +138,7 @@ export function registerBookmarkSync(hooks: BookmarkSyncHooks): BookmarkSync {
   })
 
   const onBookmarkEvent = (bookmarkId: string): void => {
+    if (hooks.isBookmarkMutationSuppressed?.()) return
     whenProfiles(summary => summary.watchesBookmarks, engine => engine.onLocalChange(String(bookmarkId)))
   }
   chrome.bookmarks.onCreated.addListener(onBookmarkEvent)
@@ -240,6 +252,14 @@ export function registerBookmarkSync(hooks: BookmarkSyncHooks): BookmarkSync {
       const key = `${node.parentId}\n${canonicalUrl(node.url)}`
       const times = createdBySync.get(key)
       if (!times?.length) return false
+      const now = Date.now()
+      while (times.length && now - times[0] >= CREATED_BOOKMARK_TTL_MS) {
+        times.shift()
+      }
+      if (!times.length) {
+        createdBySync.delete(key)
+        return false
+      }
       times.shift()
       if (!times.length) createdBySync.delete(key)
       return true

@@ -37,18 +37,6 @@ export interface NewTabOnboardingModule {
   placement: 'utility'
 }
 
-export interface NewTabClockModule {
-  id: 'clock'
-  kind: 'clock'
-  placement: 'utility'
-}
-
-export interface NewTabClockSpacerModule {
-  id: 'clock-spacer'
-  kind: 'clock-spacer'
-  placement: 'utility'
-}
-
 export interface NewTabSearchModule {
   id: 'search'
   kind: 'search'
@@ -77,8 +65,6 @@ export interface NewTabMissingFolderModule extends MissingFolderViewOptions {
 
 export type NewTabPageModule =
   | NewTabBookmarksModule
-  | NewTabClockModule
-  | NewTabClockSpacerModule
   | NewTabLoadingModule
   | NewTabMissingFolderModule
   | NewTabOnboardingModule
@@ -90,7 +76,6 @@ export interface NewTabPageOptions {
 
 export interface NewTabPageView {
   contentState: 'bookmarks' | 'empty'
-  hasClock: boolean
   hasSearch: boolean
   iconVerticalCenter: string
   modules: NewTabPageModule[]
@@ -901,7 +886,6 @@ export function createNewTabPage({ modules }: NewTabPageOptions): NewTabPageView
 
   return {
     contentState: bookmarkModule ? 'bookmarks' : 'empty',
-    hasClock: modules.some((module) => module.id === 'clock'),
     hasSearch: modules.some((module) => module.id === 'search'),
     iconVerticalCenter: bookmarkModule ? String(bookmarkModule.iconVerticalCenter) : 'false',
     modules,

@@ -1,11 +1,17 @@
 import { DEFAULT_SPRING, type SpringConfig } from './motion-spring'
 
+let cachedMatchMedia: typeof window.matchMedia | null = null
+let cachedReducedMotionQuery: MediaQueryList | null = null
+
 export function prefersReducedMotion(): boolean {
-  return Boolean(
-    typeof window !== 'undefined' &&
-      'matchMedia' in window &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  )
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false
+  }
+  if (cachedMatchMedia !== window.matchMedia || !cachedReducedMotionQuery) {
+    cachedMatchMedia = window.matchMedia
+    cachedReducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  }
+  return Boolean(cachedReducedMotionQuery?.matches)
 }
 
 export function getMotionAwareScrollBehavior(

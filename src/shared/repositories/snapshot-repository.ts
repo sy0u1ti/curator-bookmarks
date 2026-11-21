@@ -2,6 +2,7 @@ import { STORAGE_KEYS } from '../constants.js'
 import {
   getLocalStorage,
   setLocalStorage,
+  withLocalStorageTransaction,
   type LocalStorageTransaction
 } from '../storage.js'
 import type {
@@ -12,8 +13,7 @@ import {
   CURATOR_DATA_STORES,
   applyCuratorDataStoreDeltaWithMeta,
   isCuratorDataDbAvailable,
-  readCuratorDataStore,
-  readCuratorDataStoreMeta,
+  readCuratorDataStoreWithMeta,
   resetCuratorDataDbForTest,
   replaceCuratorDataStoreWithMeta
 } from './curator-data-db.js'
@@ -59,13 +59,19 @@ export async function updateContentSnapshotIndexInRepository(
   updater: (index: ContentSnapshotIndex) => ContentSnapshotIndex,
   transaction?: LocalStorageTransaction
 ): Promise<ContentSnapshotIndex> {
+  if (!transaction) {
+    return withLocalStorageTransaction((activeTransaction) => {
+      return updateContentSnapshotIndexInRepository(updater, activeTransaction)
+    })
+  }
   const { normalizeIndex } = requireContentSnapshotRepositoryNormalizers()
   const current = await loadContentSnapshotIndexFromRepository(transaction)
   const nextIndex = normalizeIndex(updater(current))
   const delta = diffContentSnapshotIndexes(current, nextIndex)
-  if (delta.upserts.length || delta.deletedIds.length) {
-    nextIndex.updatedAt = Math.max(Number(nextIndex.updatedAt) || 0, (Number(current.updatedAt) || 0) + 1)
+  if (!delta.upserts.length && !delta.deletedIds.length) {
+    return current
   }
+  nextIndex.updatedAt = Math.max(Number(nextIndex.updatedAt) || 0, (Number(current.updatedAt) || 0) + 1)
 
   if (!isCuratorDataDbAvailable()) {
     await writeContentSnapshotIndexToLocalStorage(nextIndex, transaction)
@@ -165,13 +171,15 @@ async function loadContentSnapshotIndexFromIndexedDb(): Promise<ContentSnapshotI
     return null
   }
 
-  const meta = await readCuratorDataStoreMeta(CONTENT_SNAPSHOT_REPOSITORY_META_KEY)
+  const { meta, records: storedRecords } = await readCuratorDataStoreWithMeta<ContentSnapshotRecord>(
+    CURATOR_DATA_STORES.contentSnapshots,
+    CONTENT_SNAPSHOT_REPOSITORY_META_KEY
+  )
   if (!meta) {
     return null
   }
 
   const records: Record<string, ContentSnapshotRecord> = {}
-  const storedRecords = await readCuratorDataStore<ContentSnapshotRecord>(CURATOR_DATA_STORES.contentSnapshots)
   if (storedRecords.length < meta.recordCount) {
     return null
   }
@@ -194,6 +202,16 @@ async function loadContentSnapshotIndexFromLocalStorage(): Promise<ContentSnapsh
   const stored = await getLocalStorage([STORAGE_KEYS.contentSnapshotIndex])
   const rawIndex = stored[STORAGE_KEYS.contentSnapshotIndex]
   if (!rawIndex || typeof rawIndex !== 'object') return null
+  const candidate = rawIndex as { migratedTo?: string; records?: unknown }
+  if (
+    candidate.migratedTo === 'indexedDB' &&
+    (!candidate.records ||
+      (typeof candidate.records === 'object' &&
+        !Array.isArray(candidate.records) &&
+        Object.keys(candidate.records).length === 0))
+  ) {
+    return null
+  }
   const index = normalizeIndex(rawIndex)
   // Only a compacted metadata marker delegates to IndexedDB. An explicit empty
   // fallback must win over older records whose full-text blobs may be gone.
@@ -315,12 +333,31 @@ function areContentSnapshotRecordsEquivalent(
 
   return left.bookmarkId === right.bookmarkId &&
     left.snapshotId === right.snapshotId &&
-    left.extractedAt === right.extractedAt &&
-    left.fullTextStorage === right.fullTextStorage &&
-    left.fullTextRef === right.fullTextRef &&
-    left.summary === right.summary &&
+    left.url === right.url &&
     left.title === right.title &&
-    left.finalUrl === right.finalUrl
+    left.summary === right.summary &&
+    left.canonicalUrl === right.canonicalUrl &&
+    left.finalUrl === right.finalUrl &&
+    left.contentType === right.contentType &&
+    left.source === right.source &&
+    left.extractionStatus === right.extractionStatus &&
+    left.extractedAt === right.extractedAt &&
+    left.hasFullText === right.hasFullText &&
+    left.fullTextBytes === right.fullTextBytes &&
+    left.fullTextStorage === right.fullTextStorage &&
+    left.fullText === right.fullText &&
+    left.fullTextRef === right.fullTextRef &&
+    areSnapshotStringArraysEqual(left.headings, right.headings) &&
+    areSnapshotStringArraysEqual(left.warnings, right.warnings)
+}
+
+function areSnapshotStringArraysEqual(left: string[] | undefined, right: string[] | undefined): boolean {
+  if (left === right) return true
+  if (!left || !right || left.length !== right.length) return false
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false
+  }
+  return true
 }
 
 function dedupeContentSnapshotRecords(records: ContentSnapshotRecord[]): ContentSnapshotRecord[] {

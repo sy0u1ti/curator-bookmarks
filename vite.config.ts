@@ -200,6 +200,77 @@ async function buildBrowserIifeScript(entryPoint: string, minify: boolean): Prom
   return result.outputFiles[0]?.text || ''
 }
 
+function manualChunks(id: string): string | undefined {
+  const normalizedId = id.replaceAll('\\', '/')
+  if (normalizedId.includes('/src/shared/text.ts')) {
+    return 'shared-text'
+  }
+  if (id.includes('/src/newtab/content-state.ts') || normalizedId.includes('/src/newtab/content-state.ts')) {
+    return 'newtab-content-state'
+  }
+  if (normalizedId.includes('/src/newtab/interactions.ts')) {
+    return 'newtab-interactions'
+  }
+  if (normalizedId.includes('/src/newtab/icon-settings.ts')) {
+    return 'newtab-icon-settings'
+  }
+  if (normalizedId.includes('/src/newtab/folder-settings.ts')) {
+    return 'newtab-folder-settings'
+  }
+  if (normalizedId.includes('/src/newtab/search-engines.ts')) {
+    return 'newtab-search-engines'
+  }
+  if (normalizedId.includes('/src/shared/newtab-workspace-settings.ts')) {
+    return 'newtab-workspace-settings'
+  }
+  if (normalizedId.includes('/src/newtab/favicon-cache.ts')) {
+    return 'newtab-favicon-cache'
+  }
+  return undefined
+}
+
+function sharedCoreChunks(id: string): string | undefined {
+  const normalizedId = id.replaceAll('\\', '/')
+  if (normalizedId.includes('/src/shared/text.ts')) {
+    return 'shared-text'
+  }
+  if (normalizedId.includes('/src/shared/constants.ts')) {
+    return 'shared-constants'
+  }
+  if (normalizedId.includes('/src/shared/format.ts')) {
+    return 'shared-format'
+  }
+  if (
+    normalizedId.includes('/src/shared/storage.ts') ||
+    normalizedId.includes('/src/shared/bookmark-tags.ts') ||
+    normalizedId.includes('/src/shared/content-snapshots.ts') ||
+    normalizedId.includes('/src/shared/repositories/')
+  ) {
+    return 'shared-core'
+  }
+  return undefined
+}
+
+function sharedSearchChunks(id: string): string | undefined {
+  const normalizedId = id.replaceAll('\\', '/')
+  if (normalizedId.includes('/src/shared/search/pinyin.ts')) {
+    return undefined
+  }
+  if (
+    normalizedId.includes('/src/popup/search.ts') ||
+    normalizedId.includes('/src/popup/search-lookup.ts') ||
+    normalizedId.includes('/src/popup/search-index.ts') ||
+    normalizedId.includes('/src/shared/search-query.ts') ||
+    normalizedId.includes('/src/shared/search/')
+  ) {
+    return 'shared-search'
+  }
+  if (normalizedId.includes('/src/shared/newtab-workspace-settings.ts')) {
+    return 'newtab-workspace-settings'
+  }
+  return undefined
+}
+
 export default defineConfig(({ mode }) => {
   const debugSourcemap = mode === 'debug' || process.env.CURATOR_DEBUG_SOURCEMAP === '1'
   const buildId = randomUUID()
@@ -217,35 +288,35 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: { archive: 'src/archive/archive.html' },
         output: {
-          manualChunks(id) {
-            if (id.includes('/src/shared/search/pinyin.ts')) {
-              return 'shared-pinyin'
-            }
-            if (id.includes('/src/shared/text.ts')) {
-              return 'shared-text'
-            }
-            if (id.includes('/src/newtab/content-state.ts')) {
-              return 'newtab-content-state'
-            }
-            if (id.includes('/src/newtab/interactions.ts')) {
-              return 'newtab-interactions'
-            }
-            if (id.includes('/src/newtab/icon-settings.ts')) {
-              return 'newtab-icon-settings'
-            }
-            if (id.includes('/src/newtab/folder-settings.ts')) {
-              return 'newtab-folder-settings'
-            }
-            if (id.includes('/src/newtab/search-engines.ts')) {
-              return 'newtab-search-engines'
-            }
-            if (id.includes('/src/shared/newtab-workspace-settings.ts')) {
-              return 'newtab-workspace-settings'
-            }
-            if (id.includes('/src/newtab/favicon-cache.ts')) {
-              return 'newtab-favicon-cache'
-            }
-            return undefined
+          codeSplitting: {
+            groups: [
+              {
+                priority: 40,
+                name(id) {
+                  return sharedCoreChunks(id)
+                }
+              },
+              {
+                priority: 30,
+                name(id) {
+                  return sharedSearchChunks(id)
+                }
+              },
+              {
+                priority: 20,
+                name(id) {
+                  return id.replaceAll('\\', '/').includes('/src/shared/search/pinyin.ts')
+                    ? 'shared-pinyin'
+                    : undefined
+                }
+              },
+              {
+                priority: 10,
+                name(id) {
+                  return manualChunks(id)
+                }
+              }
+            ]
           }
         }
       }

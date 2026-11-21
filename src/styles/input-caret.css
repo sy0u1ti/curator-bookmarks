@@ -41,6 +41,9 @@ textarea[data-curator-input-caret="true"] {
   box-shadow: 0 0 4px color-mix(in oklab, var(--curator-input-caret-color) 35%, transparent);
   animation: curator-input-caret-blink 1.2s ease-in-out infinite;
   transition: transform var(--ds-motion-feedback) var(--ease-smooth-out);
+}
+
+.curator-input-caret-layer[data-visible="true"] .curator-input-caret[data-visible="true"]:not([data-resting="true"]) {
   will-change: transform, opacity;
 }
 
@@ -58,7 +61,6 @@ textarea[data-curator-input-caret="true"] {
   border-radius: 1px;
   opacity: 0;
   contain: paint;
-  will-change: transform, opacity;
 }
 
 .curator-input-caret-trail[data-direction="right"] {

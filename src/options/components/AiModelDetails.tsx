@@ -125,7 +125,7 @@ export function AiModelDetails({ state }: { state: AiProviderSettingsState }) {
         </StatusMessage>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0 text-xs leading-relaxed text-ds-text-secondary">
-            <a href="https://models.dev" target="_blank" rel="noopener noreferrer" className="rounded-ds-xs underline underline-offset-2 focus-visible:outline-ds-focus">models.dev</a>
+            <a href="https://models.dev" target="_blank" rel="noopener noreferrer" className="rounded-ds-xs underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ds-focus">models.dev</a>
           </div>
           <StatusButton
             size="sm"

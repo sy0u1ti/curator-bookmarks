@@ -24,8 +24,19 @@ export function observeMotionPreferences(): () => void {
       root.toggleAttribute('data-motion-paused', document.hidden || !document.hasFocus())
       ambient.sync()
     }
+    let pointerMoveBound = false
+    const syncPointerMoveListener = (shouldBind: boolean) => {
+      if (shouldBind === pointerMoveBound) return
+      pointerMoveBound = shouldBind
+      if (shouldBind) {
+        document.addEventListener('pointermove', onPointerMove, { passive: true })
+      } else {
+        document.removeEventListener('pointermove', onPointerMove)
+      }
+    }
     const setInput = (input: 'keyboard' | 'pointer') => {
       if (root.dataset.motionInput !== input) root.dataset.motionInput = input
+      syncPointerMoveListener(input === 'keyboard')
     }
     const onKey = (event: KeyboardEvent) => {
       if (!['Alt', 'Control', 'Meta', 'Shift'].includes(event.key)) {
@@ -48,7 +59,6 @@ export function observeMotionPreferences(): () => void {
     window.addEventListener('blur', updateActivity)
     document.addEventListener('keydown', onKey, true)
     document.addEventListener('pointerdown', onPointerDown, true)
-    document.addEventListener('pointermove', onPointerMove, { passive: true })
     dispose = () => {
       document.removeEventListener('visibilitychange', updateActivity)
       window.removeEventListener('focus', updateActivity)
@@ -56,7 +66,7 @@ export function observeMotionPreferences(): () => void {
       ambient.dispose()
       document.removeEventListener('keydown', onKey, true)
       document.removeEventListener('pointerdown', onPointerDown, true)
-      document.removeEventListener('pointermove', onPointerMove)
+      syncPointerMoveListener(false)
       lastPointerAnchor = null
       root.removeAttribute('data-motion-paused')
       delete root.dataset.motionInput

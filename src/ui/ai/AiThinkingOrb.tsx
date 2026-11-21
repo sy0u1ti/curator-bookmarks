@@ -45,7 +45,7 @@ export function AiThinkingOrb({
     }>
       <ThinkingOrb
         {...accessibility}
-        className={cx('flex-none', className)}
+        className={cx('flex-none transition-opacity duration-[160ms] ease-ds-standard starting:opacity-0 motion-reduce:duration-[80ms]', className)}
         state={state}
         size={size}
         speed={speed}

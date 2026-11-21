@@ -6,7 +6,6 @@ export const NEWTAB_BACKUP_FIELDS = {
   backgroundSettings: STORAGE_KEYS.newTabBackgroundSettings,
   searchSettings: STORAGE_KEYS.newTabSearchSettings,
   iconSettings: STORAGE_KEYS.newTabIconSettings,
-  timeSettings: STORAGE_KEYS.newTabTimeSettings,
   glassSettings: STORAGE_KEYS.newTabGlassSettings,
   generalSettings: STORAGE_KEYS.newTabGeneralSettings,
   folderSettings: STORAGE_KEYS.newTabFolderSettings,

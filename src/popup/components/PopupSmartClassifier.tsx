@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { AiThinkingOrb } from '../../ui/ai/AiThinkingOrb'
 import { Button } from '../../ui/base/Button'
 import { StatusMessage } from '../../ui/base/StatusMessage'
@@ -14,6 +14,8 @@ import {
 import { Toolbar } from '../../ui/base/Toolbar'
 import { cx } from '../../ui/base/utils'
 import { Icon } from '../../ui/icons/Icon'
+import { prefersReducedMotion } from '../../shared/motion'
+import { usePopupSyncStatus } from '../popup-sync-state'
 import { getSmartDisplayProgress, getSmartLoadingOrbState, SMART_LOADING_STAGE_STARTS } from '../smart-loading-progress.js'
 import { isSidePanelSurface } from '../../shared/extension-surfaces'
 import type { PopupSmartClassifierViewModel, PopupSmartPageViewModel } from './PopupViewModels'
@@ -25,7 +27,7 @@ const pageRevealShellClass = 't-skel popup-t-skel popup-page-reveal relative min
 const pageLayerClass = 'absolute inset-0 min-h-12'
 const pageSkeletonLayerClass = cx(
   pageLayerClass,
-  't-skel-skeleton is-pulsing popup-page-skeleton pointer-events-none z-[1]'
+  't-skel-skeleton popup-page-skeleton pointer-events-none z-[1]'
 )
 const pageContentLayerClass = cx(
   pageLayerClass,
@@ -63,14 +65,18 @@ const placeholderPageActionClass = cx(currentPageActionClass, 'disabled:opacity-
 const currentPageActionDividerClass = 'h-3.5 w-px flex-none bg-current opacity-20'
 const currentPageActionIconClass = 'flex-none'
 
-const skeletonBarClass =
-  'block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)] rounded-full bg-[rgba(255,255,255,0.065)]'
+const skeletonSurfaceBaseClass =
+  'popup-skeleton-pulse block bg-[rgba(255,255,255,0.065)]'
+const skeletonBarBaseClass =
+  cx(skeletonSurfaceBaseClass, 'rounded-full')
 const skeletonDotClass =
-  'block h-7 w-7 rounded-ds-sm bg-[rgba(255,255,255,0.065)]'
-const pageSkeletonCopyClass = 'grid min-w-0 gap-[7px]'
-const pageSkeletonTitleClass = cx(skeletonBarClass, 'h-[11px] min-w-24')
-const pageSkeletonStatusClass = cx(skeletonBarClass, 'h-2 min-w-[132px] opacity-[0.68]')
-const pageSkeletonActionsClass = cx(skeletonBarClass, 'h-7 w-36 justify-self-end rounded-ds-sm @max-[520px]/popup:w-full')
+  cx(skeletonSurfaceBaseClass, 'h-[26px] w-[26px] rounded-ds-sm')
+const pageSkeletonCopyClass = 'grid min-w-0 gap-[6px]'
+const pageSkeletonTitleClass = cx(skeletonBarBaseClass, 'h-[10px] w-[148px] max-w-[64%]')
+const pageSkeletonStatusClass = cx(skeletonBarBaseClass, 'h-2 w-[104px] max-w-[48%] opacity-[0.72]')
+const pageSkeletonActionsClass = cx(skeletonSurfaceBaseClass, 'h-7 w-36 flex-none rounded-ds-sm @max-[520px]/popup:w-full')
+const pageSkeletonSyncActionClass = cx(skeletonSurfaceBaseClass, 'h-7 w-[88px] flex-none rounded-ds-sm @max-[520px]/popup:w-20')
+const PAGE_SYNC_HOLD_MAX_MS = 120
 
 const panelCardClass =
   'w-full bg-transparent shadow-none'
@@ -81,7 +87,7 @@ const panelHeaderLargeMarginClass = panelHeaderClass
 const panelHeaderStandaloneClass = panelHeaderClass
 const exitButtonClass = [
   'inline-flex h-7 min-w-[42px] items-center justify-center rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2 text-xs font-[650] text-ds-text-secondary outline-none',
-  'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)]'
@@ -91,7 +97,7 @@ const actionsClass = 'mt-3 grid grid-cols-[repeat(auto-fit,minmax(86px,1fr))] ga
 const actionsThreeClass = cx(actionsClass, 'grid-cols-3 @max-[430px]/popup:grid-cols-1')
 const actionButtonBaseClass = [
   'inline-flex min-h-[38px] w-full items-center justify-center gap-2 rounded-ds-sm border px-3 text-[13px] font-semibold leading-none outline-none',
-  'transition-[border-color,background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,scale,opacity] duration-ds-fast ease-ds-standard',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)] disabled:cursor-default'
 ].join(' ')
@@ -101,18 +107,20 @@ const secondaryActionButtonClass = cx(
 )
 const settingsActionButtonClass = cx(
   actionButtonBaseClass,
-  'border-ds-border-hover bg-ds-surface-3 text-ds-text-primary hover:border-ds-border-hover hover:bg-ds-surface-3 focus-visible:border-ds-border-hover focus-visible:bg-ds-surface-3'
+  'border-ds-border bg-ds-surface-3 text-ds-text-primary hover:border-ds-border-hover hover:bg-ds-active focus-visible:border-ds-border-hover focus-visible:bg-ds-active'
 )
 const primaryActionButtonClass = cx(
   actionButtonBaseClass,
-  'border-ds-accent bg-ds-text-primary text-ds-text-inverse hover:border-ds-text-primary hover:bg-ds-text-primary focus-visible:border-ds-text-primary focus-visible:bg-ds-text-primary'
+  'border-transparent bg-ds-text-primary text-ds-text-inverse hover:bg-[var(--ds-accent-hover)] focus-visible:bg-[var(--ds-accent-hover)]'
 )
-const savedActionButtonClass =
+const savedActionButtonClass = cx(
+  actionButtonBaseClass,
   'border-ds-success bg-ds-success-soft text-ds-success-text disabled:opacity-100'
+)
 
 const manualButtonClass = [
   'mx-auto inline-flex w-fit items-center justify-center gap-[7px] rounded-ds-sm border border-transparent bg-transparent px-2 py-1.5 text-xs font-semibold text-ds-text-secondary outline-none',
-  'transition-[color,background-color,transform,scale] duration-ds-fast ease-ds-standard',
+  'transition-[color,background-color,scale] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)]'
@@ -143,19 +151,23 @@ const progressBarClass = SHEEN_PROGRESS_BAR_CLASS
 
 const resultCardClass = cx(panelCardClass, 'flex h-full min-h-0 flex-col overflow-hidden px-[18px] py-4')
 const titleRowClass = 'mb-3.5 grid grid-cols-[minmax(0,1fr)] gap-2'
-const titleInputClass =
-  'min-h-9 w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-[13px] font-[650] leading-tight text-ds-text-primary placeholder:text-ds-text-muted focus:bg-ds-hover'
+const titleInputClass = [
+  'min-h-9 w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-[13px] font-[650] leading-tight text-ds-text-primary outline-none',
+  'transition-[border-color,background-color] duration-ds-fast ease-ds-standard',
+  'placeholder:text-ds-text-muted hover:border-ds-border-hover focus:border-ds-focus focus:bg-ds-hover'
+].join(' ')
 const sectionLabelClass = 'mb-[9px] mt-0 text-xs font-semibold text-ds-text-secondary'
 const recommendationsClass =
-  'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
+  'ds-scrollbar flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5 [scrollbar-gutter:stable]'
 const folderOptionBaseClass = [
-  'grid min-h-[50px] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 py-2.5 text-left outline-none @max-[430px]/popup:grid-cols-[minmax(0,1fr)]',
-  'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
-  'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
-  'active:scale-[0.993]'
+  'popup-smart-folder-option grid min-h-[50px] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2.5 rounded-ds-sm border px-3 py-2.5 text-left outline-none @max-[430px]/popup:grid-cols-[minmax(0,1fr)]',
+  'transition-[border-color,background-color,color,scale] duration-ds-fast ease-ds-standard',
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1'
 ].join(' ')
+const folderOptionDefaultClass =
+  'border-ds-border bg-ds-surface-2 hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover'
 const folderOptionSelectedClass =
-  'border-ds-border-hover bg-ds-selected text-ds-text-primary'
+  'border-ds-border-hover bg-ds-selected text-ds-text-primary hover:bg-ds-selected focus-visible:bg-ds-selected'
 const folderMainClass = 'grid min-w-0 gap-1'
 const folderHeadClass = 'flex min-w-0 items-center gap-2'
 const folderNameClass = 'min-w-0 truncate text-[13px] font-bold leading-tight text-ds-text-primary'
@@ -278,17 +290,65 @@ function PopupSmartPageRevealCard({
   accessory?: ReactNode
   actionAccessory?: ReactNode
 }) {
+  const syncState = usePopupSyncStatus()
+  const waitForSync = Boolean(actionAccessory) && !syncState.settled
+  const [syncHoldExpired, setSyncHoldExpired] = useState(!waitForSync)
+
+  useEffect(() => {
+    if (!waitForSync) {
+      setSyncHoldExpired(true)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      setSyncHoldExpired(true)
+    }, PAGE_SYNC_HOLD_MAX_MS)
+    return () => window.clearTimeout(timer)
+  }, [waitForSync])
+
+  const effectiveLoading = loading || (waitForSync && !syncHoldExpired)
+  const [revealed, setRevealed] = useState(!effectiveLoading)
+
+  useLayoutEffect(() => {
+    if (effectiveLoading) {
+      setRevealed(false)
+      return
+    }
+    if (prefersReducedMotion() || document.documentElement.dataset.motionInput === 'keyboard') {
+      setRevealed(true)
+    }
+  }, [effectiveLoading])
+
+  useEffect(() => {
+    if (effectiveLoading || revealed) {
+      return
+    }
+    let firstFrame = 0
+    let secondFrame = 0
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        setRevealed(true)
+      })
+    })
+    return () => {
+      window.cancelAnimationFrame(firstFrame)
+      window.cancelAnimationFrame(secondFrame)
+    }
+  }, [effectiveLoading, revealed])
+
+  const showRevealed = !effectiveLoading && revealed
+  const showSyncSkeleton = Boolean(actionAccessory && (syncState.error || syncState.status?.count))
+
   return (
     <div
-      className={cx(pageRevealShellClass, loading ? '' : 'is-revealed')}
-      data-state={loading ? 'loading' : 'ready'}
-      aria-busy={loading ? 'true' : 'false'}
-      role={loading ? 'status' : undefined}
+      className={cx(pageRevealShellClass, showRevealed ? 'is-revealed' : '')}
+      data-state={effectiveLoading ? 'loading' : 'ready'}
+      aria-busy={effectiveLoading ? 'true' : 'false'}
+      role={effectiveLoading ? 'status' : undefined}
     >
       <div className={cx(pageCardClass, pageSkeletonLayerClass)} aria-hidden="true">
-        <PopupSmartPageSkeletonContent />
+        <PopupSmartPageSkeletonContent showSyncSlot={showSyncSkeleton} />
       </div>
-      <article className={cx(getPopupSmartPageCardClassName(page), pageContentLayerClass, loading ? 'pointer-events-none' : '')}>
+      <article className={cx(getPopupSmartPageCardClassName(page), pageContentLayerClass, effectiveLoading ? 'pointer-events-none' : '')}>
         <PopupSmartPageCardContent handlers={handlers} page={page} accessory={accessory} actionAccessory={actionAccessory} />
       </article>
     </div>
@@ -390,23 +450,20 @@ function PopupSmartPageCardContent({
   )
 }
 
-function PopupSmartPageSkeletonContent() {
+function PopupSmartPageSkeletonContent({ showSyncSlot = false }: { showSyncSlot?: boolean }) {
   return (
     <>
       <div className={pageMainClass}>
-        <span className={skeletonDotClass} aria-hidden="true"></span>
+        <span className={skeletonDotClass} data-origin="center" aria-hidden="true"></span>
         <span className={pageSkeletonCopyClass} aria-hidden="true">
-          <span
-            className={pageSkeletonTitleClass}
-            style={{ '--skeleton-width': 0.64 } as CSSProperties}
-          ></span>
-          <span
-            className={pageSkeletonStatusClass}
-            style={{ '--skeleton-width': 0.86 } as CSSProperties}
-          ></span>
+          <span className={pageSkeletonTitleClass}></span>
+          <span className={pageSkeletonStatusClass}></span>
         </span>
       </div>
-      <span className={pageSkeletonActionsClass} aria-hidden="true"></span>
+      <div className="popup-page-actions" aria-hidden="true">
+        <span className={pageSkeletonActionsClass} data-origin="right"></span>
+        {showSyncSlot ? <span className={pageSkeletonSyncActionClass} data-origin="right"></span> : null}
+      </div>
     </>
   )
 }
@@ -635,7 +692,7 @@ function PopupSmartResult({
         {state.recommendations.length ? (
           state.recommendations.map((recommendation) => (
             <Button
-              className={cx(folderOptionBaseClass, recommendation.selected ? folderOptionSelectedClass : '')}
+              className={cx(folderOptionBaseClass, recommendation.selected ? folderOptionSelectedClass : folderOptionDefaultClass)}
               type="button"
               data-smart-recommendation={recommendation.id}
               aria-pressed={recommendation.selected}
@@ -675,7 +732,7 @@ function PopupSmartResult({
           取消
         </Button>
         <Button
-          className={cx(primaryActionButtonClass, state.saved ? savedActionButtonClass : '')}
+          className={state.saved ? savedActionButtonClass : primaryActionButtonClass}
           type="button"
           data-smart-action="save"
           disabled={!canSave}
@@ -683,7 +740,7 @@ function PopupSmartResult({
           unstyled
         >
           {state.saving ? (
-           null
+            <PopupButtonLoadingLabel label="保存中…" />
           ) : (
             <span className="popup-save-action-label">
               {state.saved ? (

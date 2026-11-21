@@ -1,7 +1,7 @@
 const CONTENT_SELECTOR = [
   'a', 'button', 'input', 'textarea', 'select', '[contenteditable]',
   '[role="dialog"]', '[role="menu"]', '[role="listbox"]',
-  '[data-drawer-content]', '.newtab-clock', '.newtab-search-slot',
+  '[data-drawer-content]', '.newtab-search-slot',
   '.bookmark-folder-section', '.newtab-speed-dial-panel',
   '.bookmark-navigation', '.base-toast'
 ].join(',')

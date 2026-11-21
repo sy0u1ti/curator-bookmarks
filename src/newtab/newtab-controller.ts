@@ -141,7 +141,6 @@ import {
   shouldKeepNewtabSearchOpen,
   type NewtabSearchFocusIntent
 } from './newtab-search-focus.js'
-import type { NewTabTimeSettings } from './time-settings.js'
 import {
   buildNewTabModuleSettingRows,
   DEFAULT_NEW_TAB_MODULE_SETTINGS,
@@ -304,7 +303,6 @@ import {
 import { registerNewtabKeyboardActions } from './newtab-keyboard-store.js'
 import { registerNewtabLifecycleActions } from './newtab-lifecycle-store.js'
 import { registerNewtabWindowActions } from './newtab-window-store.js'
-import { dispatchNewtabClockView, type NewtabClockView } from './newtab-clock-store.js'
 import {
   dispatchNewtabSpeedDialView,
   getNewtabSpeedDialNodes,
@@ -336,13 +334,6 @@ import {
   registerNewtabIconSettingsActions,
   type NewtabIconSettingsFieldKey
 } from './newtab-icon-preview-store.js'
-import {
-  createNewtabTimeSettingsView,
-  dispatchNewtabTimeSettingsView,
-  registerNewtabTimeSettingsActions,
-  type NewtabTimeSettingsFieldKey,
-  type NewtabTimeSettingsToggleKey
-} from './newtab-time-settings-store.js'
 import {
   createNewtabSearchSettingsView,
   dispatchNewtabSearchSettingsView,
@@ -439,16 +430,6 @@ const DEFAULT_SEARCH_SETTINGS = {
   ...DEFAULT_SEARCH_LAYOUT,
   background: 30
 }
-const DEFAULT_TIME_SETTINGS: NewTabTimeSettings = {
-  enabled: true,
-  showSeconds: false,
-  hour12: false,
-  clockSize: 100,
-  dateFormat: 'year-month-day-weekday',
-  timeZone: 'auto',
-  displayMode: 'time-date',
-  density: 'balanced'
-}
 const SEARCH_OFFSET_BOUNDS_FALLBACK: AdaptiveSearchOffsetBounds = { min: -32, max: 72 }
 const SEARCH_OFFSET_ABSOLUTE_MIN = -240
 const SEARCH_OFFSET_ABSOLUTE_MAX = 240
@@ -485,16 +466,12 @@ type NewTabSearchSuggestion =
   | NewTabCommandSearchSuggestion
 type BackgroundGalleryModule = typeof import('./background-gallery.js')
 type BackgroundGalleryRefreshModule = typeof import('./background-gallery-refresh.js')
-type TimeSettingsModule = typeof import('./time-settings.js')
 
 let backgroundGalleryModulePromise: Promise<BackgroundGalleryModule> | null = null
 let backgroundGalleryModule: BackgroundGalleryModule | null = null
 let backgroundGalleryRefreshModulePromise: Promise<BackgroundGalleryRefreshModule> | null = null
-let timeSettingsModulePromise: Promise<TimeSettingsModule> | null = null
-let timeSettingsModule: TimeSettingsModule | null = null
 let featuredBackgroundUiVersion = 0
 let featuredBackgroundPickerRenderKey = ''
-let clockHydrationVersion = 0
 
 const SEARCH_SUGGESTION_LIMIT = 6
 const SEARCH_SUGGESTION_CACHE_LIMIT = 24
@@ -547,14 +524,6 @@ function loadBackgroundGalleryModule(): Promise<BackgroundGalleryModule> {
 function loadBackgroundGalleryRefreshModule(): Promise<BackgroundGalleryRefreshModule> {
   backgroundGalleryRefreshModulePromise ||= import('./background-gallery-refresh.js')
   return backgroundGalleryRefreshModulePromise
-}
-
-function loadTimeSettingsModule(): Promise<TimeSettingsModule> {
-  timeSettingsModulePromise ||= import('./time-settings.js').then((mod) => {
-    timeSettingsModule = mod
-    return mod
-  })
-  return timeSettingsModulePromise
 }
 
 const BOOKMARK_TILE_INITIAL_RENDER_LIMIT = 72
@@ -758,7 +727,6 @@ const state = {
   folderCandidateQuery: '',
   folderCandidateActiveId: '',
   bookmarkNavigationPath: [] as string[],
-  timeSettings: { ...DEFAULT_TIME_SETTINGS } as NewTabTimeSettings,
   settingsSaveState: 'idle' as SettingsSaveState,
   settingsSaveMessage: '',
   activeSettingsGroup: 'source' as SettingsDrawerSection,
@@ -778,7 +746,6 @@ const settingsPersistence = createNewtabSettingsPersistence({
 
 let onboardingCompleted = false
 
-let clockTimer = 0
 let featuredBackgroundRefreshTimer = 0
 let featuredBackgroundPreferencesSaveTimer = 0
 let featuredBackgroundPreviewTimer = 0
@@ -811,11 +778,9 @@ let featuredBackgroundGalleryPreviewObjectUrlWarmTask: Promise<void> | null = nu
 let featuredBackgroundGalleryPreviewObjectUrlWarmSignature = ''
 let featuredBackgroundGalleryPreviewWarmTimer = 0
 let lastIconPreviewKey = ''
-let deferredRenderClockUpdate = false
 let searchSettingsSaveTimer = 0
 let searchSettingsSettleTimer = 0
 let iconSettingsSaveTimer = 0
-let timeSettingsSaveTimer = 0
 let settingsSaveStatusTimer = 0
 let folderReorderStatusTimer = 0
 let bookmarkChangeRefreshTimer = 0
@@ -1012,7 +977,6 @@ function normalizePersistedNewtabSetting(key: string, value: unknown): Record<st
       return settings
     }
     case STORAGE_KEYS.newTabIconSettings: return { ...normalizeIconSettings(value) }
-    case STORAGE_KEYS.newTabTimeSettings: return { ...normalizeTimeSettingsLocal(value) }
     case STORAGE_KEYS.newTabGeneralSettings: return { ...normalizeGeneralSettings(value) }
     case STORAGE_KEYS.newTabFolderSettings: return { ...normalizeFolderSettingsWithDefault(value, state.rootNode) }
     case STORAGE_KEYS.newTabBackgroundSettings: return { ...normalizeBackgroundSettings(value) }
@@ -1031,30 +995,24 @@ function applySyncedNewtabSetting(key: string, value: Record<string, unknown>): 
       })
       applySearchSettingsLive()
       syncSearchSettingsControls()
-      scheduleRender({ updateClock: true })
+      scheduleRender()
       break
     case STORAGE_KEYS.newTabIconSettings:
       state.iconSettings = normalizeIconSettings(value)
       applyIconSettingsLive()
       syncIconSettingsControls()
       break
-    case STORAGE_KEYS.newTabTimeSettings:
-      state.timeSettings = normalizeTimeSettingsLocal(value)
-      syncTimeSettingsControls()
-      scheduleClockTick()
-      scheduleRender({ updateClock: true })
-      break
     case STORAGE_KEYS.newTabGeneralSettings:
       state.generalSettings = normalizeGeneralSettings(value)
       syncGeneralSettingsControls()
-      scheduleRender({ updateClock: true })
+      scheduleRender()
       break
     case STORAGE_KEYS.newTabFolderSettings:
       state.folderSettings = normalizeFolderSettingsWithDefault(value, state.rootNode)
       state.folderSections = buildNewTabFolderSections(state.rootNode, state.folderSettings)
       refreshDerivedBookmarkState()
       syncFolderSettingsControls()
-      scheduleRender({ updateClock: true })
+      scheduleRender()
       break
     case STORAGE_KEYS.newTabBackgroundSettings: {
       const previousSettings = state.backgroundSettings
@@ -1076,7 +1034,7 @@ function applySyncedNewtabSetting(key: string, value: Record<string, unknown>): 
     case STORAGE_KEYS.newTabModuleSettings:
       state.moduleSettings = normalizeNewTabModuleSettings(value)
       syncModuleSettingsControls()
-      scheduleRender({ updateClock: true })
+      scheduleRender()
   }
 }
 
@@ -1222,12 +1180,9 @@ function bindEvents(): void {
     onShowTitlesToggle: handleIconShowTitlesToggle,
     onVerticalCenterToggle: handleIconVerticalCenterToggle
   })
-  registerNewtabTimeSettingsActions({
-    onFieldChange: handleTimeSettingFieldChange,
-    onToggle: handleTimeSettingToggle
-  })
   registerNewtabSearchSettingsActions({
     onFieldChange: handleSearchSettingFieldChange,
+    onFieldCommit: flushSearchSettingsSave,
     onResetLayout: () => {
       commitSearchSettings(resetSearchLayout(state.searchSettings), { live: true })
       scheduleSearchSettingsSettle()
@@ -1266,13 +1221,11 @@ function bindEvents(): void {
     onPointerUp: handleNewtabWindowPointerUp,
     onResize: handleNewtabWindowResize
   })
+  syncDragWindowListeners()
   unregisterNewtabSettingsDrawerNodes()
   unregisterNewtabSettingsDrawerNodes = subscribeNewtabSettingsDrawerNodes(handleSettingsDrawerNodesChange)
   initializeSettingsDrawer()
   initializeFeaturedBackgroundModal()
-
-  window.clearTimeout(clockTimer)
-  scheduleClockTick()
 }
 
 function bindBookmarkEvents(): void {
@@ -1366,11 +1319,35 @@ function handleNewtabWindowResize(): void {
     resizeLayoutFrame = window.requestAnimationFrame(() => {
       resizeLayoutFrame = 0
       applyIconSettingsLive()
-      updateClockText()
       // Search bounds depend on the viewport even when no bookmark grid is shown.
       runBatchedAdaptiveLayoutUpdate()
     })
   }
+}
+
+let dragWindowListenersBound = false
+
+function hasActiveNewtabDragPointer(): boolean {
+  return Boolean(
+    state.speedDialDraggingBookmarkId ||
+    state.draggingBookmarkId ||
+    state.draggingFolderId
+  )
+}
+
+function syncDragWindowListeners(): void {
+  const shouldBind = newTabControllerStarted && hasActiveNewtabDragPointer()
+  if (shouldBind === dragWindowListenersBound) return
+  dragWindowListenersBound = shouldBind
+  if (shouldBind) {
+    window.addEventListener('pointermove', handleNewTabPointerMove)
+    window.addEventListener('pointerup', handleNewtabWindowPointerUp)
+    window.addEventListener('pointercancel', handleNewtabWindowPointerCancel)
+    return
+  }
+  window.removeEventListener('pointermove', handleNewTabPointerMove)
+  window.removeEventListener('pointerup', handleNewtabWindowPointerUp)
+  window.removeEventListener('pointercancel', handleNewtabWindowPointerCancel)
 }
 
 function handleNewtabWindowPointerUp(event: PointerEvent): void {
@@ -1590,7 +1567,7 @@ function handleGeneralSettingToggle(key: NewtabGeneralSettingToggleKey, enabled:
     previousSettings.showQuickAccess !== state.generalSettings.showQuickAccess ||
     previousSettings.showSourceNavigation !== state.generalSettings.showSourceNavigation
   ) {
-    scheduleRender({ updateClock: true })
+    scheduleRender()
   }
 }
 
@@ -1611,7 +1588,6 @@ function handleFolderHideNamesToggle(enabled: boolean): void {
     }
     scheduleAdaptiveNewTabLayoutUpdate()
   }
-  updateClockText()
 }
 
 function handleBookmarkBrowseModeChange(mode: NewTabBookmarkBrowseMode): void {
@@ -1635,7 +1611,6 @@ function handleBookmarkBrowseModeChange(mode: NewTabBookmarkBrowseMode): void {
     }
     scheduleAdaptiveNewTabLayoutUpdate()
   }
-  updateClockText()
 }
 
 // 导航模式的当前浏览层级路径栈（folderId 序列，空 = 根来源层）。
@@ -1857,7 +1832,6 @@ async function updateSelectedFolders(
     render()
     syncFolderSettingsControls()
     applyFolderSettings()
-    updateClockText()
     setSettingsSaveStatus('error', '来源保存失败，已恢复到上次已保存状态')
     console.warn('新标签页来源设置保存失败，已回滚。', error)
     return
@@ -1866,7 +1840,6 @@ async function updateSelectedFolders(
   render()
   syncFolderSettingsControls()
   applyFolderSettings()
-  updateClockText()
 
   if (preserveCandidateScroll || restoreCandidateFocus) {
     if (restoreCandidateFocus) {
@@ -1935,7 +1908,7 @@ function commitSearchSettings(
     applySearchSettingsLive()
   }
   if (options.render) {
-    scheduleRender({ updateClock: true })
+    scheduleRender()
   }
   if (options.syncControls !== false) {
     syncSearchSettingsControls()
@@ -2151,28 +2124,6 @@ async function handleBackgroundFileChange(
   }
 }
 
-function handleTimeSettingToggle(key: NewtabTimeSettingsToggleKey, enabled: boolean): void {
-  commitTimeSettings(normalizeTimeSettingsLocal({
-    ...state.timeSettings,
-    [key]: enabled
-  }))
-}
-
-function handleTimeSettingFieldChange(key: NewtabTimeSettingsFieldKey, value: number | string): void {
-  commitTimeSettings(normalizeTimeSettingsLocal({
-    ...state.timeSettings,
-    [key]: value
-  }))
-}
-
-function commitTimeSettings(nextSettings: NewTabTimeSettings): void {
-  state.timeSettings = nextSettings
-  scheduleTimeSettingsSave()
-  scheduleRender({ updateClock: true })
-  syncTimeSettingsControls()
-  scheduleClockTick()
-}
-
 let settingsDrawerReady = false
 let settingsDrawerReadyPromise: Promise<void> | null = null
 let resolveSettingsDrawerReady: (() => void) | null = null
@@ -2205,7 +2156,6 @@ function initializeSettingsDrawer(): void {
   syncGeneralSettingsControls()
   syncFolderSettingsControls()
   syncIconSettingsControls()
-  syncTimeSettingsControls()
 }
 
 function openSettingsDrawer(options?: { focusFirstControl?: boolean; section?: SettingsDrawerSection }): void {
@@ -2416,6 +2366,7 @@ function startSpeedDialDragFromReact(
   const rect = card.getBoundingClientRect()
   state.speedDialDragOffsetX = event.clientX - rect.left
   state.speedDialDragOffsetY = event.clientY - rect.top
+  syncDragWindowListeners()
   if (event.pointerType !== 'mouse') {
     dispatchNewtabDragUiView({ speedDialPendingId: normalizedBookmarkId })
     state.speedDialDragLongPressTimer = window.setTimeout(() => {
@@ -2518,6 +2469,9 @@ async function finishSpeedDialDrag(event: PointerEvent): Promise<void> {
 
   window.clearTimeout(state.speedDialDragLongPressTimer)
   state.speedDialDragLongPressTimer = 0
+  state.speedDialDragPointerId = 0
+  window.cancelAnimationFrame(speedDialDragGhostFrame)
+  speedDialDragGhostFrame = 0
 
   const wasDragging = Boolean(state.speedDialDragOriginalOrderIds.length)
   const generation = speedDialDragGeneration
@@ -2546,7 +2500,6 @@ async function finishSpeedDialDrag(event: PointerEvent): Promise<void> {
   })
   const committedCard = getNewtabSpeedDialNodes().cards.get(bookmarkId)
   if (committedCard) void committedCard.offsetWidth
-  updateClockText()
   finishBookmarkDropVisualCommit()
 
   if (areStringArraysEqual(originalOrderIds, finalOrderIds)) {
@@ -2564,7 +2517,6 @@ function cancelSpeedDialDrag({ keepSuppressClick = false } = {}): void {
   window.clearTimeout(state.speedDialDragLongPressTimer)
   clearSpeedDialDragState({ keepSuppressClick })
   render()
-  updateClockText()
 }
 
 function clearSpeedDialDragState({ deferVisualReset = false, keepSuppressClick = false } = {}): void {
@@ -2586,6 +2538,7 @@ function clearSpeedDialDragState({ deferVisualReset = false, keepSuppressClick =
   state.speedDialDragOffsetY = 0
   state.speedDialDragOriginalOrderIds = []
   state.speedDialDragPendingInsertIndex = -1
+  syncDragWindowListeners()
   if (deferVisualReset) {
     speedDialDragSlotRects = new Map()
     speedDialDragSlotOrderIds = []
@@ -2999,7 +2952,6 @@ async function persistSpeedDialOrder(
     )
     state.speedDialReorderError = message
     render()
-    updateClockText()
   } finally {
     state.reorderingSpeedDial = false
     syncSpeedDialReorderBusyState()
@@ -3072,7 +3024,6 @@ async function reorderSpeedDialByKeyboard(bookmarkId: string, direction: -1 | 1)
     { validBookmarkIds: state.allBookmarkMap.keys() }
   )
   render()
-  updateClockText()
   focusSpeedDialCard(bookmarkId)
   await persistSpeedDialOrder(originalIds, finalIds)
   if (!state.speedDialReorderError) {
@@ -3122,6 +3073,7 @@ function startBookmarkDragFromReact(
   const rect = tile.getBoundingClientRect()
   state.dragOffsetX = event.clientX - rect.left
   state.dragOffsetY = event.clientY - rect.top
+  syncDragWindowListeners()
   if (event.pointerType !== 'mouse') {
     dispatchNewtabDragUiView({ bookmarkPendingId: normalizedBookmarkId })
     state.dragLongPressTimer = window.setTimeout(() => {
@@ -3212,6 +3164,9 @@ async function finishBookmarkDrag(event: PointerEvent): Promise<void> {
 
   window.clearTimeout(state.dragLongPressTimer)
   state.dragLongPressTimer = 0
+  state.dragPointerId = 0
+  window.cancelAnimationFrame(bookmarkDragGhostFrame)
+  bookmarkDragGhostFrame = 0
 
   const wasDragging = Boolean(state.dragOriginalOrderIds.length)
   const generation = bookmarkDragGeneration
@@ -3245,7 +3200,6 @@ async function finishBookmarkDrag(event: PointerEvent): Promise<void> {
   })
   const committedGrid = getNewtabBookmarkContentNodes().grids.get(folderId)
   if (committedGrid) void committedGrid.offsetWidth
-  updateClockText()
   finishBookmarkDropVisualCommit()
 
   if (areStringArraysEqual(originalOrderIds, finalOrderIds)) {
@@ -3264,7 +3218,6 @@ function cancelBookmarkDrag({ keepSuppressClick = false } = {}): void {
   window.clearTimeout(state.dragLongPressTimer)
   clearBookmarkDragState({ keepSuppressClick })
   render()
-  updateClockText()
 }
 
 function clearBookmarkDragState({
@@ -3294,6 +3247,7 @@ function clearBookmarkDragState({
   state.draggingBookmarkFolderId = ''
   state.dragOriginalOrderIds = []
   state.dragPendingInsertIndex = -1
+  syncDragWindowListeners()
   if (deferVisualReset) {
     bookmarkDragSlotRects = new Map()
     bookmarkDragSlotOrderIds = []
@@ -3931,7 +3885,6 @@ async function persistBookmarkOrder(
     await refreshNewTab({ showLoading: false })
     state.bookmarkReorderError = message
     render()
-    updateClockText()
   } finally {
     state.reorderingBookmarks = false
     syncBookmarkReorderBusyState()
@@ -3994,7 +3947,6 @@ function syncPersistedBookmarkOrderInState(
   refreshDerivedBookmarkState()
   markSearchIndexDirty()
   render()
-  updateClockText()
   return true
 }
 
@@ -4075,7 +4027,6 @@ async function reorderBookmarkByKeyboard(
   const finalIds = section.bookmarks.map((bookmark) => String(bookmark.id))
   refreshDerivedBookmarkState()
   render()
-  updateClockText()
   focusBookmarkTile(bookmarkId)
   await persistBookmarkOrder(folderId, originalIds, finalIds)
   if (!state.bookmarkReorderError) {
@@ -4144,7 +4095,6 @@ async function reorderFolderByKeyboard(folderId: string, direction: -1 | 1): Pro
   })
   refreshDerivedBookmarkState()
   render()
-  updateClockText()
   focusFolderHeader(folderId)
 
   try {
@@ -4161,7 +4111,6 @@ async function reorderFolderByKeyboard(folderId: string, direction: -1 | 1): Pro
     settingsPersistence.discard(STORAGE_KEYS.newTabFolderSettings, state.folderSettings)
     refreshDerivedBookmarkState()
     render()
-    updateClockText()
     const message = error instanceof Error ? error.message : '保存失败，请稍后重试。'
     setFolderReorderStatus(`文件夹顺序保存失败，已恢复。${message}`, 'error')
     focusFolderHeader(folderId)
@@ -4239,6 +4188,7 @@ function startFolderDragFromReact(
   const rect = header.getBoundingClientRect()
   state.folderDragOffsetX = event.clientX - rect.left
   state.folderDragOffsetY = event.clientY - rect.top
+  syncDragWindowListeners()
   if (event.pointerType !== 'mouse') {
     dispatchNewtabDragUiView({ folderPendingId: normalizedFolderId })
     state.folderDragLongPressTimer = window.setTimeout(() => {
@@ -4341,6 +4291,9 @@ async function finishFolderDrag(event: PointerEvent): Promise<void> {
 
   window.clearTimeout(state.folderDragLongPressTimer)
   state.folderDragLongPressTimer = 0
+  state.folderDragPointerId = 0
+  window.cancelAnimationFrame(folderDragGhostFrame)
+  folderDragGhostFrame = 0
 
   const wasDragging = Boolean(state.folderDragOriginalOrderIds.length)
   const generation = folderDragGeneration
@@ -4359,7 +4312,6 @@ async function finishFolderDrag(event: PointerEvent): Promise<void> {
   }
 
   render()
-  updateClockText()
 
   if (areStringArraysEqual(originalOrderIds, finalOrderIds)) {
     return
@@ -4399,7 +4351,6 @@ function cancelFolderDrag({ keepSuppressClick = false } = {}): void {
   clearFolderDragState({ keepSuppressClick })
   restoreFolderDragOrder(originalOrderIds, originalSections)
   render()
-  updateClockText()
 }
 
 function clearFolderDragState({ keepSuppressClick = false } = {}): void {
@@ -4418,6 +4369,7 @@ function clearFolderDragState({ keepSuppressClick = false } = {}): void {
   state.folderDragOriginalOrderIds = []
   state.folderDragOriginalSections = []
   folderDragSectionRectSnapshot = null
+  syncDragWindowListeners()
   removeFolderDragGhost()
   dispatchNewtabDragUiView({ folderOrderDragging: false, folderPendingId: '' })
 
@@ -4541,6 +4493,9 @@ async function settleNewtabDragGhost(
     return
   }
   const currentTransform = getComputedStyle(ghost).transform
+  for (const existing of ghost.getAnimations()) {
+    existing.cancel()
+  }
   const animation = ghost.animate(
     [
       { transform: currentTransform === 'none' ? ghost.style.transform : currentTransform },
@@ -4582,25 +4537,40 @@ function getFolderSectionRects(): FolderDragSectionRectSnapshot {
 function renderWithFolderFlip(): void {
   const previousRects = folderDragSectionRectSnapshot || getFolderSectionRects()
   render()
-  updateClockText()
+  const currentSnapshot = projectFolderDragSectionRectSnapshot(previousRects, state.folderSections.map((section) => section.id))
 
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    folderDragSectionRectSnapshot = currentSnapshot
     return
   }
 
-  const currentSnapshot = projectFolderDragSectionRectSnapshot(previousRects, state.folderSections.map((section) => section.id))
   for (const delta of getFolderFlipDeltasFromSnapshots(
     previousRects,
     currentSnapshot,
     state.draggingFolderId
   )) {
     const section = getNewtabBookmarkContentNodes().folderSections.get(delta.folderId) || null
-    section?.animate(
+    if (!section) {
+      continue
+    }
+    let currentOffsetY = 0
+    const activeFlips = section.getAnimations().filter((animation) => animation.id === 'folder-flip')
+    if (activeFlips.length) {
+      const transform = getComputedStyle(section).transform
+      if (transform && transform !== 'none') {
+        currentOffsetY = new DOMMatrixReadOnly(transform).m42
+      }
+      for (const animation of activeFlips) {
+        animation.cancel()
+      }
+    }
+    section.animate(
       [
-        { transform: `translate3d(0, ${delta.deltaY}px, 0)` },
+        { transform: `translate3d(0, ${delta.deltaY + currentOffsetY}px, 0)` },
         { transform: 'translate3d(0, 0, 0)' }
       ],
       {
+        id: 'folder-flip',
         // 与书签卡片让位（BOOKMARK_TILE_DRAG_RESTING_MOTION_CLASS）共用
         // drag settle 时长和 easing，避免不同拖拽模式在落位时变速。
         duration: getMotionDurationMs('--drag-settle-dur', 160),
@@ -4763,7 +4733,7 @@ function insertBookmarkInPlace(bookmark: chrome.bookmarks.BookmarkTreeNode): boo
     state.allBookmarkMap.set(bookmarkId, bookmark)
   }
   markSearchIndexDirty({ force: true })
-  scheduleRender({ updateClock: false })
+  scheduleRender()
   return true
 }
 
@@ -5128,8 +5098,7 @@ async function toggleActiveMenuBookmarkPin(): Promise<void> {
     const workspaceSettings = await persistNewtabWorkspaceMutation({ type: 'pin', bookmarkId, pinned: !pinned })
     if (controllerSession !== newTabControllerGeneration || !newTabControllerStarted) return
     state.workspaceSettings = workspaceSettings
-    scheduleRender({ updateClock: true })
-    updateClockText()
+    scheduleRender()
     if (!isCurrentBookmarkMenuSession(session)) return
     state.menuBusy = false
     const copy = getSpeedDialPinActionCopyLocal(pinned)
@@ -5412,7 +5381,6 @@ function refreshActiveMenuIcon(): void {
     render()
   }
   scheduleAdaptiveNewTabLayoutUpdate()
-  updateClockText()
   renderBookmarkMenu({ focusFirst: false, focusAction: 'refresh-icon' })
 }
 
@@ -5474,9 +5442,30 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
   }
 
   try {
+    let resolveStartupData!: (value: Awaited<ReturnType<typeof consumeNewtabStartupData>>) => void
+    let rejectStartupData!: (reason?: unknown) => void
+    const sharedStartupData = new Promise<Awaited<ReturnType<typeof consumeNewtabStartupData>>>((resolve, reject) => {
+      resolveStartupData = resolve
+      rejectStartupData = reject
+    })
     const [startup, customIcons] = await Promise.all([
-      consumeNewtabStartupData(),
-      loadCustomIcons().catch(error => { console.warn('新标签页图标读取失败，保留已有图标。', error); return null }),
+      consumeNewtabStartupData().then(
+        data => {
+          resolveStartupData(data)
+          return data
+        },
+        error => {
+          rejectStartupData(error)
+          throw error
+        }
+      ),
+      sharedStartupData
+        .then(data => loadCustomIcons({
+          raw: STORAGE_KEYS.newTabCustomIcons in newTabRefreshStorageChanges
+            ? newTabRefreshStorageChanges[STORAGE_KEYS.newTabCustomIcons]
+            : data.stored[STORAGE_KEYS.newTabCustomIcons]
+        }))
+        .catch(error => { console.warn('新标签页图标读取失败，保留已有图标。', error); return null }),
       loadActiveFaviconStore().catch(error => { console.warn('新标签页网站图标缓存读取失败。', error) })
     ])
     if (refreshVersion !== newTabRefreshVersion || !newTabControllerStarted) return
@@ -5529,7 +5518,6 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
     )
     state.iconSettings = normalizeIconSettings(stored[STORAGE_KEYS.newTabIconSettings])
     state.generalSettings = normalizeGeneralSettings(stored[STORAGE_KEYS.newTabGeneralSettings])
-    state.timeSettings = normalizeTimeSettingsLocal(stored[STORAGE_KEYS.newTabTimeSettings])
     state.utilitySettingsHydrated = true
     onboardingCompleted = normalizeNewTabOnboardingCompleted(stored[STORAGE_KEYS.onboardingState])
   } catch (error) {
@@ -5561,10 +5549,7 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
     syncGeneralSettingsControls()
     syncFolderSettingsControls()
     syncNewTabModernSettingsControls()
-    syncTimeSettingsControls()
     if (settingsRecoveryError) setSettingsSaveStatus('error', settingsRecoveryError)
-    updateClockText()
-    scheduleClockTick()
     runIdle(() => {
       void hydrateNewTabSearchAndTags(refreshVersion)
     })
@@ -5834,14 +5819,7 @@ function getNewTabShellSignature(): string {
     state.searchSettings.width,
     state.searchSettings.height,
     state.searchSettings.offsetY,
-    state.searchSettings.background,
-    state.timeSettings.enabled,
-    state.timeSettings.displayMode,
-    state.timeSettings.hour12,
-    state.timeSettings.showSeconds,
-    state.timeSettings.dateFormat,
-    state.timeSettings.clockSize,
-    state.timeSettings.density
+    state.searchSettings.background
   ].join('|')
 }
 
@@ -5859,20 +5837,14 @@ function renderDeleteToast(): void {
   })
 }
 
-function scheduleRender({ updateClock = false } = {}): void {
-  deferredRenderClockUpdate = deferredRenderClockUpdate || updateClock
+function scheduleRender(): void {
   if (deferredRenderFrame) {
     return
   }
 
   deferredRenderFrame = window.requestAnimationFrame(() => {
     deferredRenderFrame = 0
-    const shouldUpdateClock = deferredRenderClockUpdate
-    deferredRenderClockUpdate = false
     render()
-    if (shouldUpdateClock) {
-      updateClockText()
-    }
   })
 }
 
@@ -6159,7 +6131,6 @@ function createNewTabLayout(primaryContent: NewTabPageModule): NewTabContentView
   const modules: NewTabPageModule[] = []
 
   if (!state.utilitySettingsHydrated) {
-    dispatchNewtabClockView(null)
     dispatchNewtabSearchWidgetView(null)
     modules.push(primaryContent)
     return createNewTabPage({ modules })
@@ -6168,17 +6139,6 @@ function createNewTabLayout(primaryContent: NewTabPageModule): NewTabContentView
   const onboarding = createNewTabOnboardingStrip()
   if (onboarding) {
     modules.push(onboarding)
-  }
-
-  const clock = createClockModule()
-  if (clock) {
-    modules.push(clock)
-  } else {
-    modules.push({
-      id: 'clock-spacer',
-      kind: 'clock-spacer',
-      placement: 'utility'
-    })
   }
 
   if (initializeSearchWidget()) {
@@ -7658,23 +7618,6 @@ function openBookmarkSuggestion(suggestion: SearchBookmarkSuggestion): void {
   openSearchTarget(String(bookmark.url || suggestion.url))
 }
 
-function createClockModule(): NewTabPageModule | null {
-  const settings = state.timeSettings
-  if (!settings.enabled) {
-    dispatchNewtabClockView(null)
-    return null
-  }
-
-  dispatchNewtabClockView(createFallbackClockWidgetState(new Date(), settings))
-  hydrateClockText()
-
-  return {
-    id: 'clock',
-    kind: 'clock',
-    placement: 'utility'
-  }
-}
-
 function createBookmarkSections(sections: NewTabFolderSection[]): NewTabBookmarksModule {
   let speedDial = false
   for (const moduleKey of getVisibleNewTabModules(state.moduleSettings)) {
@@ -8214,7 +8157,6 @@ function cleanupNewTabController(): void {
   customIconLoadVersion += 1
   newTabNaturalSearchSettingsGeneration += 1
   newTabNaturalSearchToggleVersion += 1
-  clockHydrationVersion += 1
   newTabRefreshStorageChanges = null
   clearTimeout(newTabMetadataRefreshTimer)
   newTabMetadataRefreshTimer = undefined
@@ -8239,10 +8181,9 @@ function cleanupNewTabController(): void {
   unregisterNewtabSettingsDrawerNodes = () => {}
   unregisterNewtabWindowActions()
   unregisterNewtabWindowActions = () => {}
+  syncDragWindowListeners()
   unregisterNewtabBookmarkEventActions()
   unregisterNewtabBookmarkEventActions = () => {}
-  window.clearTimeout(clockTimer)
-  clockTimer = 0
   window.clearTimeout(featuredBackgroundRefreshTimer)
   featuredBackgroundRefreshTimer = 0
   window.clearTimeout(backgroundStartupCacheTimer)
@@ -8260,8 +8201,6 @@ function cleanupNewTabController(): void {
   searchSettingsSettleTimer = 0
   window.clearTimeout(iconSettingsSaveTimer)
   iconSettingsSaveTimer = 0
-  window.clearTimeout(timeSettingsSaveTimer)
-  timeSettingsSaveTimer = 0
   window.clearTimeout(settingsSaveStatusTimer)
   settingsSaveStatusTimer = 0
   window.clearTimeout(folderReorderStatusTimer)
@@ -10529,13 +10468,9 @@ function scheduleFeaturedBackgroundDailyRefresh(): void {
 
 function handleNewTabVisibilityChange(visibilityState: DocumentVisibilityState): void {
   if (visibilityState !== 'visible') {
-    window.clearTimeout(clockTimer)
-    clockTimer = 0
     return
   }
 
-  updateClockText()
-  scheduleClockTick()
   void hydrateFeaturedBackgroundOptions()
   applyFeaturedBackgroundDailyRefreshIfNeeded()
 }
@@ -11044,6 +10979,17 @@ function scheduleSearchSettingsSave(): void {
   }, SETTINGS_SAVE_DEBOUNCE_MS)
 }
 
+function flushSearchSettingsSave(): void {
+  if (!searchSettingsSaveTimer) {
+    return
+  }
+  window.clearTimeout(searchSettingsSaveTimer)
+  searchSettingsSaveTimer = 0
+  void saveSearchSettings().catch((error) => {
+    console.warn('新标签页搜索设置保存失败。', error)
+  })
+}
+
 function normalizeGeneralSettings(rawSettings: unknown): typeof DEFAULT_GENERAL_SETTINGS {
   if (!rawSettings || typeof rawSettings !== 'object' || Array.isArray(rawSettings)) {
     return { ...DEFAULT_GENERAL_SETTINGS }
@@ -11118,7 +11064,7 @@ function handleModuleSettingToggle(key: NewTabModuleSettingKey, enabled: boolean
     console.warn('新标签页模块设置保存失败。', error)
   })
   syncNewTabModernSettingsControls()
-  scheduleRender({ updateClock: true })
+  scheduleRender()
 }
 
 function createFolderSourceView() {
@@ -11262,12 +11208,10 @@ function setFolderReorderStatus(message: string, tone: 'success' | 'error'): voi
   state.folderReorderStatus = message
   state.folderReorderStatusTone = tone
   render()
-  updateClockText()
 
   folderReorderStatusTimer = window.setTimeout(() => {
     clearFolderReorderStatus()
     render()
-    updateClockText()
   }, tone === 'success' ? 1800 : 4200)
 }
 
@@ -11317,7 +11261,7 @@ function applyIconSettingsLive(): void {
   const bookmarkView = getNewtabBookmarkContentView()
   if (!bookmarkView) {
     // The empty/loading page has no bookmark geometry to update. Rebuilding
-    // its clock and search modules here makes every layout click repaint the shell.
+    // its search module here makes every layout click repaint the shell.
     return
   }
 
@@ -11357,7 +11301,6 @@ function applyIconPreset(presetKey: IconLayoutPresetKey): void {
   })
   applyIconSettingsLive()
   syncIconSettingsControls()
-  updateClockText()
 }
 
 function resetIconSettingsToDefaults(): void {
@@ -11367,7 +11310,6 @@ function resetIconSettingsToDefaults(): void {
   })
   applyIconSettingsLive()
   syncIconSettingsControls()
-  updateClockText()
 }
 
 async function saveSettingsWithFeedback(values: Record<string, unknown>): Promise<void> {
@@ -12450,205 +12392,6 @@ function openSearchTarget(targetUrl: string, forceNewTab = false): void {
   }
 
   window.location.assign(targetUrl)
-}
-
-function normalizeTimeSettingsLocal(rawSettings: unknown): NewTabTimeSettings {
-  if (!rawSettings || typeof rawSettings !== 'object' || Array.isArray(rawSettings)) {
-    return { ...DEFAULT_TIME_SETTINGS }
-  }
-
-  const settings = rawSettings as Record<string, unknown>
-  const rawDateFormat = String(settings.dateFormat)
-  const dateFormat = rawDateFormat === 'iso'
-    ? 'year-month-day'
-    : rawDateFormat === 'auto' || rawDateFormat === 'zh'
-      ? 'month-day-weekday'
-      : rawDateFormat
-  const timeZone = String(settings.timeZone)
-  const displayMode = String(settings.displayMode)
-  const density = String(settings.density)
-
-  return {
-    enabled: settings.enabled !== false,
-    showSeconds: settings.showSeconds === true,
-    hour12: settings.hour12 === true,
-    clockSize: clampNumber(settings.clockSize, 70, 140, DEFAULT_TIME_SETTINGS.clockSize),
-    dateFormat: (dateFormat || DEFAULT_TIME_SETTINGS.dateFormat) as NewTabTimeSettings['dateFormat'],
-    timeZone: (timeZone || DEFAULT_TIME_SETTINGS.timeZone) as NewTabTimeSettings['timeZone'],
-    displayMode: displayMode === 'time' || displayMode === 'date' || displayMode === 'time-date'
-      ? displayMode as NewTabTimeSettings['displayMode']
-      : DEFAULT_TIME_SETTINGS.displayMode,
-    density: density === 'compact' || density === 'balanced' || density === 'comfortable'
-      ? density as NewTabTimeSettings['density']
-      : DEFAULT_TIME_SETTINGS.density
-  }
-}
-
-function syncTimeSettingsControls(): void {
-  const settings = state.timeSettings
-  dispatchNewtabTimeSettingsView(createNewtabTimeSettingsView(settings))
-}
-
-async function saveTimeSettings(): Promise<void> {
-  await saveSettingsWithFeedback({
-    [STORAGE_KEYS.newTabTimeSettings]: state.timeSettings
-  })
-}
-
-function scheduleTimeSettingsSave(): void {
-  settingsPersistence.stage({ [STORAGE_KEYS.newTabTimeSettings]: state.timeSettings })
-  window.clearTimeout(timeSettingsSaveTimer)
-  timeSettingsSaveTimer = window.setTimeout(() => {
-    timeSettingsSaveTimer = 0
-    void saveTimeSettings().catch((error) => {
-      console.warn('新标签页时间设置保存失败。', error)
-    })
-  }, SETTINGS_SAVE_DEBOUNCE_MS)
-}
-
-function scheduleClockTick(): void {
-  window.clearTimeout(clockTimer)
-  clockTimer = 0
-  if (!newTabControllerStarted || document.visibilityState === 'hidden') return
-  const delay = getClockUpdateDelayLocal(new Date(), state.timeSettings)
-  if (delay <= 0) {
-    clockTimer = 0
-    return
-  }
-
-  clockTimer = window.setTimeout(() => {
-    clockTimer = 0
-    updateClockText()
-    scheduleClockTick()
-  }, delay)
-}
-
-function updateClockText(): void {
-  if (!timeSettingsModule) {
-    updateClockTextFallback()
-    void hydrateClockText()
-    return
-  }
-
-  const now = new Date()
-  const settings = timeSettingsModule.normalizeTimeSettings(state.timeSettings)
-  state.timeSettings = settings
-  dispatchNewtabClockView({
-    ariaLabel: timeSettingsModule.getClockAriaLabel(now, settings),
-    dateDateTime: timeSettingsModule.formatClockDateTime(now, settings),
-    dateText: timeSettingsModule.formatClockDate(now, settings),
-    periodText: timeSettingsModule.formatClockPeriod(now, settings),
-    settings,
-    timeDateTime: timeSettingsModule.formatClockTimeDateTime(now, settings),
-    timeText: timeSettingsModule.formatClockTime(now, settings)
-  })
-}
-
-function updateClockTextFallback(): void {
-  const now = new Date()
-  dispatchNewtabClockView(createFallbackClockWidgetState(now, state.timeSettings))
-}
-
-function createFallbackClockWidgetState(
-  date: Date,
-  settings: NewTabTimeSettings
-): NewtabClockView {
-  return {
-    ariaLabel: getFallbackClockAriaLabel(date, settings),
-    dateDateTime: getFallbackClockDateTime(date),
-    dateText: formatFallbackClockDate(date),
-    periodText: formatFallbackClockPeriod(date),
-    settings,
-    timeDateTime: getFallbackClockTimeDateTime(date),
-    timeText: formatFallbackClockTime(date, settings)
-  }
-}
-
-function hydrateClockText(): void {
-  const hydrateVersion = ++clockHydrationVersion
-  void loadTimeSettingsModule()
-    .then((timeSettings) => {
-      if (hydrateVersion !== clockHydrationVersion) {
-        return
-      }
-      updateClockText()
-      scheduleClockTick()
-    })
-    .catch(() => {
-      if (hydrateVersion === clockHydrationVersion && newTabControllerStarted) scheduleClockTick()
-    })
-}
-
-function getClockUpdateDelayLocal(date: Date, settings: NewTabTimeSettings): number {
-  if (!settings.enabled) {
-    return 0
-  }
-  if (timeSettingsModule) {
-    return timeSettingsModule.getClockUpdateDelay(date, settings)
-  }
-  const milliseconds = date.getMilliseconds()
-  if (settings.displayMode === 'date') {
-    return 60 * 60 * 1000
-  }
-  if (settings.showSeconds) {
-    return Math.max(250, 1000 - milliseconds + 25)
-  }
-  return Math.max(1000, (60 - date.getSeconds()) * 1000 - milliseconds + 25)
-}
-
-function formatFallbackClockTime(date: Date, settings: NewTabTimeSettings): string {
-  let hours = date.getHours()
-  if (settings.hour12) {
-    hours = hours % 12 || 12
-  }
-  const parts = [
-    String(hours).padStart(2, '0'),
-    String(date.getMinutes()).padStart(2, '0')
-  ]
-  if (settings.showSeconds) {
-    parts.push(String(date.getSeconds()).padStart(2, '0'))
-  }
-  return parts.join(':')
-}
-
-function formatFallbackClockPeriod(date: Date): string {
-  return date.getHours() < 12 ? 'AM' : 'PM'
-}
-
-function formatFallbackClockDate(date: Date): string {
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const weekday = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][date.getDay()]
-  return `${date.getFullYear()}.${month}.${day} ${weekday}`
-}
-
-function getFallbackClockAriaLabel(date: Date, settings: NewTabTimeSettings): string {
-  const parts: string[] = []
-  if (settings.displayMode !== 'date') {
-    parts.push(settings.hour12
-      ? `${formatFallbackClockTime(date, settings)} ${formatFallbackClockPeriod(date)}`
-      : formatFallbackClockTime(date, settings))
-  }
-  if (settings.displayMode !== 'time') {
-    parts.push(formatFallbackClockDate(date))
-  }
-  return parts.join('，')
-}
-
-function getFallbackClockTimeDateTime(date: Date): string {
-  return [
-    String(date.getHours()).padStart(2, '0'),
-    String(date.getMinutes()).padStart(2, '0'),
-    String(date.getSeconds()).padStart(2, '0')
-  ].join(':')
-}
-
-function getFallbackClockDateTime(date: Date): string {
-  return [
-    String(date.getFullYear()).padStart(4, '0'),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0')
-  ].join('-')
 }
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {

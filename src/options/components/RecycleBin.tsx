@@ -7,19 +7,24 @@ import { CheckboxControl } from '../../ui/base/Checkbox'
 import { useListExit, type MountedListEntry } from '../../ui/motion/useListExit'
 import { handleRecycleAction } from '../options-controller'
 import { formatDateTime } from '../shared-options/utils.js'
-import { OPTION_RESULT_CHECKBOX_CLASS, OPTION_INSET_CLASS } from './option-layout-classes.js'
+import {
+  OPTION_LIST_ROW_CLASS,
+  OPTION_LIST_SECTION_CLASS,
+  OPTION_RESULT_CHECKBOX_CLASS
+} from './option-layout-classes.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
 import { useRecycleBinState } from './recycle-bin-store.js'
 import type { RecycleEntryViewModel } from './recycle-bin-types.js'
 
-const RECYCLE_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
+const RECYCLE_RESULTS_SECTION_CLASS = `${OPTION_LIST_SECTION_CLASS} mt-3`
+const RECYCLE_FILTER_BAR_CLASS =
+  'grid gap-2.5 border-b border-ds-border-subtle bg-ds-bg-page/45 px-5 py-3.5 max-[760px]:px-4'
 // Row spacing lives on .t-list-exit-inner so a removed card collapses its gap too.
-const RECYCLE_ENTRY_LIST_CLASS = 'flex flex-col [--list-exit-gap:0.75rem]'
+const RECYCLE_ENTRY_LIST_CLASS = 'flex flex-col divide-y divide-ds-border-subtle [--list-exit-gap:0px]'
 const RECYCLE_PAGE_SIZE = 30
 const RECYCLE_STATUS_RESERVE = ['当前页已选 30 条，其他页或筛选外已选 999 条。']
 const RECYCLE_CARD_CLASS =
-  `${OPTION_INSET_CLASS} p-[14px_16px] [transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard),transform_var(--list-exit-dur)_var(--list-exit-ease)] hover:border-ds-border-hover hover:bg-ds-hover`
-const RECYCLE_CARD_SELECTED_CLASS = 'border-ds-border-hover bg-ds-selected'
+  `${OPTION_LIST_ROW_CLASS} [transition:background-color_var(--ds-motion-fast)_var(--ds-ease-standard),transform_var(--list-exit-dur)_var(--list-exit-ease)] data-[selected=true]:bg-ds-selected`
 const RECYCLE_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3 max-[760px]:flex-col'
 const RECYCLE_CARD_HEAD_LEFT_CLASS = 'flex min-w-0 flex-wrap items-center gap-2.5'
@@ -31,11 +36,11 @@ const RECYCLE_CARD_COPY_CLASS = 'mt-3 min-w-0'
 const RECYCLE_CARD_TITLE_CLASS =
   'block min-w-0 text-[15px] font-semibold leading-[1.4] text-ds-text-primary [overflow-wrap:anywhere]'
 const RECYCLE_CARD_URL_CLASS =
-  'mt-[7px] inline-block text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-1.5 inline-block font-mono text-xs leading-[1.6] text-ds-text-muted [overflow-wrap:anywhere] [word-break:break-word]'
 const RECYCLE_CARD_DETAIL_CLASS =
   'mt-[7px] text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 const RECYCLE_CARD_PATH_CLASS =
-  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-disabled [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-muted [overflow-wrap:anywhere] [word-break:break-word]'
 
 export function RecycleBin() {
   const state = useRecycleBinState()
@@ -52,33 +57,36 @@ export function RecycleBin() {
   const hiddenSelectedCount = state.selectedIds.size - visibleSelectedCount
 
   return (
-    <div className={hasRows ? RECYCLE_RESULTS_LIST_CLASS : 'flex flex-col'}>
-      {hasRows ? <Input aria-label="搜索回收站记录" placeholder="搜索标题、网址或原文件夹" value={query} onChange={event => { setQuery(event.target.value); setPage(0) }} /> : null}
-      {hasRows ? <StatusMessage className="m-0 text-xs leading-relaxed text-ds-text-secondary" reserve={RECYCLE_STATUS_RESERVE}>
-        {state.selectedIds.size > 0
-          ? `当前页已选 ${visibleSelectedCount} 条，其他页或筛选外已选 ${hiddenSelectedCount} 条。`
-          : `共 ${filtered.length} 条`}
-      </StatusMessage> : null}
-      {hasRows ? (
+    hasRows ? (
+      <div className={RECYCLE_RESULTS_SECTION_CLASS}>
+        <div className={RECYCLE_FILTER_BAR_CLASS}>
+          <Input aria-label="搜索回收站记录" placeholder="搜索标题、网址或原文件夹" value={query} onChange={event => { setQuery(event.target.value); setPage(0) }} />
+          <StatusMessage className="m-0 text-xs leading-relaxed text-ds-text-secondary" reserve={RECYCLE_STATUS_RESERVE}>
+            {state.selectedIds.size > 0
+              ? `当前页已选 ${visibleSelectedCount} 条，其他页或筛选外已选 ${hiddenSelectedCount} 条。`
+              : `共 ${filtered.length} 条`}
+          </StatusMessage>
+        </div>
         <RecycleEntryList
           disabled={state.disabled}
           rows={rows}
           selectedIds={state.selectedIds}
         />
-      ) : (
+        {state.entries.length && !filtered.length ? <p className="m-0 px-5 py-5 text-[13px] text-ds-text-secondary max-[760px]:px-4">没有匹配的回收记录。</p> : null}
+        {pageCount > 1 ? <div className="flex items-center justify-between gap-3 border-t border-ds-border-subtle px-5 py-3 max-[760px]:px-4">
+          <Button size="sm" variant="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</Button>
+          <span className="text-xs tabular-nums text-ds-text-secondary">第 {currentPage + 1} / {pageCount} 页，共 {filtered.length} 条</span>
+          <Button size="sm" variant="secondary" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>下一页</Button>
+        </div> : null}
+      </div>
+    ) : (
+      <div className="mt-6 max-[760px]:mt-4">
         <OptionEmptyState
-          embedded
           title="回收站为空"
           description="各清理功能删除的书签会先进入这里，恢复时尽量放回原文件夹。"
         />
-      )}
-      {state.entries.length && !filtered.length ? <p className="text-sm text-ds-text-secondary">没有匹配的回收记录。</p> : null}
-      {pageCount > 1 ? <div className="flex items-center justify-between gap-3">
-        <Button size="sm" variant="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</Button>
-        <span className="text-xs tabular-nums text-ds-text-secondary">第 {currentPage + 1} / {pageCount} 页，共 {filtered.length} 条</span>
-        <Button size="sm" variant="secondary" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>下一页</Button>
-      </div> : null}
-    </div>
+      </div>
+    )
   )
 }
 
@@ -125,10 +133,8 @@ function RecycleEntryCard({
 
   return (
     <article
-      className={[
-        RECYCLE_CARD_CLASS,
-        selected ? RECYCLE_CARD_SELECTED_CLASS : ''
-      ].filter(Boolean).join(' ')}
+      className={RECYCLE_CARD_CLASS}
+      data-selected={selected ? 'true' : undefined}
     >
       <div className={RECYCLE_CARD_HEAD_CLASS}>
         <div className={RECYCLE_CARD_HEAD_LEFT_CLASS}>

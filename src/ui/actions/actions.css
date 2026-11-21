@@ -96,6 +96,7 @@
   background: var(--ds-danger-soft);
   transform: scaleX(0);
   transform-origin: left;
+  transition: transform var(--ds-motion-control) var(--ds-ease-standard);
 }
 
 .curator-hold-button > .curator-action-label {
@@ -103,15 +104,14 @@
 }
 
 .curator-hold-button[data-hold-phase="holding"] .curator-hold-fill {
-  animation: curator-hold-fill var(--hold-duration) linear forwards;
-}
-
-.curator-hold-button[data-hold-phase="ready"] .curator-hold-fill {
   transform: scaleX(1);
+  transition: transform var(--hold-duration) linear;
 }
 
-@keyframes curator-hold-fill {
-  to { transform: scaleX(1); }
+.curator-hold-button[data-hold-phase="ready"] .curator-hold-fill,
+.curator-hold-button[data-hold-phase="confirmed"] .curator-hold-fill {
+  transform: scaleX(1);
+  transition-duration: 0ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -119,8 +119,13 @@
   .curator-reveal-input .t-icon {
     transition: none !important;
   }
-  .curator-action-spinner,
-  .curator-hold-button[data-hold-phase="holding"] .curator-hold-fill {
+  .curator-action-spinner {
     animation: none;
+  }
+  .curator-hold-fill {
+    transition: none !important;
+  }
+  .curator-hold-button[data-hold-phase="holding"] .curator-hold-fill {
+    transform: scaleX(0.42);
   }
 }

@@ -1,5 +1,5 @@
 import { OPTION_SURFACE_CLASS } from './option-layout-classes.js'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button } from '../../ui/base/Button.js'
 import { Select } from '../../ui/base/Select.js'
 import { Input } from '../../ui/base/Input.js'
@@ -9,7 +9,7 @@ import type { FolderRecord } from '../../shared/types.js'
 import { formatBookmarkPath } from '../../shared/bookmark-path.js'
 import { displayUrl } from '../../shared/text.js'
 import { Icon } from '../../ui/icons/Icon.js'
-import { StableLabel } from '../../ui/base/StatusMessage.js'
+import { StableLabel, StatusMessage } from '../../ui/base/StatusMessage.js'
 import { useListExit, type MountedListEntry } from '../../ui/motion/useListExit.js'
 import { getInboxReviewData, refreshInboxReview, useInboxReviewData } from './inbox-review-store.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
@@ -18,6 +18,7 @@ import { showOptionsUndoToast } from './options-undo-toast-store.js'
 const PAGE_SIZE = 20
 const NEW_FOLDER_VALUE = '__inbox-recommended-new__'
 const PATH_SEPARATOR = ' / '
+const EMPTY_PENDING: InboxItem[] = []
 
 type InboxRunMessage = InboxReviewMessage | { type: 'inbox:undo-last-move' }
 /** Resolves to an error message, or an empty string on success. */
@@ -36,7 +37,25 @@ export function InboxReview() {
   const folderOptions = useMemo(() => (folders || []).map(folder => ({ value: folder.id, label: formatBookmarkPath(folder.path || folder.title, PATH_SEPARATOR) })), [folders])
   const folderMap = useMemo(() => new Map((folders || []).map(folder => [folder.id, folder])), [folders])
 
-  const run: InboxReviewRunner = async message => {
+  const runRef = useRef<InboxReviewRunner>(async () => '')
+
+  const undoLastMove = useCallback(async () => {
+    const failure = await runRef.current({ type: 'inbox:undo-last-move' })
+    if (failure) showOptionsUndoToast({ title: '撤销失败', detail: failure })
+  }, [])
+
+  const announceMove = useCallback((bookmarkId: string) => {
+    const latest = getInboxReviewData()
+    const move = latest?.inbox.lastUndoMove
+    if (move?.bookmarkId !== bookmarkId) return
+    const folder = latest?.folders.find(candidate => candidate.id === move.toFolderId)
+    showOptionsUndoToast({
+      title: folder ? `已移到「${folder.title || '未命名文件夹'}」` : '已移动',
+      onUndo: undoLastMove
+    })
+  }, [undoLastMove])
+
+  const run = useCallback<InboxReviewRunner>(async message => {
     if (pendingOperation.current) return ''
     pendingOperation.current = true
     const request = generation.current
@@ -57,27 +76,24 @@ export function InboxReview() {
       announceMove(message.bookmarkId)
     }
     return failure
-  }
+  }, [announceMove])
+  runRef.current = run
 
-  const undoLastMove = async () => {
-    const failure = await run({ type: 'inbox:undo-last-move' })
-    if (failure) showOptionsUndoToast({ title: '撤销失败', detail: failure })
-  }
-
-  const announceMove = (bookmarkId: string) => {
-    const latest = getInboxReviewData()
-    const move = latest?.inbox.lastUndoMove
-    if (move?.bookmarkId !== bookmarkId) return
-    const folder = latest?.folders.find(candidate => candidate.id === move.toFolderId)
-    showOptionsUndoToast({
-      title: folder ? `已移到「${folder.title || '未命名文件夹'}」` : '已移动',
-      onUndo: undoLastMove
-    })
-  }
-
-  const pending = data?.pending || []
+  const pending = data?.pending ?? EMPTY_PENDING
+  const indexedPending = useMemo(
+    () => pending.map(item => ({
+      item,
+      searchText: `${item.title} ${item.url}`.toLocaleLowerCase()
+    })),
+    [pending]
+  )
   const normalizedQuery = query.trim().toLocaleLowerCase()
-  const filtered = pending.filter(item => `${item.title} ${item.url}`.toLocaleLowerCase().includes(normalizedQuery))
+  const filtered = useMemo(
+    () => (normalizedQuery
+      ? indexedPending.filter(entry => entry.searchText.includes(normalizedQuery)).map(entry => entry.item)
+      : pending),
+    [indexedPending, normalizedQuery, pending]
+  )
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount - 1)
   const visible = filtered.slice(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE)
@@ -146,7 +162,16 @@ function InboxReviewList({ rows, bookmarks, folderMap, folderOptions, busy, run 
   </div>
 }
 
-function InboxReviewRow({ item, stale, folderMap, folderOptions, busy, run }: { item: InboxItem; stale: boolean; folderMap: Map<string, FolderRecord>; folderOptions: FolderOption[]; busy: boolean; run: InboxReviewRunner }) {
+function renderRecommendedLabel(label: ReactNode) {
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <Icon name="Sparkles" size={13} aria-hidden="true" className="shrink-0 text-ds-accent" />
+      <span className="truncate">{label}</span>
+    </span>
+  )
+}
+
+const InboxReviewRow = memo(function InboxReviewRow({ item, stale, folderMap, folderOptions, busy, run }: { item: InboxItem; stale: boolean; folderMap: Map<string, FolderRecord>; folderOptions: FolderOption[]; busy: boolean; run: InboxReviewRunner }) {
   const [chosenFolderId, setChosenFolderId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const analyzing = !stale && item.status === 'analyzing'
@@ -155,15 +180,15 @@ function InboxReviewRow({ item, stale, folderMap, folderOptions, busy, run }: { 
   const recommendedFolder = item.recommendedFolderId ? folderMap.get(item.recommendedFolderId) : undefined
   const recommendedTarget = recommendedPath ? (recommendedFolder ? recommendedFolder.id : item.recommendedFolderId ? null : NEW_FOLDER_VALUE) : null
   const target = chosenFolderId ?? recommendedTarget
-  const recommendedLabel = (label: ReactNode) => <span className="flex min-w-0 items-center gap-1.5">
-    <Icon name="Sparkles" size={13} aria-hidden="true" className="shrink-0 text-ds-accent" />
-    <span className="truncate">{label}</span>
-  </span>
-  const options = recommendedTarget === NEW_FOLDER_VALUE
-    ? [{ value: NEW_FOLDER_VALUE, label: recommendedLabel(`${formatBookmarkPath(recommendedPath, PATH_SEPARATOR)}（新建）`) }, ...folderOptions]
-    : recommendedTarget
-      ? folderOptions.map(option => option.value === recommendedTarget ? { ...option, label: recommendedLabel(option.label) } : option)
-      : folderOptions
+  const options = useMemo(() => {
+    if (recommendedTarget === NEW_FOLDER_VALUE) {
+      return [{ value: NEW_FOLDER_VALUE, label: renderRecommendedLabel(`${formatBookmarkPath(recommendedPath, PATH_SEPARATOR)}（新建）`) }, ...folderOptions]
+    }
+    if (recommendedTarget) {
+      return folderOptions.map(option => option.value === recommendedTarget ? { ...option, label: renderRecommendedLabel(option.label) } : option)
+    }
+    return folderOptions
+  }, [folderOptions, recommendedPath, recommendedTarget])
   const act = async (action: InboxReviewMessage['action']) => {
     setError('')
     const folder = target && target !== NEW_FOLDER_VALUE ? folderMap.get(target) : undefined
@@ -176,18 +201,42 @@ function InboxReviewRow({ item, stale, folderMap, folderOptions, busy, run }: { 
     setError(failure)
   }
   const note = error || (stale ? '地址已变化，旧建议不再适用。处理后请重新保存。' : analyzing ? '正在分析…' : item.lastError || '')
-  const noteTone = error || item.status === 'failed' ? 'text-ds-danger-text' : stale ? 'text-ds-warning' : 'text-ds-text-secondary'
+  const noteTone = error || item.status === 'failed' ? 'error' : stale ? 'warning' : 'neutral'
   const confidence = Math.round((item.confidence || 0) * 100)
+  const urlLabel = displayUrl(item.url)
+  const hasRecommendation = Boolean(recommendedPath && (item.recommendationReason || confidence > 0))
+  const recommendationContent = hasRecommendation ? (
+    <>
+      {item.recommendationReason}
+      {confidence > 0 ? <span className="ml-2 whitespace-nowrap tabular-nums text-ds-text-muted">置信度 {confidence}%</span> : null}
+    </>
+  ) : null
 
   return <article className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-8 gap-y-3 py-4 max-[1180px]:grid-cols-1">
     <div className="min-w-0">
-      <a className="block truncate text-[15px] font-semibold text-ds-text-primary no-underline hover:underline" href={item.url} target="_blank" rel="noreferrer" title={item.title}>{item.title}</a>
-      <p className="m-0 mt-1 truncate text-xs text-ds-text-muted" title={item.url}>{displayUrl(item.url)}</p>
-      {recommendedPath && (item.recommendationReason || confidence > 0) ? <p className="m-0 mt-2.5 text-xs leading-relaxed text-ds-text-secondary">
-        {item.recommendationReason}
-        {confidence > 0 ? <span className="ml-2 whitespace-nowrap tabular-nums text-ds-text-muted">置信度 {confidence}%</span> : null}
-      </p> : null}
-      {note ? <p role={error ? 'alert' : undefined} className={`m-0 mt-1.5 text-xs leading-relaxed [overflow-wrap:anywhere] ${noteTone}`}>{note}</p> : null}
+      <a className="block truncate rounded-ds-xs text-[15px] font-semibold text-ds-text-primary no-underline outline-none hover:underline focus-visible:underline focus-visible:shadow-ds-focus" href={item.url} target="_blank" rel="noreferrer" title={item.title}>{item.title}</a>
+      {hasRecommendation ? (
+        <>
+          <p className="m-0 mt-1 truncate text-xs text-ds-text-muted" title={item.url}>{urlLabel}</p>
+          <StatusMessage
+            className="m-0 mt-2.5 text-xs leading-relaxed text-ds-text-secondary"
+            reserve={[recommendationContent]}
+            tone={note ? noteTone : 'neutral'}
+            title={note || undefined}
+          >
+            {note || recommendationContent}
+          </StatusMessage>
+        </>
+      ) : (
+        <StatusMessage
+          className="m-0 mt-1 text-xs leading-[1.5] text-ds-text-muted"
+          reserve={[<span className="block truncate">{urlLabel}</span>]}
+          tone={note ? noteTone : 'neutral'}
+          title={note || item.url}
+        >
+          {note || <span className="block truncate">{urlLabel}</span>}
+        </StatusMessage>
+      )}
     </div>
     <div className="flex flex-nowrap items-center gap-2 max-[1180px]:flex-wrap">
       <Select className="w-[260px] max-[520px]:w-full" triggerClassName="w-full" valueClassName="truncate text-left" ariaLabel={`为 ${item.title} 选择目录`} value={target} onValueChange={setChosenFolderId} disabled={disabled} placeholder="选择目录" options={options} />
@@ -200,4 +249,4 @@ function InboxReviewRow({ item, stale, folderMap, folderOptions, busy, run }: { 
       </Button>
     </div>
   </article>
-}
+})

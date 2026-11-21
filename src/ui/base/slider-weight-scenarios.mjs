@@ -162,9 +162,44 @@ export async function runSliderWeightChecks(page, origin, directory) {
     await page.cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] })
 
     await page.click('loc=role:button[name*="推理强度"]')
-    await page.click('loc=role:button[name="高级设置"]')
     await page.waitForSelector('.reasoning-effort-slider', { state: 'visible' })
     await settleFrame()
+    assert.equal(
+      await page.evaluate(() => [...document.querySelectorAll('.reasoning-effort-popover button')]
+        .filter(button => button.textContent?.trim() === '高级设置').length),
+      0,
+      'Reasoning effort trigger should open directly to the slider without an intermediate menu.'
+    )
+    const readReasoningAlignment = () => page.evaluate(() => {
+      const slider = document.querySelector('.reasoning-effort-slider')
+      const track = document.querySelector('.reasoning-effort-track').getBoundingClientRect()
+      const knob = document.querySelector('.reasoning-effort-knob').getBoundingClientRect()
+      const fill = document.querySelector('.reasoning-effort-fill')
+      const fillRect = fill.getBoundingClientRect()
+      const clip = getComputedStyle(fill).clipPath
+      const insetMatch = clip.match(/^inset\(([^)]+)\)$/)
+      const lengths = (insetMatch?.[1].split('round')[0] ?? '').trim().split(/\s+/).map(token => Number.parseFloat(token))
+      const rightInset = lengths.length >= 2 ? lengths[1] : (lengths[0] ?? 0)
+      const leftInset = lengths.length >= 4 ? lengths[3] : (lengths.length >= 2 ? lengths[1] : (lengths[0] ?? 0))
+      const progress = Number(slider.style.getPropertyValue('--reasoning-progress'))
+      return {
+        progress,
+        clip,
+        knobCenter: knob.left + knob.width / 2,
+        expectedCenter: track.left + 17 + progress * (track.width - 34),
+        knobLeft: knob.left,
+        knobRight: knob.right,
+        fillLeft: fillRect.left + leftInset,
+        fillRight: fillRect.right - rightInset
+      }
+    })
+    const initialAlignment = await readReasoningAlignment()
+    assert.ok(
+      initialAlignment.clip.startsWith('inset(') &&
+        Math.abs(initialAlignment.knobCenter - initialAlignment.expectedCenter) <= 1 &&
+        initialAlignment.fillRight <= initialAlignment.knobRight,
+      `Reasoning slider knob and fill must align immediately on open: ${JSON.stringify(initialAlignment)}`
+    )
     const reasoningTrack = await page.evaluate(() => {
       const rect = document.querySelector('.reasoning-effort-track').getBoundingClientRect()
       const knob = document.querySelector('.reasoning-effort-knob').getBoundingClientRect()
@@ -173,6 +208,19 @@ export async function runSliderWeightChecks(page, origin, directory) {
     await page.mouse.move(reasoningTrack.knobX, reasoningTrack.y)
     await page.mouse.down()
     await page.mouse.move(reasoningTrack.left + reasoningTrack.width * 0.76, reasoningTrack.y)
+    await page.waitForFunction(() => {
+      const knob = document.querySelector('.reasoning-effort-knob')
+      return knob && knob.getAnimations().length === 0
+    })
+    const dragAlignment = await readReasoningAlignment()
+    assert.ok(
+      Math.abs(dragAlignment.knobCenter - dragAlignment.expectedCenter) <= 1,
+      `Dragging knob must stay centered on its progress offset instead of shrinking toward the origin: ${JSON.stringify(dragAlignment)}`
+    )
+    assert.ok(
+      dragAlignment.fillRight <= dragAlignment.knobRight,
+      `Slider fill must never overflow past the knob while dragging: ${JSON.stringify(dragAlignment)}`
+    )
     const preview = await page.evaluate(() => document.querySelector('.reasoning-effort-slider').getAttribute('aria-valuenow'))
     await page.mouse.up()
     const settling = await page.evaluate(async () => {

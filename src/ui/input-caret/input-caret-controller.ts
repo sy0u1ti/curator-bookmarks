@@ -75,6 +75,7 @@ interface CaretMetrics {
   signature: string
   tabSize: string
   textAlign: string
+  textIndentNeedsMirror: boolean
   typography: Array<readonly [string, string]>
   unicodeBidi: string
   whiteSpace: string
@@ -113,12 +114,16 @@ export function startInputCaretController(): () => void {
 }
 
 class InputCaretController {
+  private activeListenersBound = false
   private activeTarget: CaretTarget | null = null
+  private cachedMatchMedia: typeof window.matchMedia | null = null
   private caret: HTMLSpanElement | null = null
   private composing = false
   private destroyed = false
   private enabled: boolean | null = null
+  private focusInBound = false
   private followFrame = 0
+  private forcedColorsQuery: MediaQueryList | null = null
   private layer: HTMLDivElement | null = null
   private lastInputAt: number | null = null
   private lastLayerGeometry: LayerGeometry | null = null
@@ -131,12 +136,15 @@ class InputCaretController {
   private measureCanvas: HTMLCanvasElement | null = null
   private measureContext: CanvasRenderingContext2D | null = null
   private measureContextKey = ''
+  private measureRange: Range | null = null
   private metrics: CaretMetrics | null = null
   private metricsRectHeight: number | null = null
   private metricsRectWidth: number | null = null
   private metricsTarget: CaretTarget | null = null
   private mirror: HTMLDivElement | null = null
   private mirrorLeft = -10_000
+  private mirrorMarker: HTMLSpanElement | null = null
+  private mirrorTop = 0
   private pendingSnap = false
   private preferenceVersion = 0
   private restTimer: number | null = null
@@ -144,7 +152,28 @@ class InputCaretController {
   private updateFrame = 0
 
   constructor() {
+    if (typeof chrome !== 'undefined') {
+      chrome.storage?.onChanged?.addListener(this.handleStorageChanged)
+    }
+    void document.fonts?.ready.then(this.handleFontsReady)
+    void this.hydratePreference()
+  }
+
+  private bindFocusInListener(): void {
+    if (this.focusInBound || this.destroyed) return
+    this.focusInBound = true
     document.addEventListener('focusin', this.handleFocusIn, true)
+  }
+
+  private unbindFocusInListener(): void {
+    if (!this.focusInBound) return
+    this.focusInBound = false
+    document.removeEventListener('focusin', this.handleFocusIn, true)
+  }
+
+  private bindActiveListeners(): void {
+    if (this.activeListenersBound || this.destroyed) return
+    this.activeListenersBound = true
     document.addEventListener('focusout', this.handleFocusOut, true)
     document.addEventListener('selectionchange', this.handleSelectionChange)
     document.addEventListener('input', this.handleInput, true)
@@ -159,18 +188,11 @@ class InputCaretController {
     window.addEventListener('resize', this.handleResize)
     window.visualViewport?.addEventListener('resize', this.handleResize, { passive: true })
     window.visualViewport?.addEventListener('scroll', this.handleViewportScroll, { passive: true })
-    if (typeof chrome !== 'undefined') {
-      chrome.storage?.onChanged?.addListener(this.handleStorageChanged)
-    }
-    void document.fonts?.ready.then(this.handleFontsReady)
-    void this.hydratePreference()
   }
 
-  destroy(): void {
-    if (this.destroyed) return
-    this.destroyed = true
-    this.deactivate()
-    document.removeEventListener('focusin', this.handleFocusIn, true)
+  private unbindActiveListeners(): void {
+    if (!this.activeListenersBound) return
+    this.activeListenersBound = false
     document.removeEventListener('focusout', this.handleFocusOut, true)
     document.removeEventListener('selectionchange', this.handleSelectionChange)
     document.removeEventListener('input', this.handleInput, true)
@@ -185,11 +207,22 @@ class InputCaretController {
     window.removeEventListener('resize', this.handleResize)
     window.visualViewport?.removeEventListener('resize', this.handleResize)
     window.visualViewport?.removeEventListener('scroll', this.handleViewportScroll)
+  }
+
+  destroy(): void {
+    if (this.destroyed) return
+    this.destroyed = true
+    this.deactivate()
+    this.unbindFocusInListener()
     if (typeof chrome !== 'undefined') {
       chrome.storage?.onChanged?.removeListener(this.handleStorageChanged)
     }
     this.mirror?.remove()
     this.mirror = null
+    this.mirrorMarker = null
+    this.measureRange = null
+    this.forcedColorsQuery = null
+    this.cachedMatchMedia = null
     this.layer?.remove()
     this.layer = null
     this.caret = null
@@ -274,14 +307,17 @@ class InputCaretController {
   // from the field's ancestors (a dialog opening, a panel sliding in). While any
   // of them animates, re-measure every frame until the field comes to rest.
   private isTargetMoving(target: CaretTarget): boolean {
-    if (typeof document.getAnimations !== 'function') return false
-    return document.getAnimations().some((animation) => {
-      if (animation.playState !== 'running') return false
-      const effect = animation.effect
-      if (!(effect instanceof KeyframeEffect) || effect.pseudoElement) return false
-      const element = effect.target
-      return element instanceof Element && element.contains(target)
-    })
+    for (let node: Element | null = target; node; node = node.parentElement) {
+      if (typeof node.getAnimations !== 'function') continue
+      const animations = node.getAnimations()
+      for (const animation of animations) {
+        if (animation.playState !== 'running') continue
+        const effect = animation.effect
+        if (!(effect instanceof KeyframeEffect) || effect.pseudoElement) continue
+        return true
+      }
+    }
+    return false
   }
 
   private followTargetMotion(): void {
@@ -347,9 +383,11 @@ class InputCaretController {
     if (this.enabled === enabled) return
     this.enabled = enabled
     if (!enabled) {
+      this.unbindFocusInListener()
       this.deactivate()
       return
     }
+    this.bindFocusInListener()
     const target = this.getEligibleTarget(document.activeElement)
     if (target) this.activate(target)
   }
@@ -379,6 +417,7 @@ class InputCaretController {
     }
     this.deactivate()
     this.activeTarget = target
+    this.bindActiveListeners()
     target.dataset.curatorInputCaret = 'true'
     this.invalidateMetrics()
     this.lastPosition = null
@@ -394,6 +433,7 @@ class InputCaretController {
   }
 
   private deactivate(): void {
+    this.unbindActiveListeners()
     if (this.activeTarget) {
       delete this.activeTarget.dataset.curatorInputCaret
       this.activeTarget = null
@@ -658,6 +698,10 @@ class InputCaretController {
     const isTextarea = target instanceof HTMLTextAreaElement
     const whiteSpace = isTextarea ? style.whiteSpace : 'pre'
     const textAlign = style.textAlign || 'start'
+    const textIndent = style.getPropertyValue('text-indent')
+    const textIndentNeedsMirror = Boolean(textIndent) &&
+      textIndent !== 'normal' &&
+      textIndent !== '0px'
     const offsetWidth = target.offsetWidth || rect.width
     const offsetHeight = target.offsetHeight || rect.height
 
@@ -690,6 +734,7 @@ class InputCaretController {
       ].join('|'),
       tabSize: style.tabSize || '8',
       textAlign,
+      textIndentNeedsMirror,
       typography,
       unicodeBidi: style.unicodeBidi || 'normal',
       whiteSpace
@@ -761,7 +806,9 @@ class InputCaretController {
     for (const [property, propertyValue] of metrics.typography) {
       mirror.style.setProperty(property, propertyValue)
     }
-    this.mirrorLeft = mirror.getBoundingClientRect().left
+    const mirrorRect = mirror.getBoundingClientRect()
+    this.mirrorLeft = mirrorRect.left
+    this.mirrorTop = mirrorRect.top
     return mirror
   }
 
@@ -773,15 +820,11 @@ class InputCaretController {
     const value = target.value
     const inputType = target instanceof HTMLInputElement ? target.type : 'textarea'
     const textAlignNeedsMirror = !['start', 'left'].includes(metrics.textAlign)
-    const textIndent = metrics.typography.find(([property]) => property === 'text-indent')?.[1]
-    const textIndentNeedsMirror = Boolean(textIndent) &&
-      textIndent !== 'normal' &&
-      textIndent !== '0px'
     const usesMirror = target instanceof HTMLTextAreaElement ||
       (metrics.inputType !== 'password' &&
         (metrics.direction === 'rtl' ||
           textAlignNeedsMirror ||
-          textIndentNeedsMirror ||
+          metrics.textIndentNeedsMirror ||
           INPUT_CARET_BIDI_PATTERN.test(value)))
     const caretHeight = Math.min(24, Math.max(12, metrics.lineHeight * 0.96))
     let measuredLeft = 0
@@ -797,13 +840,16 @@ class InputCaretController {
       const mirrorText = inputType === 'password'
         ? maskInputCaretPasswordText(value)
         : value
-      if (mirror.textContent !== mirrorText) mirror.textContent = mirrorText
-      mirror.normalize()
+      if (mirror.textContent !== mirrorText) {
+        mirror.textContent = mirrorText
+      } else if (mirror.childNodes.length > 1) {
+        mirror.normalize()
+      }
       const textNode = mirror.firstChild
       let rangeRect: DOMRect | null = null
       if (textNode instanceof Text) {
         const offset = Math.min(selectionStart, textNode.textContent?.length ?? 0)
-        const range = document.createRange()
+        const range = this.measureRange ??= document.createRange()
         range.setStart(textNode, offset)
         range.setEnd(textNode, offset)
         rangeRect = range.getBoundingClientRect()
@@ -826,13 +872,20 @@ class InputCaretController {
           top = metrics.borderTop +
             metrics.paddingTop +
             rangeRect.top -
-            mirror.getBoundingClientRect().top -
+            this.mirrorTop -
             target.scrollTop
         }
       }
     }
 
     const minimumLeft = metrics.borderLeft + metrics.paddingLeft
+    const leadingGutter = !usesMirror &&
+      selectionStart === 0 &&
+      target.scrollLeft === 0 &&
+      metrics.direction !== 'rtl' &&
+      metrics.paddingLeft > 0
+      ? Math.min(metrics.paddingLeft, INPUT_CARET_WIDTH_PX + 0.5)
+      : 0
     const maximumLeft = Math.max(
       minimumLeft,
       metrics.borderLeft + target.clientWidth - metrics.paddingRight - INPUT_CARET_WIDTH_PX
@@ -840,8 +893,8 @@ class InputCaretController {
     return {
       height: caretHeight,
       left: clampInputCaretLeft(
-        metrics.borderLeft + metrics.paddingLeft + measuredLeft - target.scrollLeft,
-        minimumLeft,
+        metrics.borderLeft + metrics.paddingLeft + measuredLeft - leadingGutter - target.scrollLeft,
+        metrics.borderLeft,
         maximumLeft
       ),
       top
@@ -852,12 +905,16 @@ class InputCaretController {
     mirror: HTMLDivElement,
     insert: (marker: HTMLSpanElement) => void
   ): DOMRect {
-    const marker = document.createElement('span')
-    marker.textContent = '\u200b'
+    let marker = this.mirrorMarker
+    if (!marker) {
+      marker = document.createElement('span')
+      marker.textContent = '\u200b'
+      this.mirrorMarker = marker
+    }
     insert(marker)
     const rect = marker.getBoundingClientRect()
     marker.remove()
-    mirror.normalize()
+    if (mirror.childNodes.length > 1) mirror.normalize()
     return rect
   }
 
@@ -881,6 +938,15 @@ class InputCaretController {
     }, INPUT_CARET_REST_AFTER_MS)
   }
 
+  private isForcedColorsActive(): boolean {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+    if (this.cachedMatchMedia !== window.matchMedia || !this.forcedColorsQuery) {
+      this.cachedMatchMedia = window.matchMedia
+      this.forcedColorsQuery = window.matchMedia('(forced-colors: active)')
+    }
+    return this.forcedColorsQuery.matches
+  }
+
   private drawTrail(
     previous: InputCaretPosition,
     next: InputCaretPosition,
@@ -890,7 +956,7 @@ class InputCaretController {
     if (
       !trail ||
       prefersReducedMotion() ||
-      window.matchMedia('(forced-colors: active)').matches
+      this.isForcedColorsActive()
     ) {
       return
     }

@@ -91,10 +91,13 @@ function ToastListViewport({
     for (const id of syncedSignatures.keys()) {
       if (!nextIds.has(id)) syncedSignatures.delete(id)
     }
+    const activeToastIds = new Set<string>()
     for (const toast of manager.toasts) {
       if (!nextIds.has(toast.id) && toast.transitionStatus !== 'ending') {
         manager.close(toast.id)
         syncedSignatures.delete(toast.id)
+      } else if (toast.transitionStatus !== 'ending') {
+        activeToastIds.add(toast.id)
       }
     }
 
@@ -104,7 +107,7 @@ function ToastListViewport({
         continue
       }
 
-      manager.add({
+      const payload = {
         actionProps: item.action
           ? {
               children: item.actionLabel || '操作'
@@ -112,12 +115,16 @@ function ToastListViewport({
           : undefined,
         description: item.description,
         data: item,
-        id: item.id,
         priority: item.priority,
         title: item.title,
         timeout,
         type: item.type
-      })
+      }
+      if (activeToastIds.has(item.id)) {
+        manager.update(item.id, payload)
+      } else {
+        manager.add({ ...payload, id: item.id })
+      }
       syncedSignatures.set(item.id, signature)
     }
   }, [items, manager, syncedSignatures, timeout])

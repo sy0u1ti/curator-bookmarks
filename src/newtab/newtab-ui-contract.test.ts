@@ -16,7 +16,6 @@ const globalsCss = readFileSync('src/styles/globals.css', 'utf8')
 const bookmarkContent = readFileSync('src/newtab/components/NewtabBookmarkContent.tsx', 'utf8')
 const searchWidget = readFileSync('src/newtab/components/NewtabSearchWidget.tsx', 'utf8')
 const searchWidgetClasses = readFileSync('src/newtab/components/searchWidgetClasses.ts', 'utf8')
-const clockClasses = readFileSync('src/newtab/components/clockClasses.ts', 'utf8')
 const glassCss = readFileSync('src/newtab/glass-surface.css', 'utf8')
 const glassSettings = readFileSync('src/newtab/glass-settings.ts', 'utf8')
 const speedDial = readFileSync('src/newtab/components/NewtabSpeedDialPanel.tsx', 'utf8')
@@ -281,18 +280,23 @@ assert.ok(
   newtabCss.includes('background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-hero))') &&
     !searchWidget.includes('--search-bg-alpha') &&
     newtabCss.includes('.newtab-search-surface {') &&
-    clockClasses.includes('bg-[var(--newtab-glass-bg-hero)]') &&
-    clockClasses.includes('[-webkit-backdrop-filter:var(--newtab-glass-filter-hero)]') &&
     newtabCss.includes('background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-popup') &&
     newtabCss.includes('backdrop-filter: var(--newtab-glass-filter-popup') &&
     searchSurfaceRule.includes('background: transparent') &&
     !reducedTransparencyOpaqueSelectors.includes('.newtab-search') &&
     !reducedTransparencyOpaqueSelectors.includes('.newtab-search-suggestions-panel') &&
     !reducedTransparencyOpaqueSelectors.includes('.newtab-search-engine-menu') &&
-    !reducedTransparencyOpaqueSelectors.includes('.newtab-clock') &&
     !newtabCss.includes('--newtab-glass-bg-fill: #161616') &&
     !globalsCss.includes('--newtab-glass-bg-fill: #161616'),
-  'The primary search and clock utilities should retain the explicitly selected glass material instead of being replaced by an OS-level opaque fallback.'
+  'The primary search utility should retain the explicitly selected glass material instead of being replaced by an OS-level opaque fallback.'
+)
+
+assert.ok(
+  !existsSync('src/newtab/time-settings.ts') &&
+    !existsSync('src/newtab/components/ClockWidgetContent.tsx') &&
+    !newtabCss.includes('.newtab-clock') &&
+    !settingsDrawer.includes('settings-time-title'),
+  'The retired New Tab clock and time-and-date settings must not remain.'
 )
 
 assert.ok(

@@ -134,7 +134,8 @@ function run(): void {
     popupContent.includes("'t-skel popup-t-skel popup-workspace-reveal relative h-full min-h-0'") &&
       !popupContent.includes('t-skel-skeleton is-pulsing') &&
       popupContent.includes('popup-skeleton-pulse') &&
-      popupContent.includes("isLoading ? '' : 'is-revealed'"),
+      popupContent.includes("workspaceReveal.revealed ? 'is-revealed' : ''") &&
+      popupContent.includes('popup-workspace-backdrop'),
     'popup workspace loading must keep pane surfaces static while pulsing only placeholder marks'
   )
   assert(popupSmartClassifier.includes('t-skel popup-t-skel popup-page-reveal') && popupSmartClassifier.includes('t-skel-content popup-page-content'), 'current-page loading must use the shared skeleton reveal layers')

@@ -6,17 +6,17 @@ import type { IconName } from '../../ui/icons/icon-map'
 import { cx } from '../../ui/base/utils'
 import { handleAvailabilityResultAction } from '../options-controller'
 import { useAvailabilityResultsState } from './availability-results-store.js'
-import { OPTION_RESULT_CHECKBOX_CLASS, OPTION_INSET_CLASS } from './option-layout-classes.js'
+import { OPTION_LIST_ROW_CLASS, OPTION_RESULT_CHECKBOX_CLASS } from './option-layout-classes.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
 import { OptionDetails } from './OptionDetails.js'
 import { OptionActionsMenu, type OptionMenuAction } from './OptionActionsMenu.js'
 import type { AvailabilityResultCardViewModel, AvailabilityResultPanelKind } from './availability-results-types.js'
 
-const CARD_CLASS = `min-w-0 ${OPTION_INSET_CLASS} p-4`
+const CARD_CLASS = `${OPTION_LIST_ROW_CLASS} data-[selected=true]:bg-ds-selected`
 const BADGE_CLASS = 'inline-flex min-h-6 max-w-full items-center rounded-full border px-2.5 py-1 text-xs font-medium leading-4'
 const TONES: Record<string, string> = {
   danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
-  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning',
+  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning-text',
   success: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text',
   muted: 'border-ds-border bg-ds-surface-2 text-ds-text-secondary'
 }
@@ -25,7 +25,7 @@ const DETAIL_TEXT = 'm-0 text-[13px] leading-[1.65] text-ds-text-secondary [over
 
 export function AvailabilityResults({ kind }: { kind: AvailabilityResultPanelKind }) {
   const state = useAvailabilityResultsState(kind)
-  if (!state.results.length) return <OptionEmptyState title={state.emptyMessage} />
+  if (!state.results.length) return <OptionEmptyState embedded className="px-5 py-6 max-[760px]:px-4" title={state.emptyMessage} />
   return <>{state.results.map(result => <AvailabilityResultCard key={result.bookmarkId} kind={kind} result={result} />)}</>
 }
 
@@ -37,7 +37,7 @@ function AvailabilityResultCard({ kind, result }: { kind: AvailabilityResultPane
     onSelect: () => handleAvailabilityResultAction({ action: action.action, bookmarkId: result.bookmarkId, panel: kind })
   }))
   return (
-    <article data-availability-result={result.bookmarkId} className={cx(CARD_CLASS, result.selected && 'border-ds-border-hover bg-ds-selected')}>
+    <article data-availability-result={result.bookmarkId} data-selected={result.selected ? 'true' : undefined} className={CARD_CLASS}>
       <div className="flex min-w-0 items-start gap-3">
         {result.selectable ? (
           <label className="inline-flex min-h-6 min-w-6 cursor-pointer items-center justify-center" htmlFor={'availability-result-' + kind + '-' + result.bookmarkId}>
@@ -65,9 +65,9 @@ function AvailabilityResultCard({ kind, result }: { kind: AvailabilityResultPane
           ) : <p className="m-0 mt-1 text-xs text-ds-text-muted">无可打开的地址</p>}
         </div>
       </div>
-      <p className="mb-0 mt-2 text-[13px] leading-[1.6] text-ds-text-secondary">{result.summary}</p>
+      <p className="mb-0 mt-1.5 text-[13px] leading-[1.55] text-ds-text-secondary">{result.summary}</p>
       <OptionDetails
-        className="mt-3"
+        className="mt-2.5"
         label="检测详情"
         ariaLabel={'检测详情：' + result.title}
         actions={<>

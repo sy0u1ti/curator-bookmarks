@@ -99,13 +99,19 @@ export function SyncCard() {
       if (area === 'local' && changes[SYNC_ACCOUNTS_STORAGE_KEY]) void refresh()
     }
     chrome.storage.onChanged.addListener(changed)
-    const timer = setInterval(() => tick(value => value + 1), 60000)
     return () => {
       generation.current++
       chrome.storage.onChanged.removeListener(changed)
-      clearInterval(timer)
     }
   }, [refresh])
+  const hasProfiles = profiles.length > 0
+  useEffect(() => {
+    if (!hasProfiles) return
+    const timer = setInterval(() => tick(value => value + 1), 60000)
+    return () => {
+      clearInterval(timer)
+    }
+  }, [hasProfiles])
   useEffect(() => {
     let current = true
     void takeSyncEditorTransfer().then(async transfer => {
@@ -235,11 +241,11 @@ export function SyncCard() {
         }
         headerClassName={profiles.length ? AI_SETTINGS_HEADER_CLASS : AI_SETTINGS_HEADER_BORDERLESS_CLASS}
         copyClassName={BACKUP_CARD_COPY_CLASS}
-        iconName="RefreshCw"
+        iconName={false}
         bodyClassName={AI_SETTINGS_BODY_CLASS}
       >
         {profiles.length ? (
-          <ul className="m-0 grid list-none divide-y divide-ds-border-subtle/70 p-0" aria-label="同步项">
+          <ul className="m-0 grid list-none divide-y divide-ds-border-subtle p-0" aria-label="同步项">
             {profiles.map(profile => {
               const title = getSyncProfileTitle(profile)
               const state = getSyncProfileStatus(profile, formatDateTime)
@@ -254,7 +260,7 @@ export function SyncCard() {
                         {/* Some services already name themselves in the address */}
                         {profile.label.startsWith(service) ? profile.label : `${service} · ${profile.label}`}
                         {' · '}{SYNC_DIRECTION_LABELS[profile.data.strategy || 'default']}
-                        {profile.data.failsafe === false ? <span className="text-ds-warning"> · 安全保护已关闭</span> : null}
+                        {profile.data.failsafe === false ? <span className="text-ds-warning-text"> · 安全保护已关闭</span> : null}
                       </p>
                       <StatusMessage className={BACKUP_ROW_DETAIL_CLASS} reserve={[getSyncRestingText(profile, formatDateTime)]} tone={state.tone}>
                         {state.state === 'error' ? (
@@ -299,13 +305,13 @@ export function SyncCard() {
                       ]}
                     />
                     <Button size="sm" variant="secondary"
-                      aria-label={active ? `取消同步：${title}` : state.state === 'authorize' ? `连接同步账号：${title}` : state.state === 'folder' ? `设置同步文件夹：${title}` : `同步：${title}`}
+                      aria-label={active ? `取消同步：${title}` : state.state === 'authorize' ? `连接同步账号：${title}` : state.state === 'folder' ? `选择同步文件夹：${title}` : `同步：${title}`}
                       disabled={busy}
                       onClick={() => active
                         ? act(() => requestSync({ type: 'sync:cancel', id: profile.id }), '取消失败，请重试。')
                         : state.state === 'authorize' || state.state === 'folder' ? openEditor(profile) : run(profile, 'normal')}>
-                      <Icon name={active ? 'X' : 'RefreshCw'} size={14} aria-hidden="true" />
-                      <StableLabel text={active ? '取消' : state.state === 'authorize' ? '连接' : state.state === 'folder' ? '设置' : '同步'} reserve={RUN_LABELS} />
+                      <Icon name={active ? 'X' : state.state === 'folder' ? 'Folder' : 'RefreshCw'} size={14} aria-hidden="true" />
+                      <StableLabel text={active ? '取消' : state.state === 'authorize' ? '连接' : state.state === 'folder' ? '选择文件夹' : '同步'} reserve={RUN_LABELS} />
                     </Button>
                   </BackupRow>
                 </li>

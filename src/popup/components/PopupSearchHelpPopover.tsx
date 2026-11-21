@@ -3,17 +3,17 @@ import { Button } from '../../ui/base/Button'
 import { Popover } from '../../ui/base/Popover'
 
 const searchHelpPopoverClass =
-  '[z-index:90] w-[min(320px,calc(100vw-28px))] max-w-[320px] gap-2 rounded-ds-card border-ds-border bg-ds-surface-2 ds-inset-card text-xs leading-snug text-ds-text-secondary shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-2'
-const searchHelpTitleClass = 'text-sm font-semibold text-ds-text-primary'
-const searchHelpListClass = 'm-0 grid list-none gap-1.5 p-0'
-const searchHelpItemClass = 'grid grid-cols-[52px_minmax(0,1fr)] items-baseline gap-2'
+  '[z-index:90] w-[min(276px,calc(100cqi-24px))] max-w-[276px] gap-2.5 rounded-ds-md border border-ds-border bg-ds-surface-2 p-3.5 text-xs leading-snug text-ds-text-secondary shadow-ds-popover focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-2'
+const searchHelpTitleClass = 'text-[13px] font-semibold tracking-[-0.01em] text-ds-text-primary'
+const searchHelpListClass = 'm-0 grid list-none gap-2 p-0'
+const searchHelpItemClass = 'grid grid-cols-[46px_minmax(0,1fr)] items-center gap-2.5'
 const searchHelpTagClass =
-  'inline-flex min-h-5 items-center justify-center rounded-full border border-ds-border bg-ds-surface-1 px-1.5 text-xs font-semibold text-ds-text-secondary'
+  'text-right text-xs font-medium text-ds-text-muted'
 const searchHelpExampleClass =
-  'flex min-w-0 flex-wrap items-center gap-1 text-ds-text-primary'
+  'flex min-w-0 flex-wrap items-center gap-1.5 text-ds-text-primary'
 const searchHelpCodeClass =
-  'rounded-ds-xs border border-ds-border bg-ds-app px-1 py-0.5 font-mono text-xs text-ds-text-primary'
-const searchHelpHintClass = 'text-xs text-ds-text-muted'
+  'rounded-ds-xs border border-ds-border-subtle bg-ds-bg-page px-1.5 py-0.5 font-mono text-xs text-ds-text-primary'
+const searchHelpHintClass = 'border-t border-ds-border-subtle pt-2 text-xs leading-normal text-ds-text-muted'
 const searchHelpToggleClass = 'w-8 min-w-8 !p-0'
 
 export function PopupSearchHelpPopover({
@@ -93,7 +93,6 @@ export function PopupSearchHelpPopover({
         </li>
       </ul>
       <span className={searchHelpHintClass}>条件可组合；引号内按原文查找。</span>
-      <span className={searchHelpHintClass}>按 Esc 或点击外部关闭</span>
     </Popover>
   )
 }

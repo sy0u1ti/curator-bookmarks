@@ -16,7 +16,7 @@ const metrics: Array<{
 ]
 
 const AVAILABILITY_DECISION_CLASS =
-  'mt-4 grid grid-cols-4 gap-x-5 gap-y-2 max-[760px]:grid-cols-2'
+  'mt-3 grid grid-cols-4 gap-x-5 gap-y-2 max-[760px]:grid-cols-2'
 const AVAILABILITY_DECISION_ITEM_CLASS = 'flex min-w-0 items-baseline justify-between gap-3 border-b border-ds-border-subtle py-1.5'
 const AVAILABILITY_DECISION_LABEL_CLASS =
   'block text-xs font-medium leading-4 text-ds-text-secondary'

@@ -178,7 +178,17 @@ body:has(#newtab-settings-drawer .settings-drawer-panel[data-ending-style]) .set
   overflow: hidden;
   border-radius: var(--ds-radius-dialog);
   padding: var(--ds-inset-card);
-  background: repeating-linear-gradient(135deg, var(--ds-surface-1) 0 18px, rgba(255, 255, 255, 0.35) 18px 20px, var(--ds-surface-3) 20px 38px);
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0) 0 18px,
+      rgba(255, 255, 255, 0.22) 18px 19.5px,
+      rgba(255, 255, 255, 0) 19.5px 38px
+    ),
+    radial-gradient(circle at 18% 24%, rgba(74, 128, 214, 0.52), transparent 56%),
+    radial-gradient(circle at 82% 76%, rgba(196, 122, 74, 0.46), transparent 58%),
+    radial-gradient(circle at 68% 18%, rgba(124, 96, 196, 0.36), transparent 52%),
+    linear-gradient(135deg, #121622 0%, #1c1d24 52%, #19151d 100%);
 }
 
 .newtab-glass-preview {

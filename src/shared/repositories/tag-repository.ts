@@ -14,8 +14,7 @@ import {
   CURATOR_DATA_STORES,
   applyCuratorDataStoreDeltaWithMeta,
   isCuratorDataDbAvailable,
-  readCuratorDataStore,
-  readCuratorDataStoreMeta,
+  readCuratorDataStoreWithMeta,
   resetCuratorDataDbForTest,
   replaceCuratorDataStoreWithMeta
 } from './curator-data-db.js'
@@ -109,9 +108,10 @@ export async function updateBookmarkTagIndexInRepository(
   const current = await loadBookmarkTagIndexFromRepository(transaction)
   const nextIndex = normalizeIndex(updater(current))
   const delta = diffBookmarkTagIndexes(current, nextIndex)
-  if (delta.upserts.length || delta.deletedIds.length) {
-    nextIndex.updatedAt = Math.max(Number(nextIndex.updatedAt) || 0, (Number(current.updatedAt) || 0) + 1)
+  if (!delta.upserts.length && !delta.deletedIds.length) {
+    return current
   }
+  nextIndex.updatedAt = Math.max(Number(nextIndex.updatedAt) || 0, (Number(current.updatedAt) || 0) + 1)
 
   if (!isCuratorDataDbAvailable()) {
     await writeBookmarkTagIndexToLocalStorage(nextIndex, transaction)
@@ -225,13 +225,15 @@ async function loadBookmarkTagIndexFromIndexedDb(): Promise<BookmarkTagIndex | n
     return null
   }
 
-  const meta = await readCuratorDataStoreMeta(BOOKMARK_TAG_REPOSITORY_META_KEY)
+  const { meta, records: storedRecords } = await readCuratorDataStoreWithMeta<BookmarkTagRecord>(
+    CURATOR_DATA_STORES.bookmarkTags,
+    BOOKMARK_TAG_REPOSITORY_META_KEY
+  )
   if (!meta) {
     return null
   }
 
   const records: Record<string, BookmarkTagRecord> = {}
-  const storedRecords = await readCuratorDataStore<BookmarkTagRecord>(CURATOR_DATA_STORES.bookmarkTags)
   if (storedRecords.length < meta.recordCount) {
     return null
   }
@@ -254,6 +256,16 @@ async function loadBookmarkTagIndexFromLocalStorage(): Promise<BookmarkTagIndex 
   const stored = await getLocalStorage([STORAGE_KEYS.bookmarkTagIndex])
   const rawIndex = stored[STORAGE_KEYS.bookmarkTagIndex]
   if (!rawIndex || typeof rawIndex !== 'object') return null
+  const candidate = rawIndex as { migratedTo?: string; records?: unknown }
+  if (
+    candidate.migratedTo === 'indexedDB' &&
+    (!candidate.records ||
+      (typeof candidate.records === 'object' &&
+        !Array.isArray(candidate.records) &&
+        Object.keys(candidate.records).length === 0))
+  ) {
+    return null
+  }
   const index = normalizeIndex(rawIndex)
   // Compaction writes metadata with empty records. A real empty fallback is
   // different: it records a successful deletion while IndexedDB was unavailable.
@@ -373,16 +385,37 @@ function areBookmarkTagRecordsEquivalent(
     return false
   }
 
-  return left.bookmarkId === right.bookmarkId &&
+  return left.schemaVersion === right.schemaVersion &&
+    left.bookmarkId === right.bookmarkId &&
     left.updatedAt === right.updatedAt &&
     left.generatedAt === right.generatedAt &&
     left.manualUpdatedAt === right.manualUpdatedAt &&
     left.url === right.url &&
+    left.normalizedUrl === right.normalizedUrl &&
+    left.duplicateKey === right.duplicateKey &&
+    left.title === right.title &&
+    left.path === right.path &&
     left.summary === right.summary &&
     left.contentType === right.contentType &&
     left.source === right.source &&
-    left.tags.length === right.tags.length &&
-    left.manualTags?.length === right.manualTags?.length
+    left.model === right.model &&
+    left.confidence === right.confidence &&
+    left.extraction.status === right.extraction.status &&
+    left.extraction.source === right.extraction.source &&
+    areStringArraysEqual(left.extraction.warnings, right.extraction.warnings) &&
+    areStringArraysEqual(left.topics, right.topics) &&
+    areStringArraysEqual(left.tags, right.tags) &&
+    areStringArraysEqual(left.manualTags, right.manualTags) &&
+    areStringArraysEqual(left.aliases, right.aliases)
+}
+
+function areStringArraysEqual(left: string[] | undefined, right: string[] | undefined): boolean {
+  if (left === right) return true
+  if (!left || !right || left.length !== right.length) return false
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false
+  }
+  return true
 }
 
 function dedupeBookmarkTagRecords(records: BookmarkTagRecord[]): BookmarkTagRecord[] {

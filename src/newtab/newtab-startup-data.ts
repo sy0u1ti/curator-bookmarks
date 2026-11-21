@@ -17,7 +17,6 @@ const NEWTAB_STARTUP_STORAGE_KEYS = [
   STORAGE_KEYS.newTabIconSettings,
   STORAGE_KEYS.newTabGeneralSettings,
   STORAGE_KEYS.newTabFolderSettings,
-  STORAGE_KEYS.newTabTimeSettings,
   STORAGE_KEYS.newTabWorkspaceSettings,
   STORAGE_KEYS.newTabModuleSettings,
   STORAGE_KEYS.onboardingState

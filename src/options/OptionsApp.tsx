@@ -24,19 +24,13 @@ import { DotMatrixLoader } from '../ui/base/DotMatrixLoader'
 import { Icon } from '../ui/icons/Icon'
 import type { IconName } from '../ui/icons/icon-map'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
-import {
-  getMotionAwareScrollBehavior,
-  getMotionDurationMs,
-  getMotionEasing,
-  shouldSkipMotion
-} from '../shared/motion'
+import { getMotionAwareScrollBehavior } from '../shared/motion'
 import { runIdle } from '../shared/idle'
 import { GeneralPanel } from './components/GeneralPanel'
-import { AiSettingsPanel } from './components/AiSettingsPanel'
-import { InboxPanel } from './components/InboxPanel'
 import { useInboxReviewData } from './components/inbox-review-store'
 import { useOptionsModalsState } from './components/options-modals-store'
 import { OptionsUndoToast } from './components/OptionsUndoToast'
+import { OptionsScrollToTop } from './components/OptionsScrollToTop'
 import {
   getOptionsSectionNavigationFromLink,
   type OptionsSectionKey
@@ -108,19 +102,23 @@ function preloadablePanel<T extends ComponentType<any>>(load: () => Promise<T>) 
   return { Panel, preload }
 }
 
+const aiSettingsPanel = preloadablePanel(() => import('./components/AiSettingsPanel').then((module) => module.AiSettingsPanel))
+const inboxPanel = preloadablePanel(() => import('./components/InboxPanel').then((module) => module.InboxPanel))
 const availabilityPanel = preloadablePanel(() => import('./components/AvailabilityPanel').then((module) => module.AvailabilityPanel))
 const aiAnalysisPanel = preloadablePanel(() => import('./components/AiAnalysisPanel').then((module) => module.AiAnalysisPanel))
 const bookmarkHistoryPanel = preloadablePanel(() => import('./components/BookmarkHistoryPanel').then((module) => module.BookmarkHistoryPanel))
 // These panels share one chunk. Reuse its resolved lazy boundary so moving to
 // another task panel does not suspend again after that chunk has loaded.
 const taskPanel = preloadablePanel(() => import('./components/TaskPanels').then((module) => module.TaskPanel))
+const AiSettingsPanel = aiSettingsPanel.Panel
+const InboxPanel = inboxPanel.Panel
 const AvailabilityPanel = availabilityPanel.Panel
 const AiAnalysisPanel = aiAnalysisPanel.Panel
 const BookmarkHistoryPanel = bookmarkHistoryPanel.Panel
 const TaskPanel = taskPanel.Panel
 
 function preloadOptionsPanels() {
-  for (const panel of [availabilityPanel, aiAnalysisPanel, bookmarkHistoryPanel, taskPanel]) {
+  for (const panel of [aiSettingsPanel, inboxPanel, availabilityPanel, aiAnalysisPanel, bookmarkHistoryPanel, taskPanel]) {
     // A failed preload stays retryable: navigating loads it again and reports the error.
     void panel.preload().catch(() => undefined)
   }
@@ -189,21 +187,6 @@ const aiLinks: NavLink[] = [
 ]
 
 const availabilitySectionKeys = new Set(availabilityLinks.map((link) => link.section))
-
-const OPTIONS_SECTION_ORDER: readonly OptionsSectionKey[] = [
-  'general',
-  'backup',
-  'availability',
-  'history',
-  'redirects',
-  'ignore',
-  'inbox',
-  'duplicates',
-  'recycle',
-  'ai-settings',
-  'ai',
-  'bookmark-history'
-]
 
 const navGroups: NavGroup[] = [
   {
@@ -488,6 +471,7 @@ function OptionsMobileNavigation({
       <DialogPanel
         className={optionsMobileNavPanelClass}
         motionVariant="drawer"
+        data-side="left"
         aria-labelledby="options-mobile-navigation-title"
         finalFocus={() => document.getElementById('options-mobile-nav-trigger')}
       >
@@ -550,8 +534,6 @@ export function OptionsApp() {
   } = useOptionsSectionChrome({ onSectionChange: handleOptionsWindowSectionChange })
   const optionsShellRef = useRef<HTMLDivElement | null>(null)
   const optionsMainRef = useRef<HTMLElement | null>(null)
-  const previousSectionKeyRef = useRef<OptionsSectionKey>(sectionKey)
-  const sectionAnimationRef = useRef<Animation | null>(null)
   const aiProviderAnchorRef = useRef<HTMLDivElement | null>(null)
   const [aiProviderAttentionRequestId, setAiProviderAttentionRequestId] = useState(0)
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
@@ -653,55 +635,6 @@ export function OptionsApp() {
     return () => window.cancelAnimationFrame(frame)
   }, [sectionKey, sectionAnchor, sectionRevision])
 
-  useLayoutEffect(() => {
-    const previousSection = previousSectionKeyRef.current
-    previousSectionKeyRef.current = sectionKey
-    if (previousSection === sectionKey) {
-      return
-    }
-
-    sectionAnimationRef.current?.cancel()
-    sectionAnimationRef.current = null
-    if (shouldSkipMotion()) {
-      return
-    }
-
-    const stage = optionsMainRef.current?.querySelector<HTMLElement>(':scope > section') ?? null
-    if (!stage || typeof stage.animate !== 'function') {
-      return
-    }
-
-    const duration = getMotionDurationMs('--ds-motion-standard', 220, stage)
-    if (duration <= 0) {
-      return
-    }
-
-    const previousIndex = OPTIONS_SECTION_ORDER.indexOf(previousSection)
-    const nextIndex = OPTIONS_SECTION_ORDER.indexOf(sectionKey)
-    const direction = previousIndex !== -1 && nextIndex !== -1 && nextIndex < previousIndex ? -1 : 1
-    const easing = getMotionEasing('--ds-ease-settle', 'cubic-bezier(0.32, 0.72, 0, 1)')
-    const animation = stage.animate(
-      [
-        { transform: `translate3d(0, ${direction * 10}px, 0)` },
-        { transform: 'translate3d(0, 0, 0)' }
-      ],
-      { id: 'options-section-glide', duration, easing }
-    )
-    sectionAnimationRef.current = animation
-    const clear = () => {
-      if (sectionAnimationRef.current === animation) {
-        sectionAnimationRef.current = null
-      }
-    }
-    animation.onfinish = clear
-    animation.oncancel = clear
-  }, [sectionKey])
-
-  useEffect(() => () => {
-    sectionAnimationRef.current?.cancel()
-    sectionAnimationRef.current = null
-  }, [])
-
   const handleAiProviderAnchorRef = useCallback((node: HTMLDivElement | null) => {
     aiProviderAnchorRef.current = node
   }, [])
@@ -760,6 +693,12 @@ export function OptionsApp() {
         open={mobileNavigationOpen}
       />
       <DeferredOptionsModals />
+      <OptionsScrollToTop
+        mainRef={optionsMainRef}
+        shellRef={optionsShellRef}
+        sectionKey={sectionKey}
+        suppressed={mobileNavigationOpen}
+      />
       <OptionsUndoToast />
     </ThemeProvider>
   )

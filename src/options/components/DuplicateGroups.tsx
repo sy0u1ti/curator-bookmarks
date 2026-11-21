@@ -1,4 +1,4 @@
-import { OPTION_INSET_CLASS } from './option-layout-classes.js'
+import { OPTION_LIST_SECTION_CLASS } from './option-layout-classes.js'
 import { memo, startTransition, useEffect, useState } from 'react'
 import { runIdle } from '../../shared/idle.js'
 import { formatDateTime } from '../../shared/format.js'
@@ -29,9 +29,9 @@ const DUPLICATE_DATE_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
   day: '2-digit'
 })
 
-const RESULTS_CLASS = 'mt-4 flex flex-col gap-2'
+const RESULTS_CLASS = `${OPTION_LIST_SECTION_CLASS} mt-4 divide-y divide-ds-border-subtle`
 const EMPTY_CLASS =
-  `${OPTION_INSET_CLASS} p-[14px_16px] text-[13px] leading-[1.55] text-ds-text-secondary shadow-none transition-colors hover:border-ds-border hover:bg-ds-hover`
+  'mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 px-5 py-4 text-[13px] leading-[1.55] text-ds-text-secondary shadow-none'
 const DOCKED_SELECTION_CLASS =
   'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-ds-card border border-ds-border bg-ds-surface-2 ds-inset-card [filter:var(--ds-filter-card)] max-[760px]:grid-cols-1'
 const DOCKED_COPY_CLASS = 'min-w-0'
@@ -42,7 +42,7 @@ const DOCKED_ACTIONS_CLASS =
   'flex flex-wrap items-center justify-end gap-2 max-[760px]:justify-start'
 const DOCKED_ACTION_BUTTON_CLASS = 'max-[760px]:flex-1 max-[760px]:basis-[132px]'
 const GROUP_CARD_CLASS =
-  `duplicate-group ${OPTION_INSET_CLASS} p-4 shadow-none`
+  'duplicate-group px-5 py-4 shadow-none max-[760px]:px-4'
 const GROUP_HEADER_CLASS =
   'flex min-w-0 flex-wrap items-start justify-between gap-2.5 max-[760px]:flex-col max-[760px]:items-stretch'
 const GROUP_COPY_CLASS = 'min-w-0'
@@ -73,11 +73,12 @@ export function DuplicateGroups() {
 
   if (!state.catalogLoading && !state.groups.length) {
     return (
-      <OptionEmptyState
-        embedded
-        title="未发现重复书签"
-        description="按网址检测，并给出推荐保留项。"
-      />
+      <div className="mt-5 max-[760px]:mt-4">
+        <OptionEmptyState
+          title="未发现重复书签"
+          description="按网址检测，并给出推荐保留项。"
+        />
+      </div>
     )
   }
 
@@ -138,7 +139,7 @@ function DuplicateDockedSelection({
 
   return (
     <SelectionDock open={entered} label="已选重复书签操作">
-      <section className={DOCKED_SELECTION_CLASS} aria-label="已选重复书签操作">
+      <div className={DOCKED_SELECTION_CLASS}>
         <div className={DOCKED_COPY_CLASS}>
           <strong className={DOCKED_TITLE_CLASS}>
             <TextSwap
@@ -174,14 +175,14 @@ function DuplicateDockedSelection({
             className={DOCKED_ACTION_BUTTON_CLASS}
             size="sm"
             type="button"
-            variant="secondary"
+            variant="danger"
             disabled={locked || unsafe}
             onClick={() => handleDuplicateAction({ action: 'delete-selection' })}
           >
             删除
           </Button>
         </div>
-      </section>
+      </div>
     </SelectionDock>
   )
 }

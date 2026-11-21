@@ -59,6 +59,7 @@ export function Button({
       nativeButton={resolvedNativeButton}
       render={render}
       data-control-size={size}
+      data-variant={variant}
       className={buttonVariants({ variant, size, className })}
       {...props}
     />

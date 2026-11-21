@@ -44,6 +44,7 @@
   .folder-candidate-card,
   .bookmark-menu-action,
   .newtab-search-chip-button,
+  .popup-smart-folder-option,
   .popup-reorder-row-content
 ) {
   --control-press-scale: 1;
@@ -110,6 +111,7 @@
 }
 
 .base-slider-thumb {
+  z-index: 2;
   scale: 1;
   box-shadow: var(--slider-grip-shadow);
   border-color: var(--slider-grip-border);
@@ -150,7 +152,7 @@
 }
 
 .base-slider[data-detent] .base-slider-reference {
-  background-color: var(--ds-accent);
+  background-color: var(--slider-detent-color, var(--ds-accent));
   opacity: 1;
 }
 

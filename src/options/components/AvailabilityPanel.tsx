@@ -6,11 +6,11 @@ import { AvailabilityResults } from './AvailabilityResults.js'
 import { AvailabilityResultsHeader } from './AvailabilityResultsHeader.js'
 import { AvailabilitySelectionActions } from './AvailabilitySelectionActions.js'
 import {
+  OPTION_LIST_SECTION_CLASS,
   OPTION_PANEL_CLASS,
   OPTION_RUN_CELL_CLASS,
   OPTION_RUN_CELL_TITLE_CLASS,
-  OPTION_RUN_HEADER_CLASS,
-  OPTION_TOOL_PANEL_CLASS
+  OPTION_RUN_HEADER_CLASS
 } from './option-layout-classes.js'
 import { OptionPanelHeader } from './OptionPanelHeader.js'
 import { ResultsPagination } from './ResultsPagination.js'
@@ -21,9 +21,10 @@ interface OptionsPanelVisibilityProps {
   hidden: boolean
 }
 
-const AVAILABILITY_RESULTS_GROUP_CLASS =
-  OPTION_TOOL_PANEL_CLASS
-const AVAILABILITY_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
+const AVAILABILITY_RESULTS_GROUP_CLASS = OPTION_LIST_SECTION_CLASS
+const AVAILABILITY_RESULTS_LIST_CLASS = 'divide-y divide-ds-border-subtle'
+const AVAILABILITY_RESULTS_PAGINATION_CLASS =
+  'mt-0 border-t border-ds-border-subtle px-5 py-3 max-[760px]:px-4'
 
 export function AvailabilityPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
@@ -66,7 +67,7 @@ function AvailabilityResultGroups() {
         <div className={AVAILABILITY_RESULTS_LIST_CLASS}>
           <AvailabilityResults kind="failed" />
         </div>
-        <ResultsPagination kind="availability-failed" ariaLabel="无法访问的书签分页" />
+        <ResultsPagination className={AVAILABILITY_RESULTS_PAGINATION_CLASS} kind="availability-failed" ariaLabel="无法访问的书签分页" />
       </div> : null}
 
       {reviewVisible ? <div className={AVAILABILITY_RESULTS_GROUP_CLASS}>
@@ -74,7 +75,7 @@ function AvailabilityResultGroups() {
         <div className={AVAILABILITY_RESULTS_LIST_CLASS}>
           <AvailabilityResults kind="review" />
         </div>
-        <ResultsPagination kind="availability-review" ariaLabel="待确认书签分页" />
+        <ResultsPagination className={AVAILABILITY_RESULTS_PAGINATION_CLASS} kind="availability-review" ariaLabel="待确认书签分页" />
       </div> : null}
     </>
   )

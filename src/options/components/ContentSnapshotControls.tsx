@@ -34,7 +34,7 @@ export function ContentSnapshotControls() {
         {state.loading ? '正在读取本地设置…' : state.statusCopy || contentSnapshotDescription}
       </StatusMessage>}
       headerClassName={AI_SETTINGS_HEADER_CLASS}
-      iconName="ArchiveRestore"
+      iconName={false}
       bodyClassName={`${AI_SETTINGS_BODY_CLASS} ${state.loading ? '' : AI_SETTINGS_READY_BODY_CLASS}`}
       aria-busy={state.loading ? 'true' : undefined}
     >

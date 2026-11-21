@@ -1,16 +1,19 @@
 import { displayUrl } from '../../shared/text.js'
 import { Button } from '../../ui/base/Button'
 import { CheckboxControl } from '../../ui/base/Checkbox'
-import { OPTION_RESULT_CHECKBOX_CLASS, OPTION_INSET_CLASS } from './option-layout-classes.js'
+import {
+  OPTION_LIST_ROW_CLASS,
+  OPTION_LIST_SECTION_CLASS,
+  OPTION_RESULT_CHECKBOX_CLASS
+} from './option-layout-classes.js'
 import { handleRedirectAction } from '../options-controller'
 import { useRedirectResultsState } from './redirect-results-store.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
 import type { RedirectResultViewModel } from './redirect-results-types.js'
 
-const REDIRECT_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
+const REDIRECT_RESULTS_LIST_CLASS = `${OPTION_LIST_SECTION_CLASS} mt-3 flex flex-col divide-y divide-ds-border-subtle`
 const REDIRECT_CARD_CLASS =
-  `${OPTION_INSET_CLASS} p-[14px_16px] [transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:border-ds-border-hover hover:bg-ds-hover`
-const REDIRECT_CARD_SELECTED_CLASS = 'border-ds-border-hover bg-ds-selected'
+  `${OPTION_LIST_ROW_CLASS} data-[selected=true]:bg-ds-selected`
 const REDIRECT_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3 max-[760px]:flex-col'
 const REDIRECT_CARD_HEAD_LEFT_CLASS = 'flex min-w-0 flex-wrap items-center gap-2.5'
@@ -24,9 +27,9 @@ const REDIRECT_CARD_TITLE_CLASS =
 const REDIRECT_CARD_DETAIL_CLASS =
   'mt-[7px] text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 const REDIRECT_INLINE_URL_CLASS =
-  'font-semibold text-ds-text-primary [overflow-wrap:anywhere] [word-break:break-word]'
+  'font-mono text-xs font-medium text-ds-text-primary [overflow-wrap:anywhere] [word-break:break-word]'
 const REDIRECT_CARD_PATH_CLASS =
-  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-disabled [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-muted [overflow-wrap:anywhere] [word-break:break-word]'
 const REDIRECT_STATUS_BADGE_CLASS =
   'inline-flex min-h-6 max-w-full items-center justify-center rounded-full border border-ds-success/35 bg-ds-success-soft px-2.5 text-xs font-semibold leading-none tracking-[0] text-ds-success-text [overflow-wrap:anywhere]'
 
@@ -35,12 +38,13 @@ export function RedirectResults() {
 
   if (!state.results.length) {
     return (
-      <OptionEmptyState
-        embedded
-        title="没有待更新的重定向"
-        description="检测发现原地址与最终地址不同的书签后，会出现在这里。"
-        actions={[{ action: 'run-availability', label: '去做可用性检测', variant: 'primary' }]}
-      />
+      <div className="mt-6 max-[760px]:mt-4">
+        <OptionEmptyState
+          title="没有待更新的重定向"
+          description="检测发现原地址与最终地址不同的书签后，会出现在这里。"
+          actions={[{ action: 'run-availability', label: '去做可用性检测', variant: 'primary' }]}
+        />
+      </div>
     )
   }
 
@@ -74,10 +78,8 @@ function RedirectResultCard({
 
   return (
     <article
-      className={[
-        REDIRECT_CARD_CLASS,
-        selected ? REDIRECT_CARD_SELECTED_CLASS : ''
-      ].filter(Boolean).join(' ')}
+      className={REDIRECT_CARD_CLASS}
+      data-selected={selected ? 'true' : undefined}
     >
       <div className={REDIRECT_CARD_HEAD_CLASS}>
         <div className={REDIRECT_CARD_HEAD_LEFT_CLASS}>

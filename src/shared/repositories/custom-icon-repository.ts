@@ -6,6 +6,7 @@ const DB_NAME = 'curatorCustomIcons'
 const STORE_NAME = 'images'
 const ORPHAN_STORE = 'orphanedAt'
 export const CUSTOM_ICON_GRACE_MS = 24 * 60 * 60 * 1000
+const textEncoder = new TextEncoder()
 let database: Promise<IDBDatabase> | null = null
 
 export function normalizeCustomIconEntries(value: unknown): Record<string, string> {
@@ -17,6 +18,7 @@ export function normalizeCustomIconEntries(value: unknown): Record<string, strin
 function openDatabase(): Promise<IDBDatabase> {
   if (database) return database
   let abandoned = false
+  let pending: Promise<IDBDatabase> | null = null
   const opening = new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 2)
     request.onupgradeneeded = () => {
@@ -26,13 +28,17 @@ function openDatabase(): Promise<IDBDatabase> {
     request.onsuccess = () => {
       const db = request.result
       if (abandoned) { db.close(); return }
-      db.onversionchange = () => { db.close(); database = null }
+      const clearCachedDatabase = () => {
+        if (database === pending) database = null
+      }
+      db.onversionchange = () => { db.close(); clearCachedDatabase() }
+      db.onclose = clearCachedDatabase
       resolve(db)
     }
     request.onerror = () => reject(request.error || new Error('自定义图标存储无法打开。'))
     request.onblocked = () => reject(new Error('图标存储升级被其他页面占用，请关闭旧扩展页面后重试。'))
   })
-  const pending = opening.catch((error) => {
+  pending = opening.catch((error) => {
     abandoned = true
     if (database === pending) database = null
     throw error
@@ -41,13 +47,17 @@ function openDatabase(): Promise<IDBDatabase> {
   return database
 }
 
-async function iconRequest<T>(mode: IDBTransactionMode, operation: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+async function putCustomIconsBatch(entries: Map<string, string>): Promise<void> {
+  if (!entries.size) return
   const db = await openDatabase()
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, mode)
-    const request = operation(transaction.objectStore(STORE_NAME))
-    transaction.oncomplete = () => resolve(request.result)
-    transaction.onerror = transaction.onabort = () => reject(transaction.error || request.error || new Error('自定义图标保存失败。'))
+    const transaction = db.transaction(STORE_NAME, 'readwrite')
+    const store = transaction.objectStore(STORE_NAME)
+    for (const [reference, data] of entries) {
+      store.put(data, reference)
+    }
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = transaction.onabort = () => reject(transaction.error || new Error('自定义图标保存失败。'))
   })
 }
 
@@ -56,13 +66,15 @@ async function iconRequest<T>(mode: IDBTransactionMode, operation: (store: IDBOb
 export async function prepareCustomIconReferences(value: unknown): Promise<Record<string, string>> {
   const entries = normalizeCustomIconEntries(value)
   const references: Record<string, string> = {}
+  const pendingWrites = new Map<string, string>()
   for (const [id, data] of Object.entries(entries)) {
     if (data.startsWith(ICON_REFERENCE_PREFIX)) { references[id] = data; continue }
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data))
+    const digest = await crypto.subtle.digest('SHA-256', textEncoder.encode(data))
     const reference = ICON_REFERENCE_PREFIX + Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
-    await iconRequest('readwrite', store => store.put(data, reference))
+    pendingWrites.set(reference, data)
     references[id] = reference
   }
+  await putCustomIconsBatch(pendingWrites)
   return references
 }
 
@@ -119,7 +131,14 @@ export async function resolveCustomIcons(value: unknown): Promise<Record<string,
   return result.icons
 }
 
-export async function loadCustomIcons(): Promise<Record<string, string>> {
+export async function loadCustomIcons(prefetched?: { raw: unknown }): Promise<Record<string, string>> {
+  const initialRaw = prefetched
+    ? prefetched.raw
+    : (await getLocalStorage(STORAGE_KEYS.newTabCustomIcons))[STORAGE_KEYS.newTabCustomIcons]
+  const initialEntries = normalizeCustomIconEntries(initialRaw)
+  if (!Object.values(initialEntries).some(data => data.startsWith('data:image/'))) {
+    return Object.keys(initialEntries).length ? resolveCustomIcons(initialEntries) : {}
+  }
   return withLocalStorageTransaction(async transaction => {
     const stored = await getLocalStorage(STORAGE_KEYS.newTabCustomIcons)
     const entries = normalizeCustomIconEntries(stored[STORAGE_KEYS.newTabCustomIcons])
@@ -182,7 +201,7 @@ export async function inspectCustomIconStorage(
       const entry = cursor.result
       if (!entry) return
       usage.count++
-      usage.bytes += new TextEncoder().encode(String(entry.value || '')).byteLength
+      usage.bytes += textEncoder.encode(String(entry.value || '')).byteLength
       if (references.has(String(entry.key))) {
         if (collect) orphaned.delete(entry.key)
         entry.continue()

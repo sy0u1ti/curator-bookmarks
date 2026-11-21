@@ -79,7 +79,7 @@ export function Popover({
           />
         }
       >
-        {showArrow ? <BasePopover.Arrow className="text-ds-accent-contrast-elevated" /> : null}
+        {showArrow ? <BasePopover.Arrow className="fill-ds-surface-2 text-ds-surface-2" /> : null}
         {title ? <BasePopover.Title className="font-semibold">{title}</BasePopover.Title> : null}
         {children}
       </BasePopover.Popup>

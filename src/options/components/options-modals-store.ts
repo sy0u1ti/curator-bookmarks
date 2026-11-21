@@ -42,3 +42,15 @@ export function publishOptionsModals(patch: Partial<OptionsModalsState>): void {
 export function useOptionsModalsState(): OptionsModalsState {
   return useUiViewStoreSlice(optionsModalsStore)
 }
+
+export function useConfirmModalState(): OptionsModalsState['confirm'] {
+  return useUiViewStoreSlice(optionsModalsStore, (state) => state.confirm)
+}
+
+export function useMoveModalState(): OptionsModalsState['move'] {
+  return useUiViewStoreSlice(optionsModalsStore, (state) => state.move)
+}
+
+export function useScopeModalState(): OptionsModalsState['scope'] {
+  return useUiViewStoreSlice(optionsModalsStore, (state) => state.scope)
+}

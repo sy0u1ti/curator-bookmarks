@@ -19,11 +19,8 @@ import {
   setNewtabContentLayoutNodes,
   useNewtabContentView
 } from '../newtab-content-store'
-import { useNewtabClockView } from '../newtab-clock-store'
 import { useNewtabSearchWidgetView } from '../newtab-search-widget-store'
 import { hideNewtabBookmarkPreboot } from '../newtab-bookmark-preboot'
-import { ClockWidgetContent } from './ClockWidgetContent'
-import { CLOCK_SPACER_CLASS, getClockClass } from './clockClasses'
 import { NewtabBookmarkContent } from './NewtabBookmarkContent'
 import { NewtabSearchWidget } from './NewtabSearchWidget'
 import {
@@ -107,7 +104,6 @@ function NewTabPage({
   const [primaryModule] = view.modules.filter((module) => module.placement === 'primary')
   const iconVerticalCenter = view.iconVerticalCenter === 'true'
   const pageClassName = getNewtabPageClass({
-    hasClock: view.hasClock,
     hasSearch: view.hasSearch
   })
   const pageStyle = {
@@ -132,7 +128,6 @@ function NewTabPage({
     shellRef,
     utilityModules.length,
     view.contentState,
-    view.hasClock,
     view.hasSearch,
     view.iconVerticalCenter
   ])
@@ -164,14 +159,6 @@ function NewTabPage({
 function UtilityModule({ module }: { module: NewTabPageModule }) {
   if (module.kind === 'onboarding') {
     return <OnboardingStrip module={module} />
-  }
-
-  if (module.kind === 'clock') {
-    return <ClockModule />
-  }
-
-  if (module.kind === 'clock-spacer') {
-    return <div className={CLOCK_SPACER_CLASS} aria-hidden="true" />
   }
 
   if (module.kind === 'search') {
@@ -277,28 +264,6 @@ function SearchModule() {
   }
 
   return <NewtabSearchWidget view={view} />
-}
-
-function ClockModule() {
-  const state = useNewtabClockView()
-  if (!state) {
-    return null
-  }
-
-  const settings = state.settings
-  return (
-    <NewtabGlassSurface as="section"
-      className={getClockClass(settings)}
-      style={{ '--clock-scale': String(settings.clockSize / 100) } as CSSProperties}
-      data-clock-display-mode={settings.displayMode}
-      data-clock-density={settings.density}
-      data-clock-show-seconds={String(settings.showSeconds && settings.displayMode !== 'date')}
-      data-clock-hour12={String(settings.hour12 && settings.displayMode !== 'date')}
-      aria-label={state.ariaLabel}
-    >
-      <ClockWidgetContent state={state} />
-    </NewtabGlassSurface>
-  )
 }
 
 function OnboardingStrip({ module }: { module: NewTabOnboardingModule }) {

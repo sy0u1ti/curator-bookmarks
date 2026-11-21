@@ -11,6 +11,9 @@ export function SettingsSearch({ onNavigate }: { onNavigate: (hash: string) => v
   const [open, setOpen] = useState(false)
   const [composing, setComposing] = useState(false)
   const items = useMemo(() => searchSettings(query), [query])
+  const shortcutHint = typeof navigator !== 'undefined' && /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent)
+    ? '⌘K'
+    : 'Ctrl K'
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -77,6 +80,13 @@ export function SettingsSearch({ onNavigate }: { onNavigate: (hash: string) => v
               }
             }}
           />
+          <kbd
+            className="options-settings-search-kbd"
+            data-hidden={query ? 'true' : 'false'}
+            aria-hidden="true"
+          >
+            {shortcutHint}
+          </kbd>
         </div>
         <Combobox.Portal>
           <Combobox.Positioner className="options-settings-search-positioner" side="bottom" align="start" sideOffset={6} collisionPadding={12}>

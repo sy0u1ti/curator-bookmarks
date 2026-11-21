@@ -15,28 +15,31 @@ const resultOptions: SelectOption[] = [
 ]
 
 const AI_RESULTS_FILTER_ROW_CLASS =
-  'mt-[14px] min-w-0'
-const AI_RESULTS_FILTER_ACTIONS_CLASS =
-  'grid w-full min-w-0 grid-cols-[minmax(260px,1fr)_minmax(220px,242px)_auto] items-end gap-2.5 max-[760px]:grid-cols-1'
+  'min-w-0 border-b border-ds-border-subtle bg-ds-surface-1 px-5 py-3.5 max-[760px]:px-4'
+const AI_RESULTS_FILTER_ACTIONS_TWO_COL_CLASS =
+  'grid w-full min-w-0 grid-cols-[minmax(220px,1fr)_minmax(180px,220px)] items-end gap-3 max-[760px]:grid-cols-1'
+const AI_RESULTS_FILTER_ACTIONS_THREE_COL_CLASS =
+  'grid w-full min-w-0 grid-cols-[minmax(220px,1fr)_minmax(180px,220px)_auto] items-end gap-3 max-[760px]:grid-cols-1'
 const AI_RESULTS_FILTER_FIELD_CLASS =
   'grid min-w-0 gap-1.5'
 const AI_RESULTS_FILTER_LABEL_CLASS =
   'text-xs font-medium leading-none text-ds-text-secondary'
 const AI_RESULTS_FILTER_QUERY_CLASS =
-  'h-[42px] min-h-[42px] w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3.5 font-[inherit] text-sm font-medium leading-[42px] text-ds-text-primary placeholder:text-ds-text-muted'
+  'h-10 min-h-10 w-full rounded-ds-sm border border-ds-border bg-ds-bg-page px-3 font-[inherit] text-[13px] font-normal leading-10 text-ds-text-primary outline-none transition-[border-color,background-color] duration-ds-fast ease-ds-standard placeholder:text-ds-text-muted hover:border-ds-border-hover focus:border-ds-focus'
 const AI_RESULTS_FILTER_SELECT_CLASS = 'w-full'
-const AI_RESULTS_FILTER_SELECT_TRIGGER_CLASS = 'min-h-[42px] w-full'
+const AI_RESULTS_FILTER_SELECT_TRIGGER_CLASS = 'min-h-10 w-full'
 const AI_RESULTS_FILTER_CLEAR_CLASS =
-  `${AI_ANALYSIS_SMALL_BUTTON_CLASS} h-[42px] self-end whitespace-nowrap px-3.5 max-[760px]:w-full`
+  `${AI_ANALYSIS_SMALL_BUTTON_CLASS} h-10 self-end whitespace-nowrap px-3.5 max-[760px]:w-full`
 
 export function AiAnalysisResultsFilter() {
   const state = useAiAnalysisResultsFilter()
   const inputRef = useRef<HTMLInputElement>(null)
   if (!state.visible) return null
+  const showClear = !state.clearDisabled
 
   return (
     <div className={AI_RESULTS_FILTER_ROW_CLASS}>
-      <div className={AI_RESULTS_FILTER_ACTIONS_CLASS}>
+      <div className={showClear ? AI_RESULTS_FILTER_ACTIONS_THREE_COL_CLASS : AI_RESULTS_FILTER_ACTIONS_TWO_COL_CLASS}>
         <label className={AI_RESULTS_FILTER_FIELD_CLASS} htmlFor="ai-analysis-results-filter-query">
           <span className={AI_RESULTS_FILTER_LABEL_CLASS}>文件夹或域名</span>
           <Input
@@ -69,7 +72,7 @@ export function AiAnalysisResultsFilter() {
             value: value || 'all'
           })}
         />
-        {!state.clearDisabled ? <Button
+        {showClear ? <Button
           className={AI_RESULTS_FILTER_CLEAR_CLASS}
           size="sm"
           type="button"

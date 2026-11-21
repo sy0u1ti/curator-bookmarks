@@ -23,7 +23,7 @@ import { FEATURED_WALLPAPER_CONTROL_CLASS } from './featuredWallpaperControlClas
 const featuredWallpaperModalLayoutClass =
   'fixed inset-0 z-[10020] grid place-items-center p-6 pointer-events-none'
 const featuredWallpaperBackdropClass =
-  'fixed inset-0 bg-[rgba(0,0,0,0.46)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)]'
+  'fixed inset-0 bg-[rgba(0,0,0,0.46)]'
 const featuredWallpaperPanelLayoutClass =
   'pointer-events-auto relative z-[1] grid w-[min(1320px,calc(100vw_-_48px))] max-h-[min(820px,calc(100vh_-_48px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden'
 const featuredWallpaperPanelSurfaceClass =

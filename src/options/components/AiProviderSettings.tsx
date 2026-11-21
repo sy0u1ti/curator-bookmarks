@@ -119,7 +119,7 @@ export function AiProviderSettings({
         status={status}
         headerClassName={AI_PROVIDER_HEADER_CLASS}
         copyClassName={AI_PROVIDER_COPY_CLASS}
-        iconName="Bot"
+        iconName={false}
         bodyClassName={AI_PROVIDER_BODY_CLASS}
       >
         <div className={AI_PROVIDER_GRID_CLASS}>
@@ -221,7 +221,8 @@ export function AiProviderSettings({
 
         <div className={AI_PROVIDER_ACTIONS_CLASS}>
           <StatusMessage
-            className="m-0 text-[13px] leading-relaxed text-ds-text-secondary [align-content:safe_center] max-[520px]:data-[empty=true]:hidden"
+            className="m-0 text-[13px] leading-relaxed text-ds-text-secondary [align-content:safe_center]"
+            lines={1}
             tone={state.saveError || (!state.saveStatusText && state.connectivityTone === 'danger') ? 'error' : 'neutral'}
           >
             {state.saveError || state.saveStatusText || (state.connectivityVisible ? state.connectivityCopy : '')}

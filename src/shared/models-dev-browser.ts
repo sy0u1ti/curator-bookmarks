@@ -14,8 +14,13 @@ export function createBrowserModelsDevSyncService() {
       write: (values) => setLocalStorage(values, { transaction })
     })),
     schedule: async (when) => {
-      if (when === null) await chrome.alarms.clear(MODELS_DEV_ALARM)
-      else await chrome.alarms.create(MODELS_DEV_ALARM, { when })
+      if (when === null) {
+        if (await chrome.alarms.get(MODELS_DEV_ALARM)) {
+          await chrome.alarms.clear(MODELS_DEV_ALARM)
+        }
+      } else {
+        await chrome.alarms.create(MODELS_DEV_ALARM, { when })
+      }
     }
   })
 }

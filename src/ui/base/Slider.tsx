@@ -371,6 +371,7 @@ export function SliderControl({
       onValueCommitted={handleValueCommitted}
       className={unstyled ? cx('base-slider', className) : cx(
         'base-slider grid h-6 w-full items-center',
+        props.orientation === 'vertical' ? 'py-2' : 'px-2',
         className
       )}
       {...props}
@@ -406,14 +407,14 @@ export function SliderControl({
           ) : null}
           <BaseSlider.Indicator
             className={unstyled ? indicatorClassName : cx(
-              'h-full rounded-full bg-ds-accent',
+              'h-full rounded-full bg-[var(--slider-indicator-bg,var(--ds-accent))]',
               indicatorClassName
             )}
           />
         </BaseSlider.Track>
         <BaseSlider.Thumb
           className={unstyled ? cx('base-slider-thumb', thumbClassName) : cx(
-            'base-slider-thumb size-4 rounded-full border border-ds-border-hover bg-ds-accent outline-none focus-within:ring-2 focus-within:shadow-ds-focus',
+            'base-slider-thumb size-4 rounded-full border border-ds-border-hover bg-[var(--slider-thumb-bg,var(--ds-accent))] outline-none focus-within:ring-2 focus-within:shadow-ds-focus',
             thumbClassName
           )}
           getAriaLabel={ariaLabel ? () => ariaLabel : undefined}

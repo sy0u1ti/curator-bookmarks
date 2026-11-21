@@ -65,7 +65,7 @@ export function AvailabilitySelectionActions() {
           <Button
             size="sm"
             type="button"
-            variant="secondary"
+            variant="danger"
             aria-label="批量删除可用性检测已选书签"
             disabled={state.deleteDisabled}
             focusableWhenDisabled={state.deleteDisabled}

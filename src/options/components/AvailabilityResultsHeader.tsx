@@ -1,14 +1,14 @@
 import { Button } from '../../ui/base/Button'
 import { handleAvailabilityPanelAction } from '../options-controller'
 import { useAvailabilityResultsHeader } from './availability-overview-store.js'
+import { OPTION_LIST_HEADER_CLASS } from './option-layout-classes.js'
 
-const AVAILABILITY_RESULTS_HEADER_CLASS =
-  'flex min-w-0 flex-wrap items-center justify-between gap-3 max-[760px]:flex-col max-[760px]:items-start'
+const AVAILABILITY_RESULTS_HEADER_CLASS = OPTION_LIST_HEADER_CLASS
 const AVAILABILITY_RESULTS_HEADER_COPY_CLASS = 'min-w-0'
 const AVAILABILITY_RESULTS_HEADER_TITLE_CLASS =
-  'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
+  'block text-sm font-semibold leading-5 tracking-[-0.01em] text-ds-text-primary'
 const AVAILABILITY_RESULTS_SUBTITLE_CLASS =
-  'mt-2.5 mb-0 text-[13px] leading-[1.7] text-ds-text-secondary'
+  'mt-1 mb-0 text-xs leading-[1.5] text-ds-text-secondary'
 const AVAILABILITY_RESULTS_ACTIONS_CLASS =
   'flex min-w-0 flex-[0_0_auto] flex-wrap items-center justify-end gap-2.5 max-[760px]:flex-col max-[760px]:items-start max-[760px]:justify-start'
 const AVAILABILITY_RESULTS_ACTION_BUTTON_CLASS = 'max-[760px]:w-full'

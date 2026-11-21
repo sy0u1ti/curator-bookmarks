@@ -36,10 +36,10 @@ export const OPTIONS_MODAL_SEARCH_LABEL_CLASS =
   'px-px text-xs font-semibold leading-normal text-ds-text-secondary'
 
 export const OPTIONS_MODAL_SEARCH_INPUT_CLASS =
-  'folder-picker-search-input min-h-10 bg-ds-surface-3 placeholder:text-ds-text-disabled focus:bg-ds-surface-3 focus-visible:bg-ds-surface-3'
+  'folder-picker-search-input min-h-10 bg-ds-surface-3 placeholder:text-ds-text-muted focus:bg-ds-surface-3 focus-visible:bg-ds-surface-3'
 
 export const OPTIONS_MODAL_RESULTS_CLASS =
-  'mt-3 max-h-[360px] overflow-auto border-y border-ds-border-subtle py-1.5 pr-1 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
+  'ds-scrollbar mt-3 max-h-[360px] overflow-auto border-y border-ds-border-subtle py-1.5 pr-1 [scrollbar-gutter:stable]'
 
 export const FOLDER_PICKER_EMPTY_CLASS =
   'grid min-h-[92px] place-items-center rounded-ds-sm px-5 py-5 text-center text-sm leading-[1.6] text-ds-text-muted'
@@ -54,7 +54,7 @@ export const FOLDER_PICKER_CARD_CLASS =
   'folder-picker-card grid min-h-10 w-full min-w-0 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-ds-sm border border-transparent bg-transparent px-2 py-1.5 text-left font-[inherit] leading-normal text-ds-text-primary shadow-none outline-none transition-[background-color,color] duration-ds-fast ease-ds-standard hover:bg-ds-text-primary/[0.055] active:bg-ds-active focus-visible:bg-ds-text-primary/[0.055] focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1 disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 
 export const FOLDER_PICKER_CARD_CURRENT_CLASS =
-  'bg-ds-selected'
+  'is-current [&.is-current]:bg-ds-selected'
 
 export const FOLDER_PICKER_ICON_CLASS =
   'h-4 w-4 justify-self-center text-ds-text-muted'
@@ -75,7 +75,7 @@ export const FOLDER_PICKER_BADGE_CLASS =
   'whitespace-nowrap text-xs font-semibold leading-tight text-ds-text-secondary'
 
 export const FOLDER_PICKER_BADGE_MUTED_CLASS =
-  'text-ds-text-disabled'
+  'text-ds-text-muted'
 
 export const FOLDER_PICKER_CHECK_CLASS =
   'h-3.5 w-3.5 shrink-0 text-ds-text-primary'

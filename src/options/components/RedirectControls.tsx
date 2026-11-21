@@ -1,20 +1,17 @@
-import { OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { Button } from '../../ui/base/Button'
 import { TextSwap } from '../../ui/motion/TextSwap'
 import { SelectionDock } from './SelectionDock'
 import { handleRedirectAction } from '../options-controller'
 import { useRedirectControlsState } from './redirect-controls-store.js'
 
-const REDIRECT_HEADER_CLASS = 'flex flex-wrap items-center justify-between gap-3'
+const REDIRECT_HEADER_CLASS = 'mt-6 flex flex-wrap items-center justify-between gap-3 max-[760px]:mt-4'
 const REDIRECT_HEADER_COPY_CLASS = 'min-w-0'
 const REDIRECT_HEADER_TITLE_CLASS =
-  'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
+  'block text-sm font-semibold leading-5 tracking-[-0.01em] text-ds-text-primary'
 const REDIRECT_HEADER_SUBTITLE_CLASS =
-  'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
+  'mt-1 mb-0 text-xs leading-[1.5] text-ds-text-secondary'
 const REDIRECT_HEADER_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:items-start max-[760px]:justify-start'
-const REDIRECT_SELECTION_GROUP_CLASS =
-  `mb-[18px] ${OPTION_INSET_CLASS} p-[16px]`
 
 export function RedirectControls() {
   const state = useRedirectControlsState()
@@ -24,45 +21,43 @@ export function RedirectControls() {
   return (
     <>
       <SelectionDock open={hasSelection} label="已选重定向书签操作">
-        <div className={REDIRECT_SELECTION_GROUP_CLASS}>
-          <div className={REDIRECT_HEADER_CLASS}>
-            <div className={REDIRECT_HEADER_COPY_CLASS}>
-              <strong className={REDIRECT_HEADER_TITLE_CLASS}>
-                <TextSwap animate={hasSelection} text={`${state.selectedCount} 条已选择`} />
-              </strong>
-            </div>
-            <div className={REDIRECT_HEADER_ACTIONS_CLASS}>
-              <Button
-                size="sm"
-                type="button"
-                variant="secondary"
-                aria-label="取消选择网址更新书签"
-                onClick={() => handleRedirectAction({ action: 'clear-selection' })}
-              >
-                取消选择
-              </Button>
-              <Button
-                size="sm"
-                type="button"
-                aria-label="批量更新重定向已选书签为最终地址"
-                disabled={state.locked || !hasSelection}
-                focusableWhenDisabled={state.locked}
-                onClick={() => handleRedirectAction({ action: 'update-selected' })}
-              >
-                更新为最终地址
-              </Button>
-              <Button
-                size="sm"
-                type="button"
-                variant="danger"
-                aria-label="删除网址更新已选书签"
-                disabled={state.locked || !hasSelection}
-                focusableWhenDisabled={state.locked}
-                onClick={() => handleRedirectAction({ action: 'delete-selected' })}
-              >
-                删除所选
-              </Button>
-            </div>
+        <div className="options-selection-bar">
+          <div className="options-selection-summary">
+            <strong className={REDIRECT_HEADER_TITLE_CLASS}>
+              <TextSwap animate={hasSelection} text={`${state.selectedCount} 条已选择`} />
+            </strong>
+          </div>
+          <div className="options-selection-actions">
+            <Button
+              size="sm"
+              type="button"
+              variant="secondary"
+              aria-label="取消选择网址更新书签"
+              onClick={() => handleRedirectAction({ action: 'clear-selection' })}
+            >
+              取消选择
+            </Button>
+            <Button
+              size="sm"
+              type="button"
+              aria-label="批量更新重定向已选书签为最终地址"
+              disabled={state.locked || !hasSelection}
+              focusableWhenDisabled={state.locked}
+              onClick={() => handleRedirectAction({ action: 'update-selected' })}
+            >
+              更新为最终地址
+            </Button>
+            <Button
+              size="sm"
+              type="button"
+              variant="danger"
+              aria-label="删除网址更新已选书签"
+              disabled={state.locked || !hasSelection}
+              focusableWhenDisabled={state.locked}
+              onClick={() => handleRedirectAction({ action: 'delete-selected' })}
+            >
+              删除所选
+            </Button>
           </div>
         </div>
       </SelectionDock>

@@ -87,11 +87,11 @@ export function StorageManagement() {
       }
       headerClassName={usage || storageIssue ? AI_SETTINGS_HEADER_CLASS : AI_SETTINGS_HEADER_BORDERLESS_CLASS}
       copyClassName={BACKUP_CARD_COPY_CLASS}
-      iconName="HardDrive"
+      iconName={false}
       bodyClassName={AI_SETTINGS_BODY_CLASS}
     >
       {storageIssue ? (
-        <p role="alert" className="m-0 px-5 py-3.5 text-[13px] leading-[1.55] text-ds-warning max-[760px]:px-4">{storageIssue}</p>
+        <p role="alert" className="m-0 px-5 py-3.5 text-[13px] leading-[1.55] text-ds-warning-text max-[760px]:px-4">{storageIssue}</p>
       ) : null}
       {usage ? <>
         {usage.sync?.profiles || usage.sync?.logLines ? <BackupRow title="同步数据"

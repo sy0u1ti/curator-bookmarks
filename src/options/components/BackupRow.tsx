@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 export const BACKUP_ROW_CLASS =
-  'grid min-h-[58px] grid-cols-[minmax(0,1fr)_auto] items-center gap-6 px-5 py-3.5 max-[760px]:px-4 max-[560px]:grid-cols-1 max-[560px]:gap-2.5'
+  'grid min-h-[58px] grid-cols-[minmax(0,1fr)_auto] items-center gap-6 px-5 py-4 transition-colors duration-ds-fast ease-ds-standard hover:bg-ds-hover/50 max-[760px]:px-4 max-[560px]:grid-cols-1 max-[560px]:gap-2.5'
 export const BACKUP_ROW_TITLE_CLASS =
   'block text-sm font-medium leading-[1.4] text-ds-text-primary [overflow-wrap:anywhere]'
 export const BACKUP_ROW_DETAIL_CLASS = 'm-0 mt-1 text-[13px] leading-[1.55] text-ds-text-secondary'

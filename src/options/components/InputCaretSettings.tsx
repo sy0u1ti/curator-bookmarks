@@ -10,6 +10,7 @@ import {
   withLocalStorageTransaction
 } from '../../shared/storage.js'
 import { AiProviderCard } from '../../ui/ai/AiProviderCard'
+import { StatusMessage } from '../../ui/base/StatusMessage'
 import { SwitchControl } from '../../ui/base/Switch'
 import {
   AI_SETTINGS_BODY_CLASS,
@@ -43,6 +44,8 @@ const INITIAL_STATE: InputCaretSettingsState = {
 
 const title = <h2 className={AI_SETTINGS_TITLE_CLASS}>输入框</h2>
 const descriptionId = 'animated-input-caret-description'
+const INPUT_CARET_DEFAULT_COPY = '所有输入框；关闭后使用系统光标。'
+const INPUT_CARET_STATUS_RESERVE = [INPUT_CARET_DEFAULT_COPY, '光标设置保存失败。']
 
 export function InputCaretSettings() {
   const [state, setState] = useState<InputCaretSettingsState>(INITIAL_STATE)
@@ -124,16 +127,21 @@ export function InputCaretSettings() {
       className={AI_SETTINGS_NARROW_CARD_CLASS}
       title={title}
       headerClassName={AI_SETTINGS_HEADER_CLASS}
-      iconName="MousePointer2"
+      iconName={false}
       bodyClassName={`${AI_SETTINGS_BODY_CLASS} ${state.loading ? '' : AI_SETTINGS_READY_BODY_CLASS}`}
       aria-busy={state.loading ? 'true' : undefined}
     >
       <div id="settings-input-caret" className={AI_SETTINGS_ROW_CLASS}>
         <span className={AI_SETTINGS_COPY_CLASS}>
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>动态输入光标</strong>
-          <span id={descriptionId} className={AI_SETTINGS_SECONDARY_CLASS}>
-            所有输入框；关闭后使用系统光标。
-          </span>
+          <StatusMessage
+            id={descriptionId}
+            className={AI_SETTINGS_SECONDARY_CLASS}
+            reserve={INPUT_CARET_STATUS_RESERVE}
+            tone={state.error ? 'error' : 'neutral'}
+          >
+            {state.error || INPUT_CARET_DEFAULT_COPY}
+          </StatusMessage>
         </span>
         <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
           {state.loading ? (
@@ -152,11 +160,6 @@ export function InputCaretSettings() {
           )}
         </span>
       </div>
-      {state.error ? (
-        <p className="mb-0 px-5 pb-3.5 text-xs leading-relaxed text-ds-danger-text max-[760px]:px-4" role="status">
-          {state.error}
-        </p>
-      ) : null}
     </AiProviderCard>
   )
 }

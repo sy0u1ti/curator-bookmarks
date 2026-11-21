@@ -26,7 +26,6 @@ const LIFECYCLE_SAMPLE_MS = 5_000
 const GLASS_PIXEL_SAMPLE_START_MS = 800
 const GLASS_PIXEL_SAMPLE_END_MS = 2_600
 const STARTUP_GLASS_SELECTORS = {
-  clock: '.newtab-clock',
   onboarding: '.newtab-onboarding-strip',
   search: '.newtab-search-surface',
   settingsTrigger: '.settings-trigger',
@@ -74,16 +73,6 @@ try {
   // Simulate a browser/font environment that changes the title baseline while
   // leaving the card geometry untouched, then settles late on refresh.
   await page.addInitScript(({ captureVisual, settleDelayMs, wallpaperFixture }) => {
-    // Freeze only no-argument Date construction while comparing glass pixels.
-    // Keep Date.now(), native timers and Performance marks intact: this test
-    // also measures real startup latency and persisted snapshot timestamps.
-    globalThis.Date = new Proxy(Date, {
-      construct(target, args, newTarget) {
-        return Reflect.construct(target,
-          args.length || window.__curatorGlassPixelTime === undefined
-            ? args : [window.__curatorGlassPixelTime], newTarget)
-      }
-    })
     if (wallpaperFixture) {
       localStorage.setItem('curatorNewTabInstantWallpaper', JSON.stringify({
         signature: wallpaperFixture.signature,
@@ -819,9 +808,6 @@ function bookmarkTileSelector(bookmarkId) {
 }
 
 async function assertGlassPixelsStable(page, label) {
-  // The crop includes clock digits. Keep wall time fixed during sampling so a
-  // minute rollover is not mistaken for a glass-material change.
-  await page.evaluate(() => { window.__curatorGlassPixelTime = Date.now() })
   await page.waitForFunction((selectors) => Object.values(selectors).every((selector) => {
     const element = document.querySelector(selector)
     return element instanceof HTMLElement && element.getClientRects().length > 0
@@ -850,8 +836,6 @@ async function assertGlassPixelsStable(page, label) {
     captured.push({ ...frame, encodedPng: screenshot.toString('base64') })
     await page.waitForTimeout(24)
   }
-
-  await page.evaluate(() => { delete window.__curatorGlassPixelTime })
 
   // PNG decoding and statistics do not belong in the timed capture window.
   // Collect the same startup pixels first, then analyze them in one browser

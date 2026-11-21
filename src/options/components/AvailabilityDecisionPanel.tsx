@@ -12,7 +12,7 @@ import { OPTION_SURFACE_CLASS, OPTION_VALUE_CLASS } from './option-layout-classe
 import { StatusMessage } from '../../ui/base/StatusMessage'
 
 const AVAILABILITY_DECISION_PANEL_CLASS =
-  `mt-5 ${OPTION_SURFACE_CLASS} p-[20px_22px] max-[760px]:p-4`
+  `mt-4 ${OPTION_SURFACE_CLASS} px-5 py-4 max-[760px]:p-4`
 const AVAILABILITY_DECISION_HEADER_CLASS =
   'flex min-w-0 items-start justify-between gap-3.5 max-[760px]:flex-col'
 const AVAILABILITY_DECISION_HEADER_COPY_CLASS = 'min-w-0'
@@ -20,10 +20,10 @@ const AVAILABILITY_DECISION_TITLE_CLASS =
   'block [overflow-wrap:anywhere] text-[15px] font-[650] leading-normal tracking-[0] text-ds-text-primary'
 const AVAILABILITY_LABEL_CLASS =
   'block text-xs font-medium leading-4 text-ds-text-secondary'
-const AVAILABILITY_PROGRESS_TRACK_CLASS = `mt-[14px] ${SHEEN_PROGRESS_TRACK_CLASS}`
+const AVAILABILITY_PROGRESS_TRACK_CLASS = `mt-1 ${SHEEN_PROGRESS_TRACK_CLASS}`
 const AVAILABILITY_PROGRESS_BAR_CLASS = SHEEN_PROGRESS_BAR_CLASS
 const AVAILABILITY_PROGRESS_ROW_CLASS =
-  'mt-3 grid grid-cols-[minmax(128px,0.32fr)_minmax(0,1fr)] items-center gap-[14px] border-t border-t-[rgba(255,255,255,0.07)] pt-[11px] max-[760px]:grid-cols-1 max-[760px]:gap-2'
+  'mt-2.5 grid grid-cols-[minmax(128px,0.32fr)_minmax(0,1fr)] items-center gap-[14px] border-t border-t-ds-border-subtle pt-2.5 max-[760px]:grid-cols-1 max-[760px]:gap-2'
 const AVAILABILITY_PROGRESS_META_TITLE_CLASS =
   'mt-[5px] block text-[15px] font-[650] leading-[1.3] text-ds-text-primary'
 const AVAILABILITY_PROGRESS_COPY_CLASS =

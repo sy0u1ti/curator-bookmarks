@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { getMotionDurationMs } from '../../shared/motion'
 import { AiSetupPrompt } from '../../ui/ai/AiSetupPrompt'
 import { Icon } from '../../ui/icons/Icon'
 import { Button } from '../../ui/base/Button'
@@ -17,17 +18,17 @@ import type { PopupFolderPickerState } from './PopupViewModels'
 
 const folderSearchShellClass = [
   'flex min-h-10 w-full items-center gap-1.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary',
-  'shadow-[0_0_0_3px_transparent] transition-[border-color,background-color,box-shadow] duration-ds-standard ease-ds-standard',
+  'transition-[border-color,background-color] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover',
   'focus-within:border-ds-text-primary/45 focus-within:bg-ds-hover focus-within:shadow-[0_0_0_3px_var(--ds-accent-soft)]'
 ].join(' ')
 const folderSearchIconClass =
   'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard'
 const folderSearchInputClass =
-  'min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-sm leading-[1.4] text-ds-text-primary outline-none placeholder:text-ds-text-muted [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
+  'min-w-0 flex-auto self-stretch border-0 bg-transparent pl-1 pr-0.5 py-0 text-sm leading-[1.4] text-ds-text-primary outline-none placeholder:text-ds-text-muted [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
 const modalButtonBaseClass = [
   'inline-flex min-h-[34px] min-w-[88px] items-center justify-center gap-2 rounded-ds-sm border px-3 py-2 text-center text-xs font-semibold leading-none shadow-none',
-  'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,scale] duration-ds-fast ease-ds-standard',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-2',
   'active:scale-[0.985]',
   'disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
@@ -40,15 +41,15 @@ const modalSecondaryButtonClass = [
 ].join(' ')
 const modalPrimaryButtonClass = [
   modalButtonBaseClass,
-  'border-transparent bg-[var(--ds-text-primary)] text-[var(--ds-bg-app)]',
-  'hover:bg-ds-text-primary hover:text-[var(--ds-bg-app)]',
-  'focus-visible:bg-ds-text-primary focus-visible:text-[var(--ds-bg-app)]'
+  'border-transparent bg-ds-accent text-ds-accent-contrast',
+  'hover:bg-ds-accent-hover hover:text-ds-accent-contrast',
+  'focus-visible:bg-ds-accent-hover focus-visible:text-ds-accent-contrast'
 ].join(' ')
 const modalCompactButtonClass =
   cx(modalSecondaryButtonClass, 'min-h-[30px] min-w-0 flex-none px-2.5 py-0 text-xs')
 const modalCloseButtonClass = [
   'inline-flex size-8 shrink-0 items-center justify-center rounded-ds-sm border-0 bg-transparent p-0 text-ds-text-secondary shadow-none',
-  'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-2',
   'active:scale-[var(--ds-press-scale)]',
@@ -59,8 +60,9 @@ const modalFieldClass = 'flex flex-col gap-1.5'
 const modalLabelClass = 'text-xs font-medium leading-tight text-ds-text-secondary'
 const modalInputClass = [
   'min-h-[42px] w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-[11px] text-[13px] leading-normal text-ds-text-primary outline-none',
+  'transition-[border-color,background-color] duration-ds-fast ease-ds-standard',
   'placeholder:text-ds-text-muted',
-  'focus:bg-ds-hover',
+  'hover:border-ds-border-hover focus:border-ds-focus focus:bg-ds-hover',
   'disabled:opacity-50 data-[disabled]:opacity-50'
 ].join(' ')
 const modalHeaderClass = 'flex items-center justify-between gap-2.5'
@@ -98,19 +100,19 @@ const modalCardShellClass = [
 ].join(' ')
 const modalStandardCardClass = cx(
   modalCardShellClass,
-  'w-[min(398px,calc(100vw_-_28px))] max-w-[398px] max-h-[calc(100%_-_28px)]'
+  'w-[min(398px,calc(100cqw_-_28px),calc(100vw_-_28px))] max-w-[398px] max-h-[calc(100%_-_28px)]'
 )
 const modalSmallCardClass = cx(
   modalCardShellClass,
-  'w-[min(398px,calc(100vw_-_28px))] max-w-[360px] max-h-[calc(100%_-_28px)]'
+  'w-[min(398px,calc(100cqw_-_28px),calc(100vw_-_28px))] max-w-[360px] max-h-[calc(100%_-_28px)]'
 )
 const modalWideCardClass = cx(
   modalCardShellClass,
-  'h-[min(548px,calc(100%_-_36px))] w-[min(620px,calc(100vw_-_28px))] max-h-[calc(100%_-_36px)] max-w-[620px]'
+  'h-[min(548px,calc(100%_-_36px))] w-[min(620px,calc(100cqw_-_28px),calc(100vw_-_28px))] max-h-[calc(100%_-_36px)] max-w-[620px]'
 )
 const modalListClass = [
-  'min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain rounded-ds-sm border-0 bg-ds-surface-2 p-[6px_5px]',
-  '[scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
+  'ds-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain rounded-ds-sm border-0 bg-ds-surface-2 p-[6px_5px]',
+  '[scrollbar-gutter:stable]'
 ].join(' ')
 const modalCompactListClass = cx(modalListClass, 'max-h-[170px]')
 const editFolderPickerClass = 'edit-folder-picker flex min-h-0 flex-col gap-2'
@@ -120,6 +122,14 @@ export function PopupModalsHost() {
   const lastOpenStateRef = useRef(liveState)
   const state = liveState.open ? liveState : lastOpenStateRef.current
   const previousActiveRef = useRef<PopupModalsView['active']>(null)
+  const liveEditOpen = liveState.open && liveState.edit.open
+  const [editSession, setEditSession] = useState(() => ({ open: liveEditOpen, key: 0 }))
+  if (editSession.open !== liveEditOpen) {
+    setEditSession({
+      open: liveEditOpen,
+      key: liveEditOpen ? editSession.key + 1 : editSession.key
+    })
+  }
   const moveSearchRef = useRef<HTMLInputElement | null>(null)
   const smartFolderTitleRef = useRef<HTMLInputElement | null>(null)
   const smartFolderSearchRef = useRef<HTMLInputElement | null>(null)
@@ -166,7 +176,7 @@ export function PopupModalsHost() {
       {state.move.open ? <MoveBookmarkModal searchRef={moveSearchRef} view={state.move} /> : null}
       {state.smartFolder.open ? <SmartFolderModal titleRef={smartFolderTitleRef} searchRef={smartFolderSearchRef} view={state.smartFolder} /> : null}
       {state.aiProvider.open ? <AiProviderPromptModal settingsButtonRef={aiProviderSettingsRef} /> : null}
-      {state.edit.open ? <EditBookmarkModal folderSearchRef={editFolderSearchRef} titleRef={editTitleRef} view={state.edit} /> : null}
+      {state.edit.open ? <EditBookmarkModal key={editSession.key} folderSearchRef={editFolderSearchRef} titleRef={editTitleRef} view={state.edit} /> : null}
     </div>
   )
 }
@@ -489,12 +499,8 @@ function EditBookmarkModal({
         modal.style.setProperty('--popup-edit-rest-height', value)
       }
       const panelHeight = Math.floor(Math.max(0, Math.min(226, window.innerHeight - height - 64)) / 2) * 2
-      const openHeight = height + panelHeight
-      const surfaceScale = height > 0 ? openHeight / height : 1
       modal.style.setProperty('--popup-edit-panel-height', `${panelHeight}px`)
       modal.style.setProperty('--popup-edit-open-shift', `${panelHeight / 2}px`)
-      modal.style.setProperty('--popup-edit-surface-scale', String(surfaceScale))
-      modal.style.setProperty('--popup-edit-surface-inverse-scale', String(1 / surfaceScale))
     }
     measure()
     const observer = new ResizeObserver(measure)
@@ -611,7 +617,7 @@ function EditFolderDisclosure({
             if (panelRef.current?.isConnected) {
               dispatchPopupModalAction('edit-folder-query-change', '')
             }
-          }, 280)
+          }, getMotionDurationMs('--acc-collapse', 220, panel ?? undefined))
         }
       }}
     >

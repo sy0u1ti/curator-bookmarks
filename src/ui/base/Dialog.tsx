@@ -7,7 +7,6 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
   type ComponentPropsWithoutRef,
   type ReactNode,
   type Ref,
@@ -96,6 +95,7 @@ type DialogTitleElement = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
 export interface DialogOverlayProps extends Omit<ComponentPropsWithoutRef<'div'>, 'onChange'> {
   open: boolean
   onOpenChange?: (open: boolean, event?: Event) => void
+  onOpenChangeComplete?: BaseDialogRootProps['onOpenChangeComplete']
   triggerId?: string | null
   modal?: BaseDialogRootProps['modal']
   disablePointerDismissal?: BaseDialogRootProps['disablePointerDismissal']
@@ -107,6 +107,7 @@ export interface DialogOverlayProps extends Omit<ComponentPropsWithoutRef<'div'>
 export function DialogOverlay({
   open,
   onOpenChange,
+  onOpenChangeComplete,
   triggerId,
   modal,
   disablePointerDismissal,
@@ -122,6 +123,7 @@ export function DialogOverlay({
       onOpenChange={(nextOpen, eventDetails) => {
         onOpenChange?.(nextOpen, eventDetails.event)
       }}
+      onOpenChangeComplete={onOpenChangeComplete}
       triggerId={triggerId}
       modal={modal}
       disablePointerDismissal={disablePointerDismissal}
@@ -244,19 +246,14 @@ export interface InlineDialogPanelProps extends Omit<BaseDialogPopupProps, 'clas
 }
 
 export function InlineDialogPanel({ className, ...props }: InlineDialogPanelProps) {
-  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null)
-  const setInlinePortalContainer = useCallback((element: HTMLDivElement | null) => {
-    setPortalContainer(element)
-  }, [])
+  const portalContainerRef = useRef<HTMLDivElement>(null)
 
   return (
     <BaseDialog.Root open modal={false}>
-      {portalContainer ? (
-        <BaseDialog.Portal keepMounted container={portalContainer}>
-          <BaseDialog.Popup className={className} {...props} />
-        </BaseDialog.Portal>
-      ) : null}
-      <div ref={setInlinePortalContainer} />
+      <div ref={portalContainerRef} />
+      <BaseDialog.Portal keepMounted container={portalContainerRef}>
+        <BaseDialog.Popup className={className} {...props} />
+      </BaseDialog.Portal>
     </BaseDialog.Root>
   )
 }

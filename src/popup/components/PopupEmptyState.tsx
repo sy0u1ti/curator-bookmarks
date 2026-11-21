@@ -17,18 +17,20 @@ const EMPTY_STATE_CLASS = [
 const EMPTY_TITLE_CLASS = 'm-0 text-[13px] font-[750] [color:var(--ds-text-primary)]'
 const EMPTY_HINT_CLASS = 'm-0 [color:var(--ds-text-secondary)]'
 const EMPTY_ACTIONS_CLASS = 'mt-0.5 flex flex-wrap justify-center gap-[7px]'
-const EMPTY_ACTION_CLASS = [
+const EMPTY_ACTION_BASE_CLASS = [
   'inline-flex min-h-7 items-center justify-center rounded-ds-sm border px-2.5 text-xs font-bold',
-  'border-ds-border bg-ds-surface-2 [color:var(--ds-text-secondary)]',
-  'transition-[background-color,border-color,color,transform] duration-[var(--duration-quick)] ease-ds-standard',
-  'hover:border-ds-border-hover hover:bg-ds-hover hover:[color:var(--ds-text-primary)]',
-  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:[color:var(--ds-text-primary)]',
+  'transition-[background-color,border-color,color,scale] duration-[var(--duration-quick)] ease-ds-standard',
   'active:scale-[0.98]'
 ].join(' ')
+const EMPTY_SECONDARY_ACTION_CLASS = [
+  'border-ds-border bg-ds-surface-2 text-ds-text-secondary',
+  'hover:border-ds-border-hover hover:bg-ds-hover hover:[color:var(--ds-text-primary)]',
+  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:[color:var(--ds-text-primary)]'
+].join(' ')
 const EMPTY_PRIMARY_ACTION_CLASS = [
-  'border-ds-accent bg-ds-text-primary text-ds-text-inverse',
-  'hover:border-ds-text-primary hover:bg-ds-text-primary hover:text-ds-text-inverse',
-  'focus-visible:border-ds-text-primary focus-visible:bg-ds-text-primary focus-visible:text-ds-text-inverse'
+  'border-transparent bg-ds-accent text-ds-accent-contrast',
+  'hover:bg-ds-accent-hover hover:text-ds-accent-contrast',
+  'focus-visible:bg-ds-accent-hover focus-visible:text-ds-accent-contrast'
 ].join(' ')
 
 export function PopupEmptyState({
@@ -99,5 +101,7 @@ export function PopupEmptyState({
 }
 
 function getEmptyActionClassName(primary = false) {
-  return primary ? `${EMPTY_ACTION_CLASS} ${EMPTY_PRIMARY_ACTION_CLASS}` : EMPTY_ACTION_CLASS
+  return primary
+    ? `${EMPTY_ACTION_BASE_CLASS} ${EMPTY_PRIMARY_ACTION_CLASS}`
+    : `${EMPTY_ACTION_BASE_CLASS} ${EMPTY_SECONDARY_ACTION_CLASS}`
 }

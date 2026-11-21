@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Button } from '../../ui/base/Button'
 import { Select } from '../../ui/base/Select'
+import { StatusMessage } from '../../ui/base/StatusMessage'
 import { handleDuplicateAction } from '../options-controller'
 import { useDuplicateControlsState } from './duplicate-controls-store.js'
-import { OPTION_SURFACE_CLASS } from './option-layout-classes.js'
 
 const duplicateStrategies = [
   { label: '按推荐保留', value: 'recommended' },
@@ -16,13 +16,12 @@ const duplicateStrategies = [
 ]
 
 const SUMMARY_GRID_CLASS =
-  `mt-5 flex flex-wrap items-center gap-x-8 gap-y-4 ${OPTION_SURFACE_CLASS} px-5 py-4`
-const SUMMARY_PRIMARY_CLASS = 'grid min-w-24 gap-2'
+  'options-interactive-surface m-0 mt-6 grid grid-cols-4 gap-px overflow-hidden rounded-ds-md border border-ds-border-subtle bg-ds-border-subtle max-[760px]:mt-4 max-[760px]:grid-cols-2'
+const SUMMARY_PRIMARY_CLASS = 'grid content-center gap-2 bg-ds-surface-1 px-5 py-4 max-[760px]:px-4'
 const SUMMARY_LABEL_ROW_CLASS =
-  'min-w-0 text-xs font-medium leading-4 text-ds-text-secondary'
-const SUMMARY_PRIMARY_VALUE_CLASS = 'm-0 text-2xl font-semibold leading-none text-ds-text-primary tabular-nums'
-const SUMMARY_CONTEXT_CLASS = 'ml-auto flex flex-wrap gap-x-5 gap-y-2 text-xs text-ds-text-secondary max-[520px]:ml-0 max-[520px]:basis-full'
-const TOOLBAR_CLASS = 'grid gap-3'
+  'min-w-0 text-xs font-medium leading-4 text-ds-text-muted'
+const SUMMARY_PRIMARY_VALUE_CLASS = 'm-0 text-2xl font-semibold leading-none tracking-[-0.03em] text-ds-text-primary tabular-nums'
+const TOOLBAR_CLASS = 'mt-5 flex flex-wrap items-end justify-between gap-3 max-[760px]:mt-4'
 const STRATEGY_CONTROLS_CLASS =
   'flex min-w-0 flex-wrap items-end justify-start gap-2'
 const PRIMARY_ACTION_CLASS = 'min-h-9 shrink-0'
@@ -42,9 +41,13 @@ export function DuplicateControls() {
         <dt className={SUMMARY_LABEL_ROW_CLASS}>可清理副本</dt>
         <dd className={SUMMARY_PRIMARY_VALUE_CLASS}>{state.summary.deleteCandidates}</dd>
       </div>
-      <div className={SUMMARY_CONTEXT_CLASS}>
-        <div className="flex gap-2"><dt>跨文件夹</dt><dd className="m-0 tabular-nums">{state.summary.crossFolderGroups}</dd></div>
-        <div className="flex gap-2"><dt>标题不同</dt><dd className="m-0 tabular-nums">{state.summary.titleVariantGroups}</dd></div>
+      <div className={SUMMARY_PRIMARY_CLASS}>
+        <dt className={SUMMARY_LABEL_ROW_CLASS}>跨文件夹</dt>
+        <dd className={SUMMARY_PRIMARY_VALUE_CLASS}>{state.summary.crossFolderGroups}</dd>
+      </div>
+      <div className={SUMMARY_PRIMARY_CLASS}>
+        <dt className={SUMMARY_LABEL_ROW_CLASS}>标题不同</dt>
+        <dd className={SUMMARY_PRIMARY_VALUE_CLASS}>{state.summary.titleVariantGroups}</dd>
       </div>
     </dl>
   )
@@ -87,7 +90,12 @@ export function DuplicateResultsControls() {
               选择待清理副本
             </Button>
           </div>
-          <p className={STRATEGY_STATUS_CLASS} role="status">{state.strategyStatus}</p>
+          <StatusMessage
+            className={STRATEGY_STATUS_CLASS}
+            reserve={[state.resultsSubtitle || '已手动调整选择。']}
+          >
+            {state.strategyStatus || state.resultsSubtitle}
+          </StatusMessage>
         </div>
       ) : null}
     </>

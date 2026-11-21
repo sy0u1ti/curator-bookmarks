@@ -17,7 +17,7 @@ export function AiAnalysisResultsPagination() {
   return (
     <div aria-label="AI 标签与命名结果分页">
       <div
-        className={OPTION_PAGINATION_CLASS}
+        className={`${OPTION_PAGINATION_CLASS} mt-0 border-t border-ds-border-subtle px-5 py-3 max-[760px]:px-4`}
       >
         <span className={OPTION_PAGINATION_LABEL_CLASS}>
           {state.label} <NumberPop className={OPTION_PAGINATION_RANGE_VALUE_CLASS} text={`${state.start}-${state.end} / ${state.totalCount}`} />

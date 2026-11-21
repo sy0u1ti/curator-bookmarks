@@ -9,6 +9,7 @@
   }
 
   .curator-surface-group {
+    border: 0;
     border-radius: var(--ds-radius-card);
   }
 
