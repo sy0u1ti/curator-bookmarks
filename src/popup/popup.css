@@ -1007,30 +1007,62 @@ body::after {
   min-height: 0;
 }
 
+.popup-pane-header-actions {
+  transition: margin-inline-start var(--ds-motion-standard) var(--ds-ease-settle);
+}
+
+.popup-pane-header-actions:has(> .popup-scroll-top-slot[data-visible="false"]:only-child) {
+  margin-inline-start: -8px;
+}
+
+.popup-scroll-top-slot {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  width: 0;
+  min-width: 0;
+  margin-inline-end: 0;
+  overflow: visible;
+  transform: none;
+  transition:
+    width var(--ds-motion-standard) var(--ds-ease-settle),
+    margin-inline-end var(--ds-motion-standard) var(--ds-ease-settle);
+}
+
+.popup-scroll-top-slot[data-visible="true"] {
+  width: var(--ds-control-icon-xs);
+}
+
+.popup-scroll-top-slot[data-visible="true"]:not(:last-child) {
+  margin-inline-end: 4px;
+}
+
 .popup-scroll-to-top {
-  border: var(--ds-stroke-width) solid var(--ds-border);
-  background: color-mix(in srgb, var(--ds-surface-3) 92%, transparent);
+  flex: none;
+  border: var(--ds-stroke-width) solid var(--ds-border-subtle);
+  background: var(--ds-surface-2);
   color: var(--ds-text-secondary);
-  box-shadow:
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.08),
-    0 6px 18px rgba(0, 0, 0, 0.48);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  transform: translate3d(0, 4px, 0) scale(0.92);
+  transform-origin: center;
+}
+
+.popup-scroll-to-top[data-visible="true"] {
+  transform: translate3d(0, 0, 0) scale(1);
 }
 
 .popup-scroll-to-top:focus-visible {
   border-color: var(--ds-border-hover);
-  background: var(--ds-surface-3);
+  background: var(--ds-hover);
   color: var(--ds-text-primary);
-  box-shadow:
-    var(--ds-shadow-focus),
-    0 6px 18px rgba(0, 0, 0, 0.48);
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 1px;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .popup-scroll-to-top[data-visible="true"]:hover {
     border-color: var(--ds-border-hover);
-    background: var(--ds-surface-3);
+    background: var(--ds-hover);
     color: var(--ds-text-primary);
   }
 }
@@ -1104,6 +1136,7 @@ body::after {
   }
 
   .popup-main-pane[data-reorder-mode="true"] .popup-main-row,
+  .popup-pane-header-actions,
   .popup-bookmark-drag-ghost,
   .popup-bookmark-drag-ghost[data-settling="true"] {
     transition: none !important;

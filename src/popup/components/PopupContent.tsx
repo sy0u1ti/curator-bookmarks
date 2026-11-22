@@ -132,6 +132,7 @@ const paneHeaderClass =
 const paneHeaderTitleClass = 'min-w-0 truncate'
 const paneTitleMetaClass = 'font-medium text-ds-text-muted'
 const paneCaptionClass = 'ml-auto min-w-0 truncate text-right font-medium text-ds-text-secondary'
+const paneHeaderActionsClass = 'popup-pane-header-actions inline-flex flex-none items-center'
 const paneHeaderActionClass = [
   'inline-flex h-7 flex-none items-center gap-1.5 rounded-ds-sm border border-transparent bg-transparent px-2 text-xs font-semibold text-ds-text-secondary outline-none',
   'transition-[border-color,background-color,color,scale,opacity] duration-ds-fast ease-ds-standard',
@@ -965,24 +966,31 @@ export function PopupContent({
                 {title} <span className={paneTitleMetaClass}>· <span className="t-number-value">{meta}</span></span>
               </span>
               <PaneCaption />
-              {mode === 'tree' && state.reorder ? (
-                <Button
-                  className={paneHeaderActionClass}
-                  type="button"
-                  aria-pressed={state.reorder.active}
-                  disabled={state.reorder.busy || (!state.reorder.active && !state.reorder.canEnter)}
-                  title={state.reorder.active
-                    ? '完成书签排序'
-                    : state.reorder.canEnter
-                      ? `调整「${state.reorder.folderTitle}」中的直属书签顺序`
-                      : '当前文件夹至少需要 2 个直属书签'}
-                  onClick={() => handlers?.onReorderModeChange?.(!state.reorder?.active)}
-                  unstyled
-                >
-                  <Icon name={state.reorder.active ? 'Check' : 'GripVertical'} size={14} aria-hidden="true" />
-                  <span>{state.reorder.active ? '完成排序' : '调整顺序'}</span>
-                </Button>
-              ) : null}
+              <div className={paneHeaderActionsClass}>
+                <PopupScrollToTop
+                  listRef={mainListRef}
+                  suppressed={isLoading || reorderActive || reorderDrag.dragging || Boolean(state.mainState)}
+                  syncKey={`${mode}:${title}:${mainRows.length}`}
+                />
+                {mode === 'tree' && state.reorder ? (
+                  <Button
+                    className={paneHeaderActionClass}
+                    type="button"
+                    aria-pressed={state.reorder.active}
+                    disabled={state.reorder.busy || (!state.reorder.active && !state.reorder.canEnter)}
+                    title={state.reorder.active
+                      ? '完成书签排序'
+                      : state.reorder.canEnter
+                        ? `调整「${state.reorder.folderTitle}」中的直属书签顺序`
+                        : '当前文件夹至少需要 2 个直属书签'}
+                    onClick={() => handlers?.onReorderModeChange?.(!state.reorder?.active)}
+                    unstyled
+                  >
+                    <Icon name={state.reorder.active ? 'Check' : 'GripVertical'} size={14} aria-hidden="true" />
+                    <span>{state.reorder.active ? '完成排序' : '调整顺序'}</span>
+                  </Button>
+                ) : null}
+              </div>
             </header>
             <div
               id="popup-search-results"
@@ -1039,11 +1047,6 @@ export function PopupContent({
                 </ul>
               )}
             </div>
-            <PopupScrollToTop
-              listRef={mainListRef}
-              suppressed={isLoading || reorderActive || reorderDrag.dragging || Boolean(state.mainState)}
-              syncKey={`${mode}:${title}:${mainRows.length}`}
-            />
             {reorderActive ? (
               <p className="sr-only" aria-live="polite" aria-atomic="true">
                 {state.reorder?.announcement}

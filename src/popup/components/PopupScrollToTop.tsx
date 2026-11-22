@@ -6,12 +6,17 @@ import { Icon } from '../../ui/icons/Icon'
 const POPUP_SCROLL_TOP_THRESHOLD = 260
 
 function applyScrollTopButtonVisibility(
+  slot: HTMLDivElement | null,
   button: HTMLButtonElement | null,
   visible: boolean,
   focusFallbackRef?: RefObject<HTMLElement | null>
 ): void {
+  const visibleValue = visible ? 'true' : 'false'
+  if (slot) {
+    slot.dataset.visible = visibleValue
+  }
   if (!button) return
-  button.dataset.visible = visible ? 'true' : 'false'
+  button.dataset.visible = visibleValue
   button.tabIndex = visible ? 0 : -1
   button.inert = !visible
   if (visible) {
@@ -23,7 +28,8 @@ function applyScrollTopButtonVisibility(
     const fallback = focusFallbackRef?.current
     if (fallback && fallback.isConnected) {
       fallback.focus({ preventScroll: true })
-    } else {
+    }
+    if (document.activeElement === button) {
       button.blur()
     }
   }
@@ -38,6 +44,7 @@ export const PopupScrollToTop = memo(function PopupScrollToTop({
   suppressed?: boolean
   syncKey?: string | number
 }) {
+  const slotRef = useRef<HTMLDivElement | null>(null)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const visibleRef = useRef(false)
   const suppressedRef = useRef(suppressed)
@@ -51,16 +58,23 @@ export const PopupScrollToTop = memo(function PopupScrollToTop({
       threshold: POPUP_SCROLL_TOP_THRESHOLD,
       suppressed: suppressedRef.current
     })
-    if (next === visibleRef.current) return
+    const expected = next ? 'true' : 'false'
+    if (
+      next === visibleRef.current &&
+      slotRef.current?.dataset.visible === expected &&
+      buttonRef.current?.dataset.visible === expected
+    ) {
+      return
+    }
     visibleRef.current = next
-    applyScrollTopButtonVisibility(buttonRef.current, next, listRef)
+    applyScrollTopButtonVisibility(slotRef.current, buttonRef.current, next, listRef)
   }, [listRef])
 
   useEffect(() => {
     const list = listRef?.current
     if (!list) {
       visibleRef.current = false
-      applyScrollTopButtonVisibility(buttonRef.current, false, listRef)
+      applyScrollTopButtonVisibility(slotRef.current, buttonRef.current, false, listRef)
       return
     }
 
@@ -103,12 +117,16 @@ export const PopupScrollToTop = memo(function PopupScrollToTop({
   }, [listRef])
 
   return (
-    <div className="curator-scroll-top-slot popup-scroll-top-slot pointer-events-none absolute right-4 bottom-3 z-20">
+    <div
+      ref={slotRef}
+      className="curator-scroll-top-slot popup-scroll-top-slot"
+      data-visible="false"
+    >
       <button
         ref={buttonRef}
         id="popup-scroll-to-top"
         type="button"
-        className="curator-scroll-top-button popup-scroll-to-top size-8 rounded-full outline-none"
+        className="curator-scroll-top-button popup-scroll-to-top size-7 rounded-ds-sm outline-none"
         aria-label="回到顶部"
         aria-controls="popup-search-results"
         aria-hidden="true"
@@ -118,7 +136,7 @@ export const PopupScrollToTop = memo(function PopupScrollToTop({
         data-visible="false"
         onClick={handleClick}
       >
-        <Icon name="ArrowUp" size={15} className="curator-scroll-top-icon" aria-hidden="true" />
+        <Icon name="ArrowUp" size={14} className="curator-scroll-top-icon" aria-hidden="true" />
       </button>
     </div>
   )

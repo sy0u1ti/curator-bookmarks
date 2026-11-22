@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
 import { build } from 'esbuild'
 
@@ -107,4 +108,41 @@ test('OptionsScrollToTop aligns to the bottom-right corner on mobile and lifts c
     toastOpen: true
   })
   assert.equal(mobileWithToast.lift, 88)
+})
+
+test('PopupScrollToTop stays in the pane header instead of overlaying bookmark row actions', async () => {
+  const [contentSource, buttonSource, popupCss] = await Promise.all([
+    readFile('src/popup/components/PopupContent.tsx', 'utf8'),
+    readFile('src/popup/components/PopupScrollToTop.tsx', 'utf8'),
+    readFile('src/popup/popup.css', 'utf8')
+  ])
+
+  const mainPaneStart = contentSource.indexOf('<section\n            className={mainPaneClass}')
+  const normalizedContent = contentSource.replaceAll('\r\n', '\n')
+  const sectionIndex = mainPaneStart >= 0
+    ? mainPaneStart
+    : normalizedContent.indexOf('<section\n            className={mainPaneClass}')
+  assert.ok(sectionIndex >= 0, 'Main pane section should exist in PopupContent.tsx')
+  const mainPaneSection = normalizedContent.slice(sectionIndex)
+  const headerStart = mainPaneSection.indexOf('<header className={paneHeaderClass}>')
+  const headerEnd = mainPaneSection.indexOf('</header>', headerStart)
+  const scrollToTopIndex = mainPaneSection.indexOf('<PopupScrollToTop')
+  const listIndex = mainPaneSection.indexOf('id="popup-search-results"')
+
+  assert.ok(headerStart >= 0 && headerEnd > headerStart, 'Main pane header should exist')
+  assert.ok(
+    scrollToTopIndex > headerStart && scrollToTopIndex < headerEnd,
+    'PopupScrollToTop must render inside the main pane header'
+  )
+  assert.ok(scrollToTopIndex < listIndex, 'PopupScrollToTop must stay above the scrollable list')
+  assert.doesNotMatch(
+    buttonSource,
+    /\b(?:absolute|fixed)\b/,
+    'PopupScrollToTop must not float over the bookmark list with absolute or fixed positioning'
+  )
+  assert.match(
+    popupCss,
+    /\.popup-scroll-top-slot\s*\{[^}]*display:\s*inline-flex;/s,
+    'PopupScrollToTop slot should occupy an inline header slot'
+  )
 })
