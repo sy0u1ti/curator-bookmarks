@@ -1072,8 +1072,7 @@ test('failed full restore rolls back newly covered workspace, modules and icon r
   backup.storage.newTab = {
     customIcons: { 'backup-bookmark': 'data:image/png;base64,aW1hZ2U=' },
     workspaceSettings: { workspaces: [{ id: 'imported', pinnedIds: ['backup-bookmark'] }] },
-    moduleSettings: { speedDial: false },
-    featuredBackgroundFavorites: ['favorite']
+    moduleSettings: { speedDial: false }
   }
   let sawNewTabWrite = false
   beforeStorageSet = payload => {

@@ -3,7 +3,6 @@ export type SettingsDrawerSection = 'source' | 'appearance' | 'glass' | 'search'
 export type SettingsGroupControlSyncAction =
   | 'folder'
   | 'background'
-  | 'featuredBackgroundDisplay'
   | 'search'
   | 'modules'
   | 'general'

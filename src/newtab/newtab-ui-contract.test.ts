@@ -420,7 +420,7 @@ assert.ok(
 )
 
 assert.ok(
-  /bindBookmarkEvents\(\)\s+hydrateFeaturedBackgroundOptions\(\)\s+void refreshNewTab\(\)/.test(controller) &&
+  /bindBookmarkEvents\(\)\s+void refreshNewTab\(\)/.test(controller) &&
     controller.includes('const bookmarkEventVersionAtStart = bookmarkTreeEventVersion') &&
     controller.includes('bookmarkTreeEventVersion !== bookmarkEventVersionAtStart) scheduleBookmarkChangeRefresh()') &&
     controller.includes('const alreadyInTree = existingChildren.some') &&
@@ -455,11 +455,10 @@ assert.ok(
 assert.ok(
   newtabApp.includes("import('./components/NewtabDeferredHosts')") &&
     !newtabApp.includes("from './components/BookmarkMenusHost'") &&
-    !newtabApp.includes("from './components/FeaturedBackgroundModal'") &&
     !newtabApp.includes("from './components/NewtabDeleteToastHost'") &&
     !newtabApp.includes("from './components/NewtabDragLayerHost'") &&
     newtabApp.includes('<DeferredNewtabHosts />'),
-  'Closed menus, drag ghosts, featured wallpaper modal, and delete toast should stay outside the first-paint bundle.'
+  'Closed menus, drag ghosts, and delete toast should stay outside the first-paint bundle.'
 )
 
 const autoCenteredLayoutReadyAssignments = [

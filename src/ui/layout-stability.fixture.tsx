@@ -81,16 +81,17 @@ function phase(name: string) {
         status: error ? '待授权' : '',
         statusTone: error ? 'warning' : 'muted'
       })),
-      inboxWorkflow: { value: 'move', disabled: busy, status: message }
+      inboxWorkflow: { value: 'move', disabled: busy, status: message, statusTone: error ? 'error' : 'neutral' }
     })
     store('content-snapshot-controls').setState({
       loading: name === 'loading', enabled: true, fullTextDisabled: busy,
-      saveFullText: true, statusCopy: message || '已保存 21 条索引，17 条全文。'
+      saveFullText: true, statusCopy: message || '已保存 21 条索引，17 条全文。',
+      statusTone: error ? 'error' : 'neutral'
     })
     store('shortcut-controls').setState({
       loading: name === 'loading', detail: message,
       statusLabel: busy ? '读取中…' : error ? '读取失败' : '已同步',
-      statusTone: error ? 'warning' : 'success',
+      statusTone: error ? 'danger' : 'success',
       list: name === 'loading' ? { kind: 'loading' } : { kind: 'commands', commands: shortcuts }
     })
   }
@@ -113,7 +114,7 @@ function phase(name: string) {
     store('availability-controls').setState({ ...initialControls,
       actionDisabled: active || preparing, actionBusy: busy || preparing,
       actionLabel: name === 'loading' ? '正在准备检测…' : name === 'pending' ? '正在请求站点授权…' : name === 'success' ? '重新检测全部书签' : '开始检测全部书签',
-      badgeText: name === 'loading' ? '读取中' : name === 'pending' ? '待授权' : error ? '未授权' : '多层校验', badgeTone: error ? 'warning' : 'muted',
+      badgeText: name === 'loading' ? '读取中' : name === 'pending' ? '待授权' : error ? '未授权' : '多层校验', badgeTone: error ? 'danger' : 'muted',
       permissionCopy: message || (name === 'loading' ? '正在读取书签和站点权限。' : name === 'pending' ? '等待确认站点授权。' : initialControls.permissionCopy),
       pauseHidden: !active, pauseDisabled: false, pauseLabel: name === 'paused' ? '继续检测' : '暂停检测',
       stopHidden: !active, stopDisabled: false, settingsDisabled: false
@@ -166,9 +167,11 @@ function phase(name: string) {
   if (surface === 'backup') {
     const view = structuredClone(initialBackup)
     const preparing = name === 'loading' || name === 'pending'
-    view.tagData = { ...view.tagData, hasRecords: true, countLabel: '21 条', status: message, busy }
+    const exportFeedback = error ? { status: 'error', updatedAt: Date.now() } : busy ? { status: 'pending', updatedAt: Date.now() } : { status: 'idle', updatedAt: 0 }
+    view.tagData = { ...view.tagData, hasRecords: true, countLabel: '21 条', status: message, statusTone: error ? 'error' : 'neutral', busy }
     view.backup = { ...view.backup, hasBackup: false, exportStatus: message || (preparing ? '正在读取备份文件…' : ''),
-      status: message, busy: busy || preparing }
+      exportFeedback,
+      status: message, statusTone: error ? 'error' : 'neutral', busy: busy || preparing }
     store('backup-controls').setState(view)
   }
   if (scope === 'popup') {
@@ -235,7 +238,7 @@ registerPopupActionHandlers({
 })
 registerNewtabSettingsDrawerActions({
   onActiveGroupChange: group => store('settings-drawer', 'newtab').setState(current => ({ ...current, activeGroup: group })),
-  onFeaturedPickerClick: noop, onOpenChange: noop, onReady: noop, onToggleRequest: noop
+  onOpenChange: noop, onReady: noop, onToggleRequest: noop
 })
 phase('idle')
 

@@ -77,7 +77,7 @@ function BackupCard({ state }: { state: BackupControlsState }) {
           </div>
         }
         description={
-          <StatusMessage id="backup-action-status" className={AI_SETTINGS_SUBTITLE_CLASS} reserve={[BACKUP_SCOPE]} tone={tone}>
+          <StatusMessage id="backup-action-status" className={AI_SETTINGS_SUBTITLE_CLASS} reserve={[BACKUP_SCOPE]} tone={backup.preview ? 'neutral' : tone}>
             {backup.preview ? BACKUP_SCOPE : message || BACKUP_SCOPE}
           </StatusMessage>
         }

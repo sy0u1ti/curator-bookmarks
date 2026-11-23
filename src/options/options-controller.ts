@@ -331,7 +331,10 @@ import type {
   AvailabilityControlsState,
   AvailabilitySettingsDraft
 } from './components/availability-controls-types.js'
-import type { AvailabilityPanelActionDetail } from './components/availability-overview-types.js'
+import type {
+  AvailabilityPanelActionDetail,
+  AvailabilityProgressState
+} from './components/availability-overview-types.js'
 import {
   publishAvailabilityDecisionMetrics,
   publishAvailabilityFilters,
@@ -488,10 +491,17 @@ const ignoreCallbacks = {
     renderAvailabilitySection()
   },
   onIgnoreRulesError(error) {
-    availabilityState.lastError =
-      error instanceof Error ? `忽略规则保存失败：${error.message}` : '忽略规则保存失败。'
+    setAvailabilityNotice(
+      error instanceof Error ? `忽略规则保存失败：${error.message}` : '忽略规则保存失败。',
+      'error'
+    )
     renderAvailabilitySection()
   }
+}
+
+function setAvailabilityNotice(message: string, tone: 'neutral' | 'error' = 'error') {
+  availabilityState.lastError = message
+  availabilityState.lastErrorTone = message ? tone : 'error'
 }
 
 let optionsControllerStarted = false
@@ -625,8 +635,10 @@ async function hydratePersistentState() {
     void removeLocalStorage(LEGACY_AI_NAMING_CACHE_STORAGE_KEYS).catch(() => {})
     maybeHydrateLargeRepositoryForSection(normalizeSectionKey(getCurrentSectionKey()))
   } catch (error) {
-    availabilityState.lastError =
-      error instanceof Error ? error.message : '本地规则读取失败，请刷新页面后重试。'
+    setAvailabilityNotice(
+      error instanceof Error ? error.message : '本地规则读取失败，请刷新页面后重试。',
+      'error'
+    )
   } finally {
     optionsHydrationStorageChanges = null
     availabilityState.storageLoading = false
@@ -1247,7 +1259,7 @@ async function hydrateAvailabilityCatalog({
   const readVersion = ++availabilityCatalogReadVersion
   availabilityState.catalogLoading = true
   if (!preserveLastError) {
-    availabilityState.lastError = ''
+    setAvailabilityNotice('')
   }
   scheduleAvailabilityRender()
 
@@ -1300,8 +1312,10 @@ async function hydrateAvailabilityCatalog({
       managerState.duplicateGroups = []
       syncAiNamingCatalog({ preserveResults: false })
     }
-    availabilityState.lastError =
-      error instanceof Error ? error.message : '书签列表读取失败，请刷新页面后重试。'
+    setAvailabilityNotice(
+      error instanceof Error ? error.message : '书签列表读取失败，请刷新页面后重试。',
+      'error'
+    )
     if (throwOnError) throw error
   } finally {
     if (readVersion === availabilityCatalogReadVersion) {
@@ -1380,7 +1394,7 @@ function applyAvailabilityScope({ preserveResults = false } = {}) {
   }
 
   if (!eligibleBookmarks.length) {
-    availabilityState.lastError = '当前范围内没有适合外部检测的书签；敏感地址和不支持的链接已跳过。'
+    setAvailabilityNotice('当前范围内没有适合外部检测的书签；敏感地址和不支持的链接已跳过。', 'neutral')
   }
 }
 
@@ -1857,9 +1871,9 @@ async function acquireGlobalAvailabilityRunLock(sessionId: string): Promise<bool
   }
 
   if (!acquired) {
-    availabilityState.lastError = navigator.locks
+    setAvailabilityNotice(navigator.locks
       ? '另一个 Curator 设置页正在执行可用性检测，请等待其完成后重试。'
-      : '当前浏览器不支持安全的跨页面检测锁，已取消本次检测。'
+      : '当前浏览器不支持安全的跨页面检测锁，已取消本次检测。', 'error')
     return false
   }
 
@@ -1867,10 +1881,12 @@ async function acquireGlobalAvailabilityRunLock(sessionId: string): Promise<bool
     await refreshAvailabilityPersistentStateUnderLock()
   } catch (error) {
     availabilityGlobalRunLocks.release(sessionId)
-    availabilityState.lastError =
+    setAvailabilityNotice(
       error instanceof Error
         ? `检测状态同步失败：${error.message}`
-        : '检测状态同步失败，已取消本次检测。'
+        : '检测状态同步失败，已取消本次检测。',
+      'error'
+    )
     return false
   }
   return true
@@ -1880,9 +1896,9 @@ async function claimAvailabilityMutationLock(): Promise<(() => void) | null> {
   const mutationId = `mutation-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`
   const acquired = await availabilityGlobalRunLocks.acquire(mutationId)
   if (!acquired) {
-    availabilityState.lastError = navigator.locks
+    setAvailabilityNotice(navigator.locks
       ? '另一个 Curator 设置页正在修改或检测可用性数据，请稍后重试。'
-      : '当前浏览器不支持安全的跨页面数据锁，已取消操作。'
+      : '当前浏览器不支持安全的跨页面数据锁，已取消操作。', 'error')
     renderAvailabilitySection()
     return null
   }
@@ -1891,10 +1907,12 @@ async function claimAvailabilityMutationLock(): Promise<(() => void) | null> {
     await refreshAvailabilityPersistentStateUnderLock()
   } catch (error) {
     availabilityGlobalRunLocks.release(mutationId)
-    availabilityState.lastError =
+    setAvailabilityNotice(
       error instanceof Error
         ? `可用性数据同步失败：${error.message}`
-        : '可用性数据同步失败，已取消操作。'
+        : '可用性数据同步失败，已取消操作。',
+      'error'
+    )
     renderAvailabilitySection()
     return null
   }
@@ -1934,12 +1952,12 @@ async function handleAvailabilityAction() {
   }
 
   if (!availabilityState.bookmarks.length) {
-    availabilityState.lastError = '当前没有适合外部检测的书签；敏感地址和不支持的链接已跳过。'
+    setAvailabilityNotice('当前没有适合外部检测的书签；敏感地址和不支持的链接已跳过。', 'neutral')
     renderAvailabilitySection()
     return
   }
 
-  availabilityState.lastError = ''
+  setAvailabilityNotice('')
   const sessionId = beginAvailabilityRunSession('full')
   if (!sessionId) {
     return
@@ -1951,12 +1969,12 @@ async function handleAvailabilityAction() {
       origins: collectAvailabilityPermissionOrigins(availabilityState.bookmarks, availabilityState.reviewResults)
     })
     if (!isAvailabilityRunSessionOwner(sessionId) || availabilityState.stopRequested) {
-      availabilityState.lastError = '已取消本次检测。'
+      setAvailabilityNotice('已取消本次检测。', 'neutral')
       return
     }
     if (!probeEnabled) {
       availabilityState.currentRunProbeEnabled = false
-      availabilityState.lastError = '未授予当前检测范围的目标网站访问权限，已取消本次检测。'
+      setAvailabilityNotice('未授予当前检测范围的目标网站访问权限，已取消本次检测。', 'error')
       return
     }
     await assertAvailabilityEngineReady()
@@ -1968,8 +1986,10 @@ async function handleAvailabilityAction() {
     availabilityState.currentRunProbeEnabled = probeEnabled
     await runAvailabilityDetection({ probeEnabled, sessionId })
   } catch (error) {
-    availabilityState.lastError =
-      error instanceof Error ? error.message : '失效书签检测启动失败，请稍后重试。'
+    setAvailabilityNotice(
+      error instanceof Error ? error.message : '失效书签检测启动失败，请稍后重试。',
+      'error'
+    )
   } finally {
     if (isAvailabilityRunSessionOwner(sessionId)) {
       await finishAvailabilityRunSession(sessionId)
@@ -1979,7 +1999,7 @@ async function handleAvailabilityAction() {
 }
 
 async function handleAvailabilityScopeChange(nextScopeFolderId) {
-  availabilityState.lastError = ''
+  setAvailabilityNotice('')
   availabilityState.scopeFolderId = String(nextScopeFolderId || '').trim()
   applyAvailabilityScope({ preserveResults: false })
   renderAvailabilitySection()
@@ -2051,7 +2071,7 @@ async function runAvailabilityDetection({
   const runStartedAt = Date.now()
   availabilityState.running = true
   availabilityState.paused = false
-  availabilityState.lastError = ''
+  setAvailabilityNotice('')
   availabilityState.lastCompletedAt = 0
   availabilityState.lastRunOutcome = ''
   availabilityState.runStartedAt = runStartedAt
@@ -2168,17 +2188,20 @@ async function runAvailabilityDetection({
       persistenceWarnings.push('检测期间书签发生变化，本轮结果未写入历史和缓存')
     }
     if (persistenceWarnings.length) {
-      availabilityState.lastError = `检测已完成，但${persistenceWarnings.join('；')}。`
+      setAvailabilityNotice(`检测已完成，但${persistenceWarnings.join('；')}。`, 'error')
     }
   } catch (error) {
     const stopped = availabilityState.stopRequested || isAbortError(error)
     availabilityState.lastCompletedAt = stopped ? Date.now() : 0
     availabilityState.lastRunOutcome = stopped ? 'stopped' : ''
-    availabilityState.lastError = stopped
-      ? `已停止检测，保留 ${availabilityState.checkedBookmarks} 条已完成结果。`
-      : error instanceof Error
-        ? error.message
-        : '失效书签检测失败，请稍后重试。'
+    setAvailabilityNotice(
+      stopped
+        ? `已停止检测，保留 ${availabilityState.checkedBookmarks} 条已完成结果。`
+        : error instanceof Error
+          ? error.message
+          : '失效书签检测失败，请稍后重试。',
+      stopped ? 'neutral' : 'error'
+    )
     recordPrivacyAudit({
       feature: 'availability-check',
       label: '死链/重定向检测',
@@ -2951,7 +2974,7 @@ function getAvailabilityPresentation() {
   })
 }
 
-function getAvailabilityProgressState(progressCompleted: number, progressTotal: number) {
+function getAvailabilityProgressState(progressCompleted: number, progressTotal: number): AvailabilityProgressState {
   const activeSession = availabilityRunSessions.getActive()
   const progressLabel = progressTotal
     ? `${progressCompleted} / ${progressTotal}`
@@ -2986,7 +3009,8 @@ function getAvailabilityProgressState(progressCompleted: number, progressTotal: 
     durationLabel: getAvailabilityDurationLabel(),
     progressLabel: availabilityProgressLabel,
     progressValue: Math.max(0, Math.min(progressValue, 100)),
-    statusCopy: getAvailabilityStatusCopy()
+    statusCopy: getAvailabilityStatusCopy(),
+    statusTone: availabilityState.lastError ? availabilityState.lastErrorTone : 'neutral'
   }
 }
 
@@ -3653,7 +3677,8 @@ function renderContentSnapshotSettings() {
     fullTextDisabled: !settings.enabled,
     loading: availabilityState.storageLoading,
     saveFullText: Boolean(settings.saveFullText),
-    statusCopy: [contentSnapshotState.statusMessage, contentSnapshotState.aiRunError].filter(Boolean).join('；') || aiRunCopy || indexCopy
+    statusCopy: [contentSnapshotState.statusMessage, contentSnapshotState.aiRunError].filter(Boolean).join('；') || aiRunCopy || indexCopy,
+    statusTone: contentSnapshotState.statusError || Boolean(contentSnapshotState.aiRunError) ? 'error' : 'neutral'
   })
 }
 
@@ -3708,7 +3733,7 @@ async function hydrateShortcutCommands() {
       managerState.shortcutCommands = []
     }
     managerState.shortcutStatus = error instanceof Error ? error.message : '快捷键读取失败'
-    managerState.shortcutStatusTone = 'warning'
+    managerState.shortcutStatusTone = 'danger'
   } finally {
     renderShortcutSettingsSection()
   }
@@ -3740,13 +3765,18 @@ function renderShortcutSettingsSection({
   const statusTone = String(managerState.shortcutStatusTone || 'muted')
   const loading = managerState.shortcutStatus === 'loading'
   const hasAssignedShortcut = commands.some(command => Boolean(String(command.shortcut || '').trim()))
+  const hasLoadedCommands = Array.isArray(managerState.shortcutCommands) && managerState.shortcutCommands.length > 0
+  const blockingError = !loading && statusTone === 'danger' && !hasLoadedCommands
+  const detail = getShortcutStatusDetail()
 
   publishShortcutControls({
-    detail: getShortcutStatusDetail(),
+    detail: blockingError ? '' : detail,
     list: loading
       ? keepCommandsWhileLoading && commands.length
         ? { kind: 'commands', commands }
         : { kind: 'loading' }
+      : blockingError
+        ? { kind: 'error', message: detail || '无法读取扩展快捷键，请重试或前往 Chrome 扩展快捷键页查看。' }
       : !commands.length
         ? { kind: 'empty' }
         : { kind: 'commands', commands },
@@ -3793,7 +3823,11 @@ function getShortcutStatusLabel() {
     return '已完成'
   }
 
-  if (managerState.shortcutStatusTone === 'warning' || managerState.shortcutStatusTone === 'danger') {
+  if (managerState.shortcutStatusTone === 'danger') {
+    return '读取失败'
+  }
+
+  if (managerState.shortcutStatusTone === 'warning') {
     return '未配置'
   }
 
@@ -4019,6 +4053,7 @@ function renderFeatureSettingsControls(
     settings,
     inboxSettings,
     inboxStatus: managerState.inboxSettingsStatus,
+    inboxStatusTone: managerState.inboxSettingsStatusTone,
     inboxSaving: managerState.inboxSettingsSaving,
     loading: availabilityState.storageLoading,
     permissionsLoading: !aiNamingState.permissionStateHydrated,
@@ -4642,8 +4677,10 @@ export function handleIgnoreRuleAction(detail: IgnoreRuleActionDetail): void {
 export function handleHistoryControlAction(action: 'clear-history' | 'toggle-logs'): void {
   if (action === 'clear-history') {
     void clearDetectionHistoryLogs(historyCallbacks).catch((error) => {
-      availabilityState.lastError =
-        error instanceof Error ? `检测历史清空失败：${error.message}` : '检测历史清空失败。'
+      setAvailabilityNotice(
+        error instanceof Error ? `检测历史清空失败：${error.message}` : '检测历史清空失败。',
+        'error'
+      )
       renderAvailabilitySection()
     })
     return
@@ -9003,12 +9040,12 @@ async function retestSelectedAvailabilityResults(onlyBookmarkId?: string) {
   const targetBookmarks = selectedResults.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((result) => availabilityState.bookmarkMap.get(String(result.id)) || result)(combineValue); return ((bookmark) => isCheckableUrl(bookmark?.url))(combinedResult) ? [combinedResult] : [] })
 
   if (!targetBookmarks.length) {
-    availabilityState.lastError = '所选书签中没有可重新测试的 http/https 链接。'
+    setAvailabilityNotice('所选书签中没有可重新测试的 http/https 链接。', 'neutral')
     renderAvailabilitySection()
     return
   }
 
-  availabilityState.lastError = ''
+  setAvailabilityNotice('')
   const sessionId = beginAvailabilityRunSession('retest')
   if (!sessionId) {
     return
@@ -9029,11 +9066,11 @@ async function retestSelectedAvailabilityResults(onlyBookmarkId?: string) {
       origins: retestOrigins
     })
     if (!isAvailabilityRunSessionOwner(sessionId) || availabilityState.stopRequested) {
-      availabilityState.lastError = '已取消重新测试。'
+      setAvailabilityNotice('已取消重新测试。', 'neutral')
       return
     }
     if (!probeEnabled) {
-      availabilityState.lastError = '未授予所选书签目标网站访问权限，已取消重新测试。'
+      setAvailabilityNotice('未授予所选书签目标网站访问权限，已取消重新测试。', 'error')
       return
     }
     await assertAvailabilityEngineReady()
@@ -9117,18 +9154,19 @@ async function retestSelectedAvailabilityResults(onlyBookmarkId?: string) {
     if (stopped) {
       auditStatus = 'cancelled'
       auditReason = `用户停止重新测试，已处理 ${processedCount} 条。`
-      availabilityState.lastError = `已停止重新测试，保留 ${processedCount} 条已完成结果。`
+      setAvailabilityNotice(`已停止重新测试，保留 ${processedCount} 条已完成结果。`, 'neutral')
     } else {
       auditReason = `完成重新测试 ${processedCount} 条。`
-      availabilityState.lastError = `已重新测试 ${processedCount} 条${onlyBookmarkId ? '' : '已选'}书签。`
+      const summary = `已重新测试 ${processedCount} 条${onlyBookmarkId ? '' : '已选'}书签。`
       if (catalogChangedDuringRun) {
-        availabilityState.lastError += ' 检测期间书签发生变化，本次重测未写入重定向缓存。'
+        setAvailabilityNotice(`${summary} 检测期间书签发生变化，本次重测未写入重定向缓存。`, 'neutral')
       } else {
+        setAvailabilityNotice(summary, 'neutral')
         try {
           await mergeRetestedRedirectCache(retestedResults)
         } catch (error) {
           const detail = error instanceof Error ? `：${error.message}` : ''
-          availabilityState.lastError += ` 重定向缓存保存失败${detail}`
+          setAvailabilityNotice(`${summary} 重定向缓存保存失败${detail}`, 'error')
         }
       }
     }
@@ -9136,14 +9174,15 @@ async function retestSelectedAvailabilityResults(onlyBookmarkId?: string) {
     if (availabilityState.stopRequested || isAbortError(error)) {
       auditStatus = 'cancelled'
       auditReason = `用户停止重新测试，已处理 ${processedCount} 条。`
-      availabilityState.lastError = `已停止重新测试，保留 ${processedCount} 条已完成结果。`
+      setAvailabilityNotice(`已停止重新测试，保留 ${processedCount} 条已完成结果。`, 'neutral')
     } else {
       auditStatus = 'error'
-      availabilityState.lastError =
+      const errorMessage =
         error instanceof Error
           ? `重新测试所选书签失败：${error.message}`
           : '重新测试所选书签失败，请稍后重试。'
-      auditReason = availabilityState.lastError
+      setAvailabilityNotice(errorMessage, 'error')
+      auditReason = errorMessage
     }
   } finally {
     if (networkRunStarted) {
@@ -9286,13 +9325,13 @@ async function ignoreSelectedAvailabilityResults(kind) {
 
   const candidateResults = selectedResults.filter((result) => !hasAvailabilityIgnoreRule(result, kind))
   if (!candidateResults.length) {
-    availabilityState.lastError = '没有新增忽略规则。'
+    setAvailabilityNotice('没有新增忽略规则。', 'neutral')
     renderAvailabilitySection()
     return
   }
 
   if (isAvailabilityResultActionLocked()) {
-    availabilityState.lastError = '检测状态已变化，请等待当前操作结束后重试。'
+    setAvailabilityNotice('检测状态已变化，请等待当前操作结束后重试。', 'error')
     renderAvailabilitySection()
     return
   }
@@ -9316,8 +9355,10 @@ async function ignoreSelectedAvailabilityResults(kind) {
       await saveIgnoreRules(nextIgnoreRules)
     }
   } catch (error) {
-    availabilityState.lastError =
-      error instanceof Error ? `忽略规则保存失败：${error.message}` : '忽略规则保存失败。'
+    setAvailabilityNotice(
+      error instanceof Error ? `忽略规则保存失败：${error.message}` : '忽略规则保存失败。',
+      'error'
+    )
     renderAvailabilitySection()
     return
   } finally {
@@ -9325,7 +9366,7 @@ async function ignoreSelectedAvailabilityResults(kind) {
   }
   repartitionAvailabilityResultsByIgnoreRules()
   clearAvailabilitySelection()
-  availabilityState.lastError = ''
+  setAvailabilityNotice('')
   showIgnoreRulesUndoToast(`已忽略 ${addedCount} 条`, previousIgnoreRules)
   renderAvailabilitySection()
 }
@@ -9337,13 +9378,13 @@ async function ignoreSingleAvailabilityResult(bookmarkId, kind) {
 
   const result = getAvailabilityResultById(bookmarkId)
   if (!result) {
-    availabilityState.lastError = '未找到这条检测结果。'
+    setAvailabilityNotice('未找到这条检测结果。', 'error')
     renderAvailabilitySection()
     return
   }
 
   if (hasAvailabilityIgnoreRule(result, kind)) {
-    availabilityState.lastError = '没有新增忽略规则。'
+    setAvailabilityNotice('没有新增忽略规则。', 'neutral')
     renderAvailabilitySection()
     return
   }
@@ -9362,21 +9403,23 @@ async function ignoreSingleAvailabilityResult(bookmarkId, kind) {
       await saveIgnoreRules(nextIgnoreRules)
     }
   } catch (error) {
-    availabilityState.lastError =
-      error instanceof Error ? `忽略规则保存失败：${error.message}` : '忽略规则保存失败。'
+    setAvailabilityNotice(
+      error instanceof Error ? `忽略规则保存失败：${error.message}` : '忽略规则保存失败。',
+      'error'
+    )
     renderAvailabilitySection()
     return
   } finally {
     releaseMutationLock()
   }
   if (!added) {
-    availabilityState.lastError = '没有新增忽略规则。'
+    setAvailabilityNotice('没有新增忽略规则。', 'neutral')
     renderAvailabilitySection()
     return
   }
 
   repartitionAvailabilityResultsByIgnoreRules()
-  availabilityState.lastError = ''
+  setAvailabilityNotice('')
   showIgnoreRulesUndoToast(`已${getIgnoreKindActionLabel(kind)}`, previousIgnoreRules)
   renderAvailabilitySection()
 }
@@ -9388,7 +9431,7 @@ function showIgnoreRulesUndoToast(title: string, previousIgnoreRules: ReturnType
     onUndo: async () => {
       const releaseMutationLock = await claimAvailabilityMutationLock()
       if (!releaseMutationLock) {
-        availabilityState.lastError = '书签正在被其他页面使用，暂时无法撤销；可在“忽略规则”中移除。'
+        setAvailabilityNotice('书签正在被其他页面使用，暂时无法撤销；可在“忽略规则”中移除。', 'error')
         renderAvailabilitySection()
         return
       }
@@ -9396,7 +9439,7 @@ function showIgnoreRulesUndoToast(title: string, previousIgnoreRules: ReturnType
         await saveIgnoreRules(previousIgnoreRules)
         repartitionAvailabilityResultsByIgnoreRules()
       } catch (error) {
-        availabilityState.lastError = error instanceof Error ? `撤销失败：${error.message}` : '撤销失败。'
+        setAvailabilityNotice(error instanceof Error ? `撤销失败：${error.message}` : '撤销失败。', 'error')
       } finally {
         releaseMutationLock()
         renderAvailabilitySection()
@@ -9515,7 +9558,7 @@ function hideAvailabilityResultForCurrentRun(bookmarkId) {
 
   removeAvailabilityResultById(bookmarkId, { removeHistoryEntry: false })
   managerState.selectedAvailabilityIds.delete(String(bookmarkId))
-  availabilityState.lastError = `已从本次结果隐藏“${result.title || '未命名书签'}”。不会新增忽略规则，重新检测后可能再次出现。`
+  setAvailabilityNotice(`已从本次结果隐藏“${result.title || '未命名书签'}”。不会新增忽略规则，重新检测后可能再次出现。`, 'neutral')
   renderAvailabilitySection()
 }
 
@@ -9853,7 +9896,7 @@ async function moveSelectedAvailabilityToFolder(folderId) {
   }
 
   availabilityState.deleting = true
-  availabilityState.lastError = ''
+  setAvailabilityNotice('')
   renderAvailabilitySection()
 
   const movedIds = []
@@ -9887,12 +9930,14 @@ async function moveSelectedAvailabilityToFolder(folderId) {
     const targetFolder = availabilityState.folderMap.get(folderId)
 
     if (moveError) {
-      availabilityState.lastError =
+      setAvailabilityNotice(
         moveError instanceof Error
           ? `批量移动过程中断，已移动 ${movedIds.length} 条：${moveError.message}`
-          : `批量移动过程中断，已移动 ${movedIds.length} 条。`
+          : `批量移动过程中断，已移动 ${movedIds.length} 条。`,
+        'error'
+      )
     } else if (movedIds.length) {
-      availabilityState.lastError = `已将 ${movedIds.length} 条书签移动到 ${targetFolder?.path || targetFolder?.title || '目标文件夹'}。`
+      setAvailabilityNotice(`已将 ${movedIds.length} 条书签移动到 ${targetFolder?.path || targetFolder?.title || '目标文件夹'}。`, 'neutral')
     }
 
     renderAvailabilitySection()

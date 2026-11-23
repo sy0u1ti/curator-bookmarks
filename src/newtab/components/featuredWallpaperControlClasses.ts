@@ -1,2 +1,0 @@
-export const FEATURED_WALLPAPER_CONTROL_CLASS =
-  'inline-flex min-h-9 items-center justify-center gap-2 rounded-ds-sm border-0 bg-ds-surface-2 px-3 text-sm font-medium leading-none text-ds-text-primary shadow-none outline-none transition-colors hover:bg-ds-hover hover:text-ds-text-primary focus-visible:[outline:2px_solid_var(--ds-text-primary)] focus-visible:outline-offset-2 disabled:opacity-60 data-disabled:opacity-60'

@@ -10,4 +10,5 @@ export interface ContentSnapshotControlsState {
   loading: boolean
   saveFullText: boolean
   statusCopy: string
+  statusTone?: 'neutral' | 'error'
 }

@@ -5,6 +5,7 @@ interface FeatureSettingsViewInput {
   settings: { autoAnalyzeBookmarks?: boolean; allowRemoteParsing?: boolean }
   inboxSettings: InboxWorkflowSettings
   inboxStatus: string
+  inboxStatusTone?: 'neutral' | 'error'
   inboxSaving: boolean
   loading: boolean
   permissionsLoading: boolean
@@ -42,7 +43,8 @@ export function buildFeatureSettingsView(input: FeatureSettingsViewInput): Featu
       disabled: input.loading || input.inboxSaving,
       status: input.inboxStatus || (getInboxWorkflowMode(input.inboxSettings) === 'capture'
         ? INBOX_WORKFLOW_STATUS_COPY.capture
-        : INBOX_WORKFLOW_STATUS_COPY.analyze)
+        : INBOX_WORKFLOW_STATUS_COPY.analyze),
+      statusTone: input.inboxStatus ? (input.inboxStatusTone || 'neutral') : 'neutral'
     }
   }
 }

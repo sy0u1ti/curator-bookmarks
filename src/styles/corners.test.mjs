@@ -85,7 +85,6 @@ test('Popup sibling surfaces and their placeholders share one radius role', asyn
   for (const [file, constant] of [
     ['PopupChromeHost', 'searchShellClass'],
     ['PopupSmartClassifier', 'pageCardClass'],
-    ['PopupSmartClassifier', 'SMART_ERROR_BANNER_CLASS'],
     ['PopupContent', 'paneClass']
   ]) {
     const declaration = sources.get(file).match(new RegExp(`const ${constant} =\\s*(?:\\[\\s*)?'([^']+)'`))?.[1]

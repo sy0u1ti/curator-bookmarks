@@ -13,6 +13,7 @@ export type ShortcutAction =
 export type ShortcutListState =
   | { kind: 'loading' }
   | { kind: 'empty' }
+  | { kind: 'error'; message: string }
   | { kind: 'commands'; commands: ShortcutCommandViewModel[] }
 
 export interface ShortcutControlsState {

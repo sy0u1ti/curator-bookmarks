@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { AiThinkingOrb } from '../../ui/ai/AiThinkingOrb'
 import { Button } from '../../ui/base/Button'
+import { ErrorState } from '../../ui/base/ErrorState'
 import { StatusMessage } from '../../ui/base/StatusMessage'
 import { DotMatrixLoader } from '../../ui/base/DotMatrixLoader'
 import { Input } from '../../ui/base/Input'
@@ -19,9 +20,6 @@ import { usePopupSyncStatus } from '../popup-sync-state'
 import { getSmartDisplayProgress, getSmartLoadingOrbState, SMART_LOADING_STAGE_STARTS } from '../smart-loading-progress.js'
 import { isSidePanelSurface } from '../../shared/extension-surfaces'
 import type { PopupSmartClassifierViewModel, PopupSmartPageViewModel } from './PopupViewModels'
-
-const SMART_ERROR_BANNER_CLASS =
-  'popup-surface relative z-[1] flex-none border border-ds-danger/35 bg-ds-danger-soft px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-ds-danger-text shadow-none'
 
 const pageRevealShellClass = 't-skel popup-t-skel popup-page-reveal relative min-h-12 w-full'
 const pageLayerClass = 'absolute inset-0 min-h-12'
@@ -84,7 +82,6 @@ const panelHeaderClass = 'flex items-center justify-between gap-3 px-px'
 const panelHeaderTitleClass = 'm-0 text-xs font-[650] text-ds-text-secondary'
 const panelHeaderWithMarginClass = cx(panelHeaderClass, 'mb-3.5')
 const panelHeaderLargeMarginClass = panelHeaderClass
-const panelHeaderStandaloneClass = panelHeaderClass
 const exitButtonClass = [
   'inline-flex h-7 min-w-[42px] items-center justify-center rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2 text-xs font-[650] text-ds-text-secondary outline-none',
   'transition-[border-color,background-color,color,scale] duration-ds-fast ease-ds-standard',
@@ -94,7 +91,6 @@ const exitButtonClass = [
 ].join(' ')
 
 const actionsClass = 'mt-3 grid grid-cols-[repeat(auto-fit,minmax(86px,1fr))] gap-2'
-const actionsThreeClass = cx(actionsClass, 'grid-cols-3 @max-[430px]/popup:grid-cols-1')
 const actionButtonBaseClass = [
   'inline-flex min-h-[38px] w-full items-center justify-center gap-2 rounded-ds-sm border px-3 text-[13px] font-semibold leading-none outline-none',
   'transition-[border-color,background-color,color,scale,opacity] duration-ds-fast ease-ds-standard',
@@ -131,7 +127,8 @@ const folderIconClass = 'h-3.5 w-3.5 flex-none text-ds-text-secondary'
 const permissionCardClass = cx(panelCardClass, 'flex h-full min-h-0 flex-col overflow-hidden px-[18px] py-4')
 const permissionBodyClass = 'mx-auto grid w-full max-w-[560px] gap-2.5 py-8'
 const permissionCopyClass = 'm-0 text-xs leading-[1.55] text-ds-text-secondary'
-const permissionErrorClass = 'm-0 text-xs leading-[1.55] text-ds-danger-text'
+const permissionErrorClass =
+  'm-0 rounded-ds-sm border border-ds-danger/30 bg-ds-danger-soft/65 px-3 py-2 text-xs leading-[1.55] text-ds-danger-text'
 const permissionOriginsClass = 'flex flex-wrap gap-1.5'
 const permissionOriginClass =
   'max-w-full overflow-hidden truncate whitespace-nowrap rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2 py-1.5 text-xs leading-tight text-ds-text-primary'
@@ -216,14 +213,19 @@ export function PopupSmartClassifier({
 
   if (state.status === 'error') {
     return (
-      <>
-        <PopupSmartPageCard handlers={handlers} page={state.page} />
-        <div className={panelHeaderStandaloneClass}>
-          <p className={panelHeaderTitleClass}>智能分类失败</p>
+      <article className={permissionCardClass}>
+        <div className={panelHeaderWithMarginClass}>
+          <p className={panelHeaderTitleClass}>智能分类</p>
           <PopupSmartExitButton handlers={handlers} />
         </div>
-        <div className={SMART_ERROR_BANNER_CLASS}>{state.error || '智能分类失败，请稍后重试。'}</div>
-        <Toolbar className={actionsThreeClass} unstyled>
+        <div className={loadingStageClass}>
+          <ErrorState
+            size="compact"
+            title="智能分类失败"
+            detail={state.error || '请检查 AI 配置或稍后重试。'}
+          />
+        </div>
+        <Toolbar className={actionsClass} unstyled>
           <Button
             className={secondaryActionButtonClass}
             type="button"
@@ -252,7 +254,7 @@ export function PopupSmartClassifier({
             重试
           </Button>
         </Toolbar>
-      </>
+      </article>
     )
   }
 
@@ -261,20 +263,6 @@ export function PopupSmartClassifier({
   }
 
   return <PopupSmartPageRevealCard handlers={handlers} page={state.page} loading={false} accessory={pageStatusAccessory} actionAccessory={pageActionAccessory} />
-}
-
-function PopupSmartPageCard({
-  handlers,
-  page
-}: {
-  handlers?: PopupSmartClassifierActionHandlers
-  page: PopupSmartPageViewModel | null
-}) {
-  return (
-    <article className={getPopupSmartPageCardClassName(page)}>
-      <PopupSmartPageCardContent handlers={handlers} page={page} />
-    </article>
-  )
 }
 
 function PopupSmartPageRevealCard({

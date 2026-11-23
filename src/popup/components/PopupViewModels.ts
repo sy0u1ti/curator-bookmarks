@@ -145,8 +145,10 @@ export interface PopupContentViewModel {
   keyboardPane?: 'bookmarks' | 'folders'
   loading?: boolean
   mainState?: {
-    kind: 'empty' | 'loading' | 'natural-setup' | 'search-empty'
+    kind: 'empty' | 'error' | 'loading' | 'natural-setup' | 'search-empty'
+    actions?: Array<{ action: string; label: string; primary?: boolean }>
     label?: string
+    title?: string
     state?: PopupEmptyStateViewModel
   }
   mainRows?: PopupContentMainRowViewModel[]

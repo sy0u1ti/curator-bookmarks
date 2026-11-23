@@ -30,7 +30,7 @@ export function ContentSnapshotControls() {
     <AiProviderCard
       className={AI_SETTINGS_NARROW_CARD_CLASS}
       title={contentSnapshotTitle}
-      description={<StatusMessage className={AI_SETTINGS_SUBTITLE_CLASS} reserve={contentSnapshotStatusReserve}>
+      description={<StatusMessage className={AI_SETTINGS_SUBTITLE_CLASS} reserve={contentSnapshotStatusReserve} tone={state.statusTone || 'neutral'}>
         {state.loading ? '正在读取本地设置…' : state.statusCopy || contentSnapshotDescription}
       </StatusMessage>}
       headerClassName={AI_SETTINGS_HEADER_CLASS}

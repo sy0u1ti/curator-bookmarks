@@ -5,6 +5,7 @@ export interface OptionsUndoToastView {
   detail: string
   id: string
   title: string
+  tone: 'success' | 'error'
   undoable: boolean
 }
 
@@ -15,15 +16,17 @@ const undoToastStore = createUiViewStoreSlice<OptionsUndoToastView | null>('opti
 export function showOptionsUndoToast({
   detail = '',
   onUndo,
-  title
+  title,
+  tone = 'success'
 }: {
   detail?: string
   onUndo?: () => Promise<void> | void
   title: string
+  tone?: 'success' | 'error'
 }): void {
   undoHandler = onUndo || null
   sequence += 1
-  undoToastStore.setState({ busy: false, detail, id: `options-undo-${sequence}`, title, undoable: Boolean(onUndo) })
+  undoToastStore.setState({ busy: false, detail, id: `options-undo-${sequence}`, title, tone, undoable: Boolean(onUndo) })
 }
 
 export function dismissOptionsUndoToast(): void {

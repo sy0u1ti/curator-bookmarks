@@ -1,3 +1,4 @@
+import { ErrorState } from '../../ui/base/ErrorState'
 import type { ShortcutListState } from './shortcut-types.js'
 
 const SHORTCUT_ROW_CLASS =
@@ -44,6 +45,16 @@ export function ShortcutList({ state }: { state: ShortcutListState }) {
 
   if (state.kind === 'empty') {
     return <div className={SHORTCUT_EMPTY_CLASS}>暂未读取到扩展快捷键命令。</div>
+  }
+
+  if (state.kind === 'error') {
+    return (
+      <ErrorState
+        size="compact"
+        title="无法读取扩展快捷键"
+        detail={state.message}
+      />
+    )
   }
 
   return (

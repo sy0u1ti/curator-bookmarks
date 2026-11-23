@@ -84,7 +84,7 @@ function InboxWorkflowControl({ state }: { state: FeatureSettingsControlsState['
     >
       <div className={AI_SETTINGS_COPY_CLASS}>
         <h3 className={AI_SETTINGS_ROW_TITLE_CLASS}>用快捷键保存到待整理后</h3>
-        <StatusMessage className={`m-0 ${AI_SETTINGS_SECONDARY_CLASS}`} reserve={INBOX_STATUS_RESERVE}>
+        <StatusMessage className={`m-0 ${AI_SETTINGS_SECONDARY_CLASS}`} reserve={INBOX_STATUS_RESERVE} tone={state?.statusTone || 'neutral'}>
           {state?.status || INBOX_WORKFLOW_STATUS_COPY.analyze}
         </StatusMessage>
       </div>

@@ -1,5 +1,4 @@
 import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
-import type { FeaturedBackgroundPreferences } from './featured-gallery-preferences.js'
 import { DEFAULT_TEXTURE_SETTINGS, normalizeTextureSettings, type TextureSettings } from './texture-settings.js'
 import {
   DEFAULT_WALLPAPER_ADJUSTMENTS,
@@ -13,29 +12,9 @@ export interface NewtabBackgroundSettingsView extends TextureSettings, Wallpaper
   backgroundStatus: string
   backgroundStatusTone: 'info' | 'success' | 'warning' | 'error'
   color: string
-  displaySize: number
-  displaySizeMax: number
-  displaySizeMin: number
-  featuredCreditHref: string
-  featuredCreditHidden: boolean
-  featuredCreditText: string
-  featuredCreditTitle: string
-  featuredDisplayHidden: boolean
-  featuredId: string
-  featuredPickerDisabled: boolean
-  featuredPickerExpanded: boolean
-  featuredPickerHidden: boolean
-  featuredPickerLabel: string
-  featuredPickerSelected: boolean
   imageName: string
   imageRowHidden: boolean
   wallpaperAdjustmentsHidden: boolean
-  positionX: number
-  positionXMax: number
-  positionXMin: number
-  positionY: number
-  positionYMax: number
-  positionYMin: number
   type: string
   url: string
   urlRowHidden: boolean
@@ -45,7 +24,6 @@ export interface NewtabBackgroundSettingsView extends TextureSettings, Wallpaper
 
 export interface NewtabBackgroundSettingsSource extends Partial<TextureSettings>, WallpaperAdjustmentFields {
   color: string
-  featuredId: string
   imageName: string
   type: string
   url: string
@@ -54,14 +32,10 @@ export interface NewtabBackgroundSettingsSource extends Partial<TextureSettings>
 
 export type NewtabBackgroundSettingsFieldKey =
   | 'color'
-  | 'displaySize'
-  | 'featuredId'
   | 'wallpaperEnabled'
   | 'wallpaperStyle'
   | 'wallpaperBlur'
   | 'wallpaperDim'
-  | 'positionX'
-  | 'positionY'
   | 'texturePreset'
   | 'textureIntensity'
   | 'textureMotion'
@@ -80,30 +54,10 @@ const EMPTY_VIEW: NewtabBackgroundSettingsView = {
   backgroundStatus: '',
   backgroundStatusTone: 'info',
   color: '#101013',
-  displaySize: 100,
-  displaySizeMax: 180,
-  displaySizeMin: 100,
-  featuredCreditHref: 'https://images.nasa.gov/',
-  featuredCreditHidden: true,
-  featuredCreditText: 'NASA Image and Video Library',
-  featuredCreditTitle: '',
-  featuredDisplayHidden: true,
-  featuredId: '',
-  featuredPickerDisabled: true,
-  featuredPickerExpanded: false,
-  featuredPickerHidden: true,
-  featuredPickerLabel: '选择壁纸',
-  featuredPickerSelected: false,
   imageName: '',
   imageRowHidden: true,
   wallpaperAdjustmentsHidden: true,
   ...toWallpaperAdjustmentFields(DEFAULT_WALLPAPER_ADJUSTMENTS),
-  positionX: 50,
-  positionXMax: 100,
-  positionXMin: 0,
-  positionY: 50,
-  positionYMax: 100,
-  positionYMin: 0,
   type: 'color',
   url: '',
   urlRowHidden: true,
@@ -126,47 +80,19 @@ const backgroundSettingsStore = createUiViewStoreSlice(
 
 export function createNewtabBackgroundSettingsView(
   settings: NewtabBackgroundSettingsSource,
-  preferences: FeaturedBackgroundPreferences,
-  limits: {
-    displaySize: { min: number; max: number }
-    positionX: { min: number; max: number }
-    positionY: { min: number; max: number }
-  },
   ui: Partial<Pick<
     NewtabBackgroundSettingsView,
     | 'backgroundStatus'
     | 'backgroundStatusTone'
     | 'ready'
-    | 'featuredCreditHref'
-    | 'featuredCreditText'
-    | 'featuredCreditTitle'
-    | 'featuredPickerExpanded'
-    | 'featuredPickerLabel'
-    | 'featuredPickerSelected'
   >> = {}
 ): NewtabBackgroundSettingsView {
-  const featuredPickerSelected = ui.featuredPickerSelected ?? Boolean(settings.featuredId)
-
   return {
     ...normalizeTextureSettings(settings),
     ready: ui.ready ?? false,
     backgroundStatus: ui.backgroundStatus ?? '',
     backgroundStatusTone: ui.backgroundStatusTone ?? 'info',
     color: settings.color,
-    displaySize: preferences.displaySize,
-    displaySizeMax: limits.displaySize.max,
-    displaySizeMin: limits.displaySize.min,
-    featuredCreditHref: ui.featuredCreditHref ?? 'https://images.nasa.gov/',
-    featuredCreditHidden: settings.type !== 'featured',
-    featuredCreditText: ui.featuredCreditText ?? 'NASA Image and Video Library',
-    featuredCreditTitle: ui.featuredCreditTitle ?? '',
-    featuredDisplayHidden: settings.type !== 'featured',
-    featuredId: settings.featuredId,
-    featuredPickerDisabled: settings.type !== 'featured',
-    featuredPickerExpanded: ui.featuredPickerExpanded ?? false,
-    featuredPickerHidden: settings.type !== 'featured',
-    featuredPickerLabel: ui.featuredPickerLabel ?? '选择壁纸',
-    featuredPickerSelected,
     imageName: settings.imageName,
     imageRowHidden: settings.type !== 'image',
     wallpaperAdjustmentsHidden: !doesBackgroundTypeTakeWallpaperAdjustments(settings.type),
@@ -174,12 +100,6 @@ export function createNewtabBackgroundSettingsView(
     wallpaperStyle: settings.wallpaperStyle,
     wallpaperBlur: settings.wallpaperBlur,
     wallpaperDim: settings.wallpaperDim,
-    positionX: preferences.positionX,
-    positionXMax: limits.positionX.max,
-    positionXMin: limits.positionX.min,
-    positionY: preferences.positionY,
-    positionYMax: limits.positionY.max,
-    positionYMin: limits.positionY.min,
     type: settings.type,
     url: settings.url,
     urlRowHidden: settings.type !== 'urls',

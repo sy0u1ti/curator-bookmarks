@@ -45,7 +45,6 @@ try {
         imageName: '',
         videoName: '',
         url: '',
-        featuredId: '',
         wallpaperDim: 0,
         wallpaperBlur: 1
       }

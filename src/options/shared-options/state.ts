@@ -121,6 +121,7 @@ export const availabilityState = {
   lastCompletedAt: 0,
   lastRunOutcome: '',
   lastError: '',
+  lastErrorTone: 'error' as 'neutral' | 'error',
   settingsOpen: false,
   settingsStatus: '',
   settingsStatusTone: 'muted',
@@ -176,13 +177,15 @@ export const managerState = {
   shortcutStatusTone: 'muted',
   inboxSettings: getDefaultInboxSettings(),
   inboxSettingsSaving: false,
-  inboxSettingsStatus: ''
+  inboxSettingsStatus: '',
+  inboxSettingsStatusTone: 'neutral' as 'neutral' | 'error'
 }
 
 export const contentSnapshotState = {
   settings: { ...DEFAULT_CONTENT_SNAPSHOT_SETTINGS } as ContentSnapshotSettings,
   index: { version: 1, updatedAt: 0, records: {} } as ContentSnapshotIndex,
   statusMessage: '',
+  statusError: false,
   aiRunError: '',
   aiRunSavedCount: 0,
   aiRunFailedCount: 0

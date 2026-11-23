@@ -452,6 +452,14 @@ export interface SettingsDrawerProps {
 
 function SettingsDrawerHeader({ closeButtonRef }: { closeButtonRef: Ref<HTMLButtonElement> }) {
   const view = useNewtabSettingsDrawerView()
+  const glass = useNewtabGlassSettings()
+  const glassError = view.saveState !== 'error' && glass.saveState === 'error'
+  const saveState = glassError ? 'error' : view.saveState
+  const detailMessage = view.saveState === 'error'
+    ? view.saveMessage
+    : glassError
+      ? '设置保存失败，请重试。'
+      : view.saveMessage
 
   return (
     <header className={SETTINGS_HEADER_CLASS}>
@@ -460,13 +468,13 @@ function SettingsDrawerHeader({ closeButtonRef }: { closeButtonRef: Ref<HTMLButt
         id="settings-save-status"
         className={SETTINGS_SAVE_STATUS_CLASS}
         lines={1}
-        tone={view.saveState === 'error' ? 'error' : 'neutral'}
-        data-state={view.saveState}
-        title={view.saveMessage || undefined}
-        aria-label={view.saveState === 'error' ? view.saveMessage : undefined}
+        tone={saveState === 'error' ? 'error' : 'neutral'}
+        data-state={saveState}
+        title={view.saveMessage || (glassError ? '设置保存失败，请重试。' : undefined)}
+        aria-label={saveState === 'error' ? detailMessage : undefined}
         style={{ overflow: 'visible', scrollbarGutter: 'auto' }}
       >
-        {view.saveState === 'error' ? (
+        {saveState === 'error' ? (
           <Popover
             title="设置保存失败"
             align="end"
@@ -474,13 +482,14 @@ function SettingsDrawerHeader({ closeButtonRef }: { closeButtonRef: Ref<HTMLButt
             collisionPadding={16}
             showArrow={false}
             popupClassName="w-[min(320px,calc(100vw_-_32px))] max-h-[min(320px,var(--available-height))] overflow-auto"
-            trigger={<Button size="sm" variant="ghost" className="w-full px-1 !text-ds-danger-text hover:bg-ds-danger-soft hover:!text-ds-danger-text" aria-label="查看保存失败详情">
-              保存失败
+            trigger={<Button size="sm" variant="ghost" className="w-full justify-end gap-1 px-1.5 !text-ds-danger-text hover:bg-ds-danger-soft hover:!text-ds-danger-text" aria-label="查看保存失败详情">
+              <Icon name="AlertTriangle" size={13} aria-hidden="true" className="shrink-0" />
+              <span><span className="sr-only">设置</span>保存失败</span>
             </Button>}
           >
-            <p className="m-0 text-sm leading-relaxed [overflow-wrap:anywhere]">{view.saveMessage}</p>
+            <p className="m-0 text-sm leading-relaxed [overflow-wrap:anywhere]">{detailMessage}</p>
           </Popover>
-        ) : view.saveState === 'idle' ? '' : view.saveMessage}
+        ) : saveState === 'idle' ? '' : view.saveMessage}
       </StatusMessage>
       <SettingsDrawerClose buttonRef={closeButtonRef} className={SETTINGS_CONTROL_CLASS} />
     </header>
@@ -1255,11 +1264,6 @@ const GlassSettingsSection = memo(function GlassSettingsSection({
         <Button size="sm" variant="ghost" disabled={!view.ready || !view.canUndo} onClick={undoNewtabGlassEditSession}>撤销本次调整</Button>
         <Button id="glass-reset-defaults" ref={firstControlRef} size="sm" variant="ghost" aria-label="恢复玻璃默认值" onClick={resetNewtabGlassSettings} disabled={!view.ready}>恢复默认值</Button>
       </SettingsSectionHeader>
-      {view.saveState === 'error' ? (
-        <StatusMessage lines={1} className={SETTINGS_NOTE_CLASS} tone="error">
-          设置保存失败，请重试。
-        </StatusMessage>
-      ) : null}
       <div className="newtab-glass-controls grid gap-2.5">
         <div className="newtab-glass-preview-scene" aria-label="玻璃效果实时预览">
           <NewtabGlassSurface className="newtab-glass-preview">

@@ -13,7 +13,7 @@ export function OptionsUndoToast() {
       className="pointer-events-none fixed bottom-4 right-4 z-50 grid w-[min(400px,calc(100vw-32px))] gap-2"
       rootClassName="pointer-events-auto"
       contentClassName="min-w-0 flex-1"
-      titleClassName="m-0 text-[13px] font-semibold"
+      titleClassName={view?.tone === 'error' ? 'm-0 text-[13px] font-semibold text-ds-danger-text' : 'm-0 text-[13px] font-semibold'}
       descriptionClassName="m-0 text-xs leading-relaxed text-ds-text-secondary [overflow-wrap:anywhere] empty:hidden"
       timeout={UNDO_WINDOW_MS}
       items={view ? [{
@@ -32,7 +32,7 @@ export function OptionsUndoToast() {
         description: view.detail,
         id: view.id,
         title: view.title,
-        type: 'success'
+        type: view.tone
       }] : []}
     />,
     document.body

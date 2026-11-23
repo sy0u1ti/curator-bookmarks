@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AiProviderCard } from '../../ui/ai/AiProviderCard'
 import { Button } from '../../ui/base/Button.js'
 import { StableLabel, StatusMessage } from '../../ui/base/StatusMessage.js'
+import { Icon } from '../../ui/icons/Icon.js'
 import { STORAGE_KEYS } from '../../shared/constants.js'
 import { formatBytes as size } from '../../shared/format.js'
 import { requestStorageUsage } from '../../shared/messages.js'
@@ -91,7 +92,10 @@ export function StorageManagement() {
       bodyClassName={AI_SETTINGS_BODY_CLASS}
     >
       {storageIssue ? (
-        <p role="alert" className="m-0 px-5 py-3.5 text-[13px] leading-[1.55] text-ds-warning-text max-[760px]:px-4">{storageIssue}</p>
+        <div role="alert" className="flex items-start gap-2.5 border-b border-ds-border-subtle bg-ds-warning-soft/50 px-5 py-3.5 text-[13px] leading-[1.55] text-ds-warning-text max-[760px]:px-4">
+          <Icon name="AlertTriangle" size={15} aria-hidden="true" className="mt-0.5 shrink-0" />
+          <p className="m-0 min-w-0 [overflow-wrap:anywhere]">{storageIssue}</p>
+        </div>
       ) : null}
       {usage ? <>
         {usage.sync?.profiles || usage.sync?.logLines ? <BackupRow title="同步数据"
@@ -109,9 +113,6 @@ export function StorageManagement() {
         ) : null}
         <BackupRow title="本地正文" detail={<p className={BACKUP_ROW_DETAIL_CLASS}>{usage.fullText.count} 份 · {size(usage.fullText.bytes)} · 清除后无法按正文检索</p>}>
           <Button size="sm" variant="secondary" disabled={busy || !usage.fullText.count} aria-label="清除本地正文" onClick={() => void clean('full-text')}>清除</Button>
-        </BackupRow>
-        <BackupRow title="壁纸预览缓存" detail={<p className={BACKUP_ROW_DETAIL_CLASS}>{size(usage.previewBytes)}</p>}>
-          <Button size="sm" variant="secondary" disabled={busy || !usage.previewBytes} aria-label="清除预览缓存" onClick={() => void clean('previews')}>清除</Button>
         </BackupRow>
       </> : null}
     </AiProviderCard>

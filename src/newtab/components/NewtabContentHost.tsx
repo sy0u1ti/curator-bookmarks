@@ -8,6 +8,7 @@ import {
   type RefObject
 } from 'react'
 import { Button } from '../../ui/base/Button'
+import { ErrorState } from '../../ui/base/ErrorState'
 import { cx } from '../../ui/base/utils'
 import {
   type NewTabContentView,
@@ -271,7 +272,7 @@ function OnboardingStrip({ module }: { module: NewTabOnboardingModule }) {
     <NewtabGlassSurface as="section" tone="panel" className={ONBOARDING_STRIP_CLASS} aria-label="Curator 首次使用引导">
       <div className={ONBOARDING_COPY_CLASS}>
         <strong className={ONBOARDING_TITLE_CLASS}>Curator 已将新标签页设为书签搜索和快捷入口</strong>
-        <span className={ONBOARDING_TEXT_CLASS}>核心书签功能默认本地；网页搜索、精选远程背景、AI/Jina 和链接检测可关闭或跳过。</span>
+        <span className={ONBOARDING_TEXT_CLASS}>核心书签功能默认本地；网页搜索、远程背景、AI/Jina 和链接检测可关闭或跳过。</span>
       </div>
       <div className={ONBOARDING_ACTIONS_CLASS}>
         <Button className={ONBOARDING_BUTTON_CLASS} type="button" onClick={module.onOpenFolderSettings} unstyled>
@@ -333,13 +334,24 @@ function GenericState({
   message: string
 }) {
   return (
-    <NewtabGlassSurface as="section" tone="panel" className={cx(STATE_BASE_CLASS, STATE_DEFAULT_WIDTH_CLASS)}>
-      <p className={STATE_COPY_CLASS}>{message}</p>
-      {actionLabel && action ? (
-        <Button className={getNewtabButtonClass('secondary')} type="button" onClick={action} unstyled>
-          {actionLabel}
-        </Button>
-      ) : null}
+    <NewtabGlassSurface
+      as="section"
+      tone="panel"
+      className={cx(STATE_BASE_CLASS, STATE_DEFAULT_WIDTH_CLASS)}
+      aria-labelledby="newtab-error-state-title"
+    >
+      <ErrorState
+        className="p-0"
+        titleAs="h1"
+        titleId="newtab-error-state-title"
+        title="无法读取书签"
+        detail={message}
+        actions={actionLabel && action ? (
+          <Button className={getNewtabButtonClass()} type="button" onClick={action} unstyled>
+            {actionLabel}
+          </Button>
+        ) : undefined}
+      />
     </NewtabGlassSurface>
   )
 }

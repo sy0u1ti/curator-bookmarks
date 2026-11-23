@@ -274,12 +274,13 @@ export function SyncCard() {
                             popupClassName="max-h-[min(320px,var(--available-height))] overflow-auto"
                             trigger={
                               <button type="button" aria-label={`查看同步失败详情：${title}`}
-                                className="flex max-w-full cursor-pointer items-center gap-1 rounded-ds-xs border-0 bg-transparent p-0 text-left font-[inherit] text-[length:inherit] leading-[inherit] text-ds-danger-text outline-none hover:underline focus-visible:shadow-ds-focus">
+                                className="flex max-w-full cursor-pointer items-center gap-1.5 rounded-ds-xs border-0 bg-transparent p-0 text-left font-[inherit] text-[length:inherit] leading-[inherit] text-ds-danger-text outline-none hover:underline focus-visible:shadow-ds-focus">
+                                <Icon name="AlertTriangle" size={13} aria-hidden="true" className="shrink-0" />
                                 <span className="min-w-0 truncate">{state.text}</span>
                               </button>
                             }
                           >
-                            <p className="m-0 text-sm leading-relaxed [overflow-wrap:anywhere]">{state.text}</p>
+                            <p className="m-0 text-[13px] leading-relaxed text-ds-text-primary [overflow-wrap:anywhere]">{state.text}</p>
                             <Button size="sm" variant="secondary" className="mt-3" onClick={() => downloadLogs(true)}>下载日志</Button>
                           </Popover>
                         ) : state.text}

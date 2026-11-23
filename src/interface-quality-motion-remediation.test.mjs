@@ -298,11 +298,6 @@ const layoutMotionSources = [
   read('src/newtab/newtab.css').replace(
     /(\.newtab-search-shell\s*\{[^}]*?)transition:\s*top var\(--ds-motion-control\) var\(--ds-ease-standard\);/,
     '$1'
-  ).replace(
-    // Featured wallpaper cards lift the same way: a transformed card re-snaps
-    // its resolution pill and actions when the hover settles at fractional DPI.
-    /(\.featured-wallpaper-card\.curator-control\s*\{[^}]*?transition:\s*)top var\(--ds-motion-control\) var\(--ds-ease-standard\),\s*/,
-    '$1'
   ),
   read('src/options/components/AvailabilityDecisionPanel.tsx')
 ].join('\n')

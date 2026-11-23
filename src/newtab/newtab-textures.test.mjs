@@ -69,16 +69,14 @@ test('backup restore keeps texture preferences in the existing background record
 
 test('texture mode suspends, rather than overwrites, wallpaper adjustments', () => {
   const source = {
-    type: 'texture', color: '#101013', featuredId: '', imageName: '', videoName: '', url: '',
+    type: 'texture', color: '#101013', imageName: '', videoName: '', url: '',
     wallpaperEnabled: true, wallpaperStyle: 'gradient',
     wallpaperDim: 50, wallpaperBlur: 16, ...DEFAULT_TEXTURE_SETTINGS
   }
-  const preferences = { displaySize: 100, positionX: 50, positionY: 50 }
-  const limits = { displaySize: { min: 100, max: 180 }, positionX: { min: 0, max: 100 }, positionY: { min: 0, max: 100 } }
-  const texture = api.createNewtabBackgroundSettingsView(source, preferences, limits)
+  const texture = api.createNewtabBackgroundSettingsView(source)
   assert.equal(texture.wallpaperAdjustmentsHidden, true)
   assert.equal(source.wallpaperDim, 50)
-  const image = api.createNewtabBackgroundSettingsView({ ...source, type: 'image' }, preferences, limits)
+  const image = api.createNewtabBackgroundSettingsView({ ...source, type: 'image' })
   assert.equal(image.wallpaperAdjustmentsHidden, false)
   assert.equal(image.wallpaperDim, 50)
   assert.equal(image.wallpaperBlur, 16)

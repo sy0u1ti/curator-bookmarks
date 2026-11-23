@@ -39,7 +39,6 @@ export interface NewtabSearchFocusContext {
   draggingSpeedDial: boolean
   editableTarget: boolean
   enabled: boolean
-  featuredPickerOpen: boolean
   menuOpen: boolean
   settingsOpen: boolean
 }
@@ -50,7 +49,6 @@ export function canUseNewtabSearchFocus(context: NewtabSearchFocusContext): bool
     !context.draggingFolder &&
     !context.draggingSpeedDial &&
     !context.editableTarget &&
-    !context.featuredPickerOpen &&
     !context.menuOpen &&
     !context.settingsOpen
 }

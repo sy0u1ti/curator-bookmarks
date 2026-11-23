@@ -95,7 +95,7 @@ export function toWallpaperAdjustmentFields(adjustments: WallpaperAdjustments): 
 }
 
 export function doesBackgroundTypeTakeWallpaperAdjustments(type: unknown): boolean {
-  return ['image', 'video', 'urls', 'featured'].includes(String(type))
+  return ['image', 'video', 'urls'].includes(String(type))
 }
 
 export function haveSameWallpaperSource(previous: Record<string, unknown>, next: Record<string, unknown>): boolean {

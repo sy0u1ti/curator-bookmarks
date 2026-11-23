@@ -4,12 +4,11 @@ import { extractBookmarkData } from './bookmark-tree.js'
 import { STORAGE_KEYS } from './constants.js'
 import { clearContentSnapshotFullTexts, getContentFullTextStorageUsage, loadContentSnapshotIndex } from './content-snapshots.js'
 import { collectCustomIconReferences, inspectCustomIconStorage, normalizeCustomIconEntries, resolveCustomIconState } from './repositories/custom-icon-repository.js'
-import { getLocalStorage, removeLocalStorage, setLocalStorage, withLocalStorageTransaction } from './storage.js'
+import { getLocalStorage, setLocalStorage, withLocalStorageTransaction } from './storage.js'
 import { SYNC_ACCOUNTS_STORAGE_KEY, SYNC_STORAGE_PREFIX } from './sync/sync-contract.js'
 import { summarizeStoredSyncProfiles } from './sync/sync-profile-summary.js'
 import { requestSync } from './sync/sync-messages.js'
 
-const PREVIEW_KEYS = [STORAGE_KEYS.newTabFeaturedBackgroundPreviewCache]
 const byteLength = (value: unknown) => new TextEncoder().encode(JSON.stringify(value) || '').byteLength
 
 function retainLiveIconEntries(local: Record<string, unknown>, tree: chrome.bookmarks.BookmarkTreeNode[]) {
@@ -37,14 +36,13 @@ export async function getStorageUsage() {
       logBytes: byteLength(local[`${SYNC_STORAGE_PREFIX}logs`] || []),
       logLines: Array.isArray(local[`${SYNC_STORAGE_PREFIX}logs`]) ? (local[`${SYNC_STORAGE_PREFIX}logs`] as unknown[]).length : 0
     },
-    fullText: { count: fullText.count + inlineRecords.length, bytes: fullText.bytes + inlineRecords.reduce((sum, record) => sum + new TextEncoder().encode(record.fullText || '').byteLength, 0) },
-    previewBytes: PREVIEW_KEYS.reduce((sum, key) => sum + (local[key] ? byteLength(local[key]) : 0), 0)
+    fullText: { count: fullText.count + inlineRecords.length, bytes: fullText.bytes + inlineRecords.reduce((sum, record) => sum + new TextEncoder().encode(record.fullText || '').byteLength, 0) }
   }
 }
 
 export type StorageUsage = Awaited<ReturnType<typeof getStorageUsage>>
 
-export type StorageCleanupCategory = 'icons' | 'missing-icons' | 'full-text' | 'previews' | 'sync-logs'
+export type StorageCleanupCategory = 'icons' | 'missing-icons' | 'full-text' | 'sync-logs'
 
 export async function cleanStorageCategory(category: StorageCleanupCategory): Promise<string> {
   if (category === 'sync-logs') {
@@ -56,10 +54,6 @@ export async function cleanStorageCategory(category: StorageCleanupCategory): Pr
     return '已清除本地正文，摘要与书签仍保留。之后采集的正文仍按当前设置保存。'
   }
   return withLocalStorageTransaction(async transaction => {
-    if (category === 'previews') {
-      await removeLocalStorage(PREVIEW_KEYS, { transaction })
-      return '已清除壁纸预览缓存，下次浏览时会重新获取。'
-    }
     const local = await getLocalStorage(null)
     if (category === 'missing-icons') {
       const entries = normalizeCustomIconEntries(local[STORAGE_KEYS.newTabCustomIcons])

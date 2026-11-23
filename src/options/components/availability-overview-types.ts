@@ -5,6 +5,7 @@ export interface AvailabilityProgressState {
   progressLabel: string
   progressValue: number
   statusCopy: string
+  statusTone: 'neutral' | 'error'
 }
 
 export interface AvailabilityDecisionMetricsState {

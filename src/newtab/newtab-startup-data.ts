@@ -10,9 +10,6 @@ import {
 const NEWTAB_STARTUP_STORAGE_KEYS = [
   STORAGE_KEYS.newTabBackgroundSettings,
   STORAGE_KEYS.newTabCustomIcons,
-  STORAGE_KEYS.newTabFeaturedBackgroundGallery,
-  STORAGE_KEYS.newTabFeaturedBackgroundFavorites,
-  STORAGE_KEYS.newTabFeaturedBackgroundPreferences,
   STORAGE_KEYS.newTabSearchSettings,
   STORAGE_KEYS.newTabIconSettings,
   STORAGE_KEYS.newTabGeneralSettings,

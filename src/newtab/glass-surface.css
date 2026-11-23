@@ -41,6 +41,10 @@
   text-shadow: none;
 }
 
+.newtab-glass[data-glass-tone="panel"][data-type="error"] {
+  border-color: color-mix(in srgb, var(--ds-danger) 42%, var(--newtab-panel-border));
+}
+
 .newtab-glass[data-glass-tone="chip"] {
   --glass-fill: var(--newtab-chip-bg);
   --glass-blur: 0px;

@@ -4,6 +4,7 @@
 @import "./tailwind.css";
 @import "./corners.css";
 @import "./controls-motion.css";
+@import "../ui/base/error-state.css";
 
 .curator-react-root {
   isolation: isolate;

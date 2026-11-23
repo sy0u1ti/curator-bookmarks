@@ -62,7 +62,7 @@ window.chrome = {
     sendMessage: (message, callback) => result({ ok: true, result: message.type === 'sync:list' ? []
       : message.type === 'storage:usage' ? {
         localBytes: 768, originBytes: 1024, icons: { count: 0, bytes: 0, unused: 0, removed: 0 }, missingIcons: 0,
-        sync: { profiles: 0, bytes: 0, logBytes: 0, logLines: 0 }, fullText: { count: 0, bytes: 0 }, previewBytes: 0
+        sync: { profiles: 0, bytes: 0, logBytes: 0, logLines: 0 }, fullText: { count: 0, bytes: 0 }
       } : undefined }, callback)
   },
   storage: { onChanged: event(), local: {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Button } from '../../ui/base/Button'
 import { Checkbox } from '../../ui/base/Checkbox'
 import { DialogBackdrop, DialogOverlay, DialogPanel } from '../../ui/base/Dialog'
+import { ErrorState } from '../../ui/base/ErrorState'
 import { StableLabel } from '../../ui/base/StatusMessage'
 import { Icon, type IconName } from '../../ui/icons/Icon'
 import { downloadBlobFile, downloadJsonFile } from '../../shared/download'
@@ -238,7 +239,7 @@ function ProfileCockpit({ profile, presentation, pending, onOptions, onAutoChang
         </div>
         {showStatusDetail ? (
           <div className="popup-sync-profile-status popup-sync-cockpit-alert" data-tone={state.tone}>
-            <Icon name={presentation.icon} size={13} aria-hidden="true" />
+            {state.tone === 'neutral' ? <Icon name={presentation.icon} size={13} aria-hidden="true" /> : null}
             <Button className="popup-sync-error" title={state.text} onClick={onError} unstyled>{state.text}</Button>
           </div>
         ) : null}
@@ -279,9 +280,10 @@ function ProfileCockpit({ profile, presentation, pending, onOptions, onAutoChang
   </li>
 }
 
-export function PopupSyncWorkspace({ active, onBackToBookmarks }: {
+export function PopupSyncWorkspace({ active, onBackToBookmarks, onHeaderModeChange }: {
   active: boolean
   onBackToBookmarks: () => void
+  onHeaderModeChange?: (mode: 'summary' | 'quiet') => void
 }) {
   const [profiles, setProfiles] = useState<SyncProfileView[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -297,6 +299,7 @@ export function PopupSyncWorkspace({ active, onBackToBookmarks }: {
   const [logs, setLogs] = useState<string[]>([])
   const [fullLogs, setFullLogs] = useState(false)
   const [logsLoaded, setLogsLoaded] = useState(false)
+  const [logsError, setLogsError] = useState('')
   const root = useRef<HTMLDivElement>(null)
   const subviewRef = useRef<HTMLDivElement>(null)
   const closeTimer = useRef<number | null>(null)
@@ -430,11 +433,24 @@ export function PopupSyncWorkspace({ active, onBackToBookmarks }: {
     navigate({ kind: 'logs' })
     setLogs([])
     setLogsLoaded(false)
+    setLogsError('')
     setFullLogs(!anonymous)
-    perform('logs', async current => {
-      const result = await requestSync({ type: 'sync:logs', anonymous })
+    busy.current = true
+    setPending('logs')
+    setMessage({ text: '', error: false })
+    const epoch = requestEpoch.current
+    const current = () => alive.current && epoch === requestEpoch.current
+    void requestSync({ type: 'sync:logs', anonymous }).then(result => {
       if (current()) { setLogs(result); setLogsLoaded(true) }
-    }, '同步日志读取失败，请重试。')
+    }, reason => {
+      if (current()) {
+        setLogsError(failure(reason, '同步日志读取失败，请重试。'))
+        setLogsLoaded(true)
+      }
+    }).finally(() => {
+      busy.current = false
+      if (alive.current) { setPending(null); void refresh() }
+    })
   }
   const downloadLogs = () => {
     downloadBlobFile(`curator-sync-${fullLogs ? 'full' : 'redacted'}.log`, new Blob([logs.join('\n')], { type: 'text/plain;charset=utf-8' }))
@@ -478,8 +494,13 @@ export function PopupSyncWorkspace({ active, onBackToBookmarks }: {
   }
   const errorDetail = () => navigate({ kind: 'detail', title: '同步操作未完成', text: loadFailure?.text || message.text })
   const anyRunning = profiles.some(busyProfile)
+  const blockingLoadFailure = Boolean(loadFailure && !profiles.length)
   const singleProfile = profiles.length === 1 ? profiles[0] : null
   const singlePresentation = singleProfile ? describeProfile(singleProfile, pending) : null
+  const headerMode: 'summary' | 'quiet' = blockingLoadFailure || Boolean(loadFailure) || profiles.length <= 1 ? 'quiet' : 'summary'
+  useEffect(() => {
+    onHeaderModeChange?.(headerMode)
+  }, [headerMode, onHeaderModeChange])
   const changeAutomatic = (profile: SyncProfileView, checked: boolean) => {
     if (busy.current) return
     const data = checked ? { enabled: true, syncIntervalEnabled: true } : { enabled: false, syncIntervalEnabled: false, syncOnStartupEnabled: false }
@@ -550,18 +571,41 @@ export function PopupSyncWorkspace({ active, onBackToBookmarks }: {
                 onRun={() => runProfile(profile, presentation)} />
             </li>
           })}
-          {!profiles.length ? <li className="popup-sync-notice">
-            <div className="popup-sync-empty-icon" aria-hidden="true">
-              <Icon name={loadFailure ? 'AlertTriangle' : 'RefreshCw'} size={18} />
-            </div>
-            <p>{loadFailure ? '暂时无法读取同步配置' : loaded ? '还没有同步配置' : '正在读取同步配置…'}</p>
-            {loaded && !loadFailure ? <Button size="sm" variant="primary" disabled={Boolean(pending)} onClick={() => editor(null)}>
-              <Icon name="Plus" size={14} aria-hidden="true" />添加配置
-            </Button> : null}
-          </li> : null}
+          {!profiles.length ? (
+            loadFailure ? (
+              <li className="popup-sync-notice popup-sync-notice--error">
+                <ErrorState
+                  size="compact"
+                  title={loadFailure.needsReload ? '同步后台需要重新加载' : '无法读取同步配置'}
+                  detail={loadFailure.text}
+                  actions={loadFailure.needsReload ? (
+                    <>
+                      <Button size="sm" variant="primary" onClick={() => void openExtensionManager()}>扩展管理</Button>
+                      <Button size="sm" variant="secondary" disabled={Boolean(pending)} onClick={() => void refresh()}>重试</Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button size="sm" variant="primary" disabled={Boolean(pending)} onClick={() => void refresh()}>重试</Button>
+                      <Button size="sm" variant="secondary" disabled={Boolean(pending)} onClick={() => readLogs()}>查看日志</Button>
+                    </>
+                  )}
+                />
+              </li>
+            ) : (
+              <li className="popup-sync-notice">
+                <div className="popup-sync-empty-icon" aria-hidden="true">
+                  <Icon name="RefreshCw" size={18} />
+                </div>
+                <p>{loaded ? '还没有同步配置' : '正在读取同步配置…'}</p>
+                {loaded ? <Button size="sm" variant="primary" disabled={Boolean(pending)} onClick={() => editor(null)}>
+                  <Icon name="Plus" size={14} aria-hidden="true" />添加配置
+                </Button> : null}
+              </li>
+            )
+          ) : null}
         </ul>
       )}
-      <footer className="popup-sync-footer">
+      {!blockingLoadFailure ? <footer className="popup-sync-footer">
         <div className="popup-sync-footer-actions">
           <Button className="popup-sync-action" onClick={() => editor(null)} disabled={Boolean(pending)} unstyled>
             <Icon name="Plus" size={14} aria-hidden="true" />添加配置
@@ -575,13 +619,13 @@ export function PopupSyncWorkspace({ active, onBackToBookmarks }: {
         </div>
         <button className="popup-sync-footer-message" data-error={Boolean(loadFailure || message.error)}
           title={loadFailure?.text || message.text} onClick={errorDetail} disabled={!loadFailure && !message.text}>
-          {loadFailure ? '读取失败，查看详情' : message.text}
+          {loadFailure ? '刷新失败，查看详情' : message.text}
         </button>
         {loadFailure ? <Button size="sm" variant="secondary" onClick={() => loadFailure.needsReload ? void openExtensionManager() : void refresh()}>{loadFailure.needsReload ? '扩展管理' : '重试'}</Button>
           : profiles.length > 1 ? <Button className="popup-sync-run" data-primary="true" disabled={Boolean(pending) || anyRunning} onClick={runAll} unstyled>
             <Icon name="RefreshCw" size={14} aria-hidden="true" />同步全部
           </Button> : null}
-      </footer>
+      </footer> : null}
     </section>
 
     {activeSubview ? (
@@ -610,9 +654,28 @@ export function PopupSyncWorkspace({ active, onBackToBookmarks }: {
           <header className="popup-sync-subheader"><Button data-sync-back size="icon-xs" variant="ghost" aria-label="返回同步列表" onClick={back}>
             <Icon name="ArrowLeft" size={15} aria-hidden="true" /></Button><h3>{viewHeading}</h3></header>
           <div className="popup-sync-detail">
-            {activeSubview.kind === 'detail' ? <p>{activeSubview.text}</p> : null}
+            {activeSubview.kind === 'detail' ? (
+              <div className="popup-sync-detail-card" role="alert">
+                <span className="popup-sync-detail-icon" aria-hidden="true">
+                  <Icon name="AlertTriangle" size={15} />
+                </span>
+                <p className="popup-sync-detail-text">{activeSubview.text}</p>
+              </div>
+            ) : null}
             {activeSubview.kind === 'logs' ? <>
-              {!logsLoaded ? <p>正在读取日志…</p> : logs.length ? <pre>{logs.slice(-200).join('\n')}</pre> : <p>还没有同步日志。</p>}
+              {!logsLoaded ? (
+                <div className="popup-sync-subview-state">正在读取日志…</div>
+              ) : logsError ? (
+                <ErrorState
+                  size="compact"
+                  className="popup-sync-subview-state"
+                  title="无法读取同步日志"
+                  detail={logsError}
+                  actions={<Button size="sm" variant="primary" disabled={Boolean(pending)} onClick={() => readLogs(!fullLogs)}>重试</Button>}
+                />
+              ) : logs.length ? <pre>{logs.slice(-200).join('\n')}</pre> : (
+                <div className="popup-sync-subview-state">还没有同步日志。</div>
+              )}
             </> : null}
             {activeSubview.kind === 'import' ? <>
               <label className="grid gap-3">选择同步配置文件
@@ -629,7 +692,7 @@ export function PopupSyncWorkspace({ active, onBackToBookmarks }: {
                 checked={exportIds.includes(profile.id)} onCheckedChange={checked => setExportIds(ids => checked ? [...ids, profile.id] : ids.filter(id => id !== profile.id))} />)}</div>
             </> : null}
           </div>
-          <footer className="popup-sync-footer">
+          {!(activeSubview.kind === 'logs' && Boolean(logsError)) ? <footer className="popup-sync-footer">
             <span className="popup-sync-footer-message" data-error={message.error} title={message.text} role="status">{message.text}</span>
             {activeSubview.kind === 'import' ? <Button size="sm" variant="primary" disabled={!imported || Boolean(pending)} onClick={commitImport}>导入配置</Button> : null}
             {activeSubview.kind === 'export' ? <Button size="sm" variant="primary" disabled={!exportIds.length || Boolean(pending)} onClick={commitExport}>导出 {exportIds.length} 项</Button> : null}
@@ -647,7 +710,7 @@ export function PopupSyncWorkspace({ active, onBackToBookmarks }: {
               <Button size="sm" variant="secondary" onClick={() => readLogs()}>查看日志</Button>
               {loadFailure ? <Button size="sm" variant="primary" onClick={() => loadFailure.needsReload ? void openExtensionManager() : void refresh()}>{loadFailure.needsReload ? '扩展管理' : '重试'}</Button> : null}
             </> : null}
-          </footer>
+          </footer> : null}
         </section>}
       </div>
     ) : null}

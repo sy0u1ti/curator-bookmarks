@@ -76,7 +76,7 @@ export function AvailabilityDecisionPanel({ children }: { children: ReactNode })
             className={AVAILABILITY_PROGRESS_COPY_CLASS}
             aria-atomic="true"
             aria-live="polite"
-            role="status"
+            tone={state.statusTone}
           >
             {state.statusCopy}
           </StatusMessage>

@@ -32,9 +32,11 @@ const shortcutTitle = <h2 className={AI_SETTINGS_TITLE_CLASS}>快捷键</h2>
 
 export function ShortcutControls() {
   const state = useShortcutControlsState()
+  const bodyError = state.list.kind === 'error'
   const statusClassName = [
     SHORTCUT_STATUS_BASE_CLASS,
-    SHORTCUT_STATUS_TONE_CLASSES[state.statusTone] || SHORTCUT_STATUS_TONE_CLASSES.muted
+    SHORTCUT_STATUS_TONE_CLASSES[state.statusTone] || SHORTCUT_STATUS_TONE_CLASSES.muted,
+    bodyError ? 'invisible' : ''
   ].join(' ')
 
   return (
@@ -43,12 +45,12 @@ export function ShortcutControls() {
       className={AI_SETTINGS_CARD_CLASS}
       title={shortcutTitle}
       description={
-        <StatusMessage className={AI_SETTINGS_SUBTITLE_CLASS} reserve={SHORTCUT_DETAIL_RESERVE} tone={state.statusTone === 'danger' ? 'error' : 'neutral'}>
-          {state.detail || SHORTCUT_DEFAULT_DETAIL}
+        <StatusMessage className={AI_SETTINGS_SUBTITLE_CLASS} reserve={SHORTCUT_DETAIL_RESERVE} tone={state.statusTone === 'danger' && !bodyError ? 'error' : 'neutral'}>
+          {bodyError ? SHORTCUT_DEFAULT_DETAIL : state.detail || SHORTCUT_DEFAULT_DETAIL}
         </StatusMessage>
       }
       status={
-        <span className={statusClassName}>
+        <span className={statusClassName} aria-hidden={bodyError || undefined}>
           <StableLabel text={state.statusLabel} reserve={['读取中…', '读取失败', '已同步']} />
         </span>
       }

@@ -275,66 +275,6 @@ test('only detection restarts wait for a settings save; result selection actions
   }
 })
 
-test('gallery refresh and download feedback cannot clear an unresolved favorite failure', async () => {
-  const state = { featuredBackgroundStatus: '', featuredBackgroundStatusTone: 'info' }
-  const context = await handler(newtabFile, 'setFeaturedBackgroundStatus', {
-    state, featuredBackgroundStatuses: new Map()
-  })
-  context.subject('favorite:forest', 'Favorite failed', 'error')
-  context.subject('refresh', 'Refreshing', 'info')
-  context.subject('download', 'Downloading', 'info')
-  context.subject('refresh', 'Refreshed', 'success')
-  context.subject('download', 'Downloaded', 'success')
-  assert.equal(state.featuredBackgroundStatus, 'Favorite failed')
-  context.subject('favorite:forest', '')
-  assert.equal(state.featuredBackgroundStatus, 'Downloaded')
-  context.subject('download', 'Downloading again', 'info')
-  context.subject('refresh', 'Another refresh completed', 'success')
-  assert.equal(state.featuredBackgroundStatus, 'Downloading again')
-})
-
-test('production gallery handlers retain favorite failures across refresh and clear them on retry', async () => {
-  const state = { featuredBackgroundFavoriteIds: [], featuredBackgroundRefreshing: false, featuredBackgroundStatus: '' }
-  const feedback = await handler(newtabFile, 'setFeaturedBackgroundStatus', { state, featuredBackgroundStatuses: new Map() })
-  let failFavorite = true
-  const refresh = deferred()
-  const globals = {
-    state, newTabControllerStarted: true, newTabControllerGeneration: 1,
-    featuredBackgroundFavoriteWrites: new Set(), featuredBackgroundPickerRenderKey: '',
-    setFeaturedBackgroundStatus: feedback.subject, syncFeaturedBackgroundModalControls: noop,
-    STORAGE_KEYS: { newTabFeaturedBackgroundFavorites: 'favorites', newTabFeaturedBackgroundGallery: 'gallery' },
-    withLocalStorageTransaction: task => task({}),
-    getLocalStorage: async () => ({ favorites: [], gallery: [] }),
-    setLocalStorage: async values => { if (failFavorite && values.favorites) throw new Error('Favorite failed') },
-    normalizeFeaturedBackgroundFavoriteIds: value => value,
-    normalizeFeaturedBackgroundGallery: value => value,
-    loadBackgroundGalleryModule: async () => ({}),
-    isFeaturedBackgroundPickerOpen: () => false,
-    ensureFeaturedBackgroundPermissions: async () => true,
-    loadBackgroundGalleryRefreshModule: async () => ({
-      fetchFreshFeaturedBackgroundItems: () => refresh.promise,
-      mergeFeaturedGalleryRefresh: ({ fetchedItems }) => fetchedItems,
-      getFeaturedBackgroundRefreshProviderCount: () => 1
-    }),
-    fetchJson: noop, getRemoteImageSize: noop, getFeaturedBackgroundDateSeed: () => 'fixture',
-    renderFeaturedBackgroundPickerAfterRefresh: async () => {},
-    clearFeaturedBackgroundPreviewCache: async () => {},
-    getFeaturedBackgroundRefreshErrorMessage: error => error.message
-  }
-  const favorite = await handler(newtabFile, 'toggleFeaturedBackgroundFavorite', globals)
-  const gallery = await handler(newtabFile, 'refreshFeaturedBackgroundGallery', globals)
-  const refreshing = gallery.subject()
-  await favorite.subject('forest')
-  assert.match(state.featuredBackgroundStatus, /Favorite failed/)
-  refresh.resolve([{ id: 'forest' }])
-  await refreshing
-  assert.match(state.featuredBackgroundStatus, /Favorite failed/)
-  failFavorite = false
-  await favorite.subject('forest')
-  assert.doesNotMatch(state.featuredBackgroundStatus, /Favorite failed/)
-  assert.deepEqual(Array.from(state.featuredBackgroundFavoriteIds), ['forest'])
-})
-
 for (const stale of ['selection', 'session', 'none']) {
   test(`background task failure respects its ${stale === 'none' ? 'current owner' : `old ${stale}`}`, async () => {
     const work = deferred()

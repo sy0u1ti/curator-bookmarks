@@ -15,6 +15,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '../../ui/base/Button'
+import { ErrorState } from '../../ui/base/ErrorState'
 import { StatusButton } from '../../ui/actions/StatusButton'
 import { COPY_ACTION_LABELS } from '../../ui/actions/ActionFeedback'
 import { IDLE_ACTION_FEEDBACK } from '../../shared/action-feedback'
@@ -1481,6 +1482,33 @@ function PopupMainStatePanel({
     return (
       <li className={mainStateClass} aria-live="polite">
         <PopupMainLoadingSkeleton label={state.label || '正在搜索书签…'} />
+      </li>
+    )
+  }
+
+  if (state.kind === 'error') {
+    return (
+      <li className={mainStateClass}>
+        <ErrorState
+          size="compact"
+          title={state.title || '读取失败'}
+          detail={state.label}
+          actions={state.actions?.length ? (
+            <>
+              {state.actions.map((action) => (
+                <Button
+                  key={action.action}
+                  size="sm"
+                  type="button"
+                  variant={action.primary ? 'primary' : 'secondary'}
+                  onClick={() => onEmptyAction?.(action.action)}
+                >
+                  {action.label}
+                </Button>
+              ))}
+            </>
+          ) : undefined}
+        />
       </li>
     )
   }

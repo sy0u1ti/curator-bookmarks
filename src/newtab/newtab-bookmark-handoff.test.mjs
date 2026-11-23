@@ -20,7 +20,7 @@ const EXPECTED_GLASS_FILTER = 'blur(12px)'
 const visualCaptureDir = process.env.CURATOR_NEWTAB_HANDOFF_CAPTURE_DIR
 const CAPTURE_WALLPAPER_DATA_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiBmaWxsPSIjZmZmIi8+PHBhdGggZD0iTTAgMGgxNnYxNkgwek0xNiAxNmgxNnYxNkgxNnoiIGZpbGw9IiMwMDAiLz48L3N2Zz4='
 const CAPTURE_WALLPAPER_URL = 'https://example.com/curator-handoff-checker.svg'
-const CAPTURE_WALLPAPER_SIGNATURE = ['urls', '#101013', '', '', CAPTURE_WALLPAPER_URL, '', '', ''].join('|')
+const CAPTURE_WALLPAPER_SIGNATURE = ['urls', '#101013', '', '', CAPTURE_WALLPAPER_URL].join('|')
 const CAPTURE_REMOTE_WALLPAPER_DELAY_MS = 1_200
 const LIFECYCLE_SAMPLE_MS = 5_000
 const GLASS_PIXEL_SAMPLE_START_MS = 800
@@ -60,7 +60,6 @@ try {
         imageName: '',
         videoName: '',
         url: wallpaperUrl,
-        featuredId: '',
         wallpaperDim: 0,
         wallpaperBlur: 0,
         wallpaperGrain: 0

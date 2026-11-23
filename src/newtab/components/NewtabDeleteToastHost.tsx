@@ -43,8 +43,8 @@ export function NewtabDeleteToastHost() {
           ),
           description: toast.detail,
           id: 'newtab-delete-toast',
-          title: '已删除书签',
-          type: 'success'
+          title: toast.title || '已删除书签',
+          type: toast.tone === 'error' ? 'error' : 'success'
         }] : []}
         rootClassName="t-toast newtab-delete-toast-panel"
         titleClassName="newtab-delete-toast-title"

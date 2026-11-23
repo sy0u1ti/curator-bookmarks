@@ -112,3 +112,45 @@ test('resting copy owns the status slot, so no blank fixed-height line appears a
 test('a panel named by the URL hash is never scrolled past its own title', () => {
   assert.match(source('../options/options.css'), /\.options-main-scroll > section \{\s*scroll-margin-block-start: 100dvh;/)
 })
+
+test('ErrorState keeps error details bounded, scrollable by keyboard and announced cleanly', () => {
+  const component = source('./base/ErrorState.tsx')
+  const css = source('./base/error-state.css')
+  assert.match(source('../styles/globals.css'), /@import "\.\.\/ui\/base\/error-state\.css";/)
+  assert.match(css, /max-height:\s*5lh/)
+  assert.match(css, /overflow:\s*auto/)
+  assert.match(css, /overflow-wrap:\s*anywhere/)
+  assert.match(component, /tabIndex=\{overflow \? 0 : undefined\}/)
+  assert.match(component, /tone === 'error' \? 'alert' : 'status'/)
+  assert.doesNotMatch(component, /line-clamp|\.slice\(/)
+})
+
+test('blocking error states render once without duplicate banners or dead footers', () => {
+  const island = source('../popup/components/PopupSyncIsland.tsx')
+  const workspace = source('../popup/components/PopupSyncWorkspace.tsx')
+  assert.match(island, /onHeaderModeChange=\{setWorkspaceHeaderMode\}/)
+  assert.match(island, /const quietHeader = !Workspace \|\| Boolean\(loadError\) \|\| workspaceHeaderMode === 'quiet'/)
+  assert.match(workspace, /\{!blockingLoadFailure \? <footer className="popup-sync-footer">/)
+  assert.match(workspace, /<ErrorState[\s\S]*logsError/)
+
+  const popupController = source('../popup/popup-controller.ts')
+  assert.match(popupController, /loadError: hasBlockingMainError\(\) \? '' :/)
+
+  const settingsDrawer = source('../newtab/components/SettingsDrawer.tsx')
+  assert.doesNotMatch(settingsDrawer, /<p[^>]*>保存失败，请重试/)
+  assert.match(settingsDrawer, /glassError/)
+
+  const undoToast = source('../options/components/OptionsUndoToast.tsx')
+  assert.match(undoToast, /view\?\.tone === 'error'/)
+
+  const newtabDeleteToast = source('../newtab/components/NewtabDeleteToastHost.tsx')
+  assert.match(newtabDeleteToast, /toast\.tone === 'error' \? 'error' : 'success'/)
+  assert.match(source('../newtab/newtab.css'), /\.newtab-delete-toast-panel\[data-type="error"\]/)
+  assert.match(source('../newtab/glass-surface.css'), /\.newtab-glass\[data-glass-tone="panel"\]\[data-type="error"\]/)
+
+  const backupControls = source('../options/components/BackupControls.tsx')
+  assert.match(backupControls, /tone=\{backup\.preview \? 'neutral' : tone\}/)
+
+  const providerCard = source('./ai/AiProviderCard.tsx')
+  assert.match(providerCard, /min-w-0 flex-auto content-start self-stretch/)
+})

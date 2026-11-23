@@ -72,7 +72,6 @@ const availableContext = {
   draggingSpeedDial: false,
   editableTarget: false,
   enabled: true,
-  featuredPickerOpen: false,
   menuOpen: false,
   settingsOpen: false
 }
@@ -83,7 +82,6 @@ for (const blockedKey of [
   'draggingFolder',
   'draggingSpeedDial',
   'editableTarget',
-  'featuredPickerOpen',
   'menuOpen',
   'settingsOpen'
 ] as const) {

@@ -140,7 +140,7 @@ function ToastListViewport({
             key={toast.id}
             toast={toast}
             className={unstyled ? rootClassName : cx(
-              't-toast flex items-center gap-3 rounded-ds-lg border border-ds-border bg-ds-surface-2 ds-inset-panel text-ds-text-primary [filter:var(--ds-filter-popover)]',
+              't-toast flex items-center gap-3 rounded-ds-lg border border-ds-border bg-ds-surface-2 ds-inset-panel text-ds-text-primary [filter:var(--ds-filter-popover)] data-[type=error]:border-ds-danger/40',
               rootClassName
             )}
             data-toast-id={toast.id}

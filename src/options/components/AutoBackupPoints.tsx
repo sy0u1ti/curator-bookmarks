@@ -47,10 +47,10 @@ export function AutoBackupPoints({ busy, onPreview }: { busy: boolean; onPreview
         <h3 id="recovery-points-title" className="m-0 text-sm font-semibold leading-6 text-ds-text-primary">自动恢复点</h3>
         {error ? <div className="-my-0.5 flex items-center gap-1">
           {points.length ? <Popover title="恢复点读取失败" showArrow={false} align="end"
-            trigger={<Button size="icon-sm" variant="ghost" aria-label="查看恢复点读取错误">
-              <Icon name="AlertTriangle" size={15} aria-hidden="true" className="text-ds-warning" />
+            trigger={<Button size="icon-sm" variant="ghost" className="text-ds-danger-text hover:bg-ds-danger-soft hover:text-ds-danger-text" aria-label="查看恢复点读取错误">
+              <Icon name="AlertTriangle" size={15} aria-hidden="true" />
             </Button>}>
-            <p className="m-0 text-[13px] leading-relaxed [overflow-wrap:anywhere]">{error}</p>
+            <p className="m-0 text-[13px] leading-relaxed text-ds-text-primary [overflow-wrap:anywhere]">{error}</p>
           </Popover> : null}
           <Button size="sm" variant="ghost" disabled={loading} onClick={() => void refresh()} aria-label="重新读取自动恢复点">重试</Button>
         </div> : null}

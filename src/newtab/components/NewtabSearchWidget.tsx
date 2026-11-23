@@ -144,8 +144,9 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
         </form>
         <SearchWidgetSuggestionsPanel view={view} />
         {view.webSearchError ? (
-          <output role="alert" className="newtab-search-error fixed right-6 bottom-6 z-50 max-w-[min(360px,calc(100vw-48px))] rounded-ds-card border border-[var(--newtab-glass-stroke)] bg-[var(--newtab-glass-bg-popup)] p-3 text-sm text-[var(--ds-danger-text)] shadow-none [backdrop-filter:var(--newtab-glass-filter-popup)]">
-            {view.webSearchError}
+          <output role="alert" className="newtab-search-error fixed right-6 bottom-6 z-50 flex max-w-[min(360px,calc(100vw-48px))] items-start gap-2.5 rounded-ds-lg border border-ds-danger/35 bg-[var(--newtab-glass-bg-popup)] px-3.5 py-3 text-[13px] leading-relaxed text-[var(--ds-danger-text)] shadow-none [filter:var(--newtab-glass-drop)] [backdrop-filter:var(--newtab-glass-filter-popup)]">
+            <Icon name="AlertTriangle" size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 [overflow-wrap:anywhere]">{view.webSearchError}</span>
           </output>
         ) : null}
       </BaseCollapsible.Root>

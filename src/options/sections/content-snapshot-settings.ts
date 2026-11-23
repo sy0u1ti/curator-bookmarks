@@ -7,7 +7,7 @@ type SettingsField = 'enabled' | 'saveFullText' | 'fullTextSearchEnabled'
 type SettingsPatch = Partial<Pick<ContentSnapshotSettings, SettingsField>>
 
 export function createContentSnapshotSettingsController(
-  state: { settings: ContentSnapshotSettings; statusMessage: string },
+  state: { settings: ContentSnapshotSettings; statusMessage: string; statusError?: boolean },
   render: () => void
 ) {
   let confirmed = state.settings
@@ -40,6 +40,7 @@ export function createContentSnapshotSettingsController(
       for (const field of fields) errors.delete(field)
       applyDraft()
       state.statusMessage = [...new Set(errors.values())].join('；')
+      state.statusError = errors.size > 0
       render()
       try {
         await withLocalStorageTransaction(async transaction => {
@@ -58,6 +59,7 @@ export function createContentSnapshotSettingsController(
       } finally {
         pending.delete(request)
         applyDraft()
+        state.statusError = errors.size > 0
         state.statusMessage = errors.size
           ? [...new Set(errors.values())].join('；')
           : pending.size ? '' : '网页内容索引设置已保存。'

@@ -28,7 +28,7 @@ export function readGlassSurfaceInventory() {
   const unmatched = [...document.querySelectorAll('body *')].filter(element => {
     if (!(element instanceof HTMLElement) || !visible(element) || element.matches('.newtab-glass')) return false
     if (element.closest('#newtab-background-mask, #newtab-wallpaper-stage, .newtab-dynamic-background-stage') ||
-      element.matches('.settings-backdrop,.featured-wallpaper-backdrop,.t-modal-backdrop')) return false
+      element.matches('.settings-backdrop,.t-modal-backdrop')) return false
     return getComputedStyle(element).backdropFilter !== 'none'
   }).map(element => ({ tag: element.tagName, className: element.className }))
   return {

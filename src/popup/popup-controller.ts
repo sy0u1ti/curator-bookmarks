@@ -1983,10 +1983,22 @@ function renderChrome() {
   renderSearchTools()
 }
 
+function hasBlockingMainError(): boolean {
+  const hasQuery = Boolean(state.debouncedQuery)
+  if (hasQuery && state.searchPreparationError) {
+    return true
+  }
+  if (!hasQuery && !state.isLoading && state.loadError) {
+    const currentRoot = getCurrentTreeRoot()
+    return !currentRoot || !(currentRoot.children || []).length
+  }
+  return false
+}
+
 function getPopupChromeViewModel(): PopupChromeView {
   const naturalSearchPending = state.naturalSearchPending
   return {
-    loadError: state.searchPreparationError || state.loadError,
+    loadError: hasBlockingMainError() ? '' : (state.searchPreparationError || state.loadError),
     search: {
       ariaLabel: getSearchInputAriaLabel(),
       clearVisible: Boolean(state.searchQuery),
@@ -2299,7 +2311,22 @@ function renderMainContent({ preserveScroll, navigation }: { preserveScroll?: bo
   let mainState: PopupContentViewModel['mainState'] | undefined
 
   if (hasQuery && state.searchPreparationError) {
-    mainState = { kind: 'empty', label: state.searchPreparationError }
+    mainState = {
+      kind: 'error',
+      title: '搜索暂不可用',
+      label: state.searchPreparationError,
+      actions: [
+        { action: 'retry-load', label: '重试', primary: true },
+        { action: 'clear-query', label: '清空搜索' }
+      ]
+    }
+  } else if (!hasQuery && !state.isLoading && state.loadError && showEmptyTree) {
+    mainState = {
+      kind: 'error',
+      title: '无法读取书签',
+      label: state.loadError,
+      actions: [{ action: 'retry-load', label: '重试', primary: true }]
+    }
   } else if (!state.isLoading && showSearchLoading) {
     mainState = {
       kind: 'loading',
@@ -3620,6 +3647,10 @@ function handleContentAction(detail: PopupContentActionDetail) {
   }
 }
 function handleEmptySearchAction(action) {
+  if (action === 'retry-load') {
+    void refreshData({ preserveSearch: true })
+    return
+  }
   if (action === 'clear-query') {
     setSearchQuery('', { immediate: true })
     showViewNotice('已清空搜索')

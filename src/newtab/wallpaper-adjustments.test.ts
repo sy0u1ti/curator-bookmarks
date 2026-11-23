@@ -89,10 +89,10 @@ assert.equal(projected['--wallpaper-overscan'], '16px')
 const uniform = getWallpaperAdjustmentStyles({ ...selected, style: 'dim', dim: 30 })
 assert.equal(uniform['--wallpaper-dim-image'], 'linear-gradient(rgb(0 0 0 / 30%), rgb(0 0 0 / 30%))')
 
-for (const type of ['image', 'video', 'urls', 'featured']) {
+for (const type of ['image', 'video', 'urls']) {
   assert.deepEqual(getEffectiveWallpaperAdjustments({ type, ...fields }), selected)
 }
-for (const type of ['color', 'texture', '', 'unknown']) {
+for (const type of ['color', 'texture', 'featured', '', 'unknown']) {
   assert.deepEqual(getEffectiveWallpaperAdjustments({ type, ...fields }), { ...selected, enabled: false })
 }
 
@@ -148,19 +148,13 @@ for (const changed of [{ type: 'video' }, { url: 'https://example.com/wallpaper.
   assert.equal(haveSameWallpaperSource(source, { ...source, ...changed }), false)
 }
 
-const baseSettings = { ...source, featuredId: '', videoName: '' }
-const preferences = { displaySize: 100, positionX: 50, positionY: 50 }
-const limits = {
-  displaySize: { min: 100, max: 180 },
-  positionX: { min: 0, max: 100 },
-  positionY: { min: 0, max: 100 }
-}
-assert.equal(createNewtabBackgroundSettingsView(baseSettings, preferences, limits).ready, false)
-const imageView = createNewtabBackgroundSettingsView(baseSettings, preferences, limits, { ready: true })
+const baseSettings = { ...source, videoName: '' }
+assert.equal(createNewtabBackgroundSettingsView(baseSettings).ready, false)
+const imageView = createNewtabBackgroundSettingsView(baseSettings, { ready: true })
 assert.equal(imageView.ready, true)
 assert.equal(imageView.wallpaperAdjustmentsHidden, false)
 assert.equal(imageView.wallpaperStyle, 'gradient')
-const colorView = createNewtabBackgroundSettingsView({ ...baseSettings, type: 'color' }, preferences, limits)
+const colorView = createNewtabBackgroundSettingsView({ ...baseSettings, type: 'color' })
 assert.equal(colorView.wallpaperAdjustmentsHidden, true)
 assert.equal(colorView.wallpaperDim, selected.dim, 'Switching background type must preserve saved amounts.')
 

@@ -11,8 +11,6 @@ export const NEWTAB_BACKUP_FIELDS = {
   folderSettings: STORAGE_KEYS.newTabFolderSettings,
   workspaceSettings: STORAGE_KEYS.newTabWorkspaceSettings,
   moduleSettings: STORAGE_KEYS.newTabModuleSettings,
-  featuredBackgroundFavorites: STORAGE_KEYS.newTabFeaturedBackgroundFavorites,
-  featuredBackgroundPreferences: STORAGE_KEYS.newTabFeaturedBackgroundPreferences,
   activity: STORAGE_KEYS.newTabActivity
 } as const
 

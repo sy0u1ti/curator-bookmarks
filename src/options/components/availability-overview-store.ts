@@ -13,7 +13,8 @@ const defaultProgressState: AvailabilityProgressState = {
   durationLabel: '未开始',
   progressLabel: '未开始',
   progressValue: 0,
-  statusCopy: '仅检测 http/https 书签。'
+  statusCopy: '仅检测 http/https 书签。',
+  statusTone: 'neutral'
 }
 
 const defaultDecisionMetricsState: AvailabilityDecisionMetricsState = {

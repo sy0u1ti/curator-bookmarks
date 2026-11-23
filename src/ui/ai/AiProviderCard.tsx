@@ -37,7 +37,7 @@ export function AiProviderCard({
   return (
     <Surface className={cx('curator-ai-card grid', className)} variant="group" {...props}>
       <header className={cx('flex items-start justify-between gap-3', headerClassName)}>
-        <div className={cx('grid min-w-0 gap-1', copyClassName)}>
+        <div className={cx('grid min-w-0 flex-auto content-start self-stretch gap-1', copyClassName)}>
           <div className={cx(titleLayoutClassName, titleClassName)}>
             {iconName ? (
               <span className="mt-[2px] inline-grid size-[18px] shrink-0 place-items-center text-ds-text-secondary">

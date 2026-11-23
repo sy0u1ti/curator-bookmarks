@@ -1,6 +1,7 @@
 import { OPTION_SURFACE_CLASS } from './option-layout-classes.js'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button } from '../../ui/base/Button.js'
+import { ErrorState } from '../../ui/base/ErrorState.js'
 import { Select } from '../../ui/base/Select.js'
 import { Input } from '../../ui/base/Input.js'
 import { type InboxItem } from '../../shared/inbox.js'
@@ -41,7 +42,7 @@ export function InboxReview() {
 
   const undoLastMove = useCallback(async () => {
     const failure = await runRef.current({ type: 'inbox:undo-last-move' })
-    if (failure) showOptionsUndoToast({ title: '撤销失败', detail: failure })
+    if (failure) showOptionsUndoToast({ title: '撤销失败', detail: failure, tone: 'error' })
   }, [])
 
   const announceMove = useCallback((bookmarkId: string) => {
@@ -116,6 +117,25 @@ export function InboxReview() {
     )
   }
 
+  if (!data && error) {
+    return (
+      <section aria-labelledby="inbox-review-title" className="mt-5 mb-7">
+        <ErrorState
+          surface="card"
+          titleAs="h3"
+          titleId="inbox-review-title"
+          title="无法读取待整理书签"
+          detail={error}
+          actions={
+            <Button size="sm" variant="primary" disabled={busy} onClick={() => void refreshInboxReview()}>
+              重新读取
+            </Button>
+          }
+        />
+      </section>
+    )
+  }
+
   return <section aria-labelledby="inbox-review-title" className={`mt-5 mb-7 ${OPTION_SURFACE_CLASS} px-5`}>
     <div className="flex min-h-[68px] flex-wrap items-center gap-3 py-4">
       {searchable ? <label className="relative flex min-w-[220px] flex-1 items-center text-ds-text-muted">
@@ -135,9 +155,12 @@ export function InboxReview() {
         <Icon name="RotateCcw" size={14} aria-hidden="true" />撤销最近一次移动
       </Button> : null}
     </div>
-    {error ? <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ds-border-subtle/70 py-4">
-      <p role="alert" className="m-0 min-w-0 text-[13px] text-ds-danger-text [overflow-wrap:anywhere]">{error}</p>
-      <Button size="sm" disabled={busy} onClick={() => void refreshInboxReview()}>重新读取</Button>
+    {error ? <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-ds-sm border border-ds-danger/30 bg-ds-danger-soft/60 px-3.5 py-2.5">
+      <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px] text-ds-danger-text">
+        <Icon name="AlertTriangle" size={14} aria-hidden="true" className="shrink-0" />
+        <p role="alert" className="m-0 min-w-0 [overflow-wrap:anywhere]">{error}</p>
+      </div>
+      <Button size="sm" variant="secondary" disabled={busy} onClick={() => void refreshInboxReview()}>重新读取</Button>
     </div> : null}
     {!data ? (!error ? <p className="m-0 border-t border-ds-border-subtle/70 py-10 text-center text-[13px] text-ds-text-muted">正在读取…</p> : null)
       : !pending.length && !rows.length ? <p className="m-0 border-t border-ds-border-subtle/70 py-10 text-center text-[13px] text-ds-text-muted">没有待整理的书签</p>

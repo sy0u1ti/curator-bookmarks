@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from 'react'
 import { Button } from '../../ui/base/Button'
+import { ErrorState } from '../../ui/base/ErrorState'
 import { Icon } from '../../ui/icons/Icon'
 import { formatSyncTime, syncStatusDetail, syncStatusLabel } from '../../shared/sync/sync-status'
 import { popupActivities, usePopupActivity } from '../popup-activity-store'
@@ -8,7 +9,11 @@ import { PopupSmartClassifierHost } from './PopupSmartClassifierHost'
 import { PopupContentHost } from './PopupContentHost'
 import '../popup-sync.css'
 
-type SyncWorkspace = ComponentType<{ active: boolean; onBackToBookmarks: () => void }>
+type SyncWorkspace = ComponentType<{
+  active: boolean
+  onBackToBookmarks: () => void
+  onHeaderModeChange?: (mode: 'summary' | 'quiet') => void
+}>
 let workspace: SyncWorkspace | null = null
 let workspacePromise: Promise<SyncWorkspace> | null = null
 function loadWorkspace() {
@@ -46,6 +51,7 @@ export function PopupSyncIsland({ hidden }: { hidden: boolean }) {
   const activity = usePopupActivity()
   const [Workspace, setWorkspace] = useState<SyncWorkspace | null>(() => workspace)
   const [loadError, setLoadError] = useState('')
+  const [workspaceHeaderMode, setWorkspaceHeaderMode] = useState<'summary' | 'quiet'>('quiet')
   const root = useRef<HTMLElement>(null)
   const returnFocus = useRef(false)
   const initialActivities = useRef(new Map<string, string>())
@@ -103,6 +109,23 @@ export function PopupSyncIsland({ hidden }: { hidden: boolean }) {
   }, [])
   const latest = [...activity.items].reverse().find(item => initialActivities.current.get(item.id) !== JSON.stringify(item))
     || activity.items.find(item => item.id === activity.activeId)
+  const quietHeader = !Workspace || Boolean(loadError) || workspaceHeaderMode === 'quiet'
+  const headerTone = quietHeader
+    ? 'neutral'
+    : error || status?.tone === 'error'
+      ? 'error'
+      : status?.tone === 'warning'
+        ? 'warning'
+        : status?.state === 'idle'
+          ? 'success'
+          : 'neutral'
+  const headerIcon = quietHeader
+    ? 'RefreshCw'
+    : error || status?.attention
+      ? 'AlertTriangle'
+      : status?.state === 'idle'
+        ? 'Check'
+        : 'RefreshCw'
   return <section ref={root} className="popup-sync-stage" hidden={hidden} data-sync-open={open ? 'true' : 'false'}>
     <div className="popup-sync-bookmarks" inert={open} aria-hidden={open || undefined}>
       <PopupContentHost />
@@ -116,18 +139,20 @@ export function PopupSyncIsland({ hidden }: { hidden: boolean }) {
         <header className="popup-sync-header">
           <span
             className="popup-sync-header-icon"
-            data-tone={error || status?.tone === 'error' ? 'error' : status?.tone === 'warning' ? 'warning' : status?.state === 'idle' ? 'success' : 'neutral'}
+            data-tone={headerTone}
             aria-hidden="true"
           >
             <Icon
-              name={error || status?.attention ? 'AlertTriangle' : status?.state === 'idle' ? 'Check' : 'RefreshCw'}
+              name={headerIcon}
               size={14}
-              className={!error && status?.state === 'running' ? 'animate-spin motion-reduce:animate-none' : undefined}
+              className={!quietHeader && !error && status?.state === 'running' ? 'animate-spin motion-reduce:animate-none' : undefined}
             />
           </span>
           <div className="popup-sync-header-copy">
-            <h2>同步{status && status.count > 1 ? ` · ${status.count} 项` : ''}</h2>
-            <p title={error || undefined}>{error ? '状态读取失败' : status ? syncStatusDetail(status) : '正在读取同步状态'}</p>
+            <h2>同步{!quietHeader && status && status.count > 1 ? ` · ${status.count} 项` : ''}</h2>
+            {!quietHeader ? (
+              <p title={error || undefined}>{error ? '状态读取失败' : status ? syncStatusDetail(status) : '正在读取同步状态'}</p>
+            ) : null}
           </div>
           {latest ? <Button className="popup-sync-feedback" size="sm" variant="secondary" title={latest.message} onClick={() => {
             popupActivities.select(latest.id)
@@ -136,10 +161,17 @@ export function PopupSyncIsland({ hidden }: { hidden: boolean }) {
           <Button id="popup-sync-collapse" className="popup-sync-toggle" aria-label="收起同步面板，返回书签"
             onClick={() => close()} unstyled>收起</Button>
         </header>
-        {Workspace ? <Workspace active={open && !hidden} onBackToBookmarks={() => close()} /> :
+        {Workspace ? <Workspace active={open && !hidden} onBackToBookmarks={() => close()} onHeaderModeChange={setWorkspaceHeaderMode} /> :
+          loadError ? <div className="popup-sync-loading popup-sync-loading--error">
+            <ErrorState
+              size="compact"
+              title="同步面板加载失败"
+              detail={loadError}
+              actions={<Button size="sm" variant="primary" onClick={load}>重试</Button>}
+            />
+          </div> :
           <div className="popup-sync-loading" role="status">
-            {loadError || '正在读取同步配置…'}
-            {loadError ? <Button size="sm" variant="secondary" onClick={load}>重试</Button> : null}
+            正在读取同步配置…
           </div>}
       </section>
     </div>

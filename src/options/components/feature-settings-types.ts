@@ -39,5 +39,6 @@ export interface FeatureSettingsControlsState {
     value: InboxWorkflowMode
     disabled: boolean
     status: string
+    statusTone?: 'neutral' | 'error'
   }
 }
