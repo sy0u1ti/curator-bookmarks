@@ -17,6 +17,8 @@ import { PopupChromeHost } from './components/PopupChromeHost'
 import { PopupSyncIsland } from './components/PopupSyncIsland'
 import { usePopupSyncMonitor } from './popup-sync-state'
 import { PopupSmartClassifierHost } from './components/PopupSmartClassifierHost'
+import { PopupContentHost } from './components/PopupContentHost'
+import { PopupEmbeddedActivityOverlay } from './components/PopupActivityHost'
 import { InputCaretHost } from '../ui/input-caret/InputCaretHost'
 
 const appShellBaseClass = [
@@ -25,6 +27,10 @@ const appShellBaseClass = [
 ].join(' ')
 const appShellDefaultClass = 'gap-2'
 const appShellSmartClass = 'gap-2'
+const embeddedShellClass = [
+  'group relative flex h-full min-h-0 flex-col gap-3 overflow-hidden bg-transparent text-ds-text-primary',
+  '[font-family:var(--font-sans)] tracking-normal [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start]'
+].join(' ')
 
 type PopupModalLayerComponent = (typeof import('./components/PopupModalLayer'))['PopupModalLayer']
 
@@ -50,6 +56,47 @@ export function PopupApp({ portalContainer }: { portalContainer?: HTMLElement | 
       <InputCaretHost />
       <PopupShell portalContainer={portalContainer} />
     </ThemeProvider>
+  )
+}
+
+export function PopupEmbeddedBookmarkManager({ portalContainer }: { portalContainer?: HTMLElement | null }) {
+  usePopupController()
+  const modalsView = usePopupModalsView()
+  const modalOpen = modalsView.open
+
+  useEffect(() => {
+    const unsubscribeStorageChanges = subscribeToPopupStorageChanges()
+    const unsubscribeBookmarkChanges = subscribeToPopupBookmarkChanges()
+
+    document.addEventListener('keydown', dispatchPopupDocumentKeyDown)
+    document.addEventListener('pointerdown', cancelPendingSearchActivation, true)
+    return () => {
+      unsubscribeBookmarkChanges()
+      unsubscribeStorageChanges()
+      document.removeEventListener('keydown', dispatchPopupDocumentKeyDown)
+      document.removeEventListener('pointerdown', cancelPendingSearchActivation, true)
+    }
+  }, [])
+
+  return (
+    <>
+      <div
+        id="popup-app-shell"
+        className={embeddedShellClass}
+        aria-hidden={modalOpen ? 'true' : 'false'}
+        inert={modalOpen}
+      >
+        <PopupChromeHost embedded="options" />
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <PopupContentHost />
+        </div>
+        <PopupEmbeddedActivityOverlay />
+      </div>
+      <DeferredPopupModalLayer
+        open={modalOpen}
+        portalContainer={portalContainer ?? undefined}
+      />
+    </>
   )
 }
 
@@ -149,7 +196,7 @@ function DeferredPopupModalLayer({
   open: boolean
   portalContainer?: HTMLElement
 }) {
-  const [Layer, setLayer] = useState<PopupModalLayerComponent | null>(popupModalLayerComponent)
+  const [Layer, setLayer] = useState<PopupModalLayerComponent | null>(() => popupModalLayerComponent)
 
   useEffect(() => {
     if (Layer || !open) {

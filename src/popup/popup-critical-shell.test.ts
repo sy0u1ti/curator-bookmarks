@@ -190,6 +190,10 @@ function run(): void {
       !popupController.includes('await recycleBin.removeRecycleEntry(payload.recycleId)'),
     'popup undo must consume the recycle entry through the shared rollback-safe restore transaction'
   )
+  assert(
+    !/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\*,\s*\*::before,\s*\*::after\s*\{[^}]*transition-duration\s*:/s.test(popupCss),
+    'popup reduced-motion wildcard rule must not attach transition-duration to all properties (it delays #popup-root visibility handoff)'
+  )
 }
 
 function assert(value: unknown, message: string): void {

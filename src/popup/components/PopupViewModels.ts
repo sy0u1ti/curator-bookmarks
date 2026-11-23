@@ -23,7 +23,7 @@ export interface PopupFolderTreeOptionViewModel {
   expanded: boolean
   hasChildren: boolean
   id: string
-  mode: 'move' | 'smart' | 'edit'
+  mode: 'move' | 'smart' | 'edit' | 'folder-create'
   path: string
   rowCurrent: boolean
   selected: boolean
@@ -40,7 +40,7 @@ export interface PopupFolderPickerState {
     message?: string
     title?: string
   } | null
-  mode: 'move' | 'smart' | 'edit'
+  mode: 'move' | 'smart' | 'edit' | 'folder-create'
   query: string
   treeOptions?: PopupFolderTreeOptionViewModel[]
 }
@@ -70,12 +70,14 @@ export interface PopupContentBookmarkRowViewModel {
   menuLabel: string
   parentId: string
   path?: string
+  selected?: boolean
   title: string
   url: string
 }
 
 export interface PopupContentFolderRowViewModel {
   active?: boolean
+  canManage?: boolean
   /** Kept only as an ancestor of a match; the row itself does not match. */
   dimmed?: boolean
   keyboardActive?: boolean
@@ -101,11 +103,13 @@ export interface PopupContentSearchResultViewModel {
   kind: 'result'
   menu: PopupActionMenuViewModel
   menuLabel: string
+  parentId?: string
   path: string
   reasonLabel: string
   reasonTitle: string
   reasonTokens: string[]
   presentation: PopupSearchRowPresentation
+  selected?: boolean
   title: string
   url: string
 }
@@ -129,6 +133,27 @@ export interface PopupBookmarkReorderViewModel {
   folderTitle: string
 }
 
+export interface PopupSelectionViewModel {
+  active: boolean
+  allSelected: boolean
+  busy: boolean
+  canEnter: boolean
+  selectedCount: number
+  totalCount: number
+}
+
+export interface PopupFolderManagementViewModel {
+  canCreate: boolean
+  canManage: boolean
+  canSort: boolean
+  directBookmarkCount: number
+  folderId: string
+  folderPath: string
+  folderTitle: string
+  isAllBookmarksScope?: boolean
+  sortBusy: boolean
+}
+
 export interface PopupContentViewModel {
   activeResultIndex?: number
   activeFolderIndex?: number
@@ -142,6 +167,7 @@ export interface PopupContentViewModel {
     query: string
     resultCount: number
   }
+  folderManagement?: PopupFolderManagementViewModel
   keyboardPane?: 'bookmarks' | 'folders'
   loading?: boolean
   mainState?: {
@@ -156,6 +182,7 @@ export interface PopupContentViewModel {
   mode?: 'search' | 'tree'
   reorder?: PopupBookmarkReorderViewModel
   rows: PopupContentRowViewModel[]
+  selection?: PopupSelectionViewModel
   sidebarRows?: PopupContentFolderRowViewModel[]
   title?: string
 }

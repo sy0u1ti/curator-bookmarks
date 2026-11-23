@@ -201,5 +201,8 @@ function getAriaLabel(mode: PopupFolderPickerMode): string {
   if (mode === 'smart') {
     return '保存目标文件夹'
   }
+  if (mode === 'folder-create') {
+    return '选择创建位置'
+  }
   return '编辑目标文件夹'
 }

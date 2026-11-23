@@ -667,3 +667,199 @@ body {
 .options-main-scroll > section {
   scroll-margin-block-start: 100dvh;
 }
+
+#options-main[data-section-key="bookmarks"] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 18px clamp(18px, 2.4vw, 32px) 20px;
+}
+
+.options-bookmarks-section {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+}
+
+html[data-curator-surface="options"] #popup-root {
+  --options-bookmarks-sidebar-width: clamp(236px, 19vw, 276px);
+  --options-bookmarks-column-max: 900px;
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  background: transparent;
+  contain: layout style;
+  visibility: visible;
+}
+
+html[data-curator-surface="options"] #popup-root > .curator-react-root {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+}
+
+html[data-curator-surface="options"] #popup-root #popup-app-shell {
+  position: relative;
+  width: min(100%, calc(var(--options-bookmarks-sidebar-width) + 12px + var(--options-bookmarks-column-max)));
+  margin-inline: auto;
+}
+
+html[data-curator-surface="options"] #popup-root .options-bookmarks-toolbar {
+  display: grid;
+  grid-template-columns: var(--options-bookmarks-sidebar-width) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+html[data-curator-surface="options"] #popup-root .options-bookmarks-heading {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding-inline: 10px;
+}
+
+html[data-curator-surface="options"] #popup-root .options-bookmarks-search-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+html[data-curator-surface="options"] #popup-root .popup-workspace {
+  grid-template-columns: var(--options-bookmarks-sidebar-width) minmax(0, 1fr);
+  gap: 12px;
+}
+
+html[data-curator-surface="options"] #popup-root .popup-main-pane {
+  width: 100%;
+  height: 100%;
+}
+
+html[data-curator-surface="options"] #popup-root .popup-bookmark-favicon {
+  display: inline-grid;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: var(--ds-radius-xs, 4px);
+  background: color-mix(in srgb, var(--ds-text-primary) 5%, transparent);
+}
+
+@container popup (min-width: 681px) {
+  html[data-curator-surface="options"] #popup-root .popup-main-pane > header {
+    padding-inline: 16px;
+  }
+
+  html[data-curator-surface="options"] #popup-root .popup-main-list {
+    padding: 8px 12px;
+  }
+}
+
+html[data-curator-surface="options"] #popup-root .popup-embedded-activity-overlay {
+  position: absolute;
+  left: calc(var(--options-bookmarks-sidebar-width) + 12px + (100% - var(--options-bookmarks-sidebar-width) - 12px) / 2);
+  right: auto;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 65;
+  width: min(440px, calc(100% - var(--options-bookmarks-sidebar-width) - 40px));
+  border-radius: var(--popup-radius-surface, 12px);
+  pointer-events: none;
+}
+
+html[data-curator-surface="options"] #popup-root .popup-embedded-activity-overlay[data-active="true"] {
+  pointer-events: auto;
+}
+
+html[data-curator-surface="options"] #popup-root:has(.popup-main-pane[data-selection-mode="true"]) .popup-embedded-activity-overlay {
+  bottom: 70px;
+}
+
+html[data-curator-surface="options"] #popup-root .popup-embedded-activity-overlay .popup-activity-card {
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  grid-template-rows: auto;
+  min-height: 46px;
+  height: auto;
+  padding: 8px 8px 8px 12px;
+  border-radius: inherit;
+  background: var(--ds-surface-2);
+}
+
+html[data-curator-surface="options"] #popup-root .popup-embedded-activity-overlay .popup-activity-actions {
+  grid-column: auto;
+}
+
+html[data-curator-surface="options"] #popup-root .popup-search-shell {
+  flex-wrap: nowrap;
+  align-items: center;
+  padding-block: 0;
+}
+
+@container popup (max-width: 520px) {
+  html[data-curator-surface="options"] #popup-root #clear-search[data-visible="false"] {
+    display: none;
+  }
+
+  html[data-curator-surface="options"] #popup-root #natural-search-toggle {
+    width: auto;
+    min-width: 0;
+    padding-inline: 10px;
+  }
+}
+
+@container popup (max-width: 680px) {
+  html[data-curator-surface="options"] #popup-root .options-bookmarks-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html[data-curator-surface="options"] #popup-root .options-bookmarks-heading {
+    display: none;
+  }
+
+  html[data-curator-surface="options"] #popup-root .options-bookmarks-search-stage {
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  html[data-curator-surface="options"] #popup-root .popup-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(140px, 34%) minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  html[data-curator-surface="options"] #popup-root .popup-main-pane {
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  html[data-curator-surface="options"] #popup-root .popup-embedded-activity-overlay {
+    left: auto;
+    right: 14px;
+    transform: none;
+    width: min(440px, calc(100% - 28px));
+  }
+}
+
+@media (max-width: 920px) {
+  #options-main[data-section-key="bookmarks"] {
+    overflow: visible;
+    padding: 16px 0 0;
+  }
+
+  .options-bookmarks-section {
+    height: max(560px, calc(100dvh - 112px));
+    min-height: 520px;
+  }
+}

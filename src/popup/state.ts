@@ -57,6 +57,11 @@ export interface PopupState {
   bookmarkReorderOrderIds: string[]
   bookmarkReorderBusy: boolean
   bookmarkReorderAnnouncement: string
+  selectionMode: boolean
+  selectedBookmarkIds: Set<string>
+  selectionAnchorBookmarkId: string
+  batchActionBusy: boolean
+  folderSortBusy: boolean
   viewNoticeMessage: string
   viewNoticeTimer: number | null
   searchResults: PopupSearchResult[]
@@ -97,7 +102,23 @@ export interface PopupState {
   hasPresentedContent: boolean
   searchChipsRenderSignature: string
   moveTargetBookmarkId: string | null
+  moveTargetMode: 'bookmark' | 'batch' | 'folder'
+  moveTargetFolderId: string | null
+  moveTargetBookmarkIds: string[]
   moveSearchQuery: string
+  moveCreateOpen: boolean
+  moveCreateTitle: string
+  moveCreateParentId: string
+  moveCreateError: string
+  moveCreateSaving: boolean
+  folderDialogMode: 'create' | 'rename' | 'delete' | null
+  folderDialogTargetId: string
+  folderDialogInitialTargetId: string
+  folderDialogTitle: string
+  folderDialogError: string
+  folderDialogSaving: boolean
+  folderDialogPickerOpen: boolean
+  folderDialogSearchQuery: string
   editTargetBookmarkId: string | null
   editDraftBookmarkId: string
   editDraftTitle: string
@@ -163,6 +184,11 @@ export const state: PopupState = {
   bookmarkReorderOrderIds: [],
   bookmarkReorderBusy: false,
   bookmarkReorderAnnouncement: '',
+  selectionMode: false,
+  selectedBookmarkIds: new Set(),
+  selectionAnchorBookmarkId: '',
+  batchActionBusy: false,
+  folderSortBusy: false,
   viewNoticeMessage: '',
   viewNoticeTimer: null,
   searchResults: [],
@@ -211,7 +237,23 @@ export const state: PopupState = {
   hasPresentedContent: false,
   searchChipsRenderSignature: '',
   moveTargetBookmarkId: null,
+  moveTargetMode: 'bookmark',
+  moveTargetFolderId: null,
+  moveTargetBookmarkIds: [],
   moveSearchQuery: '',
+  moveCreateOpen: false,
+  moveCreateTitle: '',
+  moveCreateParentId: '',
+  moveCreateError: '',
+  moveCreateSaving: false,
+  folderDialogMode: null,
+  folderDialogTargetId: '',
+  folderDialogInitialTargetId: '',
+  folderDialogTitle: '',
+  folderDialogError: '',
+  folderDialogSaving: false,
+  folderDialogPickerOpen: false,
+  folderDialogSearchQuery: '',
   editTargetBookmarkId: null,
   editDraftBookmarkId: '',
   editDraftTitle: '',

@@ -50,3 +50,28 @@ test('nested destinations are lazy and selecting a parent never moves implicitly
   assert.ok(child.label)
   assert.equal(buildBookmarkMoveActions([], '', () => {}).length, 0)
 })
+
+test('blockedIds omit a folder and its entire descendant subtree to prevent circular moves', () => {
+  const selected = []
+  const actions = buildBookmarkMoveActions([
+    {
+      id: '1',
+      title: '书签栏',
+      children: [
+        {
+          id: 'self',
+          title: '项目组',
+          children: [{ id: 'grandchild', title: '子目录', children: [] }]
+        },
+        { id: 'sibling', title: '归档', children: [] }
+      ]
+    }
+  ], '1', id => selected.push(id), new Set(['self', 'grandchild']))
+
+  assert.equal(actions.length, 1)
+  const [here, ...children] = actions[0].children()
+  assert.equal(here.disabled, true)
+  assert.deepEqual(children.map(item => item.id), ['move:sibling'])
+  children[0].onSelect()
+  assert.deepEqual(selected, ['sibling'])
+})

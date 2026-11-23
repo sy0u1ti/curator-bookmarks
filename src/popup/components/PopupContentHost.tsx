@@ -35,7 +35,7 @@ const contentHostClass = 'relative z-0 block h-full min-h-0 overflow-hidden'
 const INITIAL_CONTENT_STATE: PopupContentViewModel = {
   loading: true,
   rows: [],
-  title: '书签栏'
+  title: '全部书签'
 }
 
 interface ActiveResultIndicatorGeometry {
@@ -97,11 +97,44 @@ export function PopupContentHost() {
   const stateRef = useRef(state)
   stateRef.current = state
   const handlers = useMemo<PopupContentActionHandlers>(() => ({
+    onBookmarkLocateFolder: (bookmarkId) => {
+      dispatchPopupContentAction({ action: 'locate-bookmark-folder', bookmarkId })
+    },
     onBookmarkOpen: (bookmarkId) => {
       dispatchPopupContentAction({ action: 'open-bookmark', bookmarkId })
     },
+    onBookmarkSelectFromContext: (bookmarkId) => {
+      dispatchPopupContentAction({ action: 'select-bookmark-from-context', bookmarkId })
+    },
+    onBookmarkToggleSelect: (bookmarkId, shiftKey) => {
+      dispatchPopupContentAction({ action: 'toggle-select-bookmark', bookmarkId, shiftKey })
+    },
+    onBookmarkSwipeSelect: (startBookmarkId, endBookmarkId, targetSelected, baseSelectedIds) => {
+      dispatchPopupContentAction({
+        action: 'swipe-select-bookmarks',
+        bookmarkId: endBookmarkId,
+        startBookmarkId,
+        targetSelected,
+        baseSelectedIds
+      })
+    },
+    onBatchDeleteSelected: () => {
+      dispatchPopupContentAction({ action: 'batch-delete-selected' })
+    },
+    onBatchMoveSelected: (returnFocusElement) => {
+      dispatchPopupContentAction({ action: 'batch-move-selected', returnFocusElement })
+    },
+    onClearSelection: () => {
+      dispatchPopupContentAction({ action: 'clear-selection' })
+    },
     onEmptyAction: (emptyAction) => {
       dispatchPopupContentAction({ action: 'empty-action', emptyAction })
+    },
+    onFolderCreate: (folderId, returnFocusElement) => {
+      dispatchPopupContentAction({ action: 'folder-create', folderId, returnFocusElement })
+    },
+    onFolderDelete: (folderId, returnFocusElement) => {
+      dispatchPopupContentAction({ action: 'folder-delete', folderId, returnFocusElement })
     },
     onFolderFilter: (folderId) => {
       dispatchPopupContentAction({ action: 'filter-folder', folderId })
@@ -124,6 +157,15 @@ export function PopupContentHost() {
     onFolderFocus: (index) => {
       dispatchPopupContentAction({ action: 'set-active-folder', index })
     },
+    onFolderMove: (folderId, returnFocusElement) => {
+      dispatchPopupContentAction({ action: 'folder-move', folderId, returnFocusElement })
+    },
+    onFolderRename: (folderId, returnFocusElement) => {
+      dispatchPopupContentAction({ action: 'folder-rename', folderId, returnFocusElement })
+    },
+    onFolderSort: (folderId, sortMode) => {
+      dispatchPopupContentAction({ action: 'folder-sort', folderId, sortMode })
+    },
     onKeyboardNavigate: (key, repeat) => {
       dispatchPopupContentAction({ action: 'keyboard-navigate', menuAction: key, repeat })
       return true
@@ -142,6 +184,12 @@ export function PopupContentHost() {
     },
     onResultHover: (index) => {
       dispatchPopupContentResultHover(index)
+    },
+    onSelectionModeChange: (active) => {
+      dispatchPopupContentAction({ action: active ? 'enter-selection-mode' : 'exit-selection-mode' })
+    },
+    onToggleSelectAll: () => {
+      dispatchPopupContentAction({ action: 'toggle-select-all' })
     }
   }), [])
   const activeResultObserverKey = getActiveResultObserverKey(state)

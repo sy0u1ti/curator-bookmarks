@@ -1,7 +1,8 @@
 import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 import type {
   BookmarkAddMenuViewModel,
-  BookmarkEditMenuViewModel
+  BookmarkEditMenuViewModel,
+  BookmarkFolderMenuViewModel
 } from './bookmark-menu-view-models'
 
 export interface NewtabBookmarkEditMenuView {
@@ -21,14 +22,25 @@ export interface NewtabBookmarkAddMenuView {
   onExitComplete: () => void
 }
 
+export interface NewtabBookmarkFolderMenuView {
+  sessionId: number
+  closing: boolean
+  focusAction: string
+  focusFirst: boolean
+  menu: BookmarkFolderMenuViewModel
+  onExitComplete: () => void
+}
+
 export interface NewtabBookmarkMenusView {
   add: NewtabBookmarkAddMenuView | null
   edit: NewtabBookmarkEditMenuView | null
+  folder: NewtabBookmarkFolderMenuView | null
 }
 
 const EMPTY_VIEW: NewtabBookmarkMenusView = {
   add: null,
-  edit: null
+  edit: null,
+  folder: null
 }
 
 const bookmarkMenusStore = createUiViewStoreSlice(
@@ -48,6 +60,13 @@ export function dispatchNewtabBookmarkAddMenuView(view: NewtabBookmarkAddMenuVie
   bookmarkMenusStore.setState((current) => ({
     ...current,
     add: view
+  }))
+}
+
+export function dispatchNewtabBookmarkFolderMenuView(view: NewtabBookmarkFolderMenuView | null): void {
+  bookmarkMenusStore.setState((current) => ({
+    ...current,
+    folder: view
   }))
 }
 
@@ -79,6 +98,23 @@ export function dispatchNewtabBookmarkAddMenuClosing(): void {
     add: {
       ...bookmarkMenusView.add,
       closing: true,
+      focusFirst: false
+    }
+  })
+}
+
+export function dispatchNewtabBookmarkFolderMenuClosing(): void {
+  const bookmarkMenusView = bookmarkMenusStore.getState()
+  if (!bookmarkMenusView.folder || bookmarkMenusView.folder.closing) {
+    return
+  }
+
+  bookmarkMenusStore.setState({
+    ...bookmarkMenusView,
+    folder: {
+      ...bookmarkMenusView.folder,
+      closing: true,
+      focusAction: '',
       focusFirst: false
     }
   })

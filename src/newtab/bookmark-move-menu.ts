@@ -3,10 +3,13 @@ import type { BookmarkMenuActionViewModel } from './bookmark-menu-view-models.js
 export function buildBookmarkMoveActions(
   nodes: readonly chrome.bookmarks.BookmarkTreeNode[],
   currentParentId: string,
-  onMove: (folderId: string) => void | Promise<void>
+  onMove: (folderId: string) => void | Promise<void>,
+  blockedIds?: ReadonlySet<string>
 ): BookmarkMenuActionViewModel[] {
-  return nodes.filter(isWritableFolder).map(folder => {
-    const hasSubfolders = (folder.children || []).some(isWritableFolder)
+  const isAvailable = (node: chrome.bookmarks.BookmarkTreeNode) =>
+    isWritableFolder(node) && !blockedIds?.has(String(node.id))
+  return nodes.filter(isAvailable).map(folder => {
+    const hasSubfolders = (folder.children || []).some(isAvailable)
     const select: BookmarkMenuActionViewModel = {
       id: `move:${folder.id}`,
       ariaLabel: `移动到：${folder.title || '未命名文件夹'}`,
@@ -23,7 +26,7 @@ export function buildBookmarkMoveActions(
       // Materialize only the level being opened, not every folder in a large tree.
       children: () => [
         { ...select, id: `here:${folder.id}`, label: '移动到此文件夹', ariaLabel: `移动到此文件夹：${folder.title || '未命名文件夹'}`, icon: 'move' },
-        ...buildBookmarkMoveActions(folder.children || [], currentParentId, onMove)
+        ...buildBookmarkMoveActions(folder.children || [], currentParentId, onMove, blockedIds)
       ]
     }
   })

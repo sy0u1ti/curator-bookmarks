@@ -1,6 +1,11 @@
 import { useEffect } from 'react'
 import { actionFeedback, type ActionFeedback } from '../shared/action-feedback.js'
-import { closeTransientPopup, isSidePanelSurface } from '../shared/extension-surfaces.js'
+import {
+  closeTransientPopup,
+  isOptionsSurface,
+  isSidePanelSurface,
+  type BookmarkManagerTarget
+} from '../shared/extension-surfaces.js'
 import { getPopupSearchResultId, isPopupKeyboardHelpOpen, publishPopupSearchAccessibility, setPopupKeyboardHelpOpen } from './popup-workspace-state.js'
 import { isPopupSyncOpen } from './popup-sync-state.js'
 import {
@@ -27,9 +32,11 @@ import {
 } from '../shared/text.js'
 import { normalizeBookmarkSaveUrl } from '../shared/bookmark-save-url.js'
 import {
+  createBookmark,
   createTab,
   getBookmarkTree,
   moveBookmark,
+  removeBookmark,
   updateBookmark
 } from '../shared/bookmarks-api.js'
 import { getLocalStorage, removeLocalStorage, setLocalStorage, withLocalStorageTransaction } from '../shared/storage.js'
@@ -79,6 +86,7 @@ import {
   type PopupActionMenuViewModel,
   type PopupContentBookmarkRowViewModel,
   type PopupContentFolderRowViewModel,
+  type PopupContentMainRowViewModel,
   type PopupContentRowViewModel,
   type PopupContentSearchResultViewModel,
   type PopupContentViewModel,
@@ -141,7 +149,6 @@ import {
   createPopupNavigationBatch,
   getBookmarkPaneKeyboardIndex,
   getFolderPaneKeyboardIndex,
-  getFolderPaneTreeRoot,
   shouldBlurMainSearchForNavigation,
   shouldDelegatePopupDocumentNavigation,
   shouldFocusFolderFilterFromMainSearch,
@@ -155,6 +162,20 @@ import {
   getPopupBookmarkMoveDestinationIndex,
   reorderPopupBookmarkIds
 } from './popup-bookmark-reorder.js'
+import {
+  collectFolderDescendantIds,
+  computeMultiSelectSwipeRange,
+  computeMultiSelectToggle,
+  computeSortedDirectBookmarkIds,
+  countFolderSubtreeContents,
+  getPopupFolderSortOption,
+  isProtectedBookmarkFolder,
+  planDirectBookmarkSortMoves,
+  pruneSelectionToVisibleIds,
+  validateFolderTitle,
+  type PopupFolderSortMode
+} from './popup-folder-management.js'
+import type { DeletedFolderBlueprint } from '../shared/recycle-bin.js'
 import {
   getPopupPrebootSearchAdoptionQuery,
   readPopupPrebootSearchSnapshot
@@ -194,6 +215,7 @@ let naturalSearchAiModulePromise: Promise<typeof import('./natural-search-ai.js'
 let aiSettingsModulePromise: Promise<typeof import('../options/sections/ai-settings.js')> | null = null
 let smartClassifierModulePromise: Promise<typeof import('./smart-classifier.js')> | null = null
 let recycleBinModulePromise: Promise<typeof import('../shared/recycle-bin.js')> | null = null
+let activityRepositoryModulePromise: Promise<typeof import('../shared/repositories/activity-repository.js')> | null = null
 let smartProgressTimer: number | null = null
 let smartClassificationAbortController: AbortController | null = null
 // 缓动的锚点：最近一次"真实进度"的数值与发生时刻，节拍器据此按经过时间推算显示值。
@@ -225,6 +247,39 @@ const resultNavigationBatch = createPopupNavigationBatch(flushQueuedActiveResult
 const folderNavigationBatch = createPopupNavigationBatch(flushQueuedActiveFolderIndex)
 let keyboardNavigationSettleTimer = 0
 let popupActionStateVersion = 0
+let popupSelectionVersion = 0
+
+type PopupUndoPayload =
+  | { kind: 'folder-delete'; blueprint: DeletedFolderBlueprint }
+  | {
+      kind: 'folder-move'
+      folderId: string
+      folderTitle: string
+      previousParentId: string
+      previousIndex: number
+      createdFolderId?: string
+    }
+  | { kind: 'folder-rename'; folderId: string; previousTitle: string; nextTitle: string }
+  | {
+      kind: 'bookmark-edit'
+      bookmarkId: string
+      previousTitle: string
+      previousUrl: string
+      previousParentId: string
+      previousIndex: number
+      detailsChanged: boolean
+      parentChanged: boolean
+    }
+  | { kind: 'batch-delete'; recycleIds: string[] }
+  | {
+      kind: 'batch-move'
+      entries: Array<{ bookmarkId: string; parentId: string; index: number }>
+      createdFolderId?: string
+    }
+  | { kind: 'folder-sort'; folderId: string; folderTitle: string; previousIds: string[] }
+
+const popupUndoPayloads = new Map<string, PopupUndoPayload>()
+const MAX_POPUP_UNDO_PAYLOADS = 12
 const popupCopyFeedback = new Map<string, ActionFeedback>()
 const treeBookmarkRowsCache = createPopupContentRowCache<PopupContentBookmarkRowViewModel>('active')
 interface BookmarkRowMemo {
@@ -232,6 +287,7 @@ interface BookmarkRowMemo {
   depth: number
   active: boolean
   index: number
+  selected: boolean
   actionStateVersion: number
   id: unknown
   title: unknown
@@ -306,11 +362,71 @@ function loadRecycleBinModule(): Promise<typeof import('../shared/recycle-bin.js
   recycleBinModulePromise ||= import('../shared/recycle-bin.js')
   return recycleBinModulePromise
 }
+function loadActivityRepositoryModule(): Promise<typeof import('../shared/repositories/activity-repository.js')> {
+  activityRepositoryModulePromise ||= import('../shared/repositories/activity-repository.js')
+  return activityRepositoryModulePromise
+}
+function rememberPopupUndoPayload(activityId: string, payload: PopupUndoPayload): void {
+  popupUndoPayloads.set(activityId, payload)
+  while (popupUndoPayloads.size > MAX_POPUP_UNDO_PAYLOADS) {
+    const oldestKey = popupUndoPayloads.keys().next().value
+    if (oldestKey === undefined) break
+    popupUndoPayloads.delete(oldestKey)
+  }
+}
+let popupActivityWriteQueue: Promise<void> = Promise.resolve()
+
+async function recordPopupBookmarkOpen(bookmark: { id?: string; title?: string; url?: string } | null | undefined): Promise<void> {
+  const bookmarkId = String(bookmark?.id || '').trim()
+  const url = String(bookmark?.url || '').trim()
+  if (!bookmarkId || !url) return
+  const queued = popupActivityWriteQueue.then(async () => {
+    try {
+      const repository = await loadActivityRepositoryModule()
+      await withLocalStorageTransaction(async (transaction) => {
+        const current = await repository.loadNewTabActivityFromRepository(
+          repository.normalizeNewTabActivityRepositoryState,
+          transaction
+        )
+        const existing = current.records[bookmarkId]
+        const now = Date.now()
+        const nextRecord = {
+          bookmarkId,
+          title: String(bookmark?.title || existing?.title || '').trim().slice(0, 160),
+          url: url.slice(0, 2048),
+          openCount: Math.min((existing?.openCount || 0) + 1, 9999),
+          firstOpenedAt: existing?.firstOpenedAt || now,
+          lastOpenedAt: Math.max((existing?.lastOpenedAt || 0) + 1, now)
+        }
+        await repository.upsertNewTabActivityRecordInRepository(
+          current,
+          nextRecord,
+          repository.normalizeNewTabActivityRepositoryState,
+          transaction
+        )
+      })
+    } catch {
+    }
+  })
+  popupActivityWriteQueue = queued.then(() => {}, () => {})
+  await queued
+}
+
+async function settlePopupBookmarkOpenRecord(
+  bookmark: { id?: string; title?: string; url?: string } | null | undefined
+): Promise<void> {
+  await Promise.race([
+    recordPopupBookmarkOpen(bookmark),
+    new Promise<void>((resolve) => window.setTimeout(resolve, 250))
+  ])
+}
 let popupControllerStarted = false
 let pendingInitialPinnedStorage: {
   session: number
   promise: Promise<Record<string, unknown>>
 } | null = null
+let pendingBookmarkManagerTarget: BookmarkManagerTarget | null = null
+let popupBaseRefreshInFlight = false
 const POPUP_COLD_START_STORAGE_KEYS = [
   STORAGE_KEYS.popupPreferences,
   STORAGE_KEYS.aiProviderSettings,
@@ -328,10 +444,13 @@ export function startPopupController(): () => void {
   }
   popupControllerStarted = true
   const session = ++popupSessionId
+  const embeddedInOptions = isOptionsSurface()
 
   perfMark('popup.domContentLoaded')
   bindEvents()
-  adoptInitialPopupPrebootSearchQuery()
+  if (!embeddedInOptions) {
+    adoptInitialPopupPrebootSearchQuery()
+  }
   render()
   perfMark('popup.firstRender')
   perfMeasure('popup.shellReady', 'popup.domContentLoaded', 'popup.firstRender')
@@ -355,6 +474,9 @@ export function startPopupController(): () => void {
     if (session !== popupSessionId || !popupControllerStarted) return
     perfMark('popup.interactive')
     perfMeasure('popup.totalInteractive', 'popup.domContentLoaded', 'popup.interactive')
+    if (embeddedInOptions) {
+      return
+    }
     void consumePopupCommandIntent().then((handled) => {
       if (session !== popupSessionId || !popupControllerStarted) return
       if (!handled && !isSmartOverlayActive()) {
@@ -362,9 +484,71 @@ export function startPopupController(): () => void {
       }
     })
   })
-  void hydrateAutoAnalyzeStatus(coldStartStoragePromise)
+  if (!embeddedInOptions) {
+    void hydrateAutoAnalyzeStatus(coldStartStoragePromise)
+  }
 
   return cleanupPopupController
+}
+
+export function getPopupCurrentBookmarkManagerTarget(): BookmarkManagerTarget {
+  const query = String(state.searchQuery || '').trim()
+  const folderId = String(state.selectedFolderFilterId || '').trim()
+  return {
+    ...(folderId ? { folderId } : null),
+    ...(query ? { query } : null)
+  }
+}
+
+export function applyPopupBookmarkManagerTarget(target: BookmarkManagerTarget): void {
+  const folderId = String(target.folderId || '').trim()
+  const bookmarkId = String(target.bookmarkId || '').trim()
+  const query = String(target.query || '').trim()
+  if (!folderId && !bookmarkId && !query) {
+    return
+  }
+  pendingBookmarkManagerTarget = {
+    ...(folderId ? { folderId } : null),
+    ...(bookmarkId ? { bookmarkId } : null),
+    ...(query ? { query } : null)
+  }
+  if (!state.isLoading && !popupBaseRefreshInFlight && state.rawTreeRoot) {
+    flushPendingBookmarkManagerTarget()
+  }
+}
+
+function flushPendingBookmarkManagerTarget(): void {
+  const target = pendingBookmarkManagerTarget
+  if (!target || !state.rawTreeRoot) {
+    return
+  }
+  pendingBookmarkManagerTarget = null
+  if (target.bookmarkId && state.bookmarkMap.has(target.bookmarkId)) {
+    locateBookmarkFolder(target.bookmarkId)
+    return
+  }
+  if (target.folderId && findNodeById(state.rawTreeRoot, target.folderId)) {
+    cancelPendingSearchActivation()
+    resetBookmarkReorderModeState()
+    resetFolderFilterQuery()
+    state.selectedFolderFilterId = target.folderId
+    state.filteredBookmarksCacheKey = ''
+    if (target.query) {
+      setSearchQuery(target.query, { immediate: true })
+    } else if (state.searchQuery || state.debouncedQuery) {
+      setSearchQuery('', { immediate: true })
+    }
+    if (state.selectionMode) {
+      prunePopupSelectionToCurrentView()
+    }
+    renderChrome()
+    renderMainContent({ preserveScroll: false })
+    scrollSidebarFolderIntoView(target.folderId)
+    return
+  }
+  if (target.query) {
+    setSearchQuery(target.query, { immediate: true })
+  }
 }
 
 function bindEvents() {
@@ -457,6 +641,10 @@ async function refreshNaturalSearchAiConfiguredState(prefetchedStorage?: Record<
 async function openSettingsPage(target: Event | 'general' | 'ai-provider' = 'general') {
   const hash = target === 'ai-provider' ? 'general:ai-provider' : 'general'
   try {
+    if (isOptionsSurface() && typeof window !== 'undefined') {
+      window.location.hash = `#${hash}`
+      return
+    }
     await chrome.tabs.create({
       url: chrome.runtime.getURL(`src/options/options.html#${hash}`)
     })
@@ -470,6 +658,10 @@ async function openSettingsPage(target: Event | 'general' | 'ai-provider' = 'gen
 }
 async function openBookmarkHistoryPage() {
   try {
+    if (isOptionsSurface() && typeof window !== 'undefined') {
+      window.location.hash = '#bookmark-history'
+      return
+    }
     await chrome.tabs.create({
       url: chrome.runtime.getURL('src/options/options.html#bookmark-history')
     })
@@ -853,6 +1045,7 @@ async function runSmartClassifierFromCommand(intent) {
 async function refreshData({ initial = false, preserveSearch = true } = {}) {
   const refreshRunId = popupRefreshRunId + 1
   popupRefreshRunId = refreshRunId
+  popupBaseRefreshInFlight = true
   perfMark('popup.refreshData.start')
   // 已经向用户呈现过内容（会话快照或上一轮数据）时静默刷新：
   // 不再把可见内容拉回骨架 + 渐隐态，数据就绪后直接原地替换。
@@ -867,6 +1060,7 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
         if (refreshRunId !== popupRefreshRunId) {
           return
         }
+        popupBaseRefreshInFlight = false
         applyPopupBaseRefreshData(baseData, { initial, preserveSearch })
         perfMark('popup.refreshData.baseReady.end')
         perfMeasure('popup.refreshData.baseReady', 'popup.refreshData.start', 'popup.refreshData.baseReady.end')
@@ -896,6 +1090,7 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
     if (refreshRunId !== popupRefreshRunId) {
       return
     }
+    popupBaseRefreshInFlight = false
     state.isLoading = false
     render()
   }
@@ -935,7 +1130,7 @@ async function loadPopupBaseRefreshData(
   refreshRunId: number,
   { initial = false }: { initial?: boolean } = {}
 ): Promise<PopupRefreshBaseData> {
-  const activeTabPromise = initial
+  const activeTabPromise = initial && !isOptionsSurface()
     ? waitForOptionalStartupValue(consumePopupActiveTab().catch(() => null), POPUP_COLD_START_ACTIVE_TAB_WAIT_MS)
     : Promise.resolve({ ready: false } as const)
   const initialPinnedEntry = initial && pendingInitialPinnedStorage && pendingInitialPinnedStorage.session === popupSessionId
@@ -990,6 +1185,10 @@ function applyPopupBaseRefreshData(
   syncPopupExpandedFolderState(baseData.catalog.extracted, initial)
   reconcileBookmarkReorderModeAfterRefresh()
   resetSearchForPopupRefresh(preserveSearch)
+  reconcileSelectionState()
+  if (pendingBookmarkManagerTarget) {
+    flushPendingBookmarkManagerTarget()
+  }
   if (baseData.initialPinnedStorage) {
     const settings = normalizeNewTabWorkspaceSettings(
       baseData.initialPinnedStorage[STORAGE_KEYS.newTabWorkspaceSettings] || POPUP_DEFAULT_WORKSPACE_STORAGE,
@@ -1329,6 +1528,8 @@ function cleanupPopupController() {
   popupAutoAnalyzeStatusVersion++
   popupSessionId += 1
   pendingInitialPinnedStorage = null
+  pendingBookmarkManagerTarget = null
+  popupBaseRefreshInFlight = false
   popupCopyFeedback.clear()
   popupPreferencesVersion += 1
   popupAiConfigVersion += 1
@@ -1357,6 +1558,18 @@ function cleanupPopupController() {
   clearViewNotice()
   clearEditDiscardGuard()
   popupActivities.reset()
+  state.editTargetBookmarkId = null
+  state.moveTargetBookmarkId = null
+  state.moveTargetFolderId = null
+  state.moveTargetBookmarkIds = []
+  state.moveTargetMode = 'bookmark'
+  resetFolderDialogState()
+  resetMoveCreateState()
+  state.selectionMode = false
+  state.selectedBookmarkIds = new Set()
+  state.selectionAnchorBookmarkId = ''
+  state.bookmarkReorderMode = false
+  renderModals()
   state.modalError = ''
   state.contentRenderedViewModel = null
   clearPopupContentRowCaches()
@@ -1377,6 +1590,15 @@ function resetPopupSessionStateForNextOpen() {
   state.editSaving = false
   state.editTargetBookmarkId = null
   state.moveTargetBookmarkId = null
+  state.moveTargetMode = 'bookmark'
+  state.moveTargetFolderId = null
+  state.moveTargetBookmarkIds = []
+  resetMoveCreateState()
+  resetFolderDialogState()
+  resetSelectionState()
+  state.batchActionBusy = false
+  state.folderSortBusy = false
+  popupUndoPayloads.clear()
   state.isLoading = true
   state.loadError = ''
   state.currentTab = null
@@ -1493,6 +1715,9 @@ function setSearchQuery(value, { immediate = false } = {}) {
   if (String(value || '').trim() && state.bookmarkReorderMode) {
     resetBookmarkReorderModeState()
   }
+  if (state.selectionMode && String(value || '').trim() !== state.debouncedQuery) {
+    prunePopupSelectionToCurrentView()
+  }
   if (String(value || '').trim() && state.keyboardPane === 'folders') {
     clearQueuedKeyboardNavigation()
     state.keyboardPane = 'bookmarks'
@@ -1528,6 +1753,7 @@ function applyDebouncedSearchQuery(value: string): void {
   runSearch()
 }
 function syncActiveSearchResultIndex(): void {
+  prunePopupSelectionToCurrentView()
   if (!state.debouncedQuery) {
     state.activeResultIndex = -1
     return
@@ -1989,8 +2215,10 @@ function hasBlockingMainError(): boolean {
     return true
   }
   if (!hasQuery && !state.isLoading && state.loadError) {
-    const currentRoot = getCurrentTreeRoot()
-    return !currentRoot || !(currentRoot.children || []).length
+    const selectedFolder = getSelectedFolderNode()
+    return state.selectedFolderFilterId
+      ? !selectedFolder || !getFilteredBookmarks().length
+      : !state.allBookmarks.length
   }
   return false
 }
@@ -2143,6 +2371,26 @@ function clearViewNotice() {
   }
   state.viewNoticeMessage = ''
 }
+function showMutationNoticeWithUndo({
+  action,
+  id,
+  message,
+  subject
+}: {
+  action: string
+  id: string
+  message: string
+  subject?: string
+}): void {
+  showActivity({
+    id,
+    type: 'success',
+    message,
+    subject,
+    action,
+    actionLabel: '撤销'
+  })
+}
 function cleanViewNotice(value) {
   const text = String(value || '').replace(/\s+/g, ' ').trim()
   if (text.length <= 72) {
@@ -2175,6 +2423,9 @@ function hasBlockingPopupActionPending() {
       key.startsWith('edit:') ||
       key.startsWith('delete:') ||
       key.startsWith('undo-delete:') ||
+      key.startsWith('folder-') ||
+      key.startsWith('batch-') ||
+      key.startsWith('undo-') ||
       key.startsWith('save-current-page:')
     ) {
       return true
@@ -2298,11 +2549,13 @@ function renderMainContent({ preserveScroll, navigation }: { preserveScroll?: bo
     !pending &&
     !state.searchResults.length &&
     !state.isLoading
-  const currentRoot = getCurrentTreeRoot()
+  const selectedFolder = getSelectedFolderNode()
   const showEmptyTree =
     !hasQuery &&
     !state.isLoading &&
-    (!currentRoot || !(currentRoot.children || []).length)
+    (state.selectedFolderFilterId
+      ? !selectedFolder || !getFilteredBookmarks().length
+      : !state.allBookmarks.length)
   const emptyState = getPopupEmptyStateViewModel({
     showEmptySearch,
     showEmptyTree,
@@ -2347,7 +2600,7 @@ function renderMainContent({ preserveScroll, navigation }: { preserveScroll?: bo
       kind: 'empty',
       label: state.selectedFolderFilterId
         ? '当前文件夹下暂无书签'
-        : '未找到可展示的书签栏内容'
+        : '暂无书签'
     }
   }
 
@@ -2387,7 +2640,7 @@ function getPopupEmptyStateViewModel({
       kind: 'message',
       message: state.selectedFolderFilterId
         ? '当前筛选文件夹下暂无可展示内容'
-        : '未找到可展示的书签栏内容'
+        : '暂无书签'
     }
   }
 
@@ -2547,20 +2800,22 @@ function getPopupContentViewModel({
   mainState?: PopupContentViewModel['mainState']
   searchMode: boolean
 }): PopupContentViewModel {
-  const currentRoot = getCurrentTreeRoot()
-  const sidebarRoot = getFolderPaneTreeRoot(currentRoot, state.bookmarksBarNode)
-  const sidebarRows = sidebarRoot ? getSidebarFolderRows(sidebarRoot) : []
-  const currentRootTitle = currentRoot?.title || '书签栏'
-  const reorder = getPopupBookmarkReorderViewModel(currentRoot)
+  const selectedFolder = getSelectedFolderNode()
+  const sidebarRows = getSidebarFolderRows()
+  const currentRootTitle = selectedFolder ? (selectedFolder.title || '未命名文件夹') : '全部书签'
+  const reorder = selectedFolder ? getPopupBookmarkReorderViewModel(selectedFolder) : undefined
   const folderFilter = getPopupFolderFilterViewModel(sidebarRows)
+  const folderManagement = getPopupFolderManagementViewModel(selectedFolder)
 
   if (searchMode) {
     const mainRows = getSearchResultRows()
+    const selection = getPopupSelectionViewModel(mainRows, false)
     return {
       activeResultIndex: state.keyboardPane === 'bookmarks' ? state.activeResultIndex : -1,
       activeFolderIndex: state.keyboardPane === 'folders' ? state.activeFolderKeyboardIndex : -1,
       emptyLabel: '未找到相关书签',
       folderFilter,
+      folderManagement,
       keyboardPane: state.keyboardPane,
       loading,
       mainState,
@@ -2568,34 +2823,102 @@ function getPopupContentViewModel({
       meta: `${mainRows.length} 条`,
       mode: 'search',
       rows: mainRows,
+      selection,
       sidebarRows,
       title: state.naturalSearchEnabled ? 'AI 匹配结果' : '搜索结果'
     }
   }
 
-  const mainRows = reorder.active ? getBookmarkReorderRows(currentRoot) : getTreeBookmarkRows()
+  const reorderActive = Boolean(reorder?.active)
+  const mainRows = reorderActive && selectedFolder ? getBookmarkReorderRows(selectedFolder) : getTreeBookmarkRows()
+  const selection = getPopupSelectionViewModel(mainRows, reorderActive)
   const previousView = state.contentRenderedViewModel
   const rows = previousView?.mode === 'tree' &&
     previousView.mainRows === mainRows && previousView.sidebarRows === sidebarRows
     ? previousView.rows
     : [...sidebarRows, ...mainRows]
+  const directCount = folderManagement.directBookmarkCount
+  const meta = reorderActive && reorder
+    ? `${reorder.folderTitle}：${mainRows.length} 个直属书签`
+    : selectedFolder && mainRows.length > directCount
+      ? `${mainRows.length} 个书签 · 直属 ${directCount}`
+      : `${mainRows.length} 个书签`
   return {
     activeResultIndex: state.keyboardPane === 'bookmarks' ? state.activeResultIndex : -1,
     activeFolderIndex: state.keyboardPane === 'folders' ? state.activeFolderKeyboardIndex : -1,
-    emptyLabel: '当前文件夹下暂无书签',
+    emptyLabel: selectedFolder ? '当前文件夹下暂无书签' : '暂无书签',
     folderFilter,
+    folderManagement,
     keyboardPane: state.keyboardPane,
     loading,
     mainState,
     mainRows,
-    meta: reorder.active
-      ? `${reorder.folderTitle}：${mainRows.length} 个直属书签`
-      : `${mainRows.length} 个书签`,
+    meta,
     mode: 'tree',
     reorder,
     rows,
+    selection,
     sidebarRows,
-    title: reorder.active ? '调整顺序' : currentRootTitle
+    title: reorderActive ? '调整顺序' : currentRootTitle
+  }
+}
+
+function getPopupFolderManagementViewModel(
+  selectedFolder: chrome.bookmarks.BookmarkTreeNode | null | undefined
+): NonNullable<PopupContentViewModel['folderManagement']> {
+  const defaultCreateParentId = String(state.bookmarksBarNode?.id || getSidebarRootFolders()[0]?.id || '')
+  if (!selectedFolder) {
+    return {
+      canCreate: Boolean(defaultCreateParentId),
+      canManage: false,
+      canSort: false,
+      directBookmarkCount: 0,
+      folderId: '',
+      folderPath: '全部书签',
+      folderTitle: '全部书签',
+      isAllBookmarksScope: true,
+      sortBusy: state.folderSortBusy
+    }
+  }
+  const folderId = String(selectedFolder.id || '')
+  const folderInfo = folderId ? state.folderMap.get(folderId) : null
+  const directBookmarkCount = getDirectBookmarkRecords(selectedFolder).length
+  const folderTitle = selectedFolder.title || folderInfo?.title || '未命名文件夹'
+  const folderPath = folderInfo ? formatFolderPath(folderInfo, state.folderMap) || folderTitle : folderTitle
+  const canManage = Boolean(selectedFolder && !isProtectedBookmarkFolder(selectedFolder))
+  return {
+    canCreate: Boolean(folderId),
+    canManage,
+    canSort: directBookmarkCount > 1,
+    directBookmarkCount,
+    folderId,
+    folderPath,
+    folderTitle,
+    isAllBookmarksScope: false,
+    sortBusy: state.folderSortBusy
+  }
+}
+
+function getPopupSelectionViewModel(
+  mainRows: readonly PopupContentMainRowViewModel[],
+  reorderActive: boolean
+): NonNullable<PopupContentViewModel['selection']> {
+  const totalCount = mainRows.length
+  let selectedCount = 0
+  if (state.selectionMode && !reorderActive && state.selectedBookmarkIds.size) {
+    for (const row of mainRows) {
+      if (state.selectedBookmarkIds.has(row.bookmarkId)) {
+        selectedCount += 1
+      }
+    }
+  }
+  return {
+    active: Boolean(state.selectionMode && !reorderActive),
+    allSelected: totalCount > 0 && selectedCount === totalCount,
+    busy: state.batchActionBusy,
+    canEnter: !reorderActive && totalCount > 0,
+    selectedCount,
+    totalCount
   }
 }
 
@@ -2641,32 +2964,62 @@ function getPopupBookmarkReorderViewModel(
   }
 }
 
-function getSidebarFolderRows(
-  currentRoot = getFolderPaneTreeRoot(getCurrentTreeRoot(), state.bookmarksBarNode)
-): PopupContentFolderRowViewModel[] {
-  if (!currentRoot) {
+function getSidebarRootFolders(): chrome.bookmarks.BookmarkTreeNode[] {
+  const roots = (state.rawTreeRoot?.children || []).filter((node) => !node.url)
+  if (roots.length) {
+    return roots
+  }
+  return state.bookmarksBarNode ? [state.bookmarksBarNode] : []
+}
+
+function getSidebarFolderRows(): PopupContentFolderRowViewModel[] {
+  const rootFolders = getSidebarRootFolders()
+  if (!rootFolders.length) {
     return []
   }
 
   return sidebarFolderRowsCache.getRows(
     [
-      currentRoot,
+      state.rawTreeRoot,
+      state.bookmarksBarNode,
       state.folderMap,
       popupFolderBookmarkCounts,
       state.allBookmarks.length,
       state.selectedFolderFilterId,
-      getFolderFilterVisibility(currentRoot)
+      getFolderFilterVisibility()
     ],
-    () => buildFilteredSidebarFolderRows(currentRoot),
+    () => buildFilteredSidebarFolderRows(rootFolders),
     -1
   )
 }
 
-function buildFilteredSidebarFolderRows(currentRoot): PopupContentFolderRowViewModel[] {
-  const visibility = getFolderFilterVisibility(currentRoot)
-  // buildSidebarFolderRows always emits the root first; the filter only trims
-  // descendants, so "全部文件夹" stays as the way back to the full tree.
-  return buildSidebarFolderRows(currentRoot, 0, visibility).map((row, index) => ({ ...row, index }))
+function buildFilteredSidebarFolderRows(
+  rootFolders: chrome.bookmarks.BookmarkTreeNode[]
+): PopupContentFolderRowViewModel[] {
+  const visibility = getFolderFilterVisibility()
+  const allRow: PopupContentFolderRowViewModel = {
+    active: !state.selectedFolderFilterId,
+    canManage: false,
+    dimmed: Boolean(visibility),
+    keyboardActive: false,
+    countLabel: String(state.allBookmarks.length),
+    depth: 0,
+    expanded: true,
+    folderId: 'all',
+    index: -1,
+    kind: 'folder',
+    root: true,
+    subtitle: `全部书签 · ${state.allBookmarks.length} 个书签`,
+    title: '全部书签',
+    toggleLabel: '全部书签'
+  }
+  const treeRows = rootFolders.flatMap((rootFolder) => {
+    if (visibility && !visibility.visible.has(String(rootFolder.id || ''))) {
+      return []
+    }
+    return buildSidebarFolderRows(rootFolder, 0, visibility)
+  })
+  return [allRow, ...treeRows].map((row, index) => ({ ...row, index }))
 }
 
 /**
@@ -2674,9 +3027,10 @@ function buildFilteredSidebarFolderRows(currentRoot): PopupContentFolderRowViewM
  * or when a descendant matches, so the tree keeps its hierarchy; only the
  * direct matches are undimmed. Returns null while the query is empty.
  */
-function getFolderFilterVisibility(currentRoot): (PopupFolderFilterVisibility & { query: string }) | null {
+function getFolderFilterVisibility(): (PopupFolderFilterVisibility & { query: string }) | null {
   const query = normalizeFolderFilterQuery(state.folderFilterQuery)
-  if (!query || !currentRoot) {
+  const rootFolders = getSidebarRootFolders()
+  if (!query || !rootFolders.length) {
     return null
   }
 
@@ -2685,7 +3039,8 @@ function getFolderFilterVisibility(currentRoot): (PopupFolderFilterVisibility & 
     void loadFolderFilterPinyin()
   }
   const dependencies = [
-    currentRoot,
+    state.rawTreeRoot,
+    state.bookmarksBarNode,
     state.folderMap,
     query,
     usesPinyin ? folderFilterPinyinGeneration : 0
@@ -2699,8 +3054,18 @@ function getFolderFilterVisibility(currentRoot): (PopupFolderFilterVisibility & 
     return folderFilterVisibility
   }
 
-  const { matched, visible } = collectFolderFilterVisibility(currentRoot, (node) => {
-    const folder = state.folderMap.get(String(node?.id || ''))
+  const syntheticRoot: chrome.bookmarks.BookmarkTreeNode = {
+    id: 'all',
+    title: '全部书签',
+    syncing: false,
+    children: rootFolders
+  }
+  const { matched, visible } = collectFolderFilterVisibility(syntheticRoot, (node) => {
+    const nodeId = String(node?.id || '')
+    if (nodeId === 'all') {
+      return false
+    }
+    const folder = state.folderMap.get(nodeId)
     return folderFilterMatchesTarget(
       {
         normalizedPath: folder?.normalizedPath || normalizeText(node?.title || ''),
@@ -2748,7 +3113,6 @@ function loadFolderFilterPinyin(): Promise<void> {
 }
 
 function buildSidebarFolderRows(node, depth, visibility: (PopupFolderFilterVisibility & { query: string }) | null): PopupContentFolderRowViewModel[] {
-  const isPinnedRoot = depth === 0
   const children = Array.isArray(node.children) ? node.children : []
   const isExpanded = true
   const folderInfo = state.folderMap.get(node.id)
@@ -2759,16 +3123,17 @@ function buildSidebarFolderRows(node, depth, visibility: (PopupFolderFilterVisib
   )
 
   const currentRow: PopupContentRowViewModel = {
-    active: (!state.selectedFolderFilterId && isPinnedRoot) || state.selectedFolderFilterId === String(node.id || ''),
+    active: state.selectedFolderFilterId === folderId,
+    canManage: !isProtectedBookmarkFolder(node),
     dimmed: Boolean(visibility && !visibility.matched.has(folderId)),
     keyboardActive: false,
-    countLabel: getSidebarFolderCountLabel(node, folderInfo, isPinnedRoot),
+    countLabel: getSidebarFolderCountLabel(node, folderInfo, false),
     depth,
     expanded: isExpanded,
     folderId,
     index: -1,
     kind: 'folder',
-    root: isPinnedRoot,
+    root: false,
     subtitle: describeFolder(folderInfo),
     title: node.title || '未命名文件夹',
     toggleLabel
@@ -2852,14 +3217,15 @@ function getBookmarkReorderRows(
 }
 
 function getTreeBookmarkRows(): PopupContentBookmarkRowViewModel[] {
-  const rootId = String(getCurrentTreeRoot()?.id || '')
+  const selectedFolder = getSelectedFolderNode()
+  const rootId = String(selectedFolder?.id || 'all')
   const bookmarks = getFilteredBookmarks()
-  if (!rootId || !bookmarks.length) {
+  if (!bookmarks.length) {
     return []
   }
-  const baseDepth = state.folderMap.get(rootId)?.depth || 1
+  const baseDepth = selectedFolder ? (state.folderMap.get(rootId)?.depth || 1) : 1
   return treeBookmarkRowsCache.getRows(
-    [bookmarks, rootId, baseDepth, state.bookmarkMap, popupActionStateVersion],
+    [bookmarks, rootId, baseDepth, state.bookmarkMap, popupActionStateVersion, popupSelectionVersion],
     () => bookmarks.map((bookmark, index) => {
       const depth = Math.max(1, Number(bookmark.ancestorIds?.length || baseDepth) - baseDepth + 1)
       return buildBookmarkRowViewModel(bookmark, depth, false, index)
@@ -2877,6 +3243,7 @@ function clearPopupContentRowCaches(): void {
 
 function buildBookmarkRowViewModel(bookmark, depth, active = false, index = -1): PopupContentBookmarkRowViewModel {
   const labelSource = state.bookmarkMap.get(String(bookmark.id || ''))
+  const selected = Boolean(state.selectionMode && state.selectedBookmarkIds.has(String(bookmark.id || '')))
   const memo = bookmarkRowMemos.get(bookmark)
   // Compared field by field: this runs for every row of large folders.
   if (
@@ -2884,6 +3251,7 @@ function buildBookmarkRowViewModel(bookmark, depth, active = false, index = -1):
     memo.depth === depth &&
     memo.active === active &&
     memo.index === index &&
+    memo.selected === selected &&
     memo.actionStateVersion === popupActionStateVersion &&
     memo.id === bookmark.id &&
     memo.title === bookmark.title &&
@@ -2908,6 +3276,7 @@ function buildBookmarkRowViewModel(bookmark, depth, active = false, index = -1):
     menuLabel: getBookmarkActionMenuLabel(bookmark),
     parentId: String(bookmark.parentId || ''),
     path: getFormattedBookmarkPath(bookmark.path) || bookmark.path || '',
+    selected,
     title: bookmark.title || '未命名书签',
     url: bookmark.url || ''
   }
@@ -2916,6 +3285,7 @@ function buildBookmarkRowViewModel(bookmark, depth, active = false, index = -1):
     depth,
     active,
     index,
+    selected,
     actionStateVersion: popupActionStateVersion,
     id: bookmark.id,
     title: bookmark.title,
@@ -2948,7 +3318,7 @@ function getSearchResultRows(): PopupContentSearchResultViewModel[] {
   const literalKey = parsedHighlight.literalTerms.join('\u0000')
   const scopeFolderId = state.selectedFolderFilterId || ''
   return searchResultRowsCache.getRows(
-    [state.searchResults, highlightQuery, literalKey, scopeFolderId, state.bookmarkMap, popupActionStateVersion],
+    [state.searchResults, highlightQuery, literalKey, scopeFolderId, state.bookmarkMap, popupActionStateVersion, popupSelectionVersion],
     () => state.searchResults.map((bookmark, index) => {
       const presentation = buildPopupSearchRowPresentation({
         title: bookmark.title || '未命名书签',
@@ -2977,11 +3347,13 @@ function getSearchResultRows(): PopupContentSearchResultViewModel[] {
         kind: 'result',
         menu: buildActionMenuViewModel(bookmark.id),
         menuLabel: getBookmarkActionMenuLabel(bookmark),
+        parentId: String(bookmark.parentId || ''),
         path: bookmark.path || '未归档路径',
         reasonLabel: reasonTokens.length ? `命中原因：${reasonTokens.join('、')}` : '',
         reasonTitle,
         reasonTokens,
         presentation,
+        selected: Boolean(state.selectionMode && state.selectedBookmarkIds.has(String(bookmark.id || ''))),
         title: bookmark.title || '未命名书签',
         url: bookmark.url || ''
       }
@@ -3066,6 +3438,7 @@ function getPopupModalsViewModel(): PopupModalsView {
     active: getActivePopupModal(),
     aiProvider: getAiProviderPromptModalView(),
     edit: getEditModalView(),
+    folder: getFolderDialogView(),
     move: getMoveModalView(),
     open: hasOpenModal(),
     smartFolder: getSmartFolderModalView()
@@ -3073,8 +3446,11 @@ function getPopupModalsViewModel(): PopupModalsView {
 }
 
 function getActivePopupModal(): PopupModalsView['active'] {
-  if (state.moveTargetBookmarkId) {
+  if (isMoveDialogOpen()) {
     return 'move'
+  }
+  if (state.folderDialogMode) {
+    return 'folder'
   }
   if (state.smartFolderPickerOpen) {
     return 'smart-folder'
@@ -3088,7 +3464,156 @@ function getActivePopupModal(): PopupModalsView['active'] {
   return null
 }
 
+function isMoveDialogOpen(): boolean {
+  if (state.moveTargetMode === 'folder') {
+    return Boolean(state.moveTargetFolderId && state.folderMap.has(state.moveTargetFolderId))
+  }
+  if (state.moveTargetMode === 'batch') {
+    return state.moveTargetBookmarkIds.length > 0
+  }
+  return Boolean(state.moveTargetBookmarkId && state.bookmarkMap.has(state.moveTargetBookmarkId))
+}
+
+function getFolderDialogView(): PopupModalsView['folder'] {
+  const mode = state.folderDialogMode
+  if (!mode) {
+    return {
+      bookmarkCount: 0,
+      error: '',
+      mode: null,
+      open: false,
+      parentChanged: false,
+      parentPath: '',
+      parentPickerOpen: false,
+      parentQuery: '',
+      saving: false,
+      saveDisabled: true,
+      saveLabel: '创建',
+      subfolderCount: 0,
+      targetPath: '',
+      targetTitle: '',
+      title: ''
+    }
+  }
+
+  const targetNode = findNodeById(state.rawTreeRoot, state.folderDialogTargetId)
+  const targetFolder = state.folderMap.get(state.folderDialogTargetId)
+  const targetTitle = targetNode?.title || targetFolder?.title || '书签栏'
+  const targetPath = targetFolder ? formatFolderPath(targetFolder, state.folderMap) || targetTitle : targetTitle
+  const saving = state.folderDialogSaving || hasBlockingPopupActionPending()
+
+  if (mode === 'delete') {
+    const counts = countFolderSubtreeContents(targetNode)
+    return {
+      bookmarkCount: counts.bookmarkCount,
+      error: state.folderDialogError,
+      mode,
+      open: true,
+      parentChanged: false,
+      parentPath: '',
+      parentPickerOpen: false,
+      parentQuery: '',
+      saving,
+      saveDisabled: saving || !targetNode || isProtectedBookmarkFolder(targetNode),
+      saveLabel: saving ? '删除中…' : '确认删除',
+      subfolderCount: counts.subfolderCount,
+      targetPath,
+      targetTitle,
+      title: targetTitle
+    }
+  }
+
+  const validation = validateFolderTitle(state.folderDialogTitle)
+  const unchanged = mode === 'rename' && validation.ok && validation.title === targetTitle.trim()
+  if (mode === 'create' && state.folderDialogPickerOpen) {
+    dispatchPopupFolderPickerChange('folder-create', getCreateFolderParentPickerState())
+  }
+  return {
+    bookmarkCount: 0,
+    error: state.folderDialogError,
+    mode,
+    open: true,
+    parentChanged: mode === 'create' && Boolean(
+      state.folderDialogInitialTargetId &&
+      state.folderDialogTargetId !== state.folderDialogInitialTargetId
+    ),
+    parentPath: mode === 'create' ? targetPath : '',
+    parentPickerOpen: mode === 'create' && state.folderDialogPickerOpen,
+    parentQuery: mode === 'create' ? state.folderDialogSearchQuery : '',
+    saving,
+    saveDisabled: saving || !validation.ok || unchanged,
+    saveLabel: mode === 'create'
+      ? (saving ? '创建中…' : '创建')
+      : (saving ? '保存中…' : '保存'),
+    subfolderCount: 0,
+    targetPath,
+    targetTitle,
+    title: state.folderDialogTitle
+  }
+}
+
 function getMoveModalView(): PopupModalsView['move'] {
+  const createValidation = validateFolderTitle(state.moveCreateTitle)
+  const createParentFolder = state.moveCreateParentId
+    ? state.folderMap.get(state.moveCreateParentId)
+    : null
+  const createParentPath = createParentFolder
+    ? formatFolderPath(createParentFolder, state.folderMap) || createParentFolder.title || '书签栏'
+    : (state.bookmarksBarNode?.title || '书签栏')
+  const createFields = {
+    createError: state.moveCreateError,
+    createOpen: state.moveCreateOpen,
+    createParentId: state.moveCreateParentId,
+    createParentPath,
+    createSaveDisabled:
+      state.moveCreateSaving ||
+      hasBlockingPopupActionPending() ||
+      !state.moveCreateParentId ||
+      !createValidation.ok,
+    createSaving: state.moveCreateSaving,
+    createTitle: state.moveCreateTitle
+  }
+  if (state.moveTargetMode === 'folder') {
+    const folderId = String(state.moveTargetFolderId || '')
+    const folderNode = folderId ? findNodeById(state.rawTreeRoot, folderId) : null
+    const folderInfo = folderId ? state.folderMap.get(folderId) : null
+    if (folderNode && folderInfo) {
+      dispatchPopupFolderPickerChange('move', getMoveFolderForFolderPickerState(folderNode))
+    }
+    return {
+      ...createFields,
+      busy: state.moveCreateSaving || isPopupActionPending('folder-move', folderId),
+      cardLabel: '当前文件夹',
+      heading: '移动文件夹',
+      mode: 'folder',
+      open: Boolean(folderNode && folderInfo),
+      path: folderInfo ? formatFolderPath(folderInfo, state.folderMap) || folderInfo.title : '',
+      query: state.moveSearchQuery,
+      title: folderNode?.title || folderInfo?.title || ''
+    }
+  }
+  if (state.moveTargetMode === 'batch') {
+    const ids = state.moveTargetBookmarkIds.filter((id) => state.bookmarkMap.has(id))
+    if (ids.length) {
+      dispatchPopupFolderPickerChange('move', getBatchMoveFolderPickerState(ids))
+    }
+    const firstBookmark = ids.length ? state.bookmarkMap.get(ids[0]) : null
+    const parentIds = new Set(ids.map((id) => String(state.bookmarkMap.get(id)?.parentId || '')))
+    const sharedPath = parentIds.size === 1 && firstBookmark
+      ? formatBookmarkPath(firstBookmark.path) || '未归档路径'
+      : '来自多个文件夹'
+    return {
+      ...createFields,
+      busy: state.moveCreateSaving || state.batchActionBusy,
+      cardLabel: '批量移动',
+      heading: '批量移动书签',
+      mode: 'batch',
+      open: ids.length > 0,
+      path: sharedPath,
+      query: state.moveSearchQuery,
+      title: `已选择 ${ids.length} 个书签`
+    }
+  }
   const bookmark = state.moveTargetBookmarkId
     ? state.bookmarkMap.get(state.moveTargetBookmarkId)
     : null
@@ -3096,6 +3621,11 @@ function getMoveModalView(): PopupModalsView['move'] {
     dispatchPopupFolderPickerChange('move', getMoveFolderPickerState(bookmark))
   }
   return {
+    ...createFields,
+    busy: state.moveCreateSaving || Boolean(bookmark && isPopupActionPending('move', bookmark.id)),
+    cardLabel: '当前书签',
+    heading: '移动书签',
+    mode: 'bookmark',
     open: Boolean(bookmark),
     path: bookmark ? formatBookmarkPath(bookmark.path) || '未归档路径' : '',
     query: state.moveSearchQuery,
@@ -3266,7 +3796,8 @@ function isCurrentEditDraftDirty() {
 function getMoveFolderPickerState(bookmark): PopupFolderPickerState {
   const roots = (state.rawTreeRoot?.children || []).filter((node) => !node.url)
   const query = normalizeText(state.moveSearchQuery)
-  const treeOptions = roots.flatMap((node) => buildMoveFolderNodeViewModels(node, 0, query, bookmark))
+  const createParentId = state.moveCreateOpen ? state.moveCreateParentId : ''
+  const treeOptions = roots.flatMap((node) => buildMoveFolderNodeViewModels(node, 0, query, bookmark, createParentId))
 
   return {
     empty: treeOptions.length ? null : { message: '未找到相关文件夹' },
@@ -3274,6 +3805,183 @@ function getMoveFolderPickerState(bookmark): PopupFolderPickerState {
     query: state.moveSearchQuery,
     treeOptions
   }
+}
+
+function getMoveFolderForFolderPickerState(
+  folderNode: chrome.bookmarks.BookmarkTreeNode
+): PopupFolderPickerState {
+  const roots = (state.rawTreeRoot?.children || []).filter((node) => !node.url)
+  const query = normalizeText(state.moveSearchQuery)
+  const blockedIds = collectFolderDescendantIds(folderNode)
+  const currentParentId = String(folderNode.parentId || '')
+  const busy = state.moveCreateSaving || isPopupActionPending('folder-move', String(folderNode.id || ''))
+  const createParentId = state.moveCreateOpen ? state.moveCreateParentId : ''
+  const treeOptions = roots.flatMap((node) =>
+    buildGenericMoveFolderNodeViewModels(node, 0, query, {
+      blockedIds,
+      busy,
+      createParentId,
+      currentParentId
+    })
+  )
+  return {
+    empty: treeOptions.length ? null : { message: '未找到相关文件夹' },
+    mode: 'move',
+    query: state.moveSearchQuery,
+    treeOptions
+  }
+}
+
+function getBatchMoveFolderPickerState(bookmarkIds: readonly string[]): PopupFolderPickerState {
+  const roots = (state.rawTreeRoot?.children || []).filter((node) => !node.url)
+  const query = normalizeText(state.moveSearchQuery)
+  const parentIds = new Set(bookmarkIds.map((id) => String(state.bookmarkMap.get(id)?.parentId || '')).filter(Boolean))
+  const currentParentId = parentIds.size === 1 ? [...parentIds][0] : ''
+  const createParentId = state.moveCreateOpen ? state.moveCreateParentId : ''
+  const treeOptions = roots.flatMap((node) =>
+    buildGenericMoveFolderNodeViewModels(node, 0, query, {
+      blockedIds: new Set<string>(),
+      busy: state.moveCreateSaving || state.batchActionBusy,
+      createParentId,
+      currentParentId
+    })
+  )
+  return {
+    empty: treeOptions.length ? null : { message: '未找到相关文件夹' },
+    mode: 'move',
+    query: state.moveSearchQuery,
+    treeOptions
+  }
+}
+
+function buildGenericMoveFolderNodeViewModels(
+  node: chrome.bookmarks.BookmarkTreeNode,
+  depth: number,
+  query: string,
+  options: {
+    blockedIds: ReadonlySet<string>
+    busy: boolean
+    createParentId?: string
+    currentParentId: string
+  }
+): PopupFolderTreeOptionViewModel[] {
+  if (node.id === ROOT_ID) {
+    return []
+  }
+
+  const folder = state.folderMap.get(node.id)
+  if (!folder) {
+    return []
+  }
+
+  const childFolders = (node.children || []).filter((child) => !child.url)
+  const isFilterMode = Boolean(query)
+  const childOptions = childFolders.flatMap((child) =>
+    buildGenericMoveFolderNodeViewModels(child, depth + 1, query, options)
+  )
+
+  const matchesCurrent =
+    !query ||
+    folder.normalizedTitle.includes(query) ||
+    folder.normalizedPath.includes(query)
+
+  if (isFilterMode && !matchesCurrent && !childOptions.length) {
+    return []
+  }
+
+  const folderId = String(node.id || '')
+  const isExpanded = isFilterMode || state.moveExpandedFolders.has(folderId)
+  const isBlocked = options.blockedIds.has(folderId)
+  const inCreateMode = Boolean(options.createParentId)
+  const isSelectedCreateParent = Boolean(inCreateMode && options.createParentId === folderId)
+  const isCurrentFolder = !inCreateMode && Boolean(options.currentParentId && options.currentParentId === folderId)
+  const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
+  const toggleLabel = getPopupFolderToggleLabel(isExpanded ? '折叠文件夹' : '展开文件夹', folderPath)
+  const badges = isBlocked
+    ? [{ label: '不可移入', muted: true }]
+    : isSelectedCreateParent
+      ? [{ label: '新建于此' }]
+      : isCurrentFolder
+        ? [{ label: '当前位置' }]
+        : []
+
+  return [
+    {
+      badges,
+      depth,
+      disabled: options.busy || isBlocked,
+      expanded: isExpanded,
+      hasChildren: Boolean(childFolders.length),
+      id: folderId,
+      mode: 'move',
+      path: folderPath,
+      rowCurrent: isSelectedCreateParent || isCurrentFolder,
+      selected: isSelectedCreateParent || isCurrentFolder,
+      title: folder.title || '未命名文件夹',
+      toggleLabel
+    },
+    ...(isExpanded ? childOptions : [])
+  ]
+}
+
+function getCreateFolderParentPickerState(): PopupFolderPickerState {
+  const roots = (state.rawTreeRoot?.children || []).filter((node) => !node.url)
+  const query = normalizeText(state.folderDialogSearchQuery)
+  const treeOptions = roots.flatMap((node) => buildCreateFolderParentNodeViewModels(node, 0, query))
+  return {
+    empty: treeOptions.length ? null : { message: '未找到相关文件夹' },
+    mode: 'folder-create',
+    query: state.folderDialogSearchQuery,
+    treeOptions
+  }
+}
+
+function buildCreateFolderParentNodeViewModels(
+  node: chrome.bookmarks.BookmarkTreeNode,
+  depth: number,
+  query: string
+): PopupFolderTreeOptionViewModel[] {
+  if (node.id === ROOT_ID) {
+    return []
+  }
+  const folder = state.folderMap.get(node.id)
+  if (!folder) {
+    return []
+  }
+  const childFolders = (node.children || []).filter((child) => !child.url)
+  const isFilterMode = Boolean(query)
+  const childOptions = childFolders.flatMap((child) =>
+    buildCreateFolderParentNodeViewModels(child, depth + 1, query)
+  )
+  const matchesCurrent =
+    !query ||
+    folder.normalizedTitle.includes(query) ||
+    folder.normalizedPath.includes(query)
+  if (isFilterMode && !matchesCurrent && !childOptions.length) {
+    return []
+  }
+  const folderId = String(node.id || '')
+  const isExpanded = isFilterMode || state.moveExpandedFolders.has(folderId)
+  const isSelected = state.folderDialogTargetId === folderId
+  const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
+  const toggleLabel = getPopupFolderToggleLabel(isExpanded ? '折叠文件夹' : '展开文件夹', folderPath)
+  return [
+    {
+      badges: isSelected ? [{ label: '当前位置' }] : [],
+      depth,
+      disabled: state.folderDialogSaving,
+      expanded: isExpanded,
+      hasChildren: Boolean(childFolders.length),
+      id: folderId,
+      mode: 'folder-create',
+      path: folderPath,
+      rowCurrent: isSelected,
+      selected: isSelected,
+      title: folder.title || '未命名文件夹',
+      toggleLabel
+    },
+    ...(isExpanded ? childOptions : [])
+  ]
 }
 
 function getEditFolderPickerState(bookmark): PopupFolderPickerState {
@@ -3359,7 +4067,13 @@ function buildSmartFolderNodeViewModels(node, depth, query): PopupFolderTreeOpti
   ]
 }
 
-function buildMoveFolderNodeViewModels(node, depth, query, bookmark): PopupFolderTreeOptionViewModel[] {
+function buildMoveFolderNodeViewModels(
+  node,
+  depth,
+  query,
+  bookmark,
+  createParentId = ''
+): PopupFolderTreeOptionViewModel[] {
   if (node.id === ROOT_ID) {
     return []
   }
@@ -3371,7 +4085,9 @@ function buildMoveFolderNodeViewModels(node, depth, query, bookmark): PopupFolde
 
   const childFolders = (node.children || []).filter((child) => !child.url)
   const isFilterMode = Boolean(query)
-  const childOptions = childFolders.flatMap((child) => buildMoveFolderNodeViewModels(child, depth + 1, query, bookmark))
+  const childOptions = childFolders.flatMap((child) =>
+    buildMoveFolderNodeViewModels(child, depth + 1, query, bookmark, createParentId)
+  )
 
   const matchesCurrent =
     !query ||
@@ -3383,23 +4099,31 @@ function buildMoveFolderNodeViewModels(node, depth, query, bookmark): PopupFolde
   }
 
   const isExpanded = isFilterMode || state.moveExpandedFolders.has(node.id)
-  const isCurrentFolder = bookmark.parentId === node.id
-  const moving = isPopupActionPending('move', bookmark.id)
+  const folderId = String(node.id || '')
+  const inCreateMode = Boolean(createParentId)
+  const isSelectedCreateParent = Boolean(inCreateMode && createParentId === folderId)
+  const isCurrentFolder = !inCreateMode && bookmark.parentId === folderId
+  const moving = state.moveCreateSaving || isPopupActionPending('move', bookmark.id)
   const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
   const toggleLabel = getPopupFolderToggleLabel(isExpanded ? '折叠文件夹' : '展开文件夹', folderPath)
+  const badges = isSelectedCreateParent
+    ? [{ label: '新建于此' }]
+    : isCurrentFolder
+      ? [{ label: '当前位置' }]
+      : []
 
   return [
     {
-      badges: isCurrentFolder ? [{ label: '当前位置' }] : [],
+      badges,
       depth,
       disabled: moving,
       expanded: isExpanded,
       hasChildren: Boolean(childFolders.length),
-      id: String(node.id || ''),
+      id: folderId,
       mode: 'move',
       path: folderPath,
-      rowCurrent: isCurrentFolder,
-      selected: isCurrentFolder,
+      rowCurrent: isSelectedCreateParent || isCurrentFolder,
+      selected: isSelectedCreateParent || isCurrentFolder,
       title: folder.title || '未命名文件夹',
       toggleLabel
     },
@@ -3543,6 +4267,63 @@ function handleContentAction(detail: PopupContentActionDetail) {
     enterBookmarkReorderMode()
     return
   }
+  if (detail.action === 'enter-selection-mode') {
+    enterSelectionMode()
+    return
+  }
+  if (detail.action === 'exit-selection-mode') {
+    exitSelectionMode()
+    return
+  }
+  if (detail.action === 'toggle-select-bookmark') {
+    toggleBookmarkSelection(detail.bookmarkId || '', Boolean(detail.shiftKey))
+    return
+  }
+  if (detail.action === 'swipe-select-bookmarks') {
+    applyBookmarkSwipeSelection(
+      detail.startBookmarkId || '',
+      detail.bookmarkId || '',
+      Boolean(detail.targetSelected),
+      Array.isArray(detail.baseSelectedIds) ? detail.baseSelectedIds : []
+    )
+    return
+  }
+  if (detail.action === 'toggle-select-all') {
+    toggleSelectAllVisibleBookmarks()
+    return
+  }
+  if (detail.action === 'clear-selection') {
+    clearBookmarkSelection()
+    return
+  }
+  if (detail.action === 'batch-move-selected') {
+    openBatchMoveDialog(detail.returnFocusElement || null)
+    return
+  }
+  if (detail.action === 'batch-delete-selected') {
+    void deleteSelectedBookmarks()
+    return
+  }
+  if (detail.action === 'folder-create') {
+    openCreateFolderDialog(detail.folderId || '', detail.returnFocusElement || null)
+    return
+  }
+  if (detail.action === 'folder-rename') {
+    openRenameFolderDialog(detail.folderId || '', detail.returnFocusElement || null)
+    return
+  }
+  if (detail.action === 'folder-move') {
+    openMoveFolderDialog(detail.folderId || '', detail.returnFocusElement || null)
+    return
+  }
+  if (detail.action === 'folder-delete') {
+    openDeleteFolderDialog(detail.folderId || '', detail.returnFocusElement || null)
+    return
+  }
+  if (detail.action === 'folder-sort' && detail.sortMode) {
+    void sortFolderBookmarks(detail.folderId || '', detail.sortMode)
+    return
+  }
   if (detail.action === 'folder-filter-change') {
     setFolderFilterQuery(String(detail.value || ''))
     return
@@ -3642,6 +4423,14 @@ function handleContentAction(detail: PopupContentActionDetail) {
     void openBookmark(detail.bookmarkId || '')
     return
   }
+  if (detail.action === 'locate-bookmark-folder') {
+    locateBookmarkFolder(detail.bookmarkId || '')
+    return
+  }
+  if (detail.action === 'select-bookmark-from-context') {
+    enterSelectionModeWithBookmark(detail.bookmarkId || '')
+    return
+  }
   if (detail.action === 'empty-action') {
     handleEmptySearchAction(detail.emptyAction || '')
   }
@@ -3706,6 +4495,10 @@ function handleFolderPickerAction(detail: PopupFolderPickerActionDetail) {
     handleSmartFolderPickerAction(detail)
     return
   }
+  if (detail.mode === 'folder-create') {
+    handleCreateFolderParentPickerAction(detail)
+    return
+  }
   handleEditFolderPickerAction(detail)
 }
 
@@ -3726,6 +4519,60 @@ function handleModalAction(detail: PopupModalActionDetail) {
   if (action === 'move-query-change') {
     state.moveSearchQuery = value
     renderModals()
+    return
+  }
+  if (action === 'move-create-open') {
+    if (state.moveCreateSaving || hasBlockingPopupActionPending()) return
+    state.moveCreateOpen = true
+    state.moveCreateTitle = state.moveSearchQuery.trim()
+    state.moveSearchQuery = ''
+    state.moveCreateParentId = resolveDefaultMoveCreateParentId()
+    state.moveCreateError = ''
+    state.modalError = ''
+    renderModals()
+    return
+  }
+  if (action === 'move-create-close') {
+    if (state.moveCreateSaving) return
+    resetMoveCreateState()
+    renderModals()
+    return
+  }
+  if (action === 'move-create-title-change') {
+    if (!state.moveCreateOpen || state.moveCreateSaving) return
+    state.moveCreateTitle = value
+    state.moveCreateError = ''
+    renderModals()
+    return
+  }
+  if (action === 'move-create-submit') {
+    void createFolderAndMove()
+    return
+  }
+  if (action === 'folder-title-change') {
+    if (!state.folderDialogMode || state.folderDialogSaving) return
+    state.folderDialogTitle = value
+    state.folderDialogError = ''
+    renderModals()
+    return
+  }
+  if (action === 'folder-parent-picker-toggle') {
+    if (state.folderDialogMode !== 'create' || state.folderDialogSaving) return
+    state.folderDialogPickerOpen = !state.folderDialogPickerOpen
+    if (!state.folderDialogPickerOpen) {
+      state.folderDialogSearchQuery = ''
+    }
+    renderModals()
+    return
+  }
+  if (action === 'folder-parent-query-change') {
+    if (state.folderDialogMode !== 'create' || state.folderDialogSaving) return
+    state.folderDialogSearchQuery = value
+    renderModals()
+    return
+  }
+  if (action === 'save-folder-dialog') {
+    void saveFolderDialog()
     return
   }
   if (action === 'smart-folder-query-change') {
@@ -3781,7 +4628,47 @@ function handleMoveFolderPickerAction(detail: PopupFolderPickerActionDetail) {
     return
   }
   if (detail.action === 'select') {
+    if (state.moveCreateOpen) {
+      if (state.moveCreateSaving || !state.folderMap.has(detail.folderId) || detail.folderId === ROOT_ID) {
+        return
+      }
+      if (getMoveBlockedFolderIds().has(detail.folderId)) {
+        return
+      }
+      state.moveCreateParentId = detail.folderId
+      state.moveCreateError = ''
+      renderModals()
+      return
+    }
+    if (state.moveTargetMode === 'folder') {
+      void moveFolderToParent(detail.folderId)
+      return
+    }
+    if (state.moveTargetMode === 'batch') {
+      void moveSelectedBookmarksToFolder(detail.folderId)
+      return
+    }
     void moveBookmarkToFolder(detail.folderId)
+  }
+}
+
+function handleCreateFolderParentPickerAction(detail: PopupFolderPickerActionDetail) {
+  if (state.folderDialogMode !== 'create' || state.folderDialogSaving) {
+    return
+  }
+  if (detail.action === 'toggle' && !state.folderDialogSearchQuery.trim()) {
+    toggleMoveFolder(detail.folderId)
+    return
+  }
+  if (detail.action === 'select') {
+    if (!state.folderMap.has(detail.folderId) || detail.folderId === ROOT_ID) {
+      return
+    }
+    state.folderDialogTargetId = detail.folderId
+    state.folderDialogPickerOpen = false
+    state.folderDialogSearchQuery = ''
+    state.folderDialogError = ''
+    renderModals()
   }
 }
 
@@ -3835,6 +4722,20 @@ function selectEditDraftFolder(folderId) {
   renderModals()
 }
 function handleDocumentKeydown(event) {
+  if (isOptionsSurface()) {
+    const target = event.target
+    if (
+      target instanceof Element &&
+      target !== document.body &&
+      target !== document.documentElement &&
+      !target.closest('#popup-root')
+    ) {
+      return
+    }
+    if (document.getElementById('options-mobile-navigation')?.getAttribute('aria-hidden') === 'false') {
+      return
+    }
+  }
   if (event.key !== 'Enter' || event.isComposing) cancelPendingSearchActivation()
   if (event.isComposing) {
     return
@@ -3872,12 +4773,48 @@ function handleDocumentKeydown(event) {
     return
   }
   if (event.key === 'F2' && !isSmartOverlayActive() && !state.searchPending && !state.naturalSearchPending) {
+    if (state.keyboardPane === 'folders' && !state.debouncedQuery) {
+      const sidebarRows = getSidebarFolderRows()
+      const folderRow = sidebarRows[queuedActiveFolderIndex ?? state.activeFolderKeyboardIndex]
+      if (folderRow?.canManage) {
+        event.preventDefault()
+        openRenameFolderDialog(folderRow.folderId, event.target)
+        return
+      }
+    }
     const bookmark = getKeyboardNavigationBookmarks()[queuedActiveResultIndex ?? state.activeResultIndex]
     if (bookmark) { event.preventDefault(); openEditDialog(bookmark.id, event.target) }
     return
   }
+  if (
+    state.selectionMode &&
+    (event.ctrlKey || event.metaKey) &&
+    String(event.key || '').toLowerCase() === 'a' &&
+    !isEditableTarget(event.target)
+  ) {
+    event.preventDefault()
+    selectAllVisibleBookmarks()
+    return
+  }
 
   const targetInfo = getPopupKeyboardTargetInfo(event.target)
+  if (
+    state.selectionMode &&
+    event.key === ' ' &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !targetInfo.editable &&
+    !targetInfo.interactive &&
+    state.keyboardPane === 'bookmarks'
+  ) {
+    const bookmark = getKeyboardNavigationBookmarks()[queuedActiveResultIndex ?? state.activeResultIndex]
+    if (bookmark) {
+      event.preventDefault()
+      toggleBookmarkSelection(bookmark.id, Boolean(event.shiftKey))
+      return
+    }
+  }
   if (shouldFocusFolderFilterFromMainSearch(event.key, targetInfo, state.searchQuery)) {
     event.preventDefault()
     focusFolderFilter()
@@ -3898,11 +4835,26 @@ function handleDocumentKeydown(event) {
 function handleEscapeAction() {
   cancelPendingSearchActivation()
   if (hasOpenModal()) {
+    if (state.moveCreateOpen && !state.moveCreateSaving) {
+      resetMoveCreateState()
+      renderModals()
+      return true
+    }
+    if (state.folderDialogMode === 'create' && state.folderDialogPickerOpen && !state.folderDialogSaving) {
+      state.folderDialogPickerOpen = false
+      state.folderDialogSearchQuery = ''
+      renderModals()
+      return true
+    }
     closeDialogs()
     return true
   }
   if (state.bookmarkReorderMode) {
     exitBookmarkReorderMode()
+    return true
+  }
+  if (state.selectionMode) {
+    exitSelectionMode()
     return true
   }
   if (['loading', 'results', 'error'].includes(state.smartStatus)) {
@@ -3995,7 +4947,7 @@ function blurKeyboardEventTarget(target): void {
     target.blur()
   }
 }
-function handlePopupNavigationKey(key: string, modifiers: { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean; repeat?: boolean } = {}): boolean {
+function handlePopupNavigationKey(key: string, modifiers: { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean; repeat?: boolean; shiftKey?: boolean } = {}): boolean {
   const disposition: BookmarkOpenDisposition = modifiers.altKey ? 'current-tab' : modifiers.ctrlKey || modifiers.metaKey ? 'background' : 'new-tab'
   if (key === 'Enter') {
     // A fast Enter can arrive before the debounce applies the latest input.
@@ -4078,6 +5030,11 @@ function handlePopupNavigationKey(key: string, modifiers: { altKey?: boolean; ct
       return false
     }
 
+    if (state.selectionMode) {
+      toggleBookmarkSelection(activeBookmark.id, Boolean(modifiers.shiftKey))
+      return true
+    }
+
     activateBookmark(activeBookmark.id, disposition)
     return true
   }
@@ -4094,6 +5051,34 @@ function handleActivityAction(detail: PopupActivityActionDetail) {
   if (!activity || activity.type === 'pending') return
   if (action === 'undo-delete' && activity.recycleId) {
     void undoDelete(activity)
+    return
+  }
+  if (action === 'undo-delete-folder') {
+    void undoDeleteFolder(activity)
+    return
+  }
+  if (action === 'undo-delete-batch') {
+    void undoBatchDelete(activity)
+    return
+  }
+  if (action === 'undo-move-batch') {
+    void undoBatchMove(activity)
+    return
+  }
+  if (action === 'undo-edit-bookmark') {
+    void undoEditBookmark(activity)
+    return
+  }
+  if (action === 'undo-move-folder') {
+    void undoMoveFolder(activity)
+    return
+  }
+  if (action === 'undo-rename-folder') {
+    void undoRenameFolder(activity)
+    return
+  }
+  if (action === 'undo-sort-folder') {
+    void undoFolderSort(activity)
     return
   }
   if (action === 'open-bookmark-history') {
@@ -4169,8 +5154,13 @@ function openMoveDialog(bookmarkId, returnFocusElement = null) {
   }
   rememberDialogReturnFocus(returnFocusElement)
   state.editTargetBookmarkId = null
+  resetFolderDialogState()
+  state.moveTargetMode = 'bookmark'
+  state.moveTargetFolderId = null
+  state.moveTargetBookmarkIds = []
   state.moveTargetBookmarkId = bookmarkId
   state.moveSearchQuery = ''
+  resetMoveCreateState()
   render()
 }
 function openEditDialog(bookmarkId, returnFocusElement = null) {
@@ -4187,6 +5177,10 @@ function openEditDialog(bookmarkId, returnFocusElement = null) {
   }
   rememberDialogReturnFocus(returnFocusElement)
   state.moveTargetBookmarkId = null
+  state.moveTargetMode = 'bookmark'
+  state.moveTargetFolderId = null
+  state.moveTargetBookmarkIds = []
+  resetFolderDialogState()
   state.editTargetBookmarkId = bookmarkId
   resetEditDraft(bookmark)
   // Prepare only the bounded visible window during the dialog's entrance,
@@ -4196,15 +5190,20 @@ function openEditDialog(bookmarkId, returnFocusElement = null) {
 }
 function closeDialogs(options: { force?: boolean } | Event = {}) {
   const force = (options as { force?: boolean })?.force === true
-  if (!force && (state.editSaving || hasBlockingPopupActionPending())) {
+  if (!force && (state.editSaving || state.folderDialogSaving || state.moveCreateSaving || hasBlockingPopupActionPending())) {
     return
   }
   if (!force && shouldBlockDirtyEditClose()) {
     return
   }
   state.moveTargetBookmarkId = null
+  state.moveTargetMode = 'bookmark'
+  state.moveTargetFolderId = null
+  state.moveTargetBookmarkIds = []
   state.moveSearchQuery = ''
   state.modalError = ''
+  resetMoveCreateState()
+  resetFolderDialogState()
   clearSmartFolderDraft()
   state.aiProviderPromptOpen = false
   state.editTargetBookmarkId = null
@@ -4230,13 +5229,20 @@ function enterBookmarkReorderMode() {
     return
   }
 
-  const currentRoot = getCurrentTreeRoot()
+  const currentRoot = getSelectedFolderNode()
+  if (!currentRoot) {
+    showViewNotice('请先在左侧选择具体文件夹后再调整顺序')
+    return
+  }
   const directBookmarks = getDirectBookmarkRecords(currentRoot)
   if (!currentRoot || directBookmarks.length < 2) {
     showViewNotice('当前文件夹至少需要 2 个直属书签才能排序')
     return
   }
 
+  if (state.selectionMode) {
+    resetSelectionState()
+  }
   state.bookmarkReorderMode = true
   state.bookmarkReorderFolderId = String(currentRoot.id || '')
   state.bookmarkReorderOrderIds = directBookmarks.map((bookmark) => String(bookmark.id))
@@ -4340,12 +5346,14 @@ async function reorderBookmarkWithinCurrentFolder(bookmarkId: string, requestedI
 function applyFolderFilter(folderId, { focusSearch = true } = {}) {
   cancelPendingSearchActivation()
   resetBookmarkReorderModeState()
-  const selectedFolder = folderId ? state.folderMap.get(folderId) : null
   state.selectedFolderFilterId = folderId
   resetFolderFilterQuery()
+  if (state.selectionMode) {
+    prunePopupSelectionToCurrentView()
+  }
+  clearViewNotice()
   runSearch()
   render()
-  showViewNotice(selectedFolder ? `已筛选：${selectedFolder.path || selectedFolder.title}` : '已显示全部文件夹')
   if (focusSearch) {
     focusSearchInput()
   }
@@ -4996,6 +6004,10 @@ async function moveBookmarkToFolder(folderId) {
     return
   }
   const movedTitle = bookmark.title
+  const currentNode = findNodeById(state.rawTreeRoot, String(bookmark.id || ''))
+  const previousParentId = String(currentNode?.parentId || bookmark.parentId || '')
+  const previousIndex = typeof currentNode?.index === 'number' ? currentNode.index : 0
+  const targetTitle = state.folderMap.get(String(folderId))?.title || '目标目录'
   const session = popupSessionId
   setPopupActionPending('move', bookmark.id, true)
   renderModals()
@@ -5004,7 +6016,23 @@ async function moveBookmarkToFolder(folderId) {
     if (session !== popupSessionId) return
     closeDialogs({ force: true })
     await refreshData({ preserveSearch: true })
-    if (session === popupSessionId) showMutationNotice(`已移动：${movedTitle}`)
+    if (session === popupSessionId) {
+      if (previousParentId) {
+        const activityId = `bookmark-move-${bookmark.id}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+        rememberPopupUndoPayload(activityId, {
+          kind: 'batch-move',
+          entries: [{ bookmarkId: String(bookmark.id), parentId: previousParentId, index: previousIndex }]
+        })
+        showMutationNoticeWithUndo({
+          id: activityId,
+          message: `已移动「${movedTitle}」到 ${targetTitle}`,
+          subject: movedTitle,
+          action: 'undo-move-batch'
+        })
+      } else {
+        showMutationNotice(`已移动「${movedTitle}」到 ${targetTitle}`)
+      }
+    }
   } catch (error) {
     if (session !== popupSessionId) return
     showActivity({
@@ -5056,6 +6084,14 @@ async function saveEditedBookmark() {
   }
   state.editSaving = true
   const session = popupSessionId
+  const currentNode = findNodeById(state.rawTreeRoot, String(bookmark.id || ''))
+  const previousTitle = String(bookmark.title || '')
+  const previousUrl = String(bookmark.url || '')
+  const previousParentId = String(currentNode?.parentId || bookmark.parentId || '')
+  const previousIndex = typeof currentNode?.index === 'number' ? currentNode.index : 0
+  const targetFolderTitle = savePlan.parentChanged && savePlan.parentId
+    ? (state.folderMap.get(String(savePlan.parentId))?.title || '目标目录')
+    : ''
   setPopupActionPending('edit', bookmark.id, true)
   renderModals()
   let detailsSaved = false
@@ -5072,7 +6108,30 @@ async function saveEditedBookmark() {
     setPopupActionPending('edit', bookmark.id, false)
     closeDialogs({ force: true })
     await refreshData({ preserveSearch: true })
-    if (session === popupSessionId) showMutationNotice(`已更新：${nextTitle}`)
+    if (session === popupSessionId) {
+      const activityId = `bookmark-edit-${bookmark.id}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+      rememberPopupUndoPayload(activityId, {
+        kind: 'bookmark-edit',
+        bookmarkId: String(bookmark.id),
+        previousTitle,
+        previousUrl,
+        previousParentId,
+        previousIndex,
+        detailsChanged: Boolean(savePlan.updateChanges),
+        parentChanged: Boolean(savePlan.parentChanged && savePlan.parentId)
+      })
+      const message = savePlan.parentChanged && targetFolderTitle
+        ? (savePlan.updateChanges
+            ? `已更新并移动：${nextTitle} → ${targetFolderTitle}`
+            : `已更新：${nextTitle} 已移至 ${targetFolderTitle}`)
+        : `已更新：${nextTitle}`
+      showMutationNoticeWithUndo({
+        id: activityId,
+        message,
+        subject: nextTitle,
+        action: 'undo-edit-bookmark'
+      })
+    }
   } catch (error) {
     if (session !== popupSessionId) return
     showActivity({
@@ -5192,8 +6251,13 @@ async function openBookmark(bookmarkId, background = false) {
   }
   try {
     await createTab({ url: bookmark.url, active: !background })
-    if (background) showActivity({ type: 'success', message: '已在后台打开' })
-    else closeTransientPopup()
+    if (background) {
+      void recordPopupBookmarkOpen(bookmark)
+      showActivity({ type: 'success', message: '已在后台打开' })
+    } else {
+      await settlePopupBookmarkOpenRecord(bookmark)
+      closeTransientPopup()
+    }
   } catch (error) {
     showActivity({
       type: 'error',
@@ -5210,6 +6274,7 @@ async function openBookmarkInCurrentTab(bookmarkId) {
   setPopupActionPending('open-current-tab', bookmarkId, true)
   try {
     await updateCurrentTabUrl(bookmark.url)
+    await settlePopupBookmarkOpenRecord(bookmark)
     closeTransientPopup()
   } catch (error) {
     showActivity({
@@ -5218,6 +6283,1418 @@ async function openBookmarkInCurrentTab(bookmarkId) {
     })
   } finally {
     setPopupActionPending('open-current-tab', bookmarkId, false)
+  }
+}
+
+function resetMoveCreateState(): void {
+  state.moveCreateOpen = false
+  state.moveCreateTitle = ''
+  state.moveCreateParentId = ''
+  state.moveCreateError = ''
+  state.moveCreateSaving = false
+}
+
+function getMoveBlockedFolderIds(): Set<string> {
+  if (state.moveTargetMode !== 'folder' || !state.moveTargetFolderId) {
+    return new Set()
+  }
+  const folderNode = findNodeById(state.rawTreeRoot, state.moveTargetFolderId)
+  return folderNode ? collectFolderDescendantIds(folderNode) : new Set()
+}
+
+function resolveDefaultMoveCreateParentId(): string {
+  const blocked = getMoveBlockedFolderIds()
+  const candidates: string[] = []
+  if (state.selectedFolderFilterId) {
+    candidates.push(String(state.selectedFolderFilterId))
+  }
+  if (state.moveTargetMode === 'bookmark' && state.moveTargetBookmarkId) {
+    const bookmark = state.bookmarkMap.get(state.moveTargetBookmarkId)
+    if (bookmark?.parentId) {
+      candidates.push(String(bookmark.parentId))
+    }
+  }
+  if (state.bookmarksBarNode?.id) {
+    candidates.push(String(state.bookmarksBarNode.id))
+  }
+  for (const root of getSidebarRootFolders()) {
+    if (root.id) {
+      candidates.push(String(root.id))
+    }
+  }
+  for (const candidate of candidates) {
+    if (candidate && candidate !== ROOT_ID && state.folderMap.has(candidate) && !blocked.has(candidate)) {
+      return candidate
+    }
+  }
+  return ''
+}
+
+function scrollSidebarFolderIntoView(folderId: string): void {
+  const targetId = String(folderId || '')
+  if (!targetId) return
+  window.requestAnimationFrame(() => {
+    const folderRow = document.querySelector<HTMLElement>(
+      `.t-skel-content .popup-folder-tree [data-folder-row-id="${CSS.escape(targetId)}"]`
+    )
+    folderRow?.scrollIntoView({ block: 'nearest' })
+  })
+}
+
+async function removeEmptyCreatedFolderForUndo(createdFolderId?: string): Promise<void> {
+  const folderId = String(createdFolderId || '').trim()
+  if (!folderId || folderId === ROOT_ID) return
+  try {
+    const [root] = await getBookmarkTree()
+    const folderNode = findNodeById(root, folderId)
+    if (
+      folderNode &&
+      !folderNode.url &&
+      !isProtectedBookmarkFolder(folderNode) &&
+      (!folderNode.children || folderNode.children.length === 0)
+    ) {
+      await removeBookmark(folderId)
+    }
+  } catch {
+    // Ignore cleanup errors if folder was already removed or modified elsewhere.
+  }
+}
+
+function resetFolderDialogState(): void {
+  state.folderDialogMode = null
+  state.folderDialogTargetId = ''
+  state.folderDialogInitialTargetId = ''
+  state.folderDialogTitle = ''
+  state.folderDialogError = ''
+  state.folderDialogSaving = false
+  state.folderDialogPickerOpen = false
+  state.folderDialogSearchQuery = ''
+}
+
+function resetSelectionState(): void {
+  const changed = state.selectionMode || state.selectedBookmarkIds.size > 0 || Boolean(state.selectionAnchorBookmarkId)
+  state.selectionMode = false
+  state.selectedBookmarkIds = new Set()
+  state.selectionAnchorBookmarkId = ''
+  if (changed) {
+    popupSelectionVersion += 1
+  }
+}
+
+function getVisibleSelectionBookmarkIds(): string[] {
+  if (state.debouncedQuery) {
+    return state.searchResults.map((bookmark) => String(bookmark.id || ''))
+  }
+  return getFilteredBookmarks().map((bookmark) => String(bookmark.id || ''))
+}
+
+function prunePopupSelectionToCurrentView(): void {
+  if (!state.selectionMode || !state.selectedBookmarkIds.size) {
+    return
+  }
+  const visibleIds = getVisibleSelectionBookmarkIds()
+  const next = pruneSelectionToVisibleIds(state.selectedBookmarkIds, visibleIds)
+  if (next !== state.selectedBookmarkIds) {
+    state.selectedBookmarkIds = next
+    if (state.selectionAnchorBookmarkId && !next.has(state.selectionAnchorBookmarkId)) {
+      state.selectionAnchorBookmarkId = ''
+    }
+    popupSelectionVersion += 1
+  }
+}
+
+function reconcileSelectionState(): void {
+  if (!state.selectionMode) {
+    return
+  }
+  if (state.bookmarkReorderMode) {
+    resetSelectionState()
+    return
+  }
+  const visibleIds = getVisibleSelectionBookmarkIds().filter((id) => state.bookmarkMap.has(id))
+  const next = pruneSelectionToVisibleIds(state.selectedBookmarkIds, visibleIds)
+  if (next !== state.selectedBookmarkIds) {
+    state.selectedBookmarkIds = next
+    if (state.selectionAnchorBookmarkId && !next.has(state.selectionAnchorBookmarkId)) {
+      state.selectionAnchorBookmarkId = ''
+    }
+    popupSelectionVersion += 1
+  }
+}
+
+function locateBookmarkFolder(bookmarkId: string): void {
+  const bookmark = state.bookmarkMap.get(String(bookmarkId || ''))
+  const parentId = String(bookmark?.parentId || '')
+  if (!bookmark || !parentId || !findNodeById(state.rawTreeRoot, parentId)) {
+    return
+  }
+  cancelPendingSearchActivation()
+  resetBookmarkReorderModeState()
+  resetFolderFilterQuery()
+  state.selectedFolderFilterId = parentId
+  state.filteredBookmarksCacheKey = ''
+  if (state.searchQuery || state.debouncedQuery) {
+    setSearchQuery('', { immediate: true })
+  }
+  if (state.selectionMode) {
+    prunePopupSelectionToCurrentView()
+  }
+  const bookmarks = getFilteredBookmarks()
+  const targetIndex = bookmarks.findIndex((item) => String(item.id) === String(bookmark.id))
+  clearQueuedKeyboardNavigation()
+  state.keyboardPane = 'bookmarks'
+  state.activeResultIndex = targetIndex >= 0 ? targetIndex : (bookmarks.length ? 0 : -1)
+  renderChrome()
+  renderMainContent({ preserveScroll: false })
+  const folder = state.folderMap.get(parentId)
+  showViewNotice(`已定位到「${folder?.path || folder?.title || '所在文件夹'}」`)
+  scrollSidebarFolderIntoView(parentId)
+}
+
+function enterSelectionMode(): void {
+  if (state.bookmarkReorderMode) {
+    resetBookmarkReorderModeState()
+  }
+  const visibleIds = getVisibleSelectionBookmarkIds()
+  if (!visibleIds.length) {
+    showViewNotice('当前没有可选择的书签')
+    return
+  }
+  state.selectionMode = true
+  state.selectedBookmarkIds = new Set()
+  state.selectionAnchorBookmarkId = ''
+  popupSelectionVersion += 1
+  if (state.viewNoticeMessage) {
+    clearViewNotice()
+    renderChrome()
+  }
+  renderMainContent({ preserveScroll: true })
+}
+
+function enterSelectionModeWithBookmark(bookmarkId: string): void {
+  const id = String(bookmarkId || '')
+  if (!id || state.batchActionBusy) {
+    return
+  }
+  if (state.bookmarkReorderMode) {
+    resetBookmarkReorderModeState()
+  }
+  const visibleIds = getVisibleSelectionBookmarkIds()
+  if (!visibleIds.includes(id)) {
+    return
+  }
+  if (!state.selectionMode) {
+    state.selectionMode = true
+    state.selectedBookmarkIds = new Set([id])
+    state.selectionAnchorBookmarkId = id
+    popupSelectionVersion += 1
+    if (state.viewNoticeMessage) {
+      clearViewNotice()
+      renderChrome()
+    }
+    renderMainContent({ preserveScroll: true })
+    return
+  }
+  toggleBookmarkSelection(id, false)
+}
+
+function exitSelectionMode(): void {
+  if (!state.selectionMode) {
+    return
+  }
+  resetSelectionState()
+  if (state.viewNoticeMessage) {
+    clearViewNotice()
+    renderChrome()
+  }
+  renderMainContent({ preserveScroll: true })
+}
+
+function toggleBookmarkSelection(bookmarkId: string, shiftKey = false): void {
+  if (!state.selectionMode || state.batchActionBusy) {
+    return
+  }
+  const visibleIds = getVisibleSelectionBookmarkIds()
+  const result = computeMultiSelectToggle(
+    state.selectedBookmarkIds,
+    visibleIds,
+    bookmarkId,
+    state.selectionAnchorBookmarkId,
+    shiftKey
+  )
+  state.selectedBookmarkIds = result.selectedIds
+  state.selectionAnchorBookmarkId = result.anchorId
+  popupSelectionVersion += 1
+  renderMainContent({ preserveScroll: true })
+}
+
+function applyBookmarkSwipeSelection(
+  startBookmarkId: string,
+  endBookmarkId: string,
+  targetSelected: boolean,
+  baseSelectedIds: readonly string[]
+): void {
+  if (!state.selectionMode || state.batchActionBusy) {
+    return
+  }
+  const visibleIds = getVisibleSelectionBookmarkIds()
+  const startIndex = visibleIds.indexOf(String(startBookmarkId || ''))
+  const endIndex = visibleIds.indexOf(String(endBookmarkId || ''))
+  if (startIndex < 0 || endIndex < 0) {
+    return
+  }
+  const result = computeMultiSelectSwipeRange(
+    new Set(baseSelectedIds),
+    visibleIds,
+    startIndex,
+    endIndex,
+    targetSelected
+  )
+  if (
+    result.selectedIds.size === state.selectedBookmarkIds.size &&
+    [...result.selectedIds].every((id) => state.selectedBookmarkIds.has(id)) &&
+    result.anchorId === state.selectionAnchorBookmarkId
+  ) {
+    return
+  }
+  state.selectedBookmarkIds = result.selectedIds
+  state.selectionAnchorBookmarkId = result.anchorId
+  popupSelectionVersion += 1
+  renderMainContent({ preserveScroll: true })
+}
+
+function selectAllVisibleBookmarks(): void {
+  if (!state.selectionMode || state.batchActionBusy) {
+    return
+  }
+  const visibleIds = getVisibleSelectionBookmarkIds()
+  if (!visibleIds.length) return
+  state.selectedBookmarkIds = new Set(visibleIds)
+  state.selectionAnchorBookmarkId = visibleIds[visibleIds.length - 1] || ''
+  popupSelectionVersion += 1
+  renderMainContent({ preserveScroll: true })
+}
+
+function clearBookmarkSelection(): void {
+  if (!state.selectionMode || state.batchActionBusy || !state.selectedBookmarkIds.size) {
+    return
+  }
+  state.selectedBookmarkIds = new Set()
+  state.selectionAnchorBookmarkId = ''
+  popupSelectionVersion += 1
+  renderMainContent({ preserveScroll: true })
+}
+
+function toggleSelectAllVisibleBookmarks(): void {
+  if (!state.selectionMode || state.batchActionBusy) {
+    return
+  }
+  const visibleIds = getVisibleSelectionBookmarkIds()
+  const selectedVisibleCount = visibleIds.filter((id) => state.selectedBookmarkIds.has(id)).length
+  if (visibleIds.length > 0 && selectedVisibleCount === visibleIds.length) {
+    clearBookmarkSelection()
+  } else {
+    selectAllVisibleBookmarks()
+  }
+}
+
+function openBatchMoveDialog(returnFocusElement: HTMLElement | null = null): void {
+  state.modalError = ''
+  if (hasBlockingPopupActionPending() || state.batchActionBusy) {
+    return
+  }
+  if (shouldBlockDirtyEditClose()) {
+    return
+  }
+  const orderedSelectedIds = getVisibleSelectionBookmarkIds().filter((id) =>
+    state.selectedBookmarkIds.has(id) && state.bookmarkMap.has(id)
+  )
+  if (!orderedSelectedIds.length) {
+    showViewNotice('请先选择要移动的书签')
+    return
+  }
+  rememberDialogReturnFocus(returnFocusElement)
+  state.editTargetBookmarkId = null
+  resetFolderDialogState()
+  state.moveTargetMode = 'batch'
+  state.moveTargetBookmarkId = null
+  state.moveTargetFolderId = null
+  state.moveTargetBookmarkIds = orderedSelectedIds
+  state.moveSearchQuery = ''
+  resetMoveCreateState()
+  render()
+}
+
+async function moveSelectedBookmarksToFolder(targetFolderId: string): Promise<void> {
+  const targetId = String(targetFolderId || '').trim()
+  if (!targetId || state.batchActionBusy || hasBlockingPopupActionPending()) {
+    return
+  }
+  const orderedBookmarks = state.moveTargetBookmarkIds
+    .map((id) => state.bookmarkMap.get(id))
+    .filter((bookmark): bookmark is PopupSearchBookmark => Boolean(bookmark))
+  if (!orderedBookmarks.length) {
+    closeDialogs({ force: true })
+    return
+  }
+
+  const toMove = orderedBookmarks.filter((bookmark) => String(bookmark.parentId || '') !== targetId)
+  if (!toMove.length) {
+    showMutationNotice('所选书签已在当前文件夹中')
+    return
+  }
+
+  const targetFolder = state.folderMap.get(targetId)
+  const targetLabel = targetFolder?.title || '目标文件夹'
+  const undoEntries = toMove.map((bookmark) => ({
+    bookmarkId: String(bookmark.id),
+    parentId: String(bookmark.parentId || ''),
+    index: Number.isFinite(Number(bookmark.index)) ? Math.trunc(Number(bookmark.index)) : 0
+  }))
+
+  const session = popupSessionId
+  state.batchActionBusy = true
+  setPopupActionPending('batch-move', 'selection', true)
+  renderModals()
+  renderMainContent({ preserveScroll: true })
+
+  const movedEntries: typeof undoEntries = []
+  try {
+    for (let index = 0; index < toMove.length; index += 1) {
+      const bookmark = toMove[index]
+      await moveBookmark(String(bookmark.id), targetId)
+      movedEntries.push(undoEntries[index])
+    }
+    if (session !== popupSessionId) return
+    closeDialogs({ force: true })
+    exitSelectionMode()
+    await refreshData({ preserveSearch: true })
+    if (session !== popupSessionId) return
+    const activityId = `batch-move-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+    rememberPopupUndoPayload(activityId, { kind: 'batch-move', entries: movedEntries })
+    showActivity({
+      id: activityId,
+      type: 'success',
+      message: `已移动 ${movedEntries.length} 个书签到 ${targetLabel}`,
+      subject: `${movedEntries.length} 个书签`,
+      action: 'undo-move-batch',
+      actionLabel: '撤销'
+    })
+  } catch (error) {
+    if (session !== popupSessionId) return
+    if (movedEntries.length) {
+      await refreshData({ preserveSearch: true })
+    }
+    showActivity({
+      type: 'error',
+      message: error instanceof Error ? `批量移动失败：${error.message}` : '批量移动失败，请稍后重试。'
+    })
+  } finally {
+    if (session === popupSessionId) {
+      state.batchActionBusy = false
+      setPopupActionPending('batch-move', 'selection', false)
+      render()
+    }
+  }
+}
+
+async function deleteSelectedBookmarks(): Promise<void> {
+  if (state.batchActionBusy || hasBlockingPopupActionPending()) {
+    return
+  }
+  const orderedBookmarks = getVisibleSelectionBookmarkIds()
+    .filter((id) => state.selectedBookmarkIds.has(id))
+    .map((id) => state.bookmarkMap.get(id))
+    .filter((bookmark): bookmark is PopupSearchBookmark => Boolean(bookmark))
+  if (!orderedBookmarks.length) {
+    showViewNotice('请先选择要删除的书签')
+    return
+  }
+
+  const session = popupSessionId
+  state.batchActionBusy = true
+  setPopupActionPending('batch-delete', 'selection', true)
+  renderMainContent({ preserveScroll: true })
+
+  try {
+    const recycleBin = await loadRecycleBinModule()
+    const result = await recycleBin.deleteBookmarksBatchToRecycle(
+      orderedBookmarks.map((bookmark) => ({
+        bookmarkId: String(bookmark.id),
+        title: bookmark.title || '未命名书签',
+        url: bookmark.url,
+        parentId: String(bookmark.parentId || ''),
+        index: Number.isFinite(Number(bookmark.index)) ? Math.trunc(Number(bookmark.index)) : 0,
+        path: bookmark.path || ''
+      })),
+      '弹窗批量删除'
+    )
+    if (session !== popupSessionId) return
+    exitSelectionMode()
+    await refreshData({ preserveSearch: true })
+    if (session !== popupSessionId) return
+    const activityId = `batch-delete-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+    rememberPopupUndoPayload(activityId, { kind: 'batch-delete', recycleIds: result.recycleIds })
+    const countText = `${result.deletedIds.length} 个书签`
+    showActivity({
+      id: activityId,
+      type: 'success',
+      message: result.failedCount
+        ? `已删除 ${countText}（${result.failedCount} 个已跳过）`
+        : `已删除 ${countText}`,
+      subject: countText,
+      action: 'undo-delete-batch',
+      actionLabel: '撤销'
+    })
+  } catch (error) {
+    if (session !== popupSessionId) return
+    showActivity({
+      type: 'error',
+      message: error instanceof Error ? `批量删除失败：${error.message}` : '批量删除失败，请稍后重试。'
+    })
+  } finally {
+    if (session === popupSessionId) {
+      state.batchActionBusy = false
+      setPopupActionPending('batch-delete', 'selection', false)
+      renderMainContent({ preserveScroll: true })
+    }
+  }
+}
+
+function openCreateFolderDialog(
+  parentFolderId = '',
+  returnFocusElement: HTMLElement | null = null
+): void {
+  state.modalError = ''
+  if (hasBlockingPopupActionPending() || shouldBlockDirtyEditClose()) {
+    return
+  }
+  const requestedId = String(parentFolderId || '').trim()
+  const targetId = requestedId && requestedId !== 'all'
+    ? requestedId
+    : String(getSelectedFolderNode()?.id || state.bookmarksBarNode?.id || getSidebarRootFolders()[0]?.id || '').trim()
+  const targetNode = findNodeById(state.rawTreeRoot, targetId)
+  if (!targetNode || targetNode.url) {
+    showActivity({ type: 'error', message: '找不到可用于新建文件夹的目录。' })
+    return
+  }
+  rememberDialogReturnFocus(returnFocusElement)
+  state.editTargetBookmarkId = null
+  state.moveTargetBookmarkId = null
+  state.moveTargetFolderId = null
+  state.moveTargetBookmarkIds = []
+  state.moveTargetMode = 'bookmark'
+  state.folderDialogMode = 'create'
+  state.folderDialogTargetId = String(targetNode.id)
+  state.folderDialogInitialTargetId = String(targetNode.id)
+  state.folderDialogTitle = ''
+  state.folderDialogError = ''
+  state.folderDialogSaving = false
+  state.folderDialogPickerOpen = false
+  state.folderDialogSearchQuery = ''
+  dispatchPopupFolderPickerChange('folder-create', getCreateFolderParentPickerState())
+  render()
+}
+
+function openRenameFolderDialog(
+  folderId = '',
+  returnFocusElement: HTMLElement | null = null
+): void {
+  state.modalError = ''
+  if (hasBlockingPopupActionPending() || shouldBlockDirtyEditClose()) {
+    return
+  }
+  const targetId = String(folderId || getSelectedFolderNode()?.id || '').trim()
+  const targetNode = findNodeById(state.rawTreeRoot, targetId)
+  if (!targetNode || isProtectedBookmarkFolder(targetNode)) {
+    showViewNotice('系统根文件夹不支持重命名')
+    return
+  }
+  rememberDialogReturnFocus(returnFocusElement)
+  state.editTargetBookmarkId = null
+  state.moveTargetBookmarkId = null
+  state.moveTargetFolderId = null
+  state.moveTargetBookmarkIds = []
+  state.moveTargetMode = 'bookmark'
+  state.folderDialogMode = 'rename'
+  state.folderDialogTargetId = String(targetNode.id)
+  state.folderDialogTitle = String(targetNode.title || '')
+  state.folderDialogError = ''
+  state.folderDialogSaving = false
+  render()
+}
+
+function openMoveFolderDialog(
+  folderId = '',
+  returnFocusElement: HTMLElement | null = null
+): void {
+  state.modalError = ''
+  if (hasBlockingPopupActionPending() || shouldBlockDirtyEditClose()) {
+    return
+  }
+  const targetId = String(folderId || getSelectedFolderNode()?.id || '').trim()
+  const targetNode = findNodeById(state.rawTreeRoot, targetId)
+  if (!targetNode || isProtectedBookmarkFolder(targetNode)) {
+    showViewNotice('系统根文件夹不支持移动')
+    return
+  }
+  rememberDialogReturnFocus(returnFocusElement)
+  state.editTargetBookmarkId = null
+  resetFolderDialogState()
+  state.moveTargetMode = 'folder'
+  state.moveTargetBookmarkId = null
+  state.moveTargetBookmarkIds = []
+  state.moveTargetFolderId = String(targetNode.id)
+  state.moveSearchQuery = ''
+  resetMoveCreateState()
+  render()
+}
+
+function openDeleteFolderDialog(
+  folderId = '',
+  returnFocusElement: HTMLElement | null = null
+): void {
+  state.modalError = ''
+  if (hasBlockingPopupActionPending() || shouldBlockDirtyEditClose()) {
+    return
+  }
+  const targetId = String(folderId || getSelectedFolderNode()?.id || '').trim()
+  const targetNode = findNodeById(state.rawTreeRoot, targetId)
+  if (!targetNode || isProtectedBookmarkFolder(targetNode)) {
+    showViewNotice('系统根文件夹不支持删除')
+    return
+  }
+  rememberDialogReturnFocus(returnFocusElement)
+  state.editTargetBookmarkId = null
+  state.moveTargetBookmarkId = null
+  state.moveTargetFolderId = null
+  state.moveTargetBookmarkIds = []
+  state.moveTargetMode = 'bookmark'
+  state.folderDialogMode = 'delete'
+  state.folderDialogTargetId = String(targetNode.id)
+  state.folderDialogTitle = String(targetNode.title || '')
+  state.folderDialogError = ''
+  state.folderDialogSaving = false
+  render()
+}
+
+async function saveFolderDialog(): Promise<void> {
+  const mode = state.folderDialogMode
+  const targetId = state.folderDialogTargetId
+  if (!mode || !targetId || state.folderDialogSaving || hasBlockingPopupActionPending()) {
+    return
+  }
+  const targetNode = findNodeById(state.rawTreeRoot, targetId)
+  if (!targetNode || targetNode.url) {
+    state.folderDialogError = '目标文件夹已不存在，请刷新后重试。'
+    renderModals()
+    return
+  }
+
+  if (mode === 'create' || mode === 'rename') {
+    const validation = validateFolderTitle(state.folderDialogTitle)
+    if ('error' in validation) {
+      state.folderDialogError = validation.error
+      renderModals()
+      return
+    }
+    if (mode === 'rename' && isProtectedBookmarkFolder(targetNode)) {
+      state.folderDialogError = '系统根文件夹不支持重命名。'
+      renderModals()
+      return
+    }
+
+    const session = popupSessionId
+    state.folderDialogSaving = true
+    setPopupActionPending(`folder-${mode}`, targetId, true)
+    renderModals()
+    try {
+      if (mode === 'create') {
+        const created = await createBookmark({
+          parentId: targetId,
+          title: validation.title
+        })
+        if (session !== popupSessionId) return
+        closeDialogs({ force: true })
+        state.selectedFolderFilterId = String(created.id || '') || state.selectedFolderFilterId
+        await refreshData({ preserveSearch: true })
+        if (session === popupSessionId) {
+          showMutationNotice(`已新建文件夹：${validation.title}`)
+          scrollSidebarFolderIntoView(String(created.id || ''))
+        }
+      } else {
+        const previousTitle = String(targetNode.title || '')
+        if (validation.title === previousTitle) {
+          closeDialogs({ force: true })
+          showMutationNotice('文件夹名称未变化')
+          return
+        }
+        await updateBookmark(targetId, { title: validation.title })
+        if (session !== popupSessionId) return
+        closeDialogs({ force: true })
+        await refreshData({ preserveSearch: true })
+        if (session === popupSessionId) {
+          const activityId = `folder-rename-${targetId}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+          rememberPopupUndoPayload(activityId, {
+            kind: 'folder-rename',
+            folderId: targetId,
+            previousTitle,
+            nextTitle: validation.title
+          })
+          showMutationNoticeWithUndo({
+            id: activityId,
+            message: `已重命名：${validation.title}`,
+            subject: validation.title,
+            action: 'undo-rename-folder'
+          })
+        }
+      }
+    } catch (error) {
+      if (session !== popupSessionId) return
+      state.folderDialogError = error instanceof Error ? error.message : '操作失败，请稍后重试。'
+      renderModals()
+    } finally {
+      if (session === popupSessionId) {
+        state.folderDialogSaving = false
+        setPopupActionPending(`folder-${mode}`, targetId, false)
+        renderModals()
+      }
+    }
+    return
+  }
+
+  if (mode === 'delete') {
+    if (isProtectedBookmarkFolder(targetNode)) {
+      state.folderDialogError = '系统根文件夹不支持删除。'
+      renderModals()
+      return
+    }
+    const folderInfo = state.folderMap.get(targetId)
+    const folderTitle = targetNode.title || folderInfo?.title || '未命名文件夹'
+    const folderPath = folderInfo ? formatFolderPath(folderInfo, state.folderMap) || folderTitle : folderTitle
+    const parentId = String(targetNode.parentId || '')
+    const deletedIds = collectFolderDescendantIds(targetNode)
+
+    const session = popupSessionId
+    state.folderDialogSaving = true
+    setPopupActionPending('folder-delete', targetId, true)
+    renderModals()
+    try {
+      const recycleBin = await loadRecycleBinModule()
+      const result = await recycleBin.deleteFolderTreeToRecycle(targetNode, {
+        path: folderPath,
+        source: '弹窗删除文件夹'
+      })
+      if (session !== popupSessionId) return
+      closeDialogs({ force: true })
+      if (state.selectedFolderFilterId && deletedIds.has(state.selectedFolderFilterId)) {
+        state.selectedFolderFilterId = parentId && parentId !== ROOT_ID
+          ? parentId
+          : null
+      }
+      await refreshData({ preserveSearch: true })
+      if (session !== popupSessionId) return
+      const activityId = `folder-delete-${targetId}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+      rememberPopupUndoPayload(activityId, { kind: 'folder-delete', blueprint: result.blueprint })
+      showActivity({
+        id: activityId,
+        type: 'success',
+        message: result.bookmarkCount
+          ? `已删除文件夹 ${folderTitle}（含 ${result.bookmarkCount} 个书签）`
+          : `已删除文件夹 ${folderTitle}`,
+        subject: folderTitle,
+        action: 'undo-delete-folder',
+        actionLabel: '撤销'
+      })
+    } catch (error) {
+      if (session !== popupSessionId) return
+      state.folderDialogError = error instanceof Error ? error.message : '删除文件夹失败，请稍后重试。'
+      renderModals()
+    } finally {
+      if (session === popupSessionId) {
+        state.folderDialogSaving = false
+        setPopupActionPending('folder-delete', targetId, false)
+        renderModals()
+      }
+    }
+  }
+}
+
+async function moveFolderToParent(targetParentId: string): Promise<void> {
+  const folderId = String(state.moveTargetFolderId || '').trim()
+  const destinationId = String(targetParentId || '').trim()
+  const folderNode = folderId ? findNodeById(state.rawTreeRoot, folderId) : null
+  if (!folderNode || !destinationId || isProtectedBookmarkFolder(folderNode) || isPopupActionPending('folder-move', folderId)) {
+    return
+  }
+  if (String(folderNode.parentId || '') === destinationId) {
+    showMutationNotice('文件夹已在当前目录中')
+    return
+  }
+  if (collectFolderDescendantIds(folderNode).has(destinationId)) {
+    state.modalError = '不能将文件夹移动到自身或其子文件夹内。'
+    renderModals()
+    return
+  }
+
+  const folderTitle = folderNode.title || '未命名文件夹'
+  const previousParentId = String(folderNode.parentId || '')
+  const previousIndex = typeof folderNode.index === 'number' ? folderNode.index : 0
+  const targetTitle = state.folderMap.get(destinationId)?.title || '目标目录'
+  const session = popupSessionId
+  setPopupActionPending('folder-move', folderId, true)
+  renderModals()
+  try {
+    await moveBookmark(folderId, destinationId)
+    if (session !== popupSessionId) return
+    closeDialogs({ force: true })
+    await refreshData({ preserveSearch: true })
+    if (session === popupSessionId) {
+      if (previousParentId) {
+        const activityId = `folder-move-${folderId}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+        rememberPopupUndoPayload(activityId, {
+          kind: 'folder-move',
+          folderId,
+          folderTitle,
+          previousParentId,
+          previousIndex
+        })
+        showMutationNoticeWithUndo({
+          id: activityId,
+          message: `已移动「${folderTitle}」到 ${targetTitle}`,
+          subject: folderTitle,
+          action: 'undo-move-folder'
+        })
+      } else {
+        showMutationNotice(`已移动「${folderTitle}」到 ${targetTitle}`)
+      }
+    }
+  } catch (error) {
+    if (session !== popupSessionId) return
+    showActivity({
+      type: 'error',
+      message: error instanceof Error ? `移动文件夹失败：${error.message}` : '移动文件夹失败，请稍后重试。'
+    })
+  } finally {
+    if (session === popupSessionId) {
+      setPopupActionPending('folder-move', folderId, false)
+      renderModals()
+    }
+  }
+}
+
+async function createFolderAndMove(): Promise<void> {
+  if (!state.moveCreateOpen || state.moveCreateSaving || hasBlockingPopupActionPending()) {
+    return
+  }
+  const validation = validateFolderTitle(state.moveCreateTitle)
+  if ('error' in validation) {
+    state.moveCreateError = validation.error
+    renderModals()
+    return
+  }
+  const parentId = String(state.moveCreateParentId || '').trim()
+  const parentNode = parentId ? findNodeById(state.rawTreeRoot, parentId) : null
+  if (!parentNode || parentNode.url || parentId === ROOT_ID) {
+    state.moveCreateError = '目标位置已不存在，请重新选择。'
+    renderModals()
+    return
+  }
+  if (getMoveBlockedFolderIds().has(parentId)) {
+    state.moveCreateError = '不能在当前移动的文件夹及其子目录内新建。'
+    renderModals()
+    return
+  }
+
+  const session = popupSessionId
+  const mode = state.moveTargetMode
+  const bookmark = mode === 'bookmark' && state.moveTargetBookmarkId
+    ? state.bookmarkMap.get(state.moveTargetBookmarkId)
+    : null
+  const batchBookmarks = mode === 'batch'
+    ? state.moveTargetBookmarkIds
+        .map((id) => state.bookmarkMap.get(id))
+        .filter((item): item is PopupSearchBookmark => Boolean(item))
+    : []
+  const movingFolder = mode === 'folder' && state.moveTargetFolderId
+    ? findNodeById(state.rawTreeRoot, state.moveTargetFolderId)
+    : null
+
+  if (
+    (mode === 'bookmark' && !bookmark) ||
+    (mode === 'batch' && !batchBookmarks.length) ||
+    (mode === 'folder' && (!movingFolder || isProtectedBookmarkFolder(movingFolder)))
+  ) {
+    closeDialogs({ force: true })
+    return
+  }
+
+  state.moveCreateSaving = true
+  state.moveCreateError = ''
+  setPopupActionPending('move-create', parentId, true)
+  renderModals()
+  let createdFolderId = ''
+  try {
+    const created = await createBookmark({ parentId, title: validation.title })
+    const newFolderId = String(created.id || '')
+    if (!newFolderId) {
+      throw new Error('新建文件夹失败。')
+    }
+    createdFolderId = newFolderId
+    if (session !== popupSessionId) return
+
+    if (mode === 'folder' && movingFolder) {
+      const folderId = String(movingFolder.id)
+      const folderTitle = movingFolder.title || '未命名文件夹'
+      const previousParentId = String(movingFolder.parentId || '')
+      const previousIndex = typeof movingFolder.index === 'number' ? movingFolder.index : 0
+      await moveBookmark(folderId, newFolderId)
+      if (session !== popupSessionId) return
+      closeDialogs({ force: true })
+      await refreshData({ preserveSearch: true })
+      if (session !== popupSessionId) return
+      scrollSidebarFolderIntoView(newFolderId)
+      const activityId = `folder-move-${folderId}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+      if (previousParentId) {
+        rememberPopupUndoPayload(activityId, {
+          kind: 'folder-move',
+          folderId,
+          folderTitle,
+          previousParentId,
+          previousIndex,
+          createdFolderId: newFolderId
+        })
+        showMutationNoticeWithUndo({
+          id: activityId,
+          message: `已新建「${validation.title}」并移入「${folderTitle}」`,
+          subject: folderTitle,
+          action: 'undo-move-folder'
+        })
+      } else {
+        showMutationNotice(`已新建「${validation.title}」并移入「${folderTitle}」`)
+      }
+      return
+    }
+
+    const targets = mode === 'batch' ? batchBookmarks : (bookmark ? [bookmark] : [])
+    const undoEntries = targets.map((item) => ({
+      bookmarkId: String(item.id),
+      parentId: String(item.parentId || ''),
+      index: Number.isFinite(Number(item.index)) ? Math.trunc(Number(item.index)) : 0
+    }))
+    const movedEntries: typeof undoEntries = []
+    for (let index = 0; index < targets.length; index += 1) {
+      await moveBookmark(String(targets[index].id), newFolderId)
+      movedEntries.push(undoEntries[index])
+    }
+    if (session !== popupSessionId) return
+    closeDialogs({ force: true })
+    if (mode === 'batch') {
+      exitSelectionMode()
+    }
+    await refreshData({ preserveSearch: true })
+    if (session !== popupSessionId) return
+    scrollSidebarFolderIntoView(newFolderId)
+    const activityId = `move-create-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+    const validUndoEntries = movedEntries.filter((entry) => Boolean(entry.parentId))
+    const message = mode === 'batch'
+      ? `已新建「${validation.title}」并移入 ${movedEntries.length} 个书签`
+      : `已新建「${validation.title}」并移入「${targets[0]?.title || '书签'}」`
+    if (validUndoEntries.length) {
+      rememberPopupUndoPayload(activityId, {
+        kind: 'batch-move',
+        entries: validUndoEntries,
+        createdFolderId: newFolderId
+      })
+      showMutationNoticeWithUndo({
+        id: activityId,
+        message,
+        subject: validation.title,
+        action: 'undo-move-batch'
+      })
+    } else {
+      showMutationNotice(message)
+    }
+  } catch (error) {
+    if (session !== popupSessionId) return
+    if (createdFolderId) {
+      await refreshData({ preserveSearch: true })
+      if (session !== popupSessionId) return
+    }
+    state.moveCreateError = error instanceof Error ? error.message : '新建并移入失败，请稍后重试。'
+    renderModals()
+  } finally {
+    if (session === popupSessionId) {
+      state.moveCreateSaving = false
+      setPopupActionPending('move-create', parentId, false)
+      renderModals()
+    }
+  }
+}
+
+async function sortFolderBookmarks(folderId: string, mode: PopupFolderSortMode): Promise<void> {
+  if (state.folderSortBusy || hasBlockingPopupActionPending()) {
+    return
+  }
+  const resolvedFolderId = String(folderId || getSelectedFolderNode()?.id || '').trim()
+  const folderNode = findNodeById(state.rawTreeRoot, resolvedFolderId)
+  if (!folderNode || folderNode.url) {
+    showActivity({ type: 'error', message: '找不到要排序的文件夹。' })
+    return
+  }
+  const directBookmarks = getDirectBookmarkRecords(folderNode)
+  if (directBookmarks.length < 2) {
+    showViewNotice('当前文件夹至少需要 2 个直属书签才能排序')
+    return
+  }
+
+  const session = popupSessionId
+  const folderTitle = folderNode.title || '书签栏'
+  const sortOption = getPopupFolderSortOption(mode)
+  state.folderSortBusy = true
+  setPopupActionPending('folder-sort', resolvedFolderId, true)
+  renderMainContent({ preserveScroll: true })
+
+  try {
+    let activityRecords: Record<string, import('../shared/repositories/activity-repository.js').NewTabActivityRepositoryRecord> = {}
+    if (mode === 'frequency-desc') {
+      const repository = await loadActivityRepositoryModule()
+      const loaded = await repository.loadNewTabActivityFromRepository(
+        repository.normalizeNewTabActivityRepositoryState
+      )
+      activityRecords = loaded.records || {}
+    }
+    if (session !== popupSessionId) return
+
+    const latestTree = await getBookmarkTree()
+    const latestFolder = findNodeById(latestTree[0], resolvedFolderId)
+    if (!latestFolder || latestFolder.url) {
+      throw new Error('目标文件夹已变化，请稍后重试。')
+    }
+    const latestDirectBookmarks = (latestFolder.children || [])
+      .filter((child) => Boolean(child.url))
+      .map((child) => ({
+        id: String(child.id || ''),
+        title: child.title || '',
+        url: child.url || '',
+        dateAdded: child.dateAdded
+      }))
+    const previousIds = latestDirectBookmarks.map((bookmark) => bookmark.id)
+    const { orderedIds, matchedActivityCount } = computeSortedDirectBookmarkIds(
+      latestDirectBookmarks,
+      mode,
+      activityRecords
+    )
+    const moves = planDirectBookmarkSortMoves(latestFolder.children, orderedIds)
+    if (!moves.length) {
+      showMutationNotice(
+        mode === 'frequency-desc' && matchedActivityCount === 0
+          ? '暂无点击记录，当前顺序未变化'
+          : `「${folderTitle}」已按${sortOption.shortLabel}排好序`
+      )
+      return
+    }
+
+    for (const move of moves) {
+      await moveBookmark(move.bookmarkId, resolvedFolderId, move.index)
+    }
+    if (session !== popupSessionId) return
+    await refreshData({ preserveSearch: true })
+    if (session !== popupSessionId) return
+
+    const activityId = `folder-sort-${resolvedFolderId}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+    rememberPopupUndoPayload(activityId, {
+      kind: 'folder-sort',
+      folderId: resolvedFolderId,
+      folderTitle,
+      previousIds
+    })
+    showActivity({
+      id: activityId,
+      type: 'success',
+      message: mode === 'frequency-desc' && matchedActivityCount === 0
+        ? `暂无访问记录，已按最近收藏排序「${folderTitle}」`
+        : `已按${sortOption.shortLabel}排序「${folderTitle}」`,
+      subject: folderTitle,
+      action: 'undo-sort-folder',
+      actionLabel: '撤销'
+    })
+  } catch (error) {
+    if (session !== popupSessionId) return
+    showActivity({
+      type: 'error',
+      message: error instanceof Error ? `排序失败：${error.message}` : '文件夹排序失败，请稍后重试。'
+    })
+  } finally {
+    if (session === popupSessionId) {
+      state.folderSortBusy = false
+      setPopupActionPending('folder-sort', resolvedFolderId, false)
+      renderMainContent({ preserveScroll: true })
+    }
+  }
+}
+
+async function undoDeleteFolder(activity: PopupActivity): Promise<void> {
+  const payload = popupUndoPayloads.get(activity.id)
+  if (!payload || payload.kind !== 'folder-delete' || isPopupActionPending('undo-folder', activity.id)) {
+    return
+  }
+  const session = popupSessionId
+  setPopupActionPending('undo-folder', activity.id, true)
+  popupActivities.publish({
+    ...activity,
+    type: 'pending',
+    message: `正在恢复文件夹 ${payload.blueprint.title}`
+  })
+  try {
+    const recycleBin = await loadRecycleBinModule()
+    const restored = await recycleBin.restoreFolderTreeFromUndo(payload.blueprint)
+    if (session !== popupSessionId) return
+    popupUndoPayloads.delete(activity.id)
+    state.selectedFolderFilterId = String(restored.id || '') || state.selectedFolderFilterId
+    await refreshData({ preserveSearch: true })
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      id: activity.id,
+      type: 'success',
+      message: `已恢复文件夹 ${payload.blueprint.title}`,
+      duration: 1800
+    })
+  } catch (error) {
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      ...activity,
+      type: 'error',
+      message: `恢复失败：${payload.blueprint.title}`,
+      detail: error instanceof Error ? error.message : '请稍后重试。'
+    })
+  } finally {
+    if (session === popupSessionId) {
+      setPopupActionPending('undo-folder', activity.id, false)
+    }
+  }
+}
+
+async function undoBatchDelete(activity: PopupActivity): Promise<void> {
+  const payload = popupUndoPayloads.get(activity.id)
+  if (!payload || payload.kind !== 'batch-delete' || isPopupActionPending('undo-batch-delete', activity.id)) {
+    return
+  }
+  const session = popupSessionId
+  setPopupActionPending('undo-batch-delete', activity.id, true)
+  popupActivities.publish({
+    ...activity,
+    type: 'pending',
+    message: `正在恢复 ${activity.subject || '书签'}`
+  })
+  try {
+    const recycleBin = await loadRecycleBinModule()
+    const result = await recycleBin.restoreBookmarksBatchFromRecycle(payload.recycleIds)
+    if (session !== popupSessionId) return
+    if (result.remainingRecycleIds.length) {
+      rememberPopupUndoPayload(activity.id, { kind: 'batch-delete', recycleIds: result.remainingRecycleIds })
+    } else {
+      popupUndoPayloads.delete(activity.id)
+    }
+    await refreshData({ preserveSearch: true })
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      id: activity.id,
+      type: result.failedCount ? 'error' : 'success',
+      message: result.failedCount
+        ? `已恢复 ${result.restoredCount} 个书签，${result.failedCount} 个未恢复`
+        : `已恢复 ${result.restoredCount} 个书签`,
+      action: result.remainingRecycleIds.length ? 'undo-delete-batch' : '',
+      actionLabel: result.remainingRecycleIds.length ? '重试' : '',
+      duration: result.failedCount ? undefined : 1800
+    })
+  } catch (error) {
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      ...activity,
+      type: 'error',
+      message: '批量恢复失败',
+      detail: error instanceof Error ? error.message : '请稍后重试。'
+    })
+  } finally {
+    if (session === popupSessionId) {
+      setPopupActionPending('undo-batch-delete', activity.id, false)
+    }
+  }
+}
+
+async function undoBatchMove(activity: PopupActivity): Promise<void> {
+  const payload = popupUndoPayloads.get(activity.id)
+  if (!payload || payload.kind !== 'batch-move' || isPopupActionPending('undo-batch-move', activity.id)) {
+    return
+  }
+  const session = popupSessionId
+  setPopupActionPending('undo-batch-move', activity.id, true)
+  popupActivities.publish({
+    ...activity,
+    type: 'pending',
+    message: '正在还原移动位置…'
+  })
+  try {
+    const ordered = [...payload.entries].sort((left, right) => {
+      const parentCmp = left.parentId.localeCompare(right.parentId)
+      return parentCmp !== 0 ? parentCmp : left.index - right.index
+    })
+    let restoredCount = 0
+    const [root] = await getBookmarkTree()
+    for (const entry of ordered) {
+      const parentNode = findNodeById(root, entry.parentId)
+      if (!parentNode || parentNode.url) continue
+      try {
+        const currentParent = findNodeById((await getBookmarkTree())[0], entry.parentId)
+        const maxIndex = currentParent?.children?.length || 0
+        await moveBookmark(entry.bookmarkId, entry.parentId, Math.max(0, Math.min(entry.index, maxIndex)))
+        restoredCount += 1
+      } catch {
+        // Skip bookmarks removed or modified elsewhere.
+      }
+    }
+    if (session !== popupSessionId) return
+    if (payload.createdFolderId) {
+      await removeEmptyCreatedFolderForUndo(payload.createdFolderId)
+      if (session !== popupSessionId) return
+    }
+    popupUndoPayloads.delete(activity.id)
+    await refreshData({ preserveSearch: true })
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      id: activity.id,
+      type: 'success',
+      message: `已还原 ${restoredCount} 个书签的位置`,
+      duration: 1800
+    })
+  } catch (error) {
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      ...activity,
+      type: 'error',
+      message: '撤销移动失败',
+      detail: error instanceof Error ? error.message : '请稍后重试。'
+    })
+  } finally {
+    if (session === popupSessionId) {
+      setPopupActionPending('undo-batch-move', activity.id, false)
+    }
+  }
+}
+
+async function undoEditBookmark(activity: PopupActivity): Promise<void> {
+  const payload = popupUndoPayloads.get(activity.id)
+  if (!payload || payload.kind !== 'bookmark-edit' || isPopupActionPending('undo-edit-bookmark', activity.id)) {
+    return
+  }
+  const session = popupSessionId
+  setPopupActionPending('undo-edit-bookmark', activity.id, true)
+  popupActivities.publish({
+    ...activity,
+    type: 'pending',
+    message: `正在还原「${payload.previousTitle || '书签'}」…`
+  })
+  try {
+    const [root] = await getBookmarkTree()
+    const currentNode = findNodeById(root, payload.bookmarkId)
+    if (!currentNode || !currentNode.url) {
+      throw new Error('目标书签已不存在。')
+    }
+    if (payload.detailsChanged) {
+      await updateBookmark(payload.bookmarkId, {
+        title: payload.previousTitle,
+        url: payload.previousUrl
+      })
+    }
+    if (payload.parentChanged && payload.previousParentId) {
+      const [latestRoot] = await getBookmarkTree()
+      const previousParent = findNodeById(latestRoot, payload.previousParentId)
+      if (!previousParent || previousParent.url) {
+        throw new Error('原文件夹已不存在，无法还原位置。')
+      }
+      const maxIndex = previousParent.children?.length || 0
+      await moveBookmark(
+        payload.bookmarkId,
+        payload.previousParentId,
+        Math.max(0, Math.min(payload.previousIndex, maxIndex))
+      )
+    }
+    if (session !== popupSessionId) return
+    popupUndoPayloads.delete(activity.id)
+    await refreshData({ preserveSearch: true })
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      id: activity.id,
+      type: 'success',
+      message: payload.parentChanged && !payload.detailsChanged
+        ? `已还原「${payload.previousTitle || '书签'}」的位置`
+        : `已撤销对「${payload.previousTitle || '书签'}」的修改`,
+      duration: 1800
+    })
+  } catch (error) {
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      ...activity,
+      type: 'error',
+      message: '撤销修改失败',
+      detail: error instanceof Error ? error.message : '请稍后重试。'
+    })
+  } finally {
+    if (session === popupSessionId) {
+      setPopupActionPending('undo-edit-bookmark', activity.id, false)
+    }
+  }
+}
+
+async function undoMoveFolder(activity: PopupActivity): Promise<void> {
+  const payload = popupUndoPayloads.get(activity.id)
+  if (!payload || payload.kind !== 'folder-move' || isPopupActionPending('undo-move-folder', activity.id)) {
+    return
+  }
+  const session = popupSessionId
+  setPopupActionPending('undo-move-folder', activity.id, true)
+  popupActivities.publish({
+    ...activity,
+    type: 'pending',
+    message: `正在还原「${payload.folderTitle}」的位置…`
+  })
+  try {
+    const [root] = await getBookmarkTree()
+    const folderNode = findNodeById(root, payload.folderId)
+    const previousParent = findNodeById(root, payload.previousParentId)
+    if (!folderNode || folderNode.url) {
+      throw new Error('目标文件夹已不存在。')
+    }
+    if (!previousParent || previousParent.url) {
+      throw new Error('原上级文件夹已不存在。')
+    }
+    if (collectFolderDescendantIds(folderNode).has(payload.previousParentId)) {
+      throw new Error('无法将文件夹还原到自身或其子文件夹内。')
+    }
+    const maxIndex = previousParent.children?.length || 0
+    await moveBookmark(
+      payload.folderId,
+      payload.previousParentId,
+      Math.max(0, Math.min(payload.previousIndex, maxIndex))
+    )
+    if (session !== popupSessionId) return
+    if (payload.createdFolderId) {
+      await removeEmptyCreatedFolderForUndo(payload.createdFolderId)
+      if (session !== popupSessionId) return
+    }
+    popupUndoPayloads.delete(activity.id)
+    await refreshData({ preserveSearch: true })
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      id: activity.id,
+      type: 'success',
+      message: `已还原「${payload.folderTitle}」的位置`,
+      duration: 1800
+    })
+  } catch (error) {
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      ...activity,
+      type: 'error',
+      message: '撤销移动文件夹失败',
+      detail: error instanceof Error ? error.message : '请稍后重试。'
+    })
+  } finally {
+    if (session === popupSessionId) {
+      setPopupActionPending('undo-move-folder', activity.id, false)
+    }
+  }
+}
+
+async function undoRenameFolder(activity: PopupActivity): Promise<void> {
+  const payload = popupUndoPayloads.get(activity.id)
+  if (!payload || payload.kind !== 'folder-rename' || isPopupActionPending('undo-rename-folder', activity.id)) {
+    return
+  }
+  const session = popupSessionId
+  setPopupActionPending('undo-rename-folder', activity.id, true)
+  popupActivities.publish({
+    ...activity,
+    type: 'pending',
+    message: `正在还原文件夹名称…`
+  })
+  try {
+    const [root] = await getBookmarkTree()
+    const folderNode = findNodeById(root, payload.folderId)
+    if (!folderNode || folderNode.url) {
+      throw new Error('目标文件夹已不存在。')
+    }
+    await updateBookmark(payload.folderId, { title: payload.previousTitle })
+    if (session !== popupSessionId) return
+    popupUndoPayloads.delete(activity.id)
+    await refreshData({ preserveSearch: true })
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      id: activity.id,
+      type: 'success',
+      message: `已还原文件夹名称：${payload.previousTitle}`,
+      duration: 1800
+    })
+  } catch (error) {
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      ...activity,
+      type: 'error',
+      message: '撤销重命名失败',
+      detail: error instanceof Error ? error.message : '请稍后重试。'
+    })
+  } finally {
+    if (session === popupSessionId) {
+      setPopupActionPending('undo-rename-folder', activity.id, false)
+    }
+  }
+}
+
+async function undoFolderSort(activity: PopupActivity): Promise<void> {
+  const payload = popupUndoPayloads.get(activity.id)
+  if (!payload || payload.kind !== 'folder-sort' || isPopupActionPending('undo-folder-sort', activity.id)) {
+    return
+  }
+  const session = popupSessionId
+  setPopupActionPending('undo-folder-sort', activity.id, true)
+  popupActivities.publish({
+    ...activity,
+    type: 'pending',
+    message: `正在还原「${payload.folderTitle}」的顺序…`
+  })
+  try {
+    const [root] = await getBookmarkTree()
+    const folderNode = findNodeById(root, payload.folderId)
+    if (!folderNode || folderNode.url) {
+      throw new Error('目标文件夹已不存在。')
+    }
+    const moves = planDirectBookmarkSortMoves(folderNode.children, payload.previousIds)
+    for (const move of moves) {
+      await moveBookmark(move.bookmarkId, payload.folderId, move.index)
+    }
+    if (session !== popupSessionId) return
+    popupUndoPayloads.delete(activity.id)
+    await refreshData({ preserveSearch: true })
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      id: activity.id,
+      type: 'success',
+      message: `已还原「${payload.folderTitle}」的顺序`,
+      duration: 1800
+    })
+  } catch (error) {
+    if (session !== popupSessionId) return
+    popupActivities.publish({
+      ...activity,
+      type: 'error',
+      message: `还原顺序失败：${payload.folderTitle}`,
+      detail: error instanceof Error ? error.message : '请稍后重试。'
+    })
+  } finally {
+    if (session === popupSessionId) {
+      setPopupActionPending('undo-folder-sort', activity.id, false)
+    }
   }
 }
 async function updateCurrentTabUrl(url) {
@@ -5624,6 +8101,12 @@ function updateActiveSearchResult(previousIndex, nextIndex) {
   void previousIndex
   void nextIndex
 }
+function getSelectedFolderNode(): chrome.bookmarks.BookmarkTreeNode | null {
+  if (!state.selectedFolderFilterId) {
+    return null
+  }
+  return findNodeById(state.rawTreeRoot, state.selectedFolderFilterId) || null
+}
 function getCurrentTreeRoot() {
   if (state.selectedFolderFilterId) {
     return findNodeById(state.rawTreeRoot, state.selectedFolderFilterId) || state.bookmarksBarNode
@@ -5794,7 +8277,8 @@ function waitForSmartProgressCompletion() {
 }
 function hasOpenModal() {
   return Boolean(
-    state.moveTargetBookmarkId ||
+    isMoveDialogOpen() ||
+      state.folderDialogMode ||
       state.smartFolderPickerOpen ||
       state.aiProviderPromptOpen ||
       state.editTargetBookmarkId

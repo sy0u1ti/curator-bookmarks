@@ -4,8 +4,10 @@ export interface NewtabDeleteToastView {
   bookmarkLabel: string
   busy: boolean
   detail: string
+  showRecycleAction?: boolean
   title?: string
   tone?: 'success' | 'error'
+  undoAriaLabel?: string
 }
 
 export interface NewtabDeleteToastActions {

@@ -566,6 +566,7 @@ body {
 }
 
 .bookmark-edit-menu,
+.bookmark-folder-menu,
 .bookmark-add-menu.expanded {
   padding: calc(var(--ds-inset-panel) - var(--newtab-glass-stroke-width));
   border-color: var(--newtab-glass-border);
@@ -682,9 +683,10 @@ body {
   box-shadow: none;
 }
 
+.bookmark-add-menu-content.is-collapsed .bookmark-menu-action,
 .bookmark-add-menu-trigger {
-  min-height: 38px;
-  justify-content: center;
+  min-height: 36px;
+  justify-content: flex-start;
   gap: 10px;
   border: 0;
   background: transparent;
@@ -693,12 +695,14 @@ body {
   box-shadow: none;
 }
 
+.bookmark-add-menu-content.is-collapsed .bookmark-menu-action:focus-visible,
 .bookmark-add-menu-trigger:focus-visible {
   background: rgba(245, 245, 247, 0.065);
   box-shadow: none;
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .bookmark-add-menu-content.is-collapsed .bookmark-menu-action:hover,
   .bookmark-add-menu-trigger:hover {
     background: rgba(245, 245, 247, 0.065);
     box-shadow: none;
@@ -719,12 +723,17 @@ body {
     transform var(--dropdown-open-dur) var(--dropdown-open-ease);
 }
 
+.bookmark-add-menu-content.is-collapsed .bookmark-menu-action:focus-visible .bookmark-add-menu-trigger-icon,
 .bookmark-add-menu-trigger:focus-visible .bookmark-add-menu-trigger-icon {
   background: rgba(245, 245, 247, 0.16);
 }
 
 /* The rotate is a pointer affordance; touch taps would leave it stuck turned. */
 @media (hover: hover) and (pointer: fine) {
+  .bookmark-add-menu-content.is-collapsed .bookmark-menu-action:hover .bookmark-add-menu-trigger-icon {
+    background: rgba(245, 245, 247, 0.16);
+  }
+
   .bookmark-add-menu-trigger:hover .bookmark-add-menu-trigger-icon {
     background: rgba(245, 245, 247, 0.16);
     transform: rotate(90deg);
@@ -745,6 +754,7 @@ body {
 }
 
 .bookmark-edit-menu .bookmark-menu-action,
+.bookmark-folder-menu .bookmark-menu-action,
 .bookmark-add-menu.expanded .bookmark-menu-action {
   min-height: 34px;
   border: 0;
@@ -756,6 +766,9 @@ body {
 .bookmark-edit-menu .bookmark-menu-action[data-cascade-highlighted],
 .bookmark-edit-menu .bookmark-menu-action[data-popup-open],
 .bookmark-edit-menu .bookmark-menu-action:focus-visible,
+.bookmark-folder-menu .bookmark-menu-action[data-cascade-highlighted],
+.bookmark-folder-menu .bookmark-menu-action[data-popup-open],
+.bookmark-folder-menu .bookmark-menu-action:focus-visible,
 .bookmark-add-menu.expanded .bookmark-menu-action[data-cascade-highlighted],
 .bookmark-add-menu.expanded .bookmark-menu-action[data-popup-open],
 .bookmark-add-menu.expanded .bookmark-menu-action:focus-visible {
@@ -766,7 +779,10 @@ body {
 
 .bookmark-edit-menu .bookmark-menu-action-danger,
 .bookmark-edit-menu .bookmark-menu-action-danger[data-cascade-highlighted],
-.bookmark-edit-menu .bookmark-menu-action-danger:focus-visible {
+.bookmark-edit-menu .bookmark-menu-action-danger:focus-visible,
+.bookmark-folder-menu .bookmark-menu-action-danger,
+.bookmark-folder-menu .bookmark-menu-action-danger[data-cascade-highlighted],
+.bookmark-folder-menu .bookmark-menu-action-danger:focus-visible {
   color: var(--ds-danger-text);
 }
 
@@ -804,7 +820,8 @@ body {
   transform: none;
 }
 
-.bookmark-edit-menu .bookmark-menu-feedback-box {
+.bookmark-edit-menu .bookmark-menu-feedback-box,
+.bookmark-folder-menu .bookmark-menu-feedback-box {
   margin: 8px 0 0;
   padding: 7px 9px;
   border-color: rgba(245, 245, 247, 0.1);
@@ -812,18 +829,21 @@ body {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
-.bookmark-edit-menu .bookmark-menu-feedback-box[data-tone="warning"] {
+.bookmark-edit-menu .bookmark-menu-feedback-box[data-tone="warning"],
+.bookmark-folder-menu .bookmark-menu-feedback-box[data-tone="warning"] {
   border-color: rgba(245, 245, 247, 0.1);
   background: rgba(245, 245, 247, 0.052);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
-.bookmark-edit-menu .bookmark-menu-feedback-box[data-tone="error"] {
+.bookmark-edit-menu .bookmark-menu-feedback-box[data-tone="error"],
+.bookmark-folder-menu .bookmark-menu-feedback-box[data-tone="error"] {
   border-color: color-mix(in srgb, var(--ds-danger) 32%, transparent);
   background: var(--ds-danger-soft);
 }
 
-.bookmark-edit-menu .bookmark-menu-feedback {
+.bookmark-edit-menu .bookmark-menu-feedback,
+.bookmark-folder-menu .bookmark-menu-feedback {
   block-size: auto;
   max-block-size: calc(3 * 1lh);
   margin: 0;
@@ -832,19 +852,24 @@ body {
   line-height: 1.35;
 }
 
-.bookmark-edit-menu .bookmark-menu-warning {
+.bookmark-edit-menu .bookmark-menu-warning,
+.bookmark-folder-menu .bookmark-menu-warning {
   color: rgba(245, 245, 247, 0.68);
 }
 
-.bookmark-edit-menu .bookmark-menu-error {
+.bookmark-edit-menu .bookmark-menu-error,
+.bookmark-folder-menu .bookmark-menu-error {
   color: var(--ds-danger-text);
 }
 
 .bookmark-edit-menu .bookmark-menu-action:not(:disabled):not([data-disabled]):active,
+.bookmark-folder-menu .bookmark-menu-action:not(:disabled):not([data-disabled]):active,
 .bookmark-add-menu.expanded .bookmark-menu-action:active {
   background: rgba(245, 245, 247, 0.13);
 }
 
+.bookmark-folder-menu .bookmark-menu-action:disabled,
+.bookmark-folder-menu .bookmark-menu-action[data-disabled],
 .bookmark-add-menu.expanded .bookmark-menu-action:disabled,
 .bookmark-add-menu.expanded .bookmark-menu-action[data-disabled] {
   cursor: default;
@@ -896,6 +921,7 @@ body {
 
   .bookmark-add-menu-content,
   .bookmark-edit-menu .bookmark-menu-feedback,
+  .bookmark-folder-menu .bookmark-menu-feedback,
   .bookmark-add-menu .bookmark-menu-error {
     animation: none !important;
   }

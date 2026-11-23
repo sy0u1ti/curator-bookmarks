@@ -1,10 +1,12 @@
 import { displayUrl } from '../../shared/text.js'
+import { buildBookmarkManagerHash } from '../../shared/extension-surfaces.js'
 import { Button } from '../../ui/base/Button'
 import { CheckboxControl } from '../../ui/base/Checkbox'
 import { Icon } from '../../ui/icons/Icon'
 import type { IconName } from '../../ui/icons/icon-map'
 import { cx } from '../../ui/base/utils'
 import { handleAvailabilityResultAction } from '../options-controller'
+import { navigateToOptionsSectionHash } from '../options-section-store.js'
 import { useAvailabilityResultsState } from './availability-results-store.js'
 import { OPTION_LIST_ROW_CLASS, OPTION_RESULT_CHECKBOX_CLASS } from './option-layout-classes.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
@@ -30,12 +32,26 @@ export function AvailabilityResults({ kind }: { kind: AvailabilityResultPanelKin
 }
 
 function AvailabilityResultCard({ kind, result }: { kind: AvailabilityResultPanelKind; result: AvailabilityResultCardViewModel }) {
-  const actions: OptionMenuAction[] = result.quickActions.map(action => ({
-    id: action.action, label: action.label, description: action.impact,
-    icon: ACTION_ICONS[action.action], disabled: action.disabled,
-    separatorBefore: action.action === 'ignore-bookmark',
-    onSelect: () => handleAvailabilityResultAction({ action: action.action, bookmarkId: result.bookmarkId, panel: kind })
-  }))
+  const locateDisabled = Boolean(
+    result.selectionDisabled ||
+    (result.quickActions.length > 0 && result.quickActions.every(action => action.disabled))
+  )
+  const actions: OptionMenuAction[] = [
+    ...(result.bookmarkId ? [{
+      id: 'locate-in-bookmarks',
+      label: '在全部书签中定位',
+      description: '跳转到所属文件夹查看或整理',
+      icon: 'FolderOpen' as IconName,
+      disabled: locateDisabled,
+      onSelect: () => navigateToOptionsSectionHash(buildBookmarkManagerHash({ bookmarkId: result.bookmarkId }))
+    }] : []),
+    ...result.quickActions.map((action, index) => ({
+      id: action.action, label: action.label, description: action.impact,
+      icon: ACTION_ICONS[action.action], disabled: action.disabled,
+      separatorBefore: (Boolean(result.bookmarkId) && index === 0) || action.action === 'ignore-bookmark',
+      onSelect: () => handleAvailabilityResultAction({ action: action.action, bookmarkId: result.bookmarkId, panel: kind })
+    }))
+  ]
   return (
     <article data-availability-result={result.bookmarkId} data-selected={result.selected ? 'true' : undefined} className={CARD_CLASS}>
       <div className="flex min-w-0 items-start gap-3">

@@ -9,6 +9,7 @@ import {
   useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type RefObject,
   type ReactNode
@@ -16,6 +17,7 @@ import {
 import { createPortal } from 'react-dom'
 import { Button } from '../../ui/base/Button'
 import { ErrorState } from '../../ui/base/ErrorState'
+import { OptionActionsMenu, type OptionMenuAction } from '../../ui/base/OptionActionsMenu'
 import { StatusButton } from '../../ui/actions/StatusButton'
 import { COPY_ACTION_LABELS } from '../../ui/actions/ActionFeedback'
 import { IDLE_ACTION_FEEDBACK } from '../../shared/action-feedback'
@@ -39,10 +41,14 @@ import {
   POPUP_BOOKMARK_ROW_HEIGHT
 } from '../popup-row-presentation'
 import { POPUP_FOLDER_FILTER_INPUT_ID } from '../popup-folder-filter'
+import {
+  POPUP_FOLDER_SORT_OPTIONS,
+  type PopupFolderSortMode
+} from '../popup-folder-management'
 import { isPopupContentNavigationKey } from '../popup-keyboard-navigation'
 import { getPopupSearchGridAria, getPopupSearchResultId } from '../popup-workspace-state'
 import { usePopupChromeView } from '../popup-controller-store'
-import { isSidePanelSurface } from '../../shared/extension-surfaces'
+import { isOptionsSurface, isSidePanelSurface } from '../../shared/extension-surfaces'
 import {
   folderBranchClass,
   folderCardActiveClass,
@@ -60,12 +66,28 @@ import type {
   PopupContentFolderRowViewModel,
   PopupContentMainRowViewModel,
   PopupContentSearchResultViewModel,
-  PopupContentViewModel
+  PopupContentViewModel,
+  PopupFolderManagementViewModel,
+  PopupSelectionViewModel
 } from './PopupViewModels'
 
 export interface PopupContentActionHandlers {
+  onBookmarkLocateFolder?: (bookmarkId: string) => void
   onBookmarkOpen?: (bookmarkId: string) => void
+  onBookmarkSelectFromContext?: (bookmarkId: string) => void
+  onBookmarkSwipeSelect?: (
+    startBookmarkId: string,
+    endBookmarkId: string,
+    targetSelected: boolean,
+    baseSelectedIds: string[]
+  ) => void
+  onBookmarkToggleSelect?: (bookmarkId: string, shiftKey?: boolean) => void
+  onBatchDeleteSelected?: () => void
+  onBatchMoveSelected?: (returnFocusElement?: HTMLElement | null) => void
+  onClearSelection?: () => void
   onEmptyAction?: (action: string) => void
+  onFolderCreate?: (folderId: string, returnFocusElement?: HTMLElement | null) => void
+  onFolderDelete?: (folderId: string, returnFocusElement?: HTMLElement | null) => void
   onFolderFilterApply?: () => void
   onFolderFilterChange?: (value: string) => void
   onFolderFilterClear?: () => void
@@ -73,12 +95,17 @@ export interface PopupContentActionHandlers {
   onFolderFilterMove?: (delta: number, exitOnEmpty?: boolean, repeat?: boolean) => void
   onFolderFilter?: (folderId: string) => void
   onFolderFocus?: (index: number) => void
+  onFolderMove?: (folderId: string, returnFocusElement?: HTMLElement | null) => void
+  onFolderRename?: (folderId: string, returnFocusElement?: HTMLElement | null) => void
+  onFolderSort?: (folderId: string, sortMode: PopupFolderSortMode) => void
   onKeyboardNavigate?: (key: string, repeat?: boolean) => boolean
   onMenuAction?: (bookmarkId: string, action: string, returnFocusElement?: HTMLElement | null) => void
   onBookmarkReorder?: (bookmarkId: string, index: number) => void
   onReorderModeChange?: (active: boolean) => void
   onRowFocus?: (index: number) => void
   onResultHover?: (index: number) => void
+  onSelectionModeChange?: (active: boolean) => void
+  onToggleSelectAll?: () => void
 }
 
 const POPUP_CONTENT_SKELETON_FOLDER_ROWS = [
@@ -140,6 +167,15 @@ const paneHeaderActionClass = [
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)] disabled:cursor-default disabled:opacity-40'
 ].join(' ')
+const paneHeaderActionActiveClass =
+  'border-ds-accent/45 bg-ds-accent-soft text-ds-accent-text hover:border-ds-accent/65 hover:bg-ds-accent-soft hover:text-ds-accent-text'
+const paneHeaderIconActionClass = [
+  'inline-flex h-7 w-7 flex-none items-center justify-center rounded-ds-sm border border-transparent bg-transparent p-0 text-ds-text-secondary outline-none',
+  'transition-[border-color,background-color,color,scale,opacity] duration-ds-fast ease-ds-standard',
+  'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
+  'active:scale-[var(--ds-press-scale)] disabled:cursor-default disabled:opacity-40'
+].join(' ')
+const folderPaneHeaderClass = cx(paneHeaderClass, 'gap-1.5 px-[10px]')
 const folderTreeClass =
   'popup-folder-tree ds-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2 [scrollbar-gutter:stable]'
 const mainListClass =
@@ -148,7 +184,7 @@ const mainListClass =
 // no new pane. Geometry matches the folder rows' 34px rhythm, not the 40px
 // main search shell, which would make the header grow.
 const folderFilterShellClass = [
-  'popup-folder-filter group/filter relative flex h-7 min-h-7 w-full min-w-0 items-center gap-1 rounded-ds-sm border border-transparent bg-ds-text-primary/[0.055] ds-inset-menu pl-2 text-ds-text-primary',
+  'popup-folder-filter group/filter relative flex h-7 min-h-7 w-full min-w-0 items-center gap-1 rounded-ds-sm border border-transparent bg-ds-text-primary/[0.055] ds-inset-menu pl-1.5 pr-1.5 data-[has-value=true]:pr-6 text-ds-text-primary',
   'shadow-[0_0_0_3px_transparent] transition-[background-color,border-color] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border hover:bg-ds-text-primary/[0.085]',
   'focus-within:border-ds-border-hover focus-within:bg-ds-text-primary/[0.085] focus-within:shadow-[0_0_0_3px_var(--ds-accent-soft)]'
@@ -156,9 +192,9 @@ const folderFilterShellClass = [
 const folderFilterIconClass =
   'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard group-focus-within/filter:text-ds-text-secondary'
 const folderFilterInputClass =
-  'min-w-0 flex-auto self-stretch border-0 bg-transparent pl-1 pr-0.5 py-0 text-xs font-medium leading-[1.3] text-ds-text-primary outline-none placeholder:font-normal placeholder:text-ds-text-muted [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
+  'min-w-0 flex-auto self-stretch border-0 bg-transparent px-0 py-0 text-xs font-medium leading-[1.3] text-ds-text-primary outline-none placeholder:font-normal placeholder:text-ds-text-muted [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
 const folderFilterClearClass = [
-  'inline-flex h-5 w-5 flex-none items-center justify-center rounded-ds-xs border-0 bg-transparent p-0 text-ds-text-muted outline-none',
+  'absolute right-0.5 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 flex-none items-center justify-center rounded-ds-xs border-0 bg-transparent p-0 text-ds-text-muted outline-none',
   'transition-[background-color,color,opacity,scale,visibility] [transition-behavior:allow-discrete] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-active hover:text-ds-text-primary focus-visible:bg-ds-active focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)]',
@@ -654,42 +690,382 @@ function usePopupBookmarkReorderDrag({
   }
 }
 
+const POPUP_SWIPE_SELECT_THRESHOLD_PX = 6
+const POPUP_SWIPE_AUTO_SCROLL_TOP_EDGE_PX = 44
+const POPUP_SWIPE_AUTO_SCROLL_BOTTOM_EDGE_PX = 76
+const POPUP_SWIPE_AUTO_SCROLL_MAX_PX = 16
+
+interface PopupBookmarkSwipeSelectSession {
+  activated: boolean
+  baseSelectedIds: string[]
+  clientY: number
+  hasAutoScrolled: boolean
+  lastIndex: number
+  pointerId: number
+  pointerType: string
+  startBookmarkId: string
+  startIndex: number
+  startY: number
+  startedInBottomEdge: boolean
+  startedInTopEdge: boolean
+  targetSelected: boolean
+}
+
+function resolveSwipeSelectRowIndex(
+  list: HTMLElement,
+  rows: readonly PopupContentMainRowViewModel[],
+  clientY: number
+): number {
+  if (!rows.length) {
+    return -1
+  }
+  const rect = list.getBoundingClientRect()
+  const paddingTop = Number.parseFloat(window.getComputedStyle(list).paddingTop || '') || 0
+  const clampedClientY = Math.max(rect.top + paddingTop, Math.min(rect.bottom - 1, clientY))
+  const contentY = Math.max(0, list.scrollTop + (clampedClientY - rect.top) - paddingTop)
+  if (rows[0]?.kind === 'bookmark') {
+    return Math.max(0, Math.min(rows.length - 1, Math.floor(contentY / POPUP_BOOKMARK_ROW_HEIGHT)))
+  }
+  let offset = 0
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
+    const rowHeight = row.kind === 'result' ? row.presentation.rowHeight : POPUP_BOOKMARK_ROW_HEIGHT
+    if (contentY < offset + rowHeight) {
+      return index
+    }
+    offset += rowHeight
+  }
+  return rows.length - 1
+}
+
+function usePopupBookmarkSwipeSelect({
+  active,
+  busy,
+  mainListRef,
+  onSwipeSelect,
+  rows
+}: {
+  active: boolean
+  busy: boolean
+  mainListRef?: RefObject<HTMLDivElement | null>
+  onSwipeSelect?: PopupContentActionHandlers['onBookmarkSwipeSelect']
+  rows: readonly PopupContentMainRowViewModel[]
+}) {
+  const sessionRef = useRef<PopupBookmarkSwipeSelectSession | null>(null)
+  const rowsRef = useRef(rows)
+  rowsRef.current = rows
+  const onSwipeSelectRef = useRef(onSwipeSelect)
+  onSwipeSelectRef.current = onSwipeSelect
+  const autoScrollFrameRef = useRef(0)
+  const suppressClickCleanupRef = useRef<(() => void) | null>(null)
+  const [listening, setListening] = useState(false)
+  const [swiping, setSwiping] = useState(false)
+
+  const stopAutoScroll = useCallback(() => {
+    if (autoScrollFrameRef.current) {
+      window.cancelAnimationFrame(autoScrollFrameRef.current)
+      autoScrollFrameRef.current = 0
+    }
+  }, [])
+
+  const armSuppressTrailingClick = useCallback(() => {
+    suppressClickCleanupRef.current?.()
+    let timerId = 0
+    const cleanup = () => {
+      window.removeEventListener('click', handleClickCapture, true)
+      if (timerId) {
+        window.clearTimeout(timerId)
+        timerId = 0
+      }
+      if (suppressClickCleanupRef.current === cleanup) {
+        suppressClickCleanupRef.current = null
+      }
+    }
+    const handleClickCapture = (clickEvent: MouseEvent) => {
+      clickEvent.preventDefault()
+      clickEvent.stopPropagation()
+      cleanup()
+    }
+    window.addEventListener('click', handleClickCapture, true)
+    timerId = window.setTimeout(cleanup, 0)
+    suppressClickCleanupRef.current = cleanup
+  }, [])
+
+  const applyAtClientY = useCallback((session: PopupBookmarkSwipeSelectSession, clientY: number) => {
+    const list = mainListRef?.current
+    const currentRows = rowsRef.current
+    if (!list || !currentRows.length) {
+      return
+    }
+    const hoveredIndex = resolveSwipeSelectRowIndex(list, currentRows, clientY)
+    if (hoveredIndex < 0) {
+      return
+    }
+    const targetRow = currentRows[hoveredIndex]
+    if (!targetRow) {
+      return
+    }
+    if (!session.activated) {
+      const movedEnough = hoveredIndex !== session.startIndex || Math.abs(clientY - session.startY) >= POPUP_SWIPE_SELECT_THRESHOLD_PX
+      if (!movedEnough) {
+        return
+      }
+      session.activated = true
+      session.lastIndex = hoveredIndex
+      setSwiping(true)
+      onSwipeSelectRef.current?.(
+        session.startBookmarkId,
+        targetRow.bookmarkId,
+        session.targetSelected,
+        session.baseSelectedIds
+      )
+      return
+    }
+    if (hoveredIndex !== session.lastIndex) {
+      session.lastIndex = hoveredIndex
+      onSwipeSelectRef.current?.(
+        session.startBookmarkId,
+        targetRow.bookmarkId,
+        session.targetSelected,
+        session.baseSelectedIds
+      )
+    }
+  }, [mainListRef])
+
+  const scheduleAutoScroll = useCallback(() => {
+    if (autoScrollFrameRef.current) {
+      return
+    }
+    const tick = () => {
+      const session = sessionRef.current
+      const list = mainListRef?.current
+      if (!session || !session.activated || !list) {
+        autoScrollFrameRef.current = 0
+        return
+      }
+      const rect = list.getBoundingClientRect()
+      const distanceFromTop = session.clientY - rect.top
+      const distanceFromBottom = rect.bottom - session.clientY
+      let velocity = 0
+      const blockTopScroll = session.startedInTopEdge && session.clientY > session.startY && !session.hasAutoScrolled
+      const blockBottomScroll = session.startedInBottomEdge && session.clientY < session.startY && !session.hasAutoScrolled
+      if (distanceFromTop < POPUP_SWIPE_AUTO_SCROLL_TOP_EDGE_PX && !blockTopScroll) {
+        const intensity = 1 - Math.max(0, distanceFromTop) / POPUP_SWIPE_AUTO_SCROLL_TOP_EDGE_PX
+        velocity = -Math.ceil(POPUP_SWIPE_AUTO_SCROLL_MAX_PX * intensity)
+      } else if (distanceFromBottom < POPUP_SWIPE_AUTO_SCROLL_BOTTOM_EDGE_PX && !blockBottomScroll) {
+        const intensity = 1 - Math.max(0, distanceFromBottom) / POPUP_SWIPE_AUTO_SCROLL_BOTTOM_EDGE_PX
+        velocity = Math.ceil(POPUP_SWIPE_AUTO_SCROLL_MAX_PX * intensity)
+      }
+      if (velocity) {
+        const previousScrollTop = list.scrollTop
+        const maxScrollTop = Math.max(0, list.scrollHeight - list.clientHeight)
+        list.scrollTop = Math.max(0, Math.min(previousScrollTop + velocity, maxScrollTop))
+        if (list.scrollTop !== previousScrollTop) {
+          session.hasAutoScrolled = true
+          applyAtClientY(session, session.clientY)
+        }
+      }
+      autoScrollFrameRef.current = window.requestAnimationFrame(tick)
+    }
+    autoScrollFrameRef.current = window.requestAnimationFrame(tick)
+  }, [applyAtClientY, mainListRef])
+
+  const endSession = useCallback((suppressClick: boolean) => {
+    stopAutoScroll()
+    sessionRef.current = null
+    setListening(false)
+    setSwiping(false)
+    if (suppressClick) {
+      armSuppressTrailingClick()
+    }
+  }, [armSuppressTrailingClick, stopAutoScroll])
+
+  useEffect(() => {
+    if (!active || busy) {
+      if (sessionRef.current) {
+        endSession(false)
+      }
+    }
+  }, [active, busy, endSession])
+
+  useEffect(() => () => {
+    stopAutoScroll()
+    suppressClickCleanupRef.current?.()
+  }, [stopAutoScroll])
+
+  useLayoutEffect(() => {
+    if (!listening) {
+      return
+    }
+    const handlePointerMove = (event: PointerEvent) => {
+      const session = sessionRef.current
+      if (!session || event.pointerId !== session.pointerId) {
+        return
+      }
+      if (session.pointerType === 'mouse' && (event.buttons & 1) === 0) {
+        endSession(session.activated)
+        return
+      }
+      session.clientY = event.clientY
+      const wasActivated = session.activated
+      applyAtClientY(session, event.clientY)
+      if (session.activated) {
+        event.preventDefault()
+        if (!wasActivated) {
+          scheduleAutoScroll()
+        }
+      }
+    }
+    const handlePointerUp = (event: PointerEvent) => {
+      const session = sessionRef.current
+      if (!session || event.pointerId !== session.pointerId) {
+        return
+      }
+      if (session.activated) {
+        event.preventDefault()
+        applyAtClientY(session, event.clientY)
+        endSession(true)
+        return
+      }
+      endSession(false)
+    }
+    const handlePointerCancel = (event: PointerEvent) => {
+      const session = sessionRef.current
+      if (!session || event.pointerId !== session.pointerId) {
+        return
+      }
+      endSession(session.activated)
+    }
+    const handleWindowBlur = () => {
+      const session = sessionRef.current
+      if (!session) {
+        return
+      }
+      endSession(session.activated)
+    }
+    window.addEventListener('pointermove', handlePointerMove, { passive: false })
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', handlePointerCancel)
+    window.addEventListener('blur', handleWindowBlur)
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerCancel)
+      window.removeEventListener('blur', handleWindowBlur)
+    }
+  }, [applyAtClientY, endSession, listening, scheduleAutoScroll])
+
+  const onListPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!active || busy || event.button !== 0) {
+      return
+    }
+    if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) {
+      return
+    }
+    const target = event.target instanceof HTMLElement ? event.target : null
+    if (!target) {
+      return
+    }
+    if (event.pointerType === 'touch' && !target.closest('.popup-row-checkbox')) {
+      return
+    }
+    const rowElement = target.closest<HTMLElement>('[data-bookmark-id][data-popup-row-index]')
+    if (!rowElement) {
+      return
+    }
+    const startIndex = Number(rowElement.dataset.popupRowIndex)
+    const startBookmarkId = rowElement.dataset.bookmarkId || ''
+    const currentRows = rowsRef.current
+    if (!Number.isInteger(startIndex) || startIndex < 0 || startIndex >= currentRows.length) {
+      return
+    }
+    const startRow = currentRows[startIndex]
+    if (!startRow || startRow.bookmarkId !== startBookmarkId) {
+      return
+    }
+    const baseSelectedIds = currentRows
+      .filter((row) => Boolean(row.selected))
+      .map((row) => row.bookmarkId)
+    const listRect = mainListRef?.current?.getBoundingClientRect()
+    sessionRef.current = {
+      activated: false,
+      baseSelectedIds,
+      clientY: event.clientY,
+      hasAutoScrolled: false,
+      lastIndex: startIndex,
+      pointerId: event.pointerId,
+      pointerType: event.pointerType || 'mouse',
+      startBookmarkId,
+      startIndex,
+      startY: event.clientY,
+      startedInBottomEdge: Boolean(listRect && listRect.bottom - event.clientY < POPUP_SWIPE_AUTO_SCROLL_BOTTOM_EDGE_PX),
+      startedInTopEdge: Boolean(listRect && event.clientY - listRect.top < POPUP_SWIPE_AUTO_SCROLL_TOP_EDGE_PX),
+      targetSelected: !startRow.selected
+    }
+    setListening(true)
+  }, [active, busy, mainListRef])
+
+  return {
+    onListPointerDown,
+    swiping
+  }
+}
+
 function PopupFolderPane({
   activeIndex,
   filter,
+  folderManagement,
   folderTreeRef,
   handlers,
   children
 }: {
   activeIndex: number
   filter?: PopupContentViewModel['folderFilter']
+  folderManagement?: PopupFolderManagementViewModel
   folderTreeRef?: RefObject<HTMLDivElement | null>
   handlers?: PopupContentActionHandlers
   children: ReactNode
 }) {
   const sidePanel = isSidePanelSurface()
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => sidePanel)
   const navigation = usePopupNavigationStore()
   const getClosedSelection = useCallback(() => collapsed && navigation
     ? (navigation.getSnapshot().state.activeFolderIndex ?? -1) : -1, [collapsed, navigation])
   useSyncExternalStore(navigation?.subscribe || subscribeNoPopupNavigation, getClosedSelection, getClosedSelection)
   const currentIndex = navigation?.getSnapshot().state.activeFolderIndex ?? activeIndex
   const previousActiveIndexRef = useRef(activeIndex)
+  const suppressAutoOpenRef = useRef(false)
+  const filterQuery = filter?.query || ''
   useLayoutEffect(() => {
+    if (suppressAutoOpenRef.current) {
+      suppressAutoOpenRef.current = false
+      previousActiveIndexRef.current = currentIndex
+      return
+    }
     // Only navigation into a closed tree opens it. Publishing false on every
     // repeat creates redundant commits even though the tree is already open.
     if (previousActiveIndexRef.current !== currentIndex && currentIndex >= 0 && collapsed) setCollapsed(false)
     previousActiveIndexRef.current = currentIndex
   }, [currentIndex, collapsed])
+  useLayoutEffect(() => {
+    if (sidePanel && collapsed && filterQuery) {
+      setCollapsed(false)
+    }
+  }, [sidePanel, collapsed, filterQuery])
   return (
     <aside className={paneClass} aria-label="文件夹树" onKeyDownCapture={event => {
       if (collapsed && !event.altKey && !event.ctrlKey && !event.metaKey &&
         (event.key === 'ArrowDown' || event.key === 'ArrowUp')) setCollapsed(false)
     }}>
-      <header className={paneHeaderClass}>
+      <header className={folderPaneHeaderClass}>
         {sidePanel ? (
           <Button
-            className="-ml-1.5 inline-flex min-h-7 shrink-0 items-center rounded-ds-sm bg-transparent px-1.5 text-left font-[inherit] text-inherit outline-none hover:bg-ds-hover hover:text-ds-text-primary focus-visible:shadow-ds-focus"
+            className={cx(
+              '-ml-1 inline-flex min-h-7 shrink-0 items-center gap-1.5 rounded-ds-sm px-2 text-left font-[inherit] outline-none transition-[background-color,color] duration-ds-fast ease-ds-standard focus-visible:shadow-ds-focus',
+              collapsed
+                ? 'bg-transparent text-ds-text-secondary hover:bg-ds-hover hover:text-ds-text-primary'
+                : 'bg-ds-active text-ds-text-primary'
+            )}
             aria-label={collapsed ? '展开文件夹列表' : '收起文件夹列表'}
             aria-expanded={!collapsed}
             aria-controls="sidepanel-folder-tree"
@@ -698,9 +1074,24 @@ function PopupFolderPane({
               setCollapsed(value => !value)
             }}
             unstyled
-          >全部文件夹</Button>
+          >
+            <Icon name={collapsed ? 'Folder' : 'FolderOpen'} size={14} className="shrink-0" aria-hidden="true" />
+            <span>文件夹</span>
+          </Button>
         ) : <span className="shrink-0">全部文件夹</span>}
         <PopupFolderFilterField filter={filter} handlers={handlers} />
+        <Button
+          id="popup-create-folder-button"
+          className={paneHeaderIconActionClass}
+          type="button"
+          aria-label="新建文件夹"
+          title="在当前目录新建文件夹"
+          disabled={!folderManagement?.canCreate}
+          onClick={(event) => handlers?.onFolderCreate?.(folderManagement?.folderId || '', event.currentTarget)}
+          unstyled
+        >
+          <Icon name="FolderPlus" size={14} aria-hidden="true" />
+        </Button>
         {/* The tree may only contain treeitems, so the result count is
             announced from the header instead of from inside the list. */}
         <span className="sr-only" aria-live="polite" aria-atomic="true">
@@ -709,7 +1100,15 @@ function PopupFolderPane({
       </header>
       <div className={folderTreeClass} role="tree" ref={folderTreeRef}
         id={sidePanel ? 'sidepanel-folder-tree' : undefined} hidden={sidePanel && collapsed}
-        inert={sidePanel && collapsed}>
+        inert={sidePanel && collapsed}
+        onClickCapture={(event) => {
+          if (!sidePanel || collapsed || event.detail === 0) return
+          const target = event.target instanceof HTMLElement ? event.target : null
+          if (target?.closest('button[role="treeitem"]')) {
+            suppressAutoOpenRef.current = true
+            setCollapsed(true)
+          }
+        }}>
         {children}
       </div>
     </aside>
@@ -749,7 +1148,11 @@ function PopupFolderFilterField({
   }
 
   return (
-    <label className={folderFilterShellClass} htmlFor={POPUP_FOLDER_FILTER_INPUT_ID}>
+    <label
+      className={folderFilterShellClass}
+      data-has-value={filter.clearVisible ? 'true' : 'false'}
+      htmlFor={POPUP_FOLDER_FILTER_INPUT_ID}
+    >
       <Icon name="Search" className={folderFilterIconClass} size={13} aria-hidden="true" />
       <Input
         ref={inputRef}
@@ -855,12 +1258,122 @@ export function PopupContent({
   const workspaceReveal = useDecoupledWorkspaceReveal(isLoading)
   const scrollLayerRef = usePopupScrollLayer(isLoading)
   const reorderActive = Boolean(state.reorder?.active && mode === 'tree')
+  const multiSelect = state.selection
+  const multiSelectActive = Boolean(multiSelect?.active && !reorderActive)
+  const folderManagement = state.folderManagement
+  const [folderContextMenu, setFolderContextMenu] = useState<PopupFolderContextMenuState | null>(null)
+  const [bookmarkContextMenu, setBookmarkContextMenu] = useState<PopupBookmarkContextMenuState | null>(null)
+  const openFolderContextMenu = useCallback((
+    row: PopupContentFolderRowViewModel,
+    clientX: number,
+    clientY: number,
+    triggerElement: HTMLElement | null
+  ) => {
+    setBookmarkContextMenu(null)
+    setFolderContextMenu({
+      canManage: Boolean(row.canManage),
+      folderId: row.folderId,
+      isRootAll: Boolean(row.root),
+      title: row.title,
+      triggerElement,
+      x: clientX,
+      y: clientY
+    })
+  }, [])
+  const closeFolderContextMenu = useCallback((restoreFocus = false) => {
+    setFolderContextMenu((current) => {
+      if (restoreFocus && current?.triggerElement?.isConnected) {
+        window.requestAnimationFrame(() => current.triggerElement?.focus({ preventScroll: true }))
+      }
+      return null
+    })
+  }, [])
+  const openBookmarkContextMenu = useCallback((
+    row: PopupContentMainRowViewModel,
+    clientX: number,
+    clientY: number,
+    triggerElement: HTMLElement | null
+  ) => {
+    setFolderContextMenu(null)
+    setBookmarkContextMenu({
+      bookmarkId: row.bookmarkId,
+      isSearch: row.kind === 'result',
+      parentId: String(row.parentId || ''),
+      selected: Boolean(row.selected),
+      title: row.title,
+      triggerElement,
+      x: clientX,
+      y: clientY
+    })
+  }, [])
+  const closeBookmarkContextMenu = useCallback((restoreFocus = false) => {
+    setBookmarkContextMenu((current) => {
+      if (restoreFocus && current?.triggerElement?.isConnected) {
+        window.requestAnimationFrame(() => current.triggerElement?.focus({ preventScroll: true }))
+      }
+      return null
+    })
+  }, [])
+  const folderSortMenuActions = useMemo<OptionMenuAction[]>(() => {
+    if (!folderManagement) return []
+    return POPUP_FOLDER_SORT_OPTIONS.map((option) => ({
+      id: `sort-${option.mode}`,
+      label: option.label,
+      disabled: folderManagement.sortBusy || !folderManagement.canSort,
+      onSelect: () => handlers?.onFolderSort?.(folderManagement.folderId, option.mode)
+    }))
+  }, [folderManagement, handlers])
+  const folderManageMenuActions = useMemo<OptionMenuAction[]>(() => {
+    if (!folderManagement) return []
+    const resolveTrigger = () => document.getElementById('popup-folder-actions-menu')
+    const actions: OptionMenuAction[] = [
+      {
+        id: 'folder-create',
+        label: '新建子文件夹',
+        icon: 'FolderPlus',
+        disabled: !folderManagement.canCreate,
+        onSelect: () => handlers?.onFolderCreate?.(folderManagement.folderId, resolveTrigger())
+      }
+    ]
+    if (folderManagement.canManage) {
+      actions.push(
+        {
+          id: 'folder-rename',
+          label: '重命名文件夹',
+          icon: 'Pencil',
+          onSelect: () => handlers?.onFolderRename?.(folderManagement.folderId, resolveTrigger())
+        },
+        {
+          id: 'folder-move',
+          label: '移动文件夹…',
+          icon: 'Move',
+          onSelect: () => handlers?.onFolderMove?.(folderManagement.folderId, resolveTrigger())
+        },
+        {
+          id: 'folder-delete',
+          label: '删除文件夹',
+          icon: 'Trash2',
+          danger: true,
+          separatorBefore: true,
+          onSelect: () => handlers?.onFolderDelete?.(folderManagement.folderId, resolveTrigger())
+        }
+      )
+    }
+    return actions
+  }, [folderManagement, handlers])
   const reorderDrag = usePopupBookmarkReorderDrag({
     active: reorderActive,
     busy: Boolean(state.reorder?.busy),
     mainListRef,
     onCommit: handlers?.onBookmarkReorder,
     rowCount: mainRows.length
+  })
+  const swipeSelect = usePopupBookmarkSwipeSelect({
+    active: multiSelectActive && !reorderActive && !state.mainState,
+    busy: Boolean(multiSelect?.busy),
+    mainListRef,
+    onSwipeSelect: handlers?.onBookmarkSwipeSelect,
+    rows: mainRows
   })
   const activeMainIndex = selection?.activeResultIndex ?? state.activeResultIndex ?? mainRows.findIndex((row) => row.active)
   const activeFolderIndex = selection?.activeFolderIndex ?? state.activeFolderIndex ?? sidebarRows.findIndex((row) => row.keyboardActive)
@@ -915,10 +1428,11 @@ export function PopupContent({
       </div>
       <div className={cx(workspaceContentLayerClass, isLoading ? workspaceContentLoadingClass : '')}>
         <div className={workspaceClass} ref={workspaceRef}
-          style={{ '--sidepanel-folder-height': `${54 + sidebarRows.length * POPUP_FOLDER_ROW_HEIGHT}px` } as CSSProperties}>
+          style={{ '--sidepanel-folder-height': `${58 + sidebarRows.length * POPUP_FOLDER_ROW_HEIGHT}px` } as CSSProperties}>
           <PopupFolderPane
             activeIndex={activeFolderIndex}
             filter={state.folderFilter}
+            folderManagement={folderManagement}
             folderTreeRef={folderTreeRef}
             handlers={handlers}
           >
@@ -935,6 +1449,7 @@ export function PopupContent({
                 <MemoPopupFolderRow
                   activeFolderRef={activeFolderRef}
                   handlers={handlers}
+                  onContextMenu={openFolderContextMenu}
                   onFolderFilter={handlers?.onFolderFilter}
                   row={row}
                   key={`folder:${row.folderId}`}
@@ -961,6 +1476,8 @@ export function PopupContent({
             aria-label={title}
             data-reorder-mode={reorderActive ? 'true' : undefined}
             data-reorder-dragging={reorderDrag.dragging ? 'true' : undefined}
+            data-selection-mode={multiSelectActive ? 'true' : undefined}
+            data-swipe-selecting={swipeSelect.swiping ? 'true' : undefined}
           >
             <header className={paneHeaderClass}>
               <span className={paneHeaderTitleClass} title={`${title} · ${meta}`}>
@@ -973,7 +1490,32 @@ export function PopupContent({
                   suppressed={isLoading || reorderActive || reorderDrag.dragging || Boolean(state.mainState)}
                   syncKey={`${mode}:${title}:${mainRows.length}`}
                 />
-                {mode === 'tree' && state.reorder ? (
+                <div className="inline-flex flex-none items-center gap-1">
+                {multiSelect && !reorderActive ? (
+                  <Button
+                    id="popup-selection-mode-toggle"
+                    className={cx(
+                      paneHeaderActionClass,
+                      multiSelectActive ? paneHeaderActionActiveClass : '',
+                      '@max-[520px]/popup:w-7 @max-[520px]/popup:justify-center @max-[520px]/popup:px-0'
+                    )}
+                    type="button"
+                    aria-label={multiSelectActive ? '退出多选' : '多选书签'}
+                    aria-pressed={multiSelectActive}
+                    disabled={multiSelect.busy || (!multiSelectActive && !multiSelect.canEnter)}
+                    title={multiSelectActive
+                      ? '退出多选模式 (Esc)'
+                      : multiSelect.canEnter
+                        ? '多选书签进行批量移动或删除'
+                        : '当前列表没有可选择的书签'}
+                    onClick={() => handlers?.onSelectionModeChange?.(!multiSelectActive)}
+                    unstyled
+                  >
+                    <Icon name="ListChecks" size={14} aria-hidden="true" />
+                    <span className="@max-[520px]/popup:hidden">{multiSelectActive ? '退出多选' : '多选'}</span>
+                  </Button>
+                ) : null}
+                {mode === 'tree' && state.reorder && !multiSelectActive ? (
                   <Button
                     className={paneHeaderActionClass}
                     type="button"
@@ -991,6 +1533,36 @@ export function PopupContent({
                     <span>{state.reorder.active ? '完成排序' : '调整顺序'}</span>
                   </Button>
                 ) : null}
+                {mode === 'tree' && folderManagement && !folderManagement.isAllBookmarksScope && !reorderActive && !multiSelectActive ? (
+                  <>
+                    <OptionActionsMenu
+                      triggerId="popup-folder-sort-menu"
+                      label="一键排序当前文件夹"
+                      triggerTitle={folderManagement.canSort
+                        ? `一键排序「${folderManagement.folderTitle}」中的直属书签`
+                        : '当前文件夹至少需要 2 个直属书签'}
+                      icon="ArrowUpDown"
+                      iconSize={14}
+                      iconOnly
+                      disabled={folderManagement.sortBusy || !folderManagement.canSort}
+                      triggerClassName={paneHeaderIconActionClass}
+                      popupWidthClass="w-[236px] max-w-[calc(100vw_-_24px)]"
+                      actions={folderSortMenuActions}
+                    />
+                    <OptionActionsMenu
+                      triggerId="popup-folder-actions-menu"
+                      label="当前文件夹操作"
+                      triggerTitle="当前文件夹操作"
+                      icon="MoreHorizontal"
+                      iconSize={14}
+                      iconOnly
+                      triggerClassName={paneHeaderIconActionClass}
+                      popupWidthClass="w-[196px] max-w-[calc(100vw_-_24px)]"
+                      actions={folderManageMenuActions}
+                    />
+                  </>
+                ) : null}
+                </div>
               </div>
             </header>
             <div
@@ -998,7 +1570,9 @@ export function PopupContent({
               role="list"
               {...getPopupSearchGridAria(mode, mainRows.length, Boolean(state.mainState))}
               className={mainListClass}
+              data-swipe-selecting={swipeSelect.swiping ? 'true' : undefined}
               ref={mainListRef}
+              onPointerDown={swipeSelect.onListPointerDown}
               aria-label={mode === 'search' ? '书签搜索结果' : reorderActive ? `${state.reorder?.folderTitle || '当前文件夹'}直属书签排序` : undefined}
             >
               {state.mainState ? (
@@ -1022,15 +1596,27 @@ export function PopupContent({
                         <MemoPopupBookmarkRow
                           activeResultRef={activeResultRef}
                           handlers={handlers}
+                          onContextMenu={openBookmarkContextMenu}
                           reorder={reorderActive ? reorderDrag.getRowProps(row) : undefined}
                           scopeFolderId={state.reorder?.folderId}
+                          selectionMode={multiSelectActive}
                           deferActions={Boolean(heldDirection && row.active)}
                           row={row}
                           key={`bookmark:${row.bookmarkId}`}
                         />
                       )
                     }
-                    return <MemoPopupSearchResultRow activeResultRef={activeResultRef} handlers={handlers} deferActions={Boolean(heldDirection && row.active)} row={row} key={`result:${row.bookmarkId}:${row.index}`} />
+                    return (
+                      <MemoPopupSearchResultRow
+                        activeResultRef={activeResultRef}
+                        handlers={handlers}
+                        onContextMenu={openBookmarkContextMenu}
+                        selectionMode={multiSelectActive}
+                        deferActions={Boolean(heldDirection && row.active)}
+                        row={row}
+                        key={`result:${row.bookmarkId}:${row.index}`}
+                      />
+                    )
                   })}
                   </ul>
                   {mainWindow.after > 0 ? (
@@ -1053,6 +1639,9 @@ export function PopupContent({
                 {state.reorder?.announcement}
               </p>
             ) : null}
+            {multiSelectActive && multiSelect ? (
+              <PopupSelectionDock handlers={handlers} selection={multiSelect} />
+            ) : null}
           </section>
           {/* Workspace-level indicator — slides freely across both panes */}
           <div
@@ -1063,6 +1652,22 @@ export function PopupContent({
             role="presentation"
           ></div>
           {reorderDrag.ghost}
+          {folderContextMenu ? (
+            <PopupFolderContextMenu
+              handlers={handlers}
+              menu={folderContextMenu}
+              onClose={closeFolderContextMenu}
+            />
+          ) : null}
+          {bookmarkContextMenu ? (
+            <PopupBookmarkContextMenu
+              handlers={handlers}
+              menu={bookmarkContextMenu}
+              multiSelectActive={multiSelectActive}
+              onClose={closeBookmarkContextMenu}
+              scopeFolderId={state.reorder?.folderId}
+            />
+          ) : null}
         </div>
       </div>
       {workspaceReveal.settled ? null : (
@@ -1354,15 +1959,15 @@ function PopupWorkspaceBackdrop({
   return (
     <div className={cx(workspaceClass, workspacePlaceholderClass)}>
       <div className={paneClass}>
-        <header className={paneHeaderClass}>
+        <header className={folderPaneHeaderClass}>
           <span className="shrink-0">全部文件夹</span>
           <div className={cx(folderFilterShellClass, 'pointer-events-none')}>
             <Icon name="Search" className={folderFilterIconClass} size={13} aria-hidden="true" />
-            <span className="min-w-0 flex-auto truncate pl-1 pr-0.5 text-xs font-normal leading-[1.3] text-ds-text-muted">
+            <span className="min-w-0 flex-auto truncate text-xs font-normal leading-[1.3] text-ds-text-muted">
               筛选文件夹
             </span>
-            <span className="inline-flex h-5 w-5 flex-none" aria-hidden="true" />
           </div>
+          <span className="inline-flex h-7 w-7 flex-none" aria-hidden="true" />
         </header>
       </div>
       <div className={mainPaneClass}>
@@ -1544,11 +2149,18 @@ function PopupMainLoadingSkeleton({ label }: { label: string }) {
 function PopupFolderRow({
   activeFolderRef,
   handlers,
+  onContextMenu,
   onFolderFilter,
   row
 }: {
   activeFolderRef?: RefObject<HTMLDivElement | null>
   handlers?: PopupContentActionHandlers
+  onContextMenu?: (
+    row: PopupContentFolderRowViewModel,
+    clientX: number,
+    clientY: number,
+    triggerElement: HTMLElement | null
+  ) => void
   onFolderFilter?: (folderId: string) => void
   row: PopupContentFolderRowViewModel
 }) {
@@ -1577,10 +2189,15 @@ function PopupFolderRow({
         onKeyDown={(event) => {
           handleContentNavigationKeyDown(event, handlers)
         }}
+        onContextMenu={(event: ReactMouseEvent<HTMLButtonElement>) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onContextMenu?.(row, event.clientX, event.clientY, event.currentTarget)
+        }}
         onClick={() => onFolderFilter?.(row.root ? 'all' : row.folderId)}
         unstyled
       >
-        <span className={row.root ? rootFolderBranchClass : folderBranchClass} aria-hidden="true"></span>
+        <span className={row.depth === 0 ? rootFolderBranchClass : folderBranchClass} aria-hidden="true"></span>
         <span className={folderMainClass}>
           <span className={folderTitleClass}>{row.title}</span>
           <span className={cx(folderCountClass, row.active ? folderCountActiveClass : '')} title={`${row.countLabel} 个书签`}>
@@ -1605,22 +2222,75 @@ function hasPointerIntent(event: ReactPointerEvent<HTMLElement>): boolean {
   return Boolean(event.movementX || event.movementY) || document.documentElement.dataset.motionInput !== 'keyboard'
 }
 
+function getOptionsBookmarkFaviconSrc(url: string): string {
+  if (!url || !/^https?:\/\//i.test(url)) {
+    return ''
+  }
+  if (typeof chrome === 'undefined' || typeof chrome.runtime?.getURL !== 'function') {
+    return ''
+  }
+  try {
+    const endpoint = chrome.runtime.getURL('/_favicon/')
+    const parsed = new URL(endpoint)
+    parsed.searchParams.set('pageUrl', url)
+    parsed.searchParams.set('size', '32')
+    return parsed.toString()
+  } catch {
+    return ''
+  }
+}
+
+function PopupBookmarkFavicon({ url }: { url: string }) {
+  const src = getOptionsBookmarkFaviconSrc(url)
+  const [failedSrc, setFailedSrc] = useState('')
+  const showImage = Boolean(src && failedSrc !== src)
+  return (
+    <span className="popup-bookmark-favicon" aria-hidden="true">
+      {showImage ? (
+        <img
+          src={src}
+          alt=""
+          width={16}
+          height={16}
+          loading="lazy"
+          decoding="async"
+          className="block size-4 rounded-ds-xs object-contain"
+          onError={() => setFailedSrc(src)}
+        />
+      ) : (
+        <Icon name="Globe" size={14} className="text-ds-text-muted" aria-hidden="true" />
+      )}
+    </span>
+  )
+}
+
 function PopupBookmarkRow({
   activeResultRef,
   handlers,
+  onContextMenu,
   reorder,
   scopeFolderId,
+  selectionMode = false,
   deferActions: fallbackDeferActions = false,
   row
 }: {
   activeResultRef?: RefObject<HTMLLIElement | null>
   handlers?: PopupContentActionHandlers
+  onContextMenu?: (
+    row: PopupContentMainRowViewModel,
+    clientX: number,
+    clientY: number,
+    triggerElement: HTMLElement | null
+  ) => void
   reorder?: PopupBookmarkReorderRowProps
   scopeFolderId?: string
+  selectionMode?: boolean
   deferActions?: boolean
   row: PopupContentBookmarkRowViewModel
 }) {
   const { active, deferActions } = usePopupRowNavigation('bookmarks', row.index, Boolean(row.active), fallbackDeferActions)
+  const selected = Boolean(selectionMode && row.selected)
+  const optionsSurface = isOptionsSurface()
   const style = {
     '--depth': row.depth,
     height: `${POPUP_BOOKMARK_ROW_HEIGHT}px`,
@@ -1636,6 +2306,7 @@ function PopupBookmarkRow({
       data-popup-row-index={row.index}
       data-reorder-source={reorder?.dragging ? 'true' : undefined}
       data-reorder-shift={reorder?.shiftY ? 'true' : undefined}
+      data-selected={selected ? 'true' : undefined}
       onFocusCapture={() => setActionsMounted(true)}
       onPointerEnter={event => { if (hasPointerIntent(event)) setActionsMounted(true) }}
       onPointerMove={event => { if (!actionsMounted && (event.movementX || event.movementY)) setActionsMounted(true) }}
@@ -1643,23 +2314,52 @@ function PopupBookmarkRow({
       style={style}
     >
       <Button
-        className={cx(listButtonClass, reorder ? 'popup-reorder-row-content' : '')}
+        className={cx(
+          listButtonClass,
+          reorder ? 'popup-reorder-row-content' : '',
+          selectionMode ? 'popup-select-row-button' : ''
+        )}
         type="button"
         data-active={active ? 'true' : undefined}
+        data-selected={selected ? 'true' : undefined}
+        aria-pressed={selectionMode ? selected : undefined}
         disabled={Boolean(reorder)}
         style={getBookmarkButtonStyle()}
         onFocus={() => {
           if (!reorder) handlers?.onRowFocus?.(row.index)
         }}
         onKeyDown={(event) => {
+          if (selectionMode && !event.altKey && !event.ctrlKey && !event.metaKey && (event.key === ' ' || event.key === 'Enter')) {
+            event.preventDefault()
+            event.stopPropagation()
+            handlers?.onBookmarkToggleSelect?.(row.bookmarkId, event.shiftKey)
+            return
+          }
           if (activateModifiedBookmark(event, row.bookmarkId, handlers)) return
           if (!reorder) handleContentNavigationKeyDown(event, handlers)
         }}
-        onClick={() => {
+        onClick={(event) => {
+          if (selectionMode) {
+            handlers?.onBookmarkToggleSelect?.(row.bookmarkId, event.shiftKey)
+            return
+          }
           if (!reorder) handlers?.onBookmarkOpen?.(row.bookmarkId)
+        }}
+        onContextMenu={(event: ReactMouseEvent<HTMLButtonElement>) => {
+          if (reorder) return
+          event.preventDefault()
+          event.stopPropagation()
+          onContextMenu?.(row, event.clientX, event.clientY, event.currentTarget)
         }}
         unstyled
       >
+        {selectionMode ? (
+          <span className="popup-row-checkbox" data-checked={selected ? 'true' : undefined} aria-hidden="true">
+            <Icon name="Check" size={12} aria-hidden="true" />
+          </span>
+        ) : optionsSurface ? (
+          <PopupBookmarkFavicon url={row.url} />
+        ) : null}
         <span className={rowMainClass}>
           <span className={rowTitleClass} title={row.title}>{row.title}</span>
           <PopupRowMetadata
@@ -1690,7 +2390,7 @@ function PopupBookmarkRow({
         >
           <Icon name="GripVertical" size={16} aria-hidden="true" />
         </Button>
-      ) : (
+      ) : !selectionMode ? (
         <PopupRowActions
           active={active}
           bookmarkId={row.bookmarkId}
@@ -1699,7 +2399,7 @@ function PopupBookmarkRow({
           menu={row.menu}
           onMenuAction={handlers?.onMenuAction}
         />
-      )}
+      ) : null}
     </li>
   )
 }
@@ -1707,15 +2407,26 @@ function PopupBookmarkRow({
 function PopupSearchResultRow({
   activeResultRef,
   handlers,
+  onContextMenu,
+  selectionMode = false,
   deferActions: fallbackDeferActions = false,
   row
 }: {
   activeResultRef?: RefObject<HTMLLIElement | null>
   handlers?: PopupContentActionHandlers
+  onContextMenu?: (
+    row: PopupContentMainRowViewModel,
+    clientX: number,
+    clientY: number,
+    triggerElement: HTMLElement | null
+  ) => void
+  selectionMode?: boolean
   deferActions?: boolean
   row: PopupContentSearchResultViewModel
 }) {
   const { active, deferActions } = usePopupRowNavigation('bookmarks', row.index, Boolean(row.active), fallbackDeferActions)
+  const selected = Boolean(selectionMode && row.selected)
+  const optionsSurface = isOptionsSurface()
   const [actionsMounted, setActionsMounted] = useRowFlag(row.bookmarkId)
   const { presentation } = row
   const reasons = presentation.reasonTokens
@@ -1727,12 +2438,13 @@ function PopupSearchResultRow({
       id={getPopupSearchResultId(row.bookmarkId)}
       role="row"
       aria-rowindex={row.index + 1}
-      aria-selected={active}
+      aria-selected={selectionMode ? selected : active}
       aria-label={`${row.title}，${row.displayUrl}，${row.path || ''}`}
       aria-description={row.reasonTitle || undefined}
       data-active={active ? 'true' : undefined}
       data-bookmark-id={row.bookmarkId}
       data-popup-row-index={row.index}
+      data-selected={selected ? 'true' : undefined}
       onFocusCapture={() => setActionsMounted(true)}
       onPointerEnter={event => { if (hasPointerIntent(event)) setActionsMounted(true) }}
       onPointerMove={event => { if (!actionsMounted && (event.movementX || event.movementY)) setActionsMounted(true) }}
@@ -1740,22 +2452,48 @@ function PopupSearchResultRow({
     >
       <div role="gridcell" className="min-w-0">
       <Button
-        className={listButtonClass}
+        className={cx(listButtonClass, selectionMode ? 'popup-select-row-button' : '')}
         type="button"
         data-active={active ? 'true' : undefined}
+        data-selected={selected ? 'true' : undefined}
+        aria-pressed={selectionMode ? selected : undefined}
         style={{ ...getBookmarkButtonStyle(), ...(reasons.length ? { paddingBlock: 4 } : {}) }}
         onFocus={() => handlers?.onRowFocus?.(row.index)}
         onKeyDown={(event) => {
+          if (selectionMode && !event.altKey && !event.ctrlKey && !event.metaKey && (event.key === ' ' || event.key === 'Enter')) {
+            event.preventDefault()
+            event.stopPropagation()
+            handlers?.onBookmarkToggleSelect?.(row.bookmarkId, event.shiftKey)
+            return
+          }
           if (activateModifiedBookmark(event, row.bookmarkId, handlers)) return
           handleContentNavigationKeyDown(event, handlers)
         }}
-        onClick={() => handlers?.onBookmarkOpen?.(row.bookmarkId)}
+        onClick={(event) => {
+          if (selectionMode) {
+            handlers?.onBookmarkToggleSelect?.(row.bookmarkId, event.shiftKey)
+            return
+          }
+          handlers?.onBookmarkOpen?.(row.bookmarkId)
+        }}
+        onContextMenu={(event: ReactMouseEvent<HTMLButtonElement>) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onContextMenu?.(row, event.clientX, event.clientY, event.currentTarget)
+        }}
         onPointerOver={event => { if (hasPointerIntent(event)) handlers?.onResultHover?.(row.index) }}
         onPointerMove={event => {
           if (!active && (event.movementX || event.movementY)) handlers?.onResultHover?.(row.index)
         }}
         unstyled
       >
+        {selectionMode ? (
+          <span className="popup-row-checkbox" data-checked={selected ? 'true' : undefined} aria-hidden="true">
+            <Icon name="Check" size={12} aria-hidden="true" />
+          </span>
+        ) : optionsSurface ? (
+          <PopupBookmarkFavicon url={row.url} />
+        ) : null}
         <span className={resultCopyClass}>
           <span className={rowTitleClass} title={row.title}>
             <HighlightedText terms={presentation.titleTerms} text={row.title} />
@@ -1775,15 +2513,17 @@ function PopupSearchResultRow({
       </Button>
       </div>
       <div role="gridcell" className="popup-result-actions-cell">
-      <PopupRowActions
-        active={active}
-        bookmarkId={row.bookmarkId}
-        label={row.menuLabel}
-        mountQuickActions={actionsMounted || (active && !deferActions)}
-        menu={row.menu}
-        onMenuAction={handlers?.onMenuAction}
-        title="操作菜单"
-      />
+      {!selectionMode ? (
+        <PopupRowActions
+          active={active}
+          bookmarkId={row.bookmarkId}
+          label={row.menuLabel}
+          mountQuickActions={actionsMounted || (active && !deferActions)}
+          menu={row.menu}
+          onMenuAction={handlers?.onMenuAction}
+          title="操作菜单"
+        />
+      ) : null}
       </div>
     </li>
   )
@@ -1822,16 +2562,30 @@ function arePopupBookmarkRowPropsEqual(
   previous: {
     activeResultRef?: RefObject<HTMLLIElement | null>
     handlers?: PopupContentActionHandlers
+    onContextMenu?: (
+      row: PopupContentMainRowViewModel,
+      clientX: number,
+      clientY: number,
+      triggerElement: HTMLElement | null
+    ) => void
     reorder?: PopupBookmarkReorderRowProps
     scopeFolderId?: string
+    selectionMode?: boolean
     deferActions?: boolean
     row: PopupContentBookmarkRowViewModel
   },
   next: {
     activeResultRef?: RefObject<HTMLLIElement | null>
     handlers?: PopupContentActionHandlers
+    onContextMenu?: (
+      row: PopupContentMainRowViewModel,
+      clientX: number,
+      clientY: number,
+      triggerElement: HTMLElement | null
+    ) => void
     reorder?: PopupBookmarkReorderRowProps
     scopeFolderId?: string
+    selectionMode?: boolean
     deferActions?: boolean
     row: PopupContentBookmarkRowViewModel
   }
@@ -1839,8 +2593,10 @@ function arePopupBookmarkRowPropsEqual(
   return previous.activeResultRef === next.activeResultRef &&
     previous.deferActions === next.deferActions &&
     previous.handlers === next.handlers &&
+    previous.onContextMenu === next.onContextMenu &&
     previous.reorder === next.reorder &&
     previous.scopeFolderId === next.scopeFolderId &&
+    previous.selectionMode === next.selectionMode &&
     areBookmarkRowsEqual(previous.row, next.row)
 }
 
@@ -1848,12 +2604,26 @@ function arePopupSearchResultRowPropsEqual(
   previous: {
     activeResultRef?: RefObject<HTMLLIElement | null>
     handlers?: PopupContentActionHandlers
+    onContextMenu?: (
+      row: PopupContentMainRowViewModel,
+      clientX: number,
+      clientY: number,
+      triggerElement: HTMLElement | null
+    ) => void
+    selectionMode?: boolean
     deferActions?: boolean
     row: PopupContentSearchResultViewModel
   },
   next: {
     activeResultRef?: RefObject<HTMLLIElement | null>
     handlers?: PopupContentActionHandlers
+    onContextMenu?: (
+      row: PopupContentMainRowViewModel,
+      clientX: number,
+      clientY: number,
+      triggerElement: HTMLElement | null
+    ) => void
+    selectionMode?: boolean
     deferActions?: boolean
     row: PopupContentSearchResultViewModel
   }
@@ -1861,6 +2631,8 @@ function arePopupSearchResultRowPropsEqual(
   return previous.activeResultRef === next.activeResultRef &&
     previous.deferActions === next.deferActions &&
     previous.handlers === next.handlers &&
+    previous.onContextMenu === next.onContextMenu &&
+    previous.selectionMode === next.selectionMode &&
     areSearchResultRowsEqual(previous.row, next.row)
 }
 
@@ -1870,6 +2642,7 @@ function areBookmarkRowsEqual(
 ) {
   if (previous === next) return true
   return Boolean(previous.active) === Boolean(next.active) &&
+    Boolean(previous.selected) === Boolean(next.selected) &&
     previous.bookmarkId === next.bookmarkId &&
     previous.depth === next.depth &&
     previous.displayUrl === next.displayUrl &&
@@ -1888,12 +2661,14 @@ function areSearchResultRowsEqual(
 ) {
   if (previous === next) return true
   return previous.active === next.active &&
+    Boolean(previous.selected) === Boolean(next.selected) &&
     previous.bookmarkId === next.bookmarkId &&
     previous.depth === next.depth &&
     previous.displayUrl === next.displayUrl &&
     previous.highlightQuery === next.highlightQuery &&
     previous.index === next.index &&
     previous.menuLabel === next.menuLabel &&
+    previous.parentId === next.parentId &&
     previous.path === next.path &&
     previous.reasonLabel === next.reasonLabel &&
     previous.reasonTitle === next.reasonTitle &&
@@ -2078,4 +2853,425 @@ function getPopupActionIconName(action: string): IconName {
     return 'Trash2'
   }
   return 'ExternalLink'
+}
+
+interface PopupFolderContextMenuState {
+  canManage: boolean
+  folderId: string
+  isRootAll?: boolean
+  title: string
+  triggerElement: HTMLElement | null
+  x: number
+  y: number
+}
+
+function PopupFolderContextMenu({
+  handlers,
+  menu,
+  onClose
+}: {
+  handlers?: PopupContentActionHandlers
+  menu: PopupFolderContextMenuState
+  onClose: (restoreFocus?: boolean) => void
+}) {
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const [position, setPosition] = useState({ left: menu.x, top: menu.y })
+
+  useLayoutEffect(() => {
+    const element = menuRef.current
+    if (!element) return
+    const rect = element.getBoundingClientRect()
+    const padding = 8
+    const nextLeft = Math.max(padding, Math.min(menu.x, window.innerWidth - rect.width - padding))
+    const nextTop = Math.max(padding, Math.min(menu.y, window.innerHeight - rect.height - padding))
+    setPosition({ left: Math.round(nextLeft), top: Math.round(nextTop) })
+    const firstItem = element.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')
+    firstItem?.focus({ preventScroll: true })
+  }, [menu.folderId, menu.x, menu.y])
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (target instanceof Node && menuRef.current?.contains(target)) {
+        return
+      }
+      onClose(false)
+    }
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        onClose(true)
+        return
+      }
+      const items = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') || [])]
+      if (!items.length) return
+      const currentIndex = items.findIndex((item) => item === document.activeElement)
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        items[(currentIndex + 1 + items.length) % items.length]?.focus({ preventScroll: true })
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        items[(currentIndex - 1 + items.length) % items.length]?.focus({ preventScroll: true })
+      } else if (event.key === 'Home') {
+        event.preventDefault()
+        items[0]?.focus({ preventScroll: true })
+      } else if (event.key === 'End') {
+        event.preventDefault()
+        items[items.length - 1]?.focus({ preventScroll: true })
+      }
+    }
+    const handleDismiss = () => onClose(false)
+    document.addEventListener('pointerdown', handlePointerDown, true)
+    document.addEventListener('keydown', handleKeyDown, true)
+    window.addEventListener('scroll', handleDismiss, true)
+    window.addEventListener('blur', handleDismiss)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true)
+      document.removeEventListener('keydown', handleKeyDown, true)
+      window.removeEventListener('scroll', handleDismiss, true)
+      window.removeEventListener('blur', handleDismiss)
+    }
+  }, [onClose])
+
+  if (typeof document === 'undefined') return null
+
+  const runAction = (callback: () => void) => {
+    onClose(false)
+    callback()
+  }
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      id="popup-folder-context-menu"
+      role="menu"
+      aria-label={`文件夹「${menu.title}」操作`}
+      className="popup-folder-context-menu fixed z-[10000] w-[192px] max-w-[calc(100vw_-_16px)] rounded-ds-menu border border-ds-border bg-ds-surface-2 ds-inset-menu [filter:var(--ds-filter-popover)] outline-none"
+      style={{ left: `${position.left}px`, top: `${position.top}px` }}
+    >
+      <button
+        type="button"
+        role="menuitem"
+        data-folder-context-action="create"
+        className="curator-menu-item flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-ds-sm px-2.5 py-2 text-left text-[13px] font-medium text-ds-text-primary outline-none hover:bg-ds-hover focus-visible:bg-ds-hover"
+        onClick={() => runAction(() => handlers?.onFolderCreate?.(menu.folderId, menu.triggerElement))}
+      >
+        <Icon name="FolderPlus" size={14} aria-hidden="true" className="shrink-0" />
+        <span>{menu.isRootAll ? '新建文件夹' : '新建子文件夹'}</span>
+      </button>
+      {menu.canManage ? (
+        <>
+          <button
+            type="button"
+            role="menuitem"
+            data-folder-context-action="rename"
+            className="curator-menu-item flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-ds-sm px-2.5 py-2 text-left text-[13px] font-medium text-ds-text-primary outline-none hover:bg-ds-hover focus-visible:bg-ds-hover"
+            onClick={() => runAction(() => handlers?.onFolderRename?.(menu.folderId, menu.triggerElement))}
+          >
+            <Icon name="Pencil" size={14} aria-hidden="true" className="shrink-0" />
+            <span>重命名</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            data-folder-context-action="move"
+            className="curator-menu-item flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-ds-sm px-2.5 py-2 text-left text-[13px] font-medium text-ds-text-primary outline-none hover:bg-ds-hover focus-visible:bg-ds-hover"
+            onClick={() => runAction(() => handlers?.onFolderMove?.(menu.folderId, menu.triggerElement))}
+          >
+            <Icon name="Move" size={14} aria-hidden="true" className="shrink-0" />
+            <span>移动到…</span>
+          </button>
+          <div role="separator" className="my-1 h-px bg-ds-border-subtle" />
+          <button
+            type="button"
+            role="menuitem"
+            data-folder-context-action="delete"
+            className="curator-menu-item flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-ds-sm px-2.5 py-2 text-left text-[13px] font-medium text-ds-danger-text outline-none hover:bg-ds-danger-soft focus-visible:bg-ds-danger-soft"
+            onClick={() => runAction(() => handlers?.onFolderDelete?.(menu.folderId, menu.triggerElement))}
+          >
+            <Icon name="Trash2" size={14} aria-hidden="true" className="shrink-0" />
+            <span>删除文件夹</span>
+          </button>
+        </>
+      ) : null}
+    </div>,
+    document.body
+  )
+}
+
+interface PopupBookmarkContextMenuState {
+  bookmarkId: string
+  isSearch: boolean
+  parentId: string
+  selected: boolean
+  title: string
+  triggerElement: HTMLElement | null
+  x: number
+  y: number
+}
+
+function PopupBookmarkContextMenu({
+  handlers,
+  menu,
+  multiSelectActive,
+  onClose,
+  scopeFolderId
+}: {
+  handlers?: PopupContentActionHandlers
+  menu: PopupBookmarkContextMenuState
+  multiSelectActive: boolean
+  onClose: (restoreFocus?: boolean) => void
+  scopeFolderId?: string
+}) {
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const [position, setPosition] = useState({ left: menu.x, top: menu.y })
+
+  useLayoutEffect(() => {
+    const element = menuRef.current
+    if (!element) return
+    const rect = element.getBoundingClientRect()
+    const padding = 8
+    const nextLeft = Math.max(padding, Math.min(menu.x, window.innerWidth - rect.width - padding))
+    const nextTop = Math.max(padding, Math.min(menu.y, window.innerHeight - rect.height - padding))
+    setPosition({ left: Math.round(nextLeft), top: Math.round(nextTop) })
+    const firstItem = element.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')
+    firstItem?.focus({ preventScroll: true })
+  }, [menu.bookmarkId, menu.x, menu.y])
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (target instanceof Node && menuRef.current?.contains(target)) {
+        return
+      }
+      onClose(false)
+    }
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      const element = menuRef.current
+      if (!element) return
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        onClose(true)
+        return
+      }
+      const items = Array.from(element.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)'))
+      if (!items.length) return
+      const activeIndex = items.indexOf(document.activeElement as HTMLButtonElement)
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        items[(activeIndex + 1 + items.length) % items.length]?.focus({ preventScroll: true })
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        items[(activeIndex - 1 + items.length) % items.length]?.focus({ preventScroll: true })
+      } else if (event.key === 'Home') {
+        event.preventDefault()
+        items[0]?.focus({ preventScroll: true })
+      } else if (event.key === 'End') {
+        event.preventDefault()
+        items[items.length - 1]?.focus({ preventScroll: true })
+      }
+    }
+    const handleDismiss = () => onClose(false)
+    document.addEventListener('pointerdown', handlePointerDown, true)
+    document.addEventListener('keydown', handleKeyDown, true)
+    window.addEventListener('scroll', handleDismiss, true)
+    window.addEventListener('blur', handleDismiss)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true)
+      document.removeEventListener('keydown', handleKeyDown, true)
+      window.removeEventListener('scroll', handleDismiss, true)
+      window.removeEventListener('blur', handleDismiss)
+    }
+  }, [onClose])
+
+  if (typeof document === 'undefined') return null
+
+  const canLocate = Boolean(menu.parentId && (menu.isSearch || !scopeFolderId || menu.parentId !== scopeFolderId))
+  const runAction = (callback: () => void) => {
+    onClose(false)
+    callback()
+  }
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      id="popup-bookmark-context-menu"
+      role="menu"
+      aria-label={`书签「${menu.title}」操作`}
+      className="popup-folder-context-menu fixed z-[10000] w-[196px] max-w-[calc(100vw_-_16px)] rounded-ds-menu border border-ds-border bg-ds-surface-2 ds-inset-menu [filter:var(--ds-filter-popover)] outline-none"
+      style={{ left: `${position.left}px`, top: `${position.top}px` }}
+    >
+      <button
+        type="button"
+        role="menuitem"
+        data-bookmark-context-action="open"
+        className="curator-menu-item flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-ds-sm px-2.5 py-2 text-left text-[13px] font-medium text-ds-text-primary outline-none hover:bg-ds-hover focus-visible:bg-ds-hover"
+        onClick={() => runAction(() => handlers?.onBookmarkOpen?.(menu.bookmarkId))}
+      >
+        <Icon name="ExternalLink" size={14} aria-hidden="true" className="shrink-0" />
+        <span>在新标签页打开</span>
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        data-bookmark-context-action="open-background"
+        className="curator-menu-item flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-ds-sm px-2.5 py-2 text-left text-[13px] font-medium text-ds-text-primary outline-none hover:bg-ds-hover focus-visible:bg-ds-hover"
+        onClick={() => runAction(() => handlers?.onMenuAction?.(menu.bookmarkId, 'open-background', menu.triggerElement))}
+      >
+        <Icon name="ExternalLink" size={14} aria-hidden="true" className="shrink-0" />
+        <span>在后台打开</span>
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        data-bookmark-context-action="open-current-tab"
+        className="curator-menu-item flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-ds-sm px-2.5 py-2 text-left text-[13px] font-medium text-ds-text-primary outline-none hover:bg-ds-hover focus-visible:bg-ds-hover"
+        onClick={() => runAction(() => handlers?.onMenuAction?.(menu.bookmarkId, 'open-current-tab', menu.triggerElement))}
+      >
+        <Icon name="ExternalLink" size={14} aria-hidden="true" className="shrink-0" />
+        <span>在当前页打开</span>
+      </button>
+      <div role="separator" className="my-1 h-px bg-ds-border-subtle" />
+      {canLocate ? (
+        <button
+          type="button"
+          role="menuitem"
+          data-bookmark-context-action="locate-folder"
+          className="curator-menu-item flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-ds-sm px-2.5 py-2 text-left text-[13px] font-medium text-ds-text-primary outline-none hover:bg-ds-hover focus-visible:bg-ds-hover"
+          onClick={() => runAction(() => handlers?.onBookmarkLocateFolder?.(menu.bookmarkId))}
+        >
+          <Icon name="FolderOpen" size={14} aria-hidden="true" className="shrink-0" />
+          <span>定位所在文件夹</span>
+        </button>
+      ) : null}
+      <button
+        type="button"
+        role="menuitem"
+        data-bookmark-context-action="move"
+        className="curator-menu-item flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-ds-sm px-2.5 py-2 text-left text-[13px] font-medium text-ds-text-primary outline-none hover:bg-ds-hover focus-visible:bg-ds-hover"
+        onClick={() => runAction(() => handlers?.onMenuAction?.(menu.bookmarkId, 'move', menu.triggerElement))}
+      >
+        <Icon name="Move" size={14} aria-hidden="true" className="shrink-0" />
+        <span>移动到…</span>
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        data-bookmark-context-action="edit"
+        className="curator-menu-item flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-ds-sm px-2.5 py-2 text-left text-[13px] font-medium text-ds-text-primary outline-none hover:bg-ds-hover focus-visible:bg-ds-hover"
+        onClick={() => runAction(() => handlers?.onMenuAction?.(menu.bookmarkId, 'edit', menu.triggerElement))}
+      >
+        <Icon name="Pencil" size={14} aria-hidden="true" className="shrink-0" />
+        <span>编辑</span>
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        data-bookmark-context-action="copy-url"
+        className="curator-menu-item flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-ds-sm px-2.5 py-2 text-left text-[13px] font-medium text-ds-text-primary outline-none hover:bg-ds-hover focus-visible:bg-ds-hover"
+        onClick={() => runAction(() => handlers?.onMenuAction?.(menu.bookmarkId, 'copy-url', menu.triggerElement))}
+      >
+        <Icon name="Copy" size={14} aria-hidden="true" className="shrink-0" />
+        <span>复制链接</span>
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        data-bookmark-context-action="select"
+        className="curator-menu-item flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-ds-sm px-2.5 py-2 text-left text-[13px] font-medium text-ds-text-primary outline-none hover:bg-ds-hover focus-visible:bg-ds-hover"
+        onClick={() => runAction(() => handlers?.onBookmarkSelectFromContext?.(menu.bookmarkId))}
+      >
+        <Icon name="ListChecks" size={14} aria-hidden="true" className="shrink-0" />
+        <span>{multiSelectActive ? (menu.selected ? '取消选中' : '选中此书签') : '多选此书签'}</span>
+      </button>
+      <div role="separator" className="my-1 h-px bg-ds-border-subtle" />
+      <button
+        type="button"
+        role="menuitem"
+        data-bookmark-context-action="delete"
+        className="curator-menu-item flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-ds-sm px-2.5 py-2 text-left text-[13px] font-medium text-ds-danger-text outline-none hover:bg-ds-danger-soft focus-visible:bg-ds-danger-soft"
+        onClick={() => runAction(() => handlers?.onMenuAction?.(menu.bookmarkId, 'delete', menu.triggerElement))}
+      >
+        <Icon name="Trash2" size={14} aria-hidden="true" className="shrink-0" />
+        <span>删除</span>
+      </button>
+    </div>,
+    document.body
+  )
+}
+
+function PopupSelectionDock({
+  handlers,
+  selection
+}: {
+  handlers?: PopupContentActionHandlers
+  selection: PopupSelectionViewModel
+}) {
+  const hasSelected = selection.selectedCount > 0
+
+  return (
+    <div
+      id="popup-selection-dock"
+      className="popup-selection-dock"
+      role="region"
+      aria-label="书签批量操作"
+    >
+      <span className="popup-selection-dock-count" aria-live="polite">
+        {hasSelected ? (
+          <>已选 <strong className="t-number-value font-semibold text-ds-text-primary">{selection.selectedCount}</strong> 项</>
+        ) : (
+          <span className="@max-[460px]/popup:hidden">点选或拖滑选择</span>
+        )}
+        {!hasSelected ? <span className="hidden @max-[460px]/popup:inline">未选择</span> : null}
+      </span>
+      <div className="flex flex-none items-center gap-1.5 @max-[460px]/popup:gap-1">
+        <Button
+          id="popup-selection-toggle-all"
+          className="popup-selection-dock-btn popup-selection-dock-secondary"
+          type="button"
+          disabled={selection.busy || selection.totalCount === 0}
+          onClick={() => handlers?.onToggleSelectAll?.()}
+          unstyled
+        >
+          {selection.allSelected ? '取消全选' : '全选'}
+        </Button>
+        <Button
+          id="popup-selection-move"
+          className="popup-selection-dock-btn popup-selection-dock-primary"
+          type="button"
+          disabled={selection.busy || !hasSelected}
+          onClick={(event) => handlers?.onBatchMoveSelected?.(event.currentTarget)}
+          unstyled
+        >
+          <Icon name="Move" size={13} aria-hidden="true" />
+          <span>移动到…</span>
+        </Button>
+        <Button
+          id="popup-selection-delete"
+          className="popup-selection-dock-btn popup-selection-dock-danger"
+          type="button"
+          disabled={selection.busy || !hasSelected}
+          onClick={() => handlers?.onBatchDeleteSelected?.()}
+          unstyled
+        >
+          <Icon name="Trash2" size={13} aria-hidden="true" />
+          <span>删除</span>
+        </Button>
+        <Button
+          id="popup-selection-exit"
+          className={paneHeaderIconActionClass}
+          type="button"
+          aria-label="退出多选"
+          title="退出多选 (Esc)"
+          disabled={selection.busy}
+          onClick={() => handlers?.onSelectionModeChange?.(false)}
+          unstyled
+        >
+          <Icon name="X" size={14} aria-hidden="true" />
+        </Button>
+      </div>
+    </div>
+  )
 }

@@ -344,8 +344,8 @@
   border-bottom-color: transparent;
 }
 
-html,
-body {
+html:not([data-curator-surface="options"]),
+html:not([data-curator-surface="options"]) body {
   margin: 0;
   width: 800px;
   height: 600px;
@@ -365,8 +365,8 @@ body {
    fixed 800x600 document never overflows at 100%, so it can always allow
    scrolling for the clipped half; the side panel sizes itself instead. The
    document must stay fixed, because Chrome derives the popup size from it. */
-html:not([data-curator-surface="sidepanel"]),
-html:not([data-curator-surface="sidepanel"]) body {
+html:not([data-curator-surface="sidepanel"]):not([data-curator-surface="options"]),
+html:not([data-curator-surface="sidepanel"]):not([data-curator-surface="options"]) body {
   overflow: auto;
 }
 
@@ -385,13 +385,13 @@ html:not([data-curator-surface="sidepanel"]) body {
   }
 }
 
-body {
+html:not([data-curator-surface="options"]) body {
   position: relative;
   padding: 0;
 }
 
-body::before,
-body::after {
+html:not([data-curator-surface="options"]) body::before,
+html:not([data-curator-surface="options"]) body::after {
   content: none;
 }
 
@@ -800,11 +800,11 @@ body::after {
 
 
 .edit-folder-picker {
-  /* 64px is the modal stack's two 18px insets plus the card's 28px reserve.
+  /* 52px keeps clean breathing room around the expanded card inside the 600px popup.
      Keep this viewport fixed while the outer grid clips it; the native
      scrollbar and every tree row no longer relayout on every motion frame. */
   flex: none;
-  height: var(--popup-edit-panel-height, clamp(0px, calc(100dvh - var(--popup-edit-rest-height, 343px) - 64px), 226px));
+  height: var(--popup-edit-panel-height, clamp(0px, calc(100dvh - var(--popup-edit-rest-height, 252px) - 52px), 320px));
 }
 
 .edit-folder-picker > label {
@@ -896,6 +896,177 @@ body::after {
 .popup-bookmark-drag-ghost[data-settling="true"] {
   transition: transform var(--drag-settle-dur) var(--ds-ease-settle);
   will-change: auto;
+}
+
+.popup-main-pane[data-selection-mode="true"] .popup-main-list {
+  padding-block-end: 68px;
+}
+
+.popup-main-pane[data-selection-mode="true"] .popup-select-row-button {
+  padding-inline-end: 12px !important;
+}
+
+.popup-main-row[data-selected="true"] .popup-select-row-button {
+  border-color: color-mix(in srgb, var(--ds-accent) 42%, transparent);
+  background: var(--ds-accent-soft);
+}
+
+.popup-select-row-button {
+  -webkit-user-drag: none;
+  touch-action: pan-y;
+}
+
+.popup-main-list[data-swipe-selecting="true"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.popup-main-pane[data-swipe-selecting="true"] .popup-selection-dock {
+  pointer-events: none;
+}
+
+.popup-row-checkbox {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  inline-size: 16px;
+  block-size: 16px;
+  touch-action: none;
+  border-radius: var(--ds-radius-xs);
+  border: 1px solid var(--ds-border-hover);
+  background: var(--ds-surface-2);
+  color: transparent;
+  transition:
+    border-color var(--ds-motion-fast) var(--ds-ease-standard),
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    color var(--ds-motion-fast) var(--ds-ease-standard);
+}
+
+.popup-row-checkbox[data-checked="true"] {
+  border-color: var(--ds-accent);
+  background: var(--ds-accent);
+  color: var(--ds-accent-contrast);
+}
+
+.popup-selection-dock {
+  position: absolute;
+  inset-inline: 10px;
+  bottom: 10px;
+  z-index: 16;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-block-size: 46px;
+  padding: 6px 8px 6px 12px;
+  border-radius: var(--ds-radius-md);
+  border: 1px solid var(--ds-border-hover);
+  background: var(--ds-surface-2);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.28),
+    0 12px 26px -10px rgba(0, 0, 0, 0.78);
+  animation: popup-selection-dock-enter var(--ds-motion-standard) var(--ds-ease-settle);
+}
+
+.popup-selection-dock-count {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ds-text-secondary);
+}
+
+.popup-selection-dock-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  block-size: 30px;
+  padding: 0 10px;
+  border-radius: var(--ds-radius-sm);
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  outline: none;
+  transition:
+    border-color var(--ds-motion-fast) var(--ds-ease-standard),
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    color var(--ds-motion-fast) var(--ds-ease-standard),
+    scale var(--ds-motion-fast) var(--ds-ease-standard),
+    opacity var(--ds-motion-fast) var(--ds-ease-standard);
+}
+
+.popup-selection-dock-btn:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 1px;
+}
+
+.popup-selection-dock-btn:active:not(:disabled) {
+  scale: var(--ds-press-scale);
+}
+
+.popup-selection-dock-btn:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.popup-selection-dock-secondary {
+  background: var(--ds-surface-3);
+  color: var(--ds-text-primary);
+}
+
+.popup-selection-dock-secondary:hover:not(:disabled) {
+  background: var(--ds-active);
+}
+
+.popup-selection-dock-primary {
+  background: var(--ds-accent);
+  color: var(--ds-accent-contrast);
+}
+
+.popup-selection-dock-primary:hover:not(:disabled) {
+  background: var(--ds-accent-hover);
+}
+
+.popup-selection-dock-danger {
+  border-color: color-mix(in srgb, var(--ds-danger) 40%, transparent);
+  background: var(--ds-danger-soft);
+  color: var(--ds-danger-text);
+}
+
+.popup-selection-dock-danger:hover:not(:disabled) {
+  border-color: var(--ds-danger);
+  background: color-mix(in srgb, var(--ds-danger) 24%, transparent);
+}
+
+@keyframes popup-selection-dock-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@container popup (max-width: 460px) {
+  .popup-selection-dock {
+    inset-inline: 8px;
+    bottom: 8px;
+    gap: 6px;
+    padding: 6px 6px 6px 10px;
+  }
+
+  .popup-selection-dock-btn {
+    padding: 0 8px;
+  }
 }
 
 #popup-app-shell[data-keyboard-nav="true"] {
@@ -1111,7 +1282,6 @@ body::after {
   *::before,
   *::after {
     animation: none !important;
-    transition-duration: 80ms !important;
     scroll-behavior: auto;
   }
 

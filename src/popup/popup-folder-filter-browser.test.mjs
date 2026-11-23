@@ -72,7 +72,7 @@ try {
   const filtered = await titles()
   assert.ok(filtered.some((title) => title.startsWith('市场')), 'the matching folder must remain')
   assert.ok(!filtered.some((title) => title.includes('GitHub')), 'unrelated folders must be hidden')
-  assert.ok(filtered[0].startsWith('书签栏'), 'the pinned root row must stay reachable while filtering')
+  assert.ok(filtered[0].startsWith('全部书签'), 'the pinned all-bookmarks row must stay reachable while filtering')
   assert.equal(
     await page.locator('.t-skel-content [data-folder-filter-empty]').count(),
     0,
@@ -112,7 +112,7 @@ try {
   await emptyNotice.waitFor()
   assert.match(await emptyNotice.innerText(), /未找到文件夹/)
   const emptyRows = await titles()
-  assert.deepEqual(emptyRows.map((title) => title.replace(/\d+$/, '')), ['书签栏'], 'only the root row remains with no matches')
+  assert.deepEqual(emptyRows.map((title) => title.replace(/\d+$/, '')), ['全部书签'], 'only the all-bookmarks row remains with no matches')
 
   // Enter applies the highlighted folder, clears the query and returns to the list.
   await filter.fill('市场')
@@ -124,9 +124,14 @@ try {
   await page.waitForFunction(() => document.querySelector('#popup-folder-filter-input')?.value === '')
   assert.equal(await filter.inputValue(), '', 'applying a folder must clear the filter query')
   await page.waitForFunction(() => {
-    const caption = document.querySelector('#view-caption')?.textContent || ''
-    return caption.includes('市场')
+    const heading = document.querySelector('.t-skel-content .popup-main-pane > header > span')?.textContent || ''
+    return heading.includes('市场')
   })
+  assert.equal(
+    (await page.locator('.t-skel-content #view-caption').textContent())?.trim() || '',
+    '',
+    'switching folders must not show a redundant filter notice'
+  )
   assert.notEqual(
     await page.evaluate(() => document.activeElement?.id || ''),
     'popup-folder-filter-input',

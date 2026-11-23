@@ -4,7 +4,7 @@ export interface PopupKeyboardFolderRowLike {
 }
 
 export type PopupKeyboardPane = 'bookmarks' | 'folders'
-export type PopupFolderPickerMode = 'edit' | 'move' | 'smart'
+export type PopupFolderPickerMode = 'edit' | 'move' | 'smart' | 'folder-create'
 
 export function createPopupNavigationBatch(
   commit: () => void,
@@ -130,6 +130,9 @@ export function getFolderPickerSelectSelector(mode: PopupFolderPickerMode): stri
   if (mode === 'smart') {
     return '[data-smart-select-folder]'
   }
+  if (mode === 'folder-create') {
+    return '[data-folder-create-select]'
+  }
   return '[data-select-edit-folder]'
 }
 
@@ -169,6 +172,9 @@ export function getFolderPickerToggleSelector(mode: PopupFolderPickerMode): stri
   }
   if (mode === 'smart') {
     return '[data-toggle-smart-folder]'
+  }
+  if (mode === 'folder-create') {
+    return '[data-folder-create-toggle]'
   }
   return '[data-toggle-edit-folder]'
 }

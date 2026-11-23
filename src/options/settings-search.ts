@@ -37,6 +37,7 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   setting('availability', 'settings', '检测设置', 'settings-availability', '并发数 超时时长 站点权限 检测 timeout concurrency'),
   ...Object.entries(SECTION_META).filter(([key]) => key !== 'ai-settings').map(([key, { title }]) =>
     setting(key as OptionsSectionKey, 'section', title, `${key}-title`, ({
+      bookmarks: '书签管理 全部书签 文件夹 目录 多选 拖滑 排序 拖拽 移动 重命名 定位 搜索 bookmarks manager',
       general: '设置 settings',
       backup: '导入 导出 数据 backup',
       availability: '死链 失效 链接 检测',

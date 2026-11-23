@@ -15,6 +15,7 @@ import {
   findBookmarksBar
 } from '../shared/bookmark-tree.js'
 import { buildBookmarkCatalogSnapshot, type BookmarkCatalogSnapshot } from '../shared/bookmark-catalog.js'
+import { buildBookmarkManagerHash } from '../shared/extension-surfaces.js'
 import { getLocalStorage, setLocalStorage, withLocalStorageTransaction, type LocalStorageTransaction } from '../shared/storage.js'
 import { consumeNewtabStartupData, getBookmarkTree } from './newtab-startup-data.js'
 import { createNewtabSettingsPersistence, NEWTAB_SYNCED_SETTING_KEYS } from './newtab-settings-persistence.js'
@@ -22,6 +23,17 @@ import { collectRemovedBookmarkNodeIds, persistNewtabWorkspaceMutation } from '.
 import { getMotionDurationMs, getMotionEasing, prefersReducedMotion } from '../shared/motion.js'
 import { isBookmarkMenuInteractionTarget } from './bookmark-menu-interactions.js'
 import { buildBookmarkMoveActions } from './bookmark-move-menu.js'
+import {
+  POPUP_FOLDER_SORT_OPTIONS,
+  collectFolderDescendantIds,
+  computeSortedDirectBookmarkIds,
+  countFolderSubtreeContents,
+  getPopupFolderSortOption,
+  isProtectedBookmarkFolder,
+  planDirectBookmarkSortMoves,
+  validateFolderTitle,
+  type PopupFolderSortMode
+} from '../popup/popup-folder-management.js'
 import {
   normalizeSettingsDrawerSection,
   type SettingsDrawerSection
@@ -278,7 +290,9 @@ import {
   dispatchNewtabBookmarkAddMenuClosing,
   dispatchNewtabBookmarkAddMenuView,
   dispatchNewtabBookmarkEditMenuClosing,
-  dispatchNewtabBookmarkEditMenuView
+  dispatchNewtabBookmarkEditMenuView,
+  dispatchNewtabBookmarkFolderMenuClosing,
+  dispatchNewtabBookmarkFolderMenuView
 } from './newtab-bookmark-menu-store.js'
 import {
   registerNewtabBookmarkEventActions,
@@ -454,6 +468,20 @@ async function restoreBookmarkFromRecycleEntryLazy(
   return restoreBookmarkFromRecycleEntry(...args)
 }
 
+async function deleteFolderTreeToRecycleLazy(
+  ...args: Parameters<typeof import('../shared/recycle-bin.js').deleteFolderTreeToRecycle>
+): ReturnType<typeof import('../shared/recycle-bin.js').deleteFolderTreeToRecycle> {
+  const { deleteFolderTreeToRecycle } = await import('../shared/recycle-bin.js')
+  return deleteFolderTreeToRecycle(...args)
+}
+
+async function restoreFolderTreeFromUndoLazy(
+  ...args: Parameters<typeof import('../shared/recycle-bin.js').restoreFolderTreeFromUndo>
+): ReturnType<typeof import('../shared/recycle-bin.js').restoreFolderTreeFromUndo> {
+  const { restoreFolderTreeFromUndo } = await import('../shared/recycle-bin.js')
+  return restoreFolderTreeFromUndo(...args)
+}
+
 const BOOKMARK_TILE_INITIAL_RENDER_LIMIT = 72
 const BOOKMARK_TILE_RENDER_CHUNK_SIZE = 48
 const BOOKMARK_CHANGE_REFRESH_DEBOUNCE_MS = 320
@@ -503,6 +531,51 @@ interface LastDeletedBookmarkState {
   customIcon?: string
 }
 
+type NewTabUndoActionState =
+  | ({ kind: 'delete-bookmark' } & LastDeletedBookmarkState)
+  | {
+      kind: 'delete-folder'
+      folderTitle: string
+      undoEntry: import('../shared/recycle-bin.js').DeletedFolderBlueprint
+      deletedAt: number
+    }
+  | {
+      kind: 'move-bookmark'
+      bookmarkId: string
+      bookmarkLabel: string
+      fromParentId: string
+      fromIndex: number
+      toFolderTitle: string
+    }
+  | {
+      kind: 'edit-bookmark'
+      bookmarkId: string
+      bookmarkLabel: string
+      previousTitle: string
+      previousUrl: string
+    }
+  | {
+      kind: 'rename-folder'
+      folderId: string
+      previousTitle: string
+      nextTitle: string
+    }
+  | {
+      kind: 'move-folder'
+      folderId: string
+      folderTitle: string
+      fromParentId: string
+      fromIndex: number
+      toFolderTitle: string
+    }
+  | {
+      kind: 'sort-folder'
+      folderId: string
+      folderTitle: string
+      sortLabel: string
+      previousDirectBookmarkIds: string[]
+    }
+
 interface BackgroundDisplayCss {
   backgroundSize: string
   backgroundPosition: string
@@ -544,20 +617,32 @@ const state = {
   menuStatus: '',
   editIconMode: 'website',
   pendingCustomIconDataUrl: '',
-  lastDeletedBookmark: null as LastDeletedBookmarkState | null,
+  lastUndoAction: null as NewTabUndoActionState | null,
   deleteToastStatus: '',
   deleteToastTitle: '',
   deleteToastTone: 'success' as 'success' | 'error',
   deleteToastBusy: false,
   addMenuOpen: false,
   addMenuExpanded: false,
+  addMenuMode: 'collapsed' as 'collapsed' | 'bookmark' | 'folder',
   addFolderId: '',
   addMenuX: 0,
   addMenuY: 0,
   addTitle: '',
   addUrl: '',
+  addFolderTitle: '',
   addMenuBusy: false,
   addMenuError: '',
+  activeMenuFolderId: '',
+  folderMenuX: 0,
+  folderMenuY: 0,
+  folderMenuTitle: '',
+  folderMenuSubfolderExpanded: false,
+  folderMenuSubfolderTitle: '',
+  folderMenuDeleteArmed: false,
+  folderMenuBusy: false,
+  folderMenuError: '',
+  folderMenuStatus: '',
   customIcons: {} as Record<string, string>,
   backgroundUrlCacheBusy: false,
   backgroundUrlCacheStatus: '',
@@ -756,6 +841,9 @@ let bookmarkMenuSession = 0
 let bookmarkCopyFeedback = IDLE_ACTION_FEEDBACK
 let bookmarkMenuReturnFocus: HTMLElement | null = null
 let addBookmarkMenuSession = 0
+let folderMenuSession = 0
+let folderMenuReturnFocus: HTMLElement | null = null
+let undoToastAutoDismissTimer = 0
 let newTabStorageEventsBound = false
 let newTabNaturalSearchSettingsGeneration = 0
 let newTabNaturalSearchToggleVersion = 0
@@ -1144,13 +1232,14 @@ function handleNewtabShellPointerDownCapture(event: ReactPointerEvent<HTMLDivEle
     return
   }
 
-  if (state.activeMenuBookmarkId || state.addMenuOpen) {
+  if (state.activeMenuBookmarkId || state.addMenuOpen || state.activeMenuFolderId) {
     if (isBookmarkMenuInteractionTarget(target)) {
       return
     }
 
     closeBookmarkMenu()
     closeAddBookmarkMenu()
+    closeFolderMenu()
   }
 
   if (shouldToggleSearchFocusFromPointerDown(event, target)) {
@@ -1169,6 +1258,7 @@ function handleNewtabShellPointerDownCapture(event: ReactPointerEvent<HTMLDivEle
 function handleNewtabWindowResize(): void {
   closeBookmarkMenu()
   closeAddBookmarkMenu()
+  closeFolderMenu()
   cancelSpeedDialDrag()
   cancelBookmarkDrag()
   cancelFolderDrag()
@@ -1253,6 +1343,7 @@ function handleDocumentKeydown(event: KeyboardEvent): void {
     }
     closeBookmarkMenu()
     closeAddBookmarkMenu()
+    closeFolderMenu()
     cancelFolderDrag()
     return
   }
@@ -2064,6 +2155,8 @@ function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number, 
     return
   }
 
+  closeAddBookmarkMenu({ animate: false })
+  closeFolderMenu({ animate: false })
   bookmarkMenuSession += 1
   bookmarkCopyFeedback = IDLE_ACTION_FEEDBACK
   bookmarkMenuReturnFocus = anchor
@@ -2082,14 +2175,17 @@ function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number, 
 
 function openAddBookmarkMenu(clientX: number, clientY: number, folderId = ''): void {
   closeBookmarkMenu({ animate: false })
+  closeFolderMenu({ animate: false })
   addBookmarkMenuSession += 1
   state.addMenuOpen = true
   state.addMenuExpanded = false
+  state.addMenuMode = 'collapsed'
   state.addFolderId = folderId
   state.addMenuX = clientX
   state.addMenuY = clientY
   state.addTitle = ''
   state.addUrl = ''
+  state.addFolderTitle = ''
   state.addMenuBusy = false
   state.addMenuError = ''
   renderAddBookmarkMenu()
@@ -2098,17 +2194,94 @@ function openAddBookmarkMenu(clientX: number, clientY: number, folderId = ''): v
 function openAddBookmarkMenuForElement(anchor: HTMLElement, folderId: string): void {
   const rect = anchor.getBoundingClientRect()
   closeBookmarkMenu({ animate: false })
+  closeFolderMenu({ animate: false })
   addBookmarkMenuSession += 1
   state.addMenuOpen = true
   state.addMenuExpanded = true
+  state.addMenuMode = 'bookmark'
   state.addFolderId = folderId
   state.addMenuX = rect.right
   state.addMenuY = rect.bottom + 8
   state.addTitle = ''
   state.addUrl = ''
+  state.addFolderTitle = ''
   state.addMenuBusy = false
   state.addMenuError = ''
   renderAddBookmarkMenu()
+}
+
+function handleFolderContextMenu(
+  folderId: string,
+  event: ReactMouseEvent<HTMLElement>
+): void {
+  event.preventDefault()
+  event.stopPropagation()
+  if (
+    state.reorderingBookmarks ||
+    state.draggingBookmarkId ||
+    state.draggingFolderId ||
+    state.folderDragSuppressClick
+  ) {
+    return
+  }
+  const normalizedFolderId = String(folderId || '').trim()
+  if (!normalizedFolderId) return
+  openFolderMenu(normalizedFolderId, event.clientX, event.clientY, event.currentTarget)
+}
+
+function openFolderMenu(folderId: string, clientX: number, clientY: number, anchor: HTMLElement): void {
+  const folder = state.folderNodeMap.get(folderId)
+  if (!folder || folder.url !== undefined || folder.id === '0') {
+    return
+  }
+  closeBookmarkMenu({ animate: false })
+  closeAddBookmarkMenu({ animate: false })
+  folderMenuSession += 1
+  folderMenuReturnFocus = anchor
+  state.activeMenuFolderId = folderId
+  state.folderMenuX = clientX
+  state.folderMenuY = clientY
+  state.folderMenuTitle = String(folder.title || '').trim() || '未命名文件夹'
+  state.folderMenuSubfolderExpanded = false
+  state.folderMenuSubfolderTitle = ''
+  state.folderMenuDeleteArmed = false
+  state.folderMenuBusy = false
+  state.folderMenuError = ''
+  state.folderMenuStatus = ''
+  renderFolderMenu()
+}
+
+function closeFolderMenu({ animate = true, restoreFocus = false } = {}): void {
+  const anchor = folderMenuReturnFocus
+  folderMenuReturnFocus = null
+  folderMenuSession += 1
+  const session = folderMenuSession
+  state.activeMenuFolderId = ''
+  state.folderMenuSubfolderExpanded = false
+  state.folderMenuSubfolderTitle = ''
+  state.folderMenuDeleteArmed = false
+  state.folderMenuBusy = false
+  state.folderMenuError = ''
+  state.folderMenuStatus = ''
+  if (animate) {
+    dispatchNewtabBookmarkFolderMenuClosing()
+  } else {
+    dispatchNewtabBookmarkFolderMenuView(null)
+  }
+  if (restoreFocus) {
+    window.requestAnimationFrame(() => {
+      if (session !== folderMenuSession || state.activeMenuFolderId) return
+      if (anchor?.isConnected) {
+        anchor.focus({ preventScroll: true })
+      }
+    })
+  }
+}
+
+function finalizeFolderMenuClose(): void {
+  if (!state.activeMenuFolderId) {
+    dispatchNewtabBookmarkFolderMenuView(null)
+  }
 }
 
 function closeBookmarkMenu({ animate = true, restoreFocus = false } = {}): void {
@@ -2151,7 +2324,9 @@ function closeAddBookmarkMenu({ animate = true } = {}): void {
   addBookmarkMenuSession += 1
   state.addMenuOpen = false
   state.addMenuExpanded = false
+  state.addMenuMode = 'collapsed'
   state.addFolderId = ''
+  state.addFolderTitle = ''
   state.addMenuBusy = false
   state.addMenuError = ''
   if (animate) {
@@ -4962,6 +5137,7 @@ async function saveBookmarkMenuChanges(): Promise<void> {
   const controllerSession = newTabControllerGeneration
   let bookmarkSaved = false
   try {
+    const previousTitle = String(bookmark.title || '').trim()
     const previousUrl = String(bookmark.url || '').trim()
     const title = state.editTitle.trim() || state.editUrl.trim()
     const url = normalizeBookmarkInputUrl(state.editUrl)
@@ -4977,6 +5153,15 @@ async function saveBookmarkMenuChanges(): Promise<void> {
     if (controllerSession !== newTabControllerGeneration || !newTabControllerStarted) return
     if (previousUrl !== url) {
       state.faviconRefreshTokens.set(bookmark.id, Date.now())
+    }
+    if (previousTitle !== title || previousUrl !== url) {
+      publishNewTabUndoAction({
+        kind: 'edit-bookmark',
+        bookmarkId: bookmark.id,
+        bookmarkLabel: title || url,
+        previousTitle,
+        previousUrl
+      })
     }
     if (isCurrentBookmarkMenuSession(session)) closeBookmarkMenu()
     await refreshNewTab({ showLoading: false })
@@ -5038,6 +5223,9 @@ async function moveActiveMenuBookmark(folderId: string): Promise<void> {
   }
 
   const session = bookmarkMenuSession
+  const fromParentId = String(bookmark.parentId || '')
+  const fromIndex = Number.isFinite(Number(bookmark.index)) ? Number(bookmark.index) : 0
+  const targetFolderTitle = String(folder.title || '未命名文件夹').trim() || '未命名文件夹'
   state.menuBusy = true
   state.menuError = ''
   state.menuStatus = ''
@@ -5048,7 +5236,17 @@ async function moveActiveMenuBookmark(folderId: string): Promise<void> {
     // committing the title, URL and icon drafts still being edited in this menu.
     if (!isCurrentBookmarkMenuSession(session)) return
     state.menuBusy = false
-    state.menuStatus = `已移动到「${folder.title || '未命名文件夹'}」`
+    state.menuStatus = `已移动到「${targetFolderTitle}」`
+    if (fromParentId) {
+      publishNewTabUndoAction({
+        kind: 'move-bookmark',
+        bookmarkId: bookmark.id,
+        bookmarkLabel: getBookmarkDisplayTitle(bookmark),
+        fromParentId,
+        fromIndex,
+        toFolderTitle: targetFolderTitle
+      })
+    }
     renderBookmarkMenu({ focusFirst: false, focusAction: 'move-bookmark' })
   } catch (error) {
     if (!isCurrentBookmarkMenuSession(session)) return
@@ -5117,15 +5315,13 @@ async function deleteActiveMenuBookmark(): Promise<void> {
     }
 
     if (controllerSession !== newTabControllerGeneration || !newTabControllerStarted) return
-    state.lastDeletedBookmark = {
+    publishNewTabUndoAction({
+      kind: 'delete-bookmark',
       bookmark,
       recycleId,
       deletedAt: Date.now(),
       customIcon: deletedCustomIcon
-    }
-    state.deleteToastStatus = ''
-    state.deleteToastTitle = ''
-    state.deleteToastTone = 'success'
+    })
     if (isCurrentBookmarkMenuSession(session)) closeBookmarkMenu()
     await refreshNewTab({ showLoading: false })
   } catch (error) {
@@ -5137,23 +5333,72 @@ async function deleteActiveMenuBookmark(): Promise<void> {
   }
 }
 
+function clearUndoToastAutoDismiss(): void {
+  if (undoToastAutoDismissTimer) {
+    window.clearTimeout(undoToastAutoDismissTimer)
+    undoToastAutoDismissTimer = 0
+  }
+}
+
+function publishNewTabUndoAction(action: NewTabUndoActionState): void {
+  clearUndoToastAutoDismiss()
+  state.lastUndoAction = action
+  state.deleteToastBusy = false
+  state.deleteToastStatus = ''
+  state.deleteToastTitle = ''
+  state.deleteToastTone = 'success'
+  renderDeleteToast()
+  if (action.kind !== 'delete-bookmark' && action.kind !== 'delete-folder') {
+    undoToastAutoDismissTimer = window.setTimeout(() => {
+      undoToastAutoDismissTimer = 0
+      if (state.lastUndoAction === action && !state.deleteToastBusy) {
+        state.lastUndoAction = null
+        renderDeleteToast()
+      }
+    }, 10000)
+  }
+}
+
 async function undoLastDeletedBookmark(): Promise<void> {
-  const deleted = state.lastDeletedBookmark
-  if (!deleted || state.deleteToastBusy) {
+  const action = state.lastUndoAction
+  if (!action || state.deleteToastBusy) {
     return
   }
 
+  clearUndoToastAutoDismiss()
   const session = newTabControllerGeneration
   state.deleteToastBusy = true
-  state.deleteToastStatus = '正在恢复...'
+  state.deleteToastStatus = action.kind === 'delete-bookmark' || action.kind === 'delete-folder' ? '正在恢复...' : '正在撤销...'
   state.deleteToastTitle = ''
   state.deleteToastTone = 'success'
   renderDeleteToast()
 
   try {
-    const restored = await restoreBookmarkFromRecycleEntryLazy(deleted.recycleId)
+    let restoredBookmark: chrome.bookmarks.BookmarkTreeNode | null = null
+    if (action.kind === 'delete-bookmark') {
+      restoredBookmark = await restoreBookmarkFromRecycleEntryLazy(action.recycleId)
+    } else if (action.kind === 'delete-folder') {
+      await restoreFolderTreeFromUndoLazy(action.undoEntry)
+    } else if (action.kind === 'move-bookmark') {
+      await moveBookmarkLazy(action.bookmarkId, action.fromParentId, action.fromIndex)
+    } else if (action.kind === 'edit-bookmark') {
+      await updateBookmarkLazy(action.bookmarkId, { title: action.previousTitle, url: action.previousUrl })
+    } else if (action.kind === 'rename-folder') {
+      await updateBookmarkLazy(action.folderId, { title: action.previousTitle })
+    } else if (action.kind === 'move-folder') {
+      await moveBookmarkLazy(action.folderId, action.fromParentId, action.fromIndex)
+    } else if (action.kind === 'sort-folder') {
+      const folderNode = state.folderNodeMap.get(action.folderId)
+      if (!folderNode) {
+        throw new Error('文件夹已不存在，无法恢复排序。')
+      }
+      const moves = planDirectBookmarkSortMoves(folderNode.children || [], action.previousDirectBookmarkIds)
+      for (const move of moves) {
+        await moveBookmarkLazy(move.bookmarkId, action.folderId, move.index)
+      }
+    }
     if (session !== newTabControllerGeneration || !newTabControllerStarted) return
-    if (state.lastDeletedBookmark === deleted) state.lastDeletedBookmark = null
+    if (state.lastUndoAction === action) state.lastUndoAction = null
     state.deleteToastBusy = false
     state.deleteToastStatus = ''
     state.deleteToastTitle = ''
@@ -5161,18 +5406,19 @@ async function undoLastDeletedBookmark(): Promise<void> {
     // The bookmark already exists in Chrome; insert it now instead of leaving
     // the grid stale until the background refresh lands, so the restore never
     // reads as a stalled toast.
-    if (restored) {
-      insertBookmarkInPlace(restored)
+    if (restoredBookmark) {
+      insertBookmarkInPlace(restoredBookmark)
       render()
     }
     renderDeleteToast()
-    void refreshNewTab({ showLoading: false }).catch(() => {})
+    await refreshNewTab({ showLoading: false })
   } catch (error) {
     if (session !== newTabControllerGeneration || !newTabControllerStarted) return
     state.deleteToastBusy = false
-    if (state.lastDeletedBookmark === deleted) {
-      state.deleteToastStatus = error instanceof Error ? error.message : '恢复失败，请打开回收站处理。'
-      state.deleteToastTitle = '恢复失败'
+    if (state.lastUndoAction === action) {
+      const isDelete = action.kind === 'delete-bookmark' || action.kind === 'delete-folder'
+      state.deleteToastStatus = error instanceof Error ? error.message : (isDelete ? '恢复失败，请打开回收站处理。' : '撤销失败，请稍后重试。')
+      state.deleteToastTitle = isDelete ? '恢复失败' : '撤销失败'
       state.deleteToastTone = 'error'
     }
     renderDeleteToast()
@@ -5182,7 +5428,8 @@ async function undoLastDeletedBookmark(): Promise<void> {
 function openRecycleBin(): void {
   const url = chrome.runtime.getURL('src/options/options.html#recycle')
   const clearToast = () => {
-    state.lastDeletedBookmark = null
+    clearUndoToastAutoDismiss()
+    state.lastUndoAction = null
     state.deleteToastStatus = ''
     state.deleteToastTitle = ''
     state.deleteToastTone = 'success'
@@ -5195,7 +5442,7 @@ function openRecycleBin(): void {
         clearToast()
       },
       () => {
-        if (!state.lastDeletedBookmark) {
+        if (!state.lastUndoAction) {
           return
         }
         state.deleteToastTitle = '无法打开回收站'
@@ -5249,10 +5496,472 @@ function refreshActiveMenuIcon(): void {
 
 function expandAddBookmarkMenu(): void {
   state.addMenuExpanded = true
+  state.addMenuMode = 'bookmark'
   state.addMenuError = ''
   renderAddBookmarkMenu()
 }
 
+function expandAddFolderMenu(): void {
+  state.addMenuExpanded = true
+  state.addMenuMode = 'folder'
+  state.addMenuError = ''
+  renderAddBookmarkMenu()
+}
+
+async function saveAddedFolder(): Promise<void> {
+  if (!state.addMenuOpen || state.addMenuBusy) return
+  const session = addBookmarkMenuSession
+  const controllerSession = newTabControllerGeneration
+  const validation = validateFolderTitle(state.addFolderTitle)
+  if ('error' in validation) {
+    state.addMenuError = validation.error
+    renderAddBookmarkMenu({ focusFirst: false })
+    return
+  }
+  try {
+    state.addMenuBusy = true
+    state.addMenuError = ''
+    renderAddBookmarkMenu({ focusFirst: false })
+    const parentId =
+      state.addFolderId ||
+      (state.folderSettings.browseMode === 'navigation' ? state.bookmarkNavigationPath[state.bookmarkNavigationPath.length - 1] : '') ||
+      state.folderSections[0]?.id ||
+      await ensureNewTabFolder()
+    await createBookmarkLazy({
+      parentId,
+      title: validation.title
+    })
+    if (controllerSession !== newTabControllerGeneration || !newTabControllerStarted) return
+    if (session === addBookmarkMenuSession) closeAddBookmarkMenu()
+    await refreshNewTab({ showLoading: false })
+  } catch (error) {
+    if (session !== addBookmarkMenuSession) return
+    state.addMenuBusy = false
+    state.addMenuError = error instanceof Error ? error.message : '新建文件夹失败，请稍后重试。'
+    renderAddBookmarkMenu({ focusFirst: false })
+  }
+}
+
+function getActiveMenuFolder(): chrome.bookmarks.BookmarkTreeNode | null {
+  return state.activeMenuFolderId ? (state.folderNodeMap.get(state.activeMenuFolderId) || null) : null
+}
+
+function isCurrentFolderMenuSession(session: number): boolean {
+  return session === folderMenuSession && Boolean(state.activeMenuFolderId)
+}
+
+async function saveFolderMenuRename(): Promise<void> {
+  if (state.folderMenuBusy) return
+  const folder = getActiveMenuFolder()
+  if (!folder) {
+    closeFolderMenu()
+    return
+  }
+  if (isProtectedBookmarkFolder(folder)) {
+    state.folderMenuError = '系统默认书签目录不能重命名。'
+    renderFolderMenu({ focusFirst: false })
+    return
+  }
+  const validation = validateFolderTitle(state.folderMenuTitle)
+  if ('error' in validation) {
+    state.folderMenuError = validation.error
+    renderFolderMenu({ focusFirst: false })
+    return
+  }
+  const previousTitle = String(folder.title || '').trim()
+  if (validation.title === previousTitle) {
+    closeFolderMenu({ restoreFocus: true })
+    return
+  }
+  const session = folderMenuSession
+  const controllerSession = newTabControllerGeneration
+  state.folderMenuBusy = true
+  state.folderMenuError = ''
+  state.folderMenuStatus = ''
+  renderFolderMenu({ focusFirst: false })
+  try {
+    await updateBookmarkLazy(folder.id, { title: validation.title })
+    if (controllerSession !== newTabControllerGeneration || !newTabControllerStarted) return
+    publishNewTabUndoAction({
+      kind: 'rename-folder',
+      folderId: folder.id,
+      previousTitle,
+      nextTitle: validation.title
+    })
+    if (isCurrentFolderMenuSession(session)) closeFolderMenu()
+    await refreshNewTab({ showLoading: false })
+  } catch (error) {
+    if (!isCurrentFolderMenuSession(session)) return
+    state.folderMenuBusy = false
+    state.folderMenuError = error instanceof Error ? `重命名失败：${error.message}` : '重命名失败，请稍后重试。'
+    renderFolderMenu({ focusFirst: false })
+  }
+}
+
+async function createActiveMenuSubfolder(): Promise<void> {
+  if (state.folderMenuBusy) return
+  const folder = getActiveMenuFolder()
+  if (!folder) {
+    closeFolderMenu()
+    return
+  }
+  const validation = validateFolderTitle(state.folderMenuSubfolderTitle)
+  if ('error' in validation) {
+    state.folderMenuError = validation.error
+    renderFolderMenu({ focusFirst: false })
+    return
+  }
+  const session = folderMenuSession
+  const controllerSession = newTabControllerGeneration
+  state.folderMenuBusy = true
+  state.folderMenuError = ''
+  state.folderMenuStatus = ''
+  renderFolderMenu({ focusFirst: false })
+  try {
+    await createBookmarkLazy({
+      parentId: folder.id,
+      title: validation.title
+    })
+    if (controllerSession !== newTabControllerGeneration || !newTabControllerStarted) return
+    if (isCurrentFolderMenuSession(session)) {
+      state.folderMenuBusy = false
+      state.folderMenuSubfolderExpanded = false
+      state.folderMenuSubfolderTitle = ''
+      state.folderMenuStatus = `已新建子文件夹「${validation.title}」`
+      renderFolderMenu({ focusFirst: false })
+    }
+    await refreshNewTab({ showLoading: false })
+  } catch (error) {
+    if (!isCurrentFolderMenuSession(session)) return
+    state.folderMenuBusy = false
+    state.folderMenuError = error instanceof Error ? `新建失败：${error.message}` : '新建子文件夹失败，请稍后重试。'
+    renderFolderMenu({ focusFirst: false })
+  }
+}
+
+async function sortActiveMenuFolder(mode: PopupFolderSortMode): Promise<void> {
+  if (state.folderMenuBusy) return
+  const folder = getActiveMenuFolder()
+  if (!folder) {
+    closeFolderMenu()
+    return
+  }
+  const directBookmarks = getDirectBookmarks(folder)
+  if (directBookmarks.length < 2) {
+    state.folderMenuError = '当前文件夹至少需要 2 个直属书签才能排序。'
+    renderFolderMenu({ focusFirst: false, focusAction: 'sort-folder' })
+    return
+  }
+  const session = folderMenuSession
+  const controllerSession = newTabControllerGeneration
+  const option = getPopupFolderSortOption(mode)
+  const previousDirectBookmarkIds = directBookmarks.map((bookmark) => String(bookmark.id))
+  state.folderMenuBusy = true
+  state.folderMenuError = ''
+  state.folderMenuStatus = ''
+  renderFolderMenu({ focusFirst: false })
+  try {
+    let activityByBookmarkId: typeof state.activity.records | undefined
+    if (mode === 'frequency-desc') {
+      activityByBookmarkId = { ...state.activity.records }
+      try {
+        const snapshot = await loadNewTabActivityLazy()
+        if (snapshot?.records) {
+          activityByBookmarkId = snapshot.records
+        }
+      } catch {
+        // Fall back to in-memory activity records if repository read fails.
+      }
+    }
+    const { orderedIds } = computeSortedDirectBookmarkIds(directBookmarks, mode, activityByBookmarkId)
+    const moves = planDirectBookmarkSortMoves(folder.children || [], orderedIds)
+    if (!moves.length) {
+      if (isCurrentFolderMenuSession(session)) {
+        state.folderMenuBusy = false
+        state.folderMenuStatus = `当前已符合「${option.label}」顺序`
+        renderFolderMenu({ focusFirst: false, focusAction: 'sort-folder' })
+      }
+      return
+    }
+    for (const move of moves) {
+      await moveBookmarkLazy(move.bookmarkId, folder.id, move.index)
+    }
+    if (controllerSession !== newTabControllerGeneration || !newTabControllerStarted) return
+    publishNewTabUndoAction({
+      kind: 'sort-folder',
+      folderId: folder.id,
+      folderTitle: String(folder.title || '未命名文件夹'),
+      sortLabel: option.label,
+      previousDirectBookmarkIds
+    })
+    if (isCurrentFolderMenuSession(session)) closeFolderMenu()
+    await refreshNewTab({ showLoading: false })
+  } catch (error) {
+    if (!isCurrentFolderMenuSession(session)) return
+    state.folderMenuBusy = false
+    state.folderMenuError = error instanceof Error ? `排序失败：${error.message}` : '排序失败，请稍后重试。'
+    renderFolderMenu({ focusFirst: false, focusAction: 'sort-folder' })
+  }
+}
+
+async function moveActiveMenuFolder(targetParentId: string): Promise<void> {
+  if (state.folderMenuBusy) return
+  const folder = getActiveMenuFolder()
+  if (!folder) {
+    closeFolderMenu()
+    return
+  }
+  if (isProtectedBookmarkFolder(folder)) return
+  if (folder.parentId === targetParentId) return
+  const blocked = collectFolderDescendantIds(folder)
+  if (blocked.has(targetParentId)) {
+    state.folderMenuError = '不能将文件夹移动到自身或其子文件夹内。'
+    renderFolderMenu({ focusFirst: false, focusAction: 'move-folder' })
+    return
+  }
+  const targetFolder = state.folderNodeMap.get(targetParentId)
+  if (!targetFolder || targetFolder.id === '0' || targetFolder.unmodifiable === 'managed') {
+    state.folderMenuError = '目标文件夹已不可用，请重新选择。'
+    renderFolderMenu({ focusFirst: false, focusAction: 'move-folder' })
+    return
+  }
+  const session = folderMenuSession
+  const controllerSession = newTabControllerGeneration
+  const fromParentId = String(folder.parentId || '')
+  const fromIndex = Number.isFinite(Number(folder.index)) ? Number(folder.index) : 0
+  const targetFolderTitle = String(targetFolder.title || '未命名文件夹').trim() || '未命名文件夹'
+  state.folderMenuBusy = true
+  state.folderMenuError = ''
+  state.folderMenuStatus = ''
+  renderFolderMenu({ focusFirst: false })
+  try {
+    await moveBookmarkLazy(folder.id, targetParentId)
+    if (controllerSession !== newTabControllerGeneration || !newTabControllerStarted) return
+    if (fromParentId) {
+      publishNewTabUndoAction({
+        kind: 'move-folder',
+        folderId: folder.id,
+        folderTitle: String(folder.title || '未命名文件夹'),
+        fromParentId,
+        fromIndex,
+        toFolderTitle: targetFolderTitle
+      })
+    }
+    if (isCurrentFolderMenuSession(session)) closeFolderMenu()
+    await refreshNewTab({ showLoading: false })
+  } catch (error) {
+    if (!isCurrentFolderMenuSession(session)) return
+    state.folderMenuBusy = false
+    state.folderMenuError = error instanceof Error ? `移动失败：${error.message}` : '移动文件夹失败，请稍后重试。'
+    renderFolderMenu({ focusFirst: false, focusAction: 'move-folder' })
+  }
+}
+
+async function deleteActiveMenuFolder(): Promise<void> {
+  if (state.folderMenuBusy) return
+  const folder = getActiveMenuFolder()
+  if (!folder) {
+    closeFolderMenu()
+    return
+  }
+  if (isProtectedBookmarkFolder(folder)) {
+    state.folderMenuError = '系统默认书签目录不能删除。'
+    renderFolderMenu({ focusFirst: false, focusAction: 'delete-folder' })
+    return
+  }
+  const counts = countFolderSubtreeContents(folder)
+  if (!state.folderMenuDeleteArmed) {
+    state.folderMenuDeleteArmed = true
+    state.folderMenuError = ''
+    const summaryParts = [
+      counts.subfolderCount > 0 ? `${counts.subfolderCount} 个子文件夹` : '',
+      counts.bookmarkCount > 0 ? `${counts.bookmarkCount} 个书签` : ''
+    ].filter(Boolean)
+    state.folderMenuStatus = summaryParts.length
+      ? `含 ${summaryParts.join('、')}，书签会进回收站且可撤销。再次点击确认删除。`
+      : '将删除此空文件夹并可撤销。再次点击确认删除。'
+    renderFolderMenu({ focusFirst: false, focusAction: 'delete-folder' })
+    return
+  }
+  const session = folderMenuSession
+  const controllerSession = newTabControllerGeneration
+  const folderTitle = String(folder.title || '未命名文件夹').trim() || '未命名文件夹'
+  const folderPath = state.folderData?.folderMap.get(folder.id)?.path || folderTitle
+  state.folderMenuBusy = true
+  state.folderMenuError = ''
+  state.folderMenuStatus = `正在删除文件夹「${folderTitle}」...`
+  renderFolderMenu({ focusFirst: false, focusAction: 'delete-folder' })
+  try {
+    const deleted = await deleteFolderTreeToRecycleLazy(folder, {
+      source: '新标签页删除文件夹',
+      path: folderPath
+    })
+    if (controllerSession !== newTabControllerGeneration || !newTabControllerStarted) return
+    if (state.bookmarkNavigationPath.includes(folder.id)) {
+      const idx = state.bookmarkNavigationPath.indexOf(folder.id)
+      state.bookmarkNavigationPath = state.bookmarkNavigationPath.slice(0, idx)
+    }
+    publishNewTabUndoAction({
+      kind: 'delete-folder',
+      folderTitle,
+      undoEntry: deleted.blueprint,
+      deletedAt: Date.now()
+    })
+    if (isCurrentFolderMenuSession(session)) closeFolderMenu()
+    await refreshNewTab({ showLoading: false })
+  } catch (error) {
+    if (!isCurrentFolderMenuSession(session)) return
+    state.folderMenuBusy = false
+    state.folderMenuDeleteArmed = false
+    state.folderMenuStatus = ''
+    state.folderMenuError = error instanceof Error ? `删除失败：${error.message}` : '删除文件夹失败，请稍后重试。'
+    renderFolderMenu({ focusFirst: false, focusAction: 'delete-folder' })
+  }
+}
+
+function renderFolderMenu({ focusFirst = true, focusAction = '' } = {}): void {
+  const folder = getActiveMenuFolder()
+  if (!folder) {
+    dispatchNewtabBookmarkFolderMenuView(null)
+    return
+  }
+  const session = folderMenuSession
+  const folderTitle = String(folder.title || '未命名文件夹').trim() || '未命名文件夹'
+  const isProtected = isProtectedBookmarkFolder(folder)
+  const directBookmarkCount = getDirectBookmarks(folder).length
+  const blockedMoveIds = collectFolderDescendantIds(folder)
+
+  const actions: BookmarkMenuActionViewModel[] = [
+    ...(!isProtected ? [createMenuActionViewModel('保存名称', 'save', saveFolderMenuRename, {
+      actionId: 'save-folder-name',
+      ariaLabel: `保存文件夹名称：${folderTitle}`,
+      disabled: state.folderMenuBusy
+    })] : []),
+    createMenuActionViewModel('添加书签', 'plus', () => {
+      const anchor = folderMenuReturnFocus
+      const x = state.folderMenuX
+      const y = state.folderMenuY
+      closeFolderMenu({ animate: false })
+      if (anchor?.isConnected) {
+        openAddBookmarkMenuForElement(anchor, folder.id)
+      } else {
+        openAddBookmarkMenu(x, y, folder.id)
+        expandAddBookmarkMenu()
+      }
+    }, {
+      actionId: 'add-bookmark-to-folder',
+      ariaLabel: `向文件夹添加书签：${folderTitle}`,
+      disabled: state.folderMenuBusy,
+      separatorBefore: !isProtected
+    }),
+    createMenuActionViewModel(
+      state.folderMenuSubfolderExpanded ? '收起新建子文件夹' : '新建子文件夹',
+      'folder-plus',
+      () => {
+        state.folderMenuSubfolderExpanded = !state.folderMenuSubfolderExpanded
+        state.folderMenuError = ''
+        state.folderMenuDeleteArmed = false
+        renderFolderMenu({ focusFirst: state.folderMenuSubfolderExpanded })
+      },
+      {
+        actionId: 'toggle-subfolder-input',
+        ariaLabel: `在「${folderTitle}」内新建子文件夹`,
+        disabled: state.folderMenuBusy
+      }
+    ),
+    {
+      ...createMenuActionViewModel('排序书签', 'sort', () => {}, {
+        actionId: 'sort-folder',
+        ariaLabel: `排序文件夹书签：${folderTitle}`,
+        disabled: state.folderMenuBusy || directBookmarkCount < 2
+      }),
+      children: () => POPUP_FOLDER_SORT_OPTIONS.map((option) => ({
+        id: `sort:${option.mode}`,
+        ariaLabel: `${option.label}：${folderTitle}`,
+        disabled: state.folderMenuBusy,
+        icon: 'sort' as const,
+        label: option.label,
+        onSelect: () => {
+          if (isCurrentFolderMenuSession(session)) return sortActiveMenuFolder(option.mode)
+        }
+      }))
+    },
+    createMenuActionViewModel('在书签管理中打开', 'folder-open', () => {
+      closeFolderMenu({ animate: false })
+      openOptionsHash(buildBookmarkManagerHash({ folderId: folder.id }))
+    }, {
+      actionId: 'open-folder-in-manager',
+      ariaLabel: `在全部书签中打开：${folderTitle}`,
+      disabled: state.folderMenuBusy
+    }),
+    {
+      ...createMenuActionViewModel('移动到', 'move', () => {}, {
+        actionId: 'move-folder',
+        ariaLabel: `移动文件夹：${folderTitle}`,
+        disabled: state.folderMenuBusy || isProtected
+      }),
+      children: () => buildBookmarkMoveActions(
+        state.rootNode?.children || [],
+        String(folder.parentId || ''),
+        (targetParentId) => {
+          if (isCurrentFolderMenuSession(session)) return moveActiveMenuFolder(targetParentId)
+        },
+        blockedMoveIds
+      )
+    },
+    createMenuActionViewModel(
+      state.folderMenuDeleteArmed ? '确认删除文件夹' : '删除文件夹',
+      'trash',
+      deleteActiveMenuFolder,
+      {
+        actionId: 'delete-folder',
+        variant: 'danger',
+        ariaLabel: `${state.folderMenuDeleteArmed ? '确认删除文件夹' : '删除文件夹'}：${folderTitle}`,
+        disabled: state.folderMenuBusy || isProtected,
+        separatorBefore: true
+      }
+    )
+  ]
+
+  dispatchNewtabBookmarkFolderMenuView({
+    sessionId: session,
+    closing: false,
+    focusAction,
+    focusFirst,
+    onExitComplete: finalizeFolderMenuClose,
+    menu: {
+      actions,
+      canRename: !isProtected,
+      error: state.folderMenuError,
+      nameField: createMenuTextFieldViewModel('名称', '输入文件夹名称', state.folderMenuTitle, (value) => {
+        state.folderMenuTitle = value
+        state.folderMenuError = ''
+      }, {
+        disabled: state.folderMenuBusy || isProtected,
+        onEnter: saveFolderMenuRename
+      }),
+      onCloseRequest: () => closeFolderMenu({ restoreFocus: true }),
+      status: state.folderMenuStatus,
+      statusTone: state.folderMenuDeleteArmed ? 'warning' : '',
+      subfolderAction: createMenuActionViewModel('创建子文件夹', 'folder-plus', createActiveMenuSubfolder, {
+        actionId: 'create-subfolder',
+        ariaLabel: `创建子文件夹到：${folderTitle}`,
+        disabled: state.folderMenuBusy
+      }),
+      subfolderExpanded: state.folderMenuSubfolderExpanded,
+      subfolderField: createMenuTextFieldViewModel('子目录', '输入子文件夹名称', state.folderMenuSubfolderTitle, (value) => {
+        state.folderMenuSubfolderTitle = value
+        state.folderMenuError = ''
+      }, {
+        disabled: state.folderMenuBusy,
+        onEnter: createActiveMenuSubfolder
+      }),
+      title: folderTitle,
+      x: state.folderMenuX,
+      y: state.folderMenuY
+    }
+  })
+}
 async function saveAddedBookmark(): Promise<void> {
   if (!state.addMenuOpen || state.addMenuBusy) return
   const session = addBookmarkMenuSession
@@ -5675,18 +6384,96 @@ function getNewTabShellSignature(): string {
 }
 
 function renderDeleteToast(): void {
-  const deleted = state.lastDeletedBookmark
-  if (!deleted) {
+  const action = state.lastUndoAction
+  if (!action) {
     dispatchNewtabDeleteToastView(null)
     return
   }
-  const bookmarkLabel = getBookmarkActionLabelContext(deleted.bookmark)
+  if (action.kind === 'delete-bookmark') {
+    const bookmarkLabel = getBookmarkActionLabelContext(action.bookmark)
+    dispatchNewtabDeleteToastView({
+      bookmarkLabel,
+      busy: state.deleteToastBusy,
+      detail: state.deleteToastStatus || getBookmarkDisplayTitle(action.bookmark),
+      showRecycleAction: true,
+      title: state.deleteToastTitle || undefined,
+      tone: state.deleteToastTone,
+      undoAriaLabel: `撤销删除：${bookmarkLabel}`
+    })
+    return
+  }
+  if (action.kind === 'delete-folder') {
+    const bookmarkCount = action.undoEntry.recycleIds.length
+    const defaultDetail = bookmarkCount > 0
+      ? `「${action.folderTitle}」及 ${bookmarkCount} 个书签已移入回收站`
+      : `「${action.folderTitle}」已删除`
+    dispatchNewtabDeleteToastView({
+      bookmarkLabel: action.folderTitle,
+      busy: state.deleteToastBusy,
+      detail: state.deleteToastStatus || defaultDetail,
+      showRecycleAction: bookmarkCount > 0,
+      title: state.deleteToastTitle || '已删除文件夹',
+      tone: state.deleteToastTone,
+      undoAriaLabel: `撤销删除文件夹：${action.folderTitle}`
+    })
+    return
+  }
+  if (action.kind === 'move-bookmark') {
+    dispatchNewtabDeleteToastView({
+      bookmarkLabel: action.bookmarkLabel,
+      busy: state.deleteToastBusy,
+      detail: state.deleteToastStatus || `「${action.bookmarkLabel}」→ ${action.toFolderTitle}`,
+      showRecycleAction: false,
+      title: state.deleteToastTitle || '已移动书签',
+      tone: state.deleteToastTone,
+      undoAriaLabel: `撤销移动：${action.bookmarkLabel}`
+    })
+    return
+  }
+  if (action.kind === 'edit-bookmark') {
+    dispatchNewtabDeleteToastView({
+      bookmarkLabel: action.bookmarkLabel,
+      busy: state.deleteToastBusy,
+      detail: state.deleteToastStatus || action.bookmarkLabel,
+      showRecycleAction: false,
+      title: state.deleteToastTitle || '已更新书签',
+      tone: state.deleteToastTone,
+      undoAriaLabel: `撤销编辑：${action.bookmarkLabel}`
+    })
+    return
+  }
+  if (action.kind === 'rename-folder') {
+    dispatchNewtabDeleteToastView({
+      bookmarkLabel: action.nextTitle,
+      busy: state.deleteToastBusy,
+      detail: state.deleteToastStatus || `「${action.previousTitle}」→「${action.nextTitle}」`,
+      showRecycleAction: false,
+      title: state.deleteToastTitle || '已重命名文件夹',
+      tone: state.deleteToastTone,
+      undoAriaLabel: `撤销重命名：${action.nextTitle}`
+    })
+    return
+  }
+  if (action.kind === 'move-folder') {
+    dispatchNewtabDeleteToastView({
+      bookmarkLabel: action.folderTitle,
+      busy: state.deleteToastBusy,
+      detail: state.deleteToastStatus || `「${action.folderTitle}」→ ${action.toFolderTitle}`,
+      showRecycleAction: false,
+      title: state.deleteToastTitle || '已移动文件夹',
+      tone: state.deleteToastTone,
+      undoAriaLabel: `撤销移动文件夹：${action.folderTitle}`
+    })
+    return
+  }
   dispatchNewtabDeleteToastView({
-    bookmarkLabel,
+    bookmarkLabel: action.folderTitle,
     busy: state.deleteToastBusy,
-    detail: state.deleteToastStatus || getBookmarkDisplayTitle(deleted.bookmark),
-    title: state.deleteToastTitle || undefined,
-    tone: state.deleteToastTone
+    detail: state.deleteToastStatus || `「${action.folderTitle}」已按${action.sortLabel}排序`,
+    showRecycleAction: false,
+    title: state.deleteToastTitle || '已排序文件夹',
+    tone: state.deleteToastTone,
+    undoAriaLabel: `撤销排序：${action.folderTitle}`
   })
 }
 
@@ -6911,6 +7698,13 @@ const searchSuggestionCache = new Map<string, SearchSuggestionCacheEntry>()
 const naturalSearchSuggestionCache = new Map<string, SearchSuggestionCacheEntry>()
 const NEWTAB_COMMAND_SUGGESTIONS: NewTabCommandSuggestion[] = [
   {
+    id: 'open-bookmark-manager',
+    title: '打开书签管理',
+    subtitle: '在全页浏览目录树、多选批量整理和排序书签',
+    keywords: ['bookmarks', 'manager', '书签管理', '全部书签', '整理书签', '管理', '文件夹', '多选', '排序'],
+    run: () => openOptionsHash('#bookmarks')
+  },
+  {
     id: 'open-settings',
     title: '打开设置',
     subtitle: '调整来源、布局、背景、搜索栏和 AI 设置',
@@ -7496,6 +8290,9 @@ function createBookmarkSections(sections: NewTabFolderSection[]): NewTabBookmark
       grid: null,
       onAddBookmark: openAddBookmarkMenuForElement,
       onClick: handleFolderHeaderClick,
+      onContextMenu: (event) => {
+        handleFolderContextMenu(section.id, event)
+      },
       onDragPointerDown: (event) => {
         handleFolderDragPointerDown(section.id, event.currentTarget, event)
       },
@@ -7566,6 +8363,9 @@ function createBookmarkNavigationModule(
   const folderCards: BookmarkFolderCardViewModel[] = level.folders.map((folder) => ({
     bookmarkCount: getFolderBookmarkCounts(folder).totalBookmarkCount,
     folderId: String(folder.id),
+    onContextMenu: (event) => {
+      handleFolderContextMenu(String(folder.id), event)
+    },
     onOpen: (event) => {
       event.preventDefault()
       event.stopPropagation()
@@ -8488,6 +9288,13 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
           actionId: 'refresh-icon',
           ariaLabel: `刷新书签图标：${bookmarkLabel}`
         }),
+        createMenuActionViewModel('在书签管理中定位', 'folder-open', () => {
+          closeBookmarkMenu({ animate: false })
+          openOptionsHash(buildBookmarkManagerHash({ bookmarkId: bookmark.id }))
+        }, {
+          actionId: 'locate-bookmark-in-manager',
+          ariaLabel: `在全部书签中定位：${bookmarkLabel}`
+        }),
         {
           ...createMenuActionViewModel('移动到', 'move', () => {}, {
             actionId: 'move-bookmark',
@@ -8565,8 +9372,26 @@ function renderAddBookmarkMenu({ focusFirst = true } = {}): void {
           onEnter: saveAddedBookmark
         })
       ],
+      folderAction: createMenuActionViewModel('创建文件夹', 'folder-plus', saveAddedFolder, {
+        actionId: 'create-folder',
+        ariaLabel: '创建新文件夹',
+        disabled: state.addMenuBusy
+      }),
+      folderField: createMenuTextFieldViewModel('名称', '输入文件夹名称', state.addFolderTitle, (value) => {
+        state.addFolderTitle = value
+        state.addMenuError = ''
+      }, {
+        disabled: state.addMenuBusy,
+        onEnter: saveAddedFolder
+      }),
+      mode: state.addMenuMode,
       onCloseRequest: closeAddBookmarkMenu,
       onExpand: expandAddBookmarkMenu,
+      onExpandFolder: expandAddFolderMenu,
+      onOpenManager: () => {
+        closeAddBookmarkMenu({ animate: false })
+        openOptionsHash('#bookmarks')
+      },
       x: state.addMenuX,
       y: state.addMenuY
     }

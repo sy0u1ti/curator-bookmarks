@@ -7,9 +7,21 @@ html[data-curator-surface="sidepanel"] #popup-root {
 }
 html[data-curator-surface="sidepanel"] #popup-root { visibility: visible; }
 html[data-curator-surface="sidepanel"] #popup-root > .curator-react-root { height: 100%; }
+html[data-curator-surface="sidepanel"] #popup-app-shell {
+  padding: 8px 10px 10px;
+  gap: 8px;
+}
+html[data-curator-surface="sidepanel"] .hero {
+  height: 32px;
+  min-height: 32px;
+  flex-basis: 32px;
+  margin-inline: -10px;
+  padding-inline: 10px;
+}
 html[data-curator-surface="sidepanel"] .popup-workspace {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(42px, min(28%, var(--sidepanel-folder-height, 140px))) minmax(0, 1fr);
+  grid-template-rows: minmax(42px, min(46%, var(--sidepanel-folder-height, 260px))) minmax(0, 1fr);
+  gap: 8px;
   transition: grid-template-rows var(--acc-expand) var(--acc-ease);
 }
 
@@ -54,7 +66,67 @@ html[data-curator-surface="sidepanel"] .popup-page-content {
   position: relative;
   inset: auto;
 }
+@container popup (min-width: 310px) {
+  html[data-curator-surface="sidepanel"] .popup-sync-stage,
+  html[data-curator-surface="sidepanel"] .popup-activity-slot {
+    --popup-activity-size: 48px;
+  }
+  html[data-curator-surface="sidepanel"] .popup-page-content,
+  html[data-curator-surface="sidepanel"] .popup-page-skeleton {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+  }
+  html[data-curator-surface="sidepanel"] .popup-page-actions {
+    width: auto;
+    flex: none;
+    gap: 6px;
+  }
+  html[data-curator-surface="sidepanel"] .popup-page-actions > [role="toolbar"] {
+    width: auto;
+    flex: none;
+    justify-self: end;
+  }
+  html[data-curator-surface="sidepanel"] .popup-page-actions > [role="toolbar"] > button {
+    padding-inline: 8px;
+    gap: 4px;
+  }
+  html[data-curator-surface="sidepanel"] .popup-activity-card {
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+    grid-template-rows: auto;
+    row-gap: 0;
+    column-gap: 8px;
+    padding: 6px 6px 6px 10px;
+  }
+  html[data-curator-surface="sidepanel"] .popup-activity-actions {
+    grid-column: auto;
+  }
+  html[data-curator-surface="sidepanel"] .popup-activity-card .popup-activity-dots {
+    margin-inline-end: 4px;
+  }
+}
+@container popup (max-width: 460px) {
+  html[data-curator-surface="sidepanel"] .hero-settings-button {
+    width: 28px;
+    min-width: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+  html[data-curator-surface="sidepanel"] .hero-settings-button > span {
+    display: none;
+  }
+  html[data-curator-surface="sidepanel"] #popup-sync-toggle {
+    width: 28px;
+    min-width: 28px;
+    padding: 0;
+    gap: 0;
+  }
+  html[data-curator-surface="sidepanel"] #popup-sync-toggle > span {
+    display: none;
+  }
+}
 @media (max-height: 600px) {
   html[data-curator-surface="sidepanel"] .popup-keyboard-hint { display: none; }
-  html[data-curator-surface="sidepanel"] #popup-app-shell { gap: 10px; }
+  html[data-curator-surface="sidepanel"] #popup-app-shell { gap: 8px; }
 }

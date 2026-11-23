@@ -17,7 +17,7 @@ import {
   readPopupPrebootSearchSnapshot
 } from '../popup-preboot-input'
 import { PopupSearchChips } from './PopupSearchChips'
-import { PopupWorkspaceTools } from './PopupWorkspaceTools'
+import { PopupKeyboardHelpButton, PopupWorkspaceTools } from './PopupWorkspaceTools'
 import { usePopupSearchInputAria } from '../popup-workspace-state'
 
 const searchHelpToggleClass = 'w-8 min-w-8 !p-0'
@@ -145,7 +145,7 @@ function hasUserFocusedPopupControl(searchInput: HTMLInputElement | null): boole
   return !active.closest(`#${POPUP_PREBOOT_SHELL_ID}`)
 }
 
-function usePopupSearchInput(query: string, smartActive: boolean) {
+function usePopupSearchInput(query: string, smartActive: boolean, disableInitialAutoFocus = false) {
   const searchFocusRequest = usePopupSearchFocusRequest()
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const initialSearchFocusAppliedRef = useRef(false)
@@ -193,7 +193,7 @@ function usePopupSearchInput(query: string, smartActive: boolean) {
   }, [query])
 
   useLayoutEffect(() => {
-    if (smartActive || initialSearchFocusAppliedRef.current || hasPopupPrebootSearchShell()) {
+    if (disableInitialAutoFocus || smartActive || initialSearchFocusAppliedRef.current || hasPopupPrebootSearchShell()) {
       return
     }
     // The folder filter lives inside the pane the user may already have
@@ -205,7 +205,7 @@ function usePopupSearchInput(query: string, smartActive: boolean) {
 
     initialSearchFocusAppliedRef.current = true
     focusSearchInputElement()
-  }, [focusSearchInputElement, smartActive])
+  }, [disableInitialAutoFocus, focusSearchInputElement, smartActive])
 
   useEffect(() => {
     if (!smartActive || prebootAdoptedRef.current) {
@@ -244,14 +244,17 @@ function usePopupSearchInput(query: string, smartActive: boolean) {
 
 export function PopupChromeHost({
   children,
+  embedded,
   smartActive = false
 }: {
   children?: ReactNode
+  embedded?: 'options'
   smartActive?: boolean
 }) {
+  const isEmbeddedOptions = embedded === 'options'
   const state = usePopupChromeView()
   const searchAria = usePopupSearchInputAria(state.search.query)
-  const searchInputRef = usePopupSearchInput(state.search.query, smartActive)
+  const searchInputRef = usePopupSearchInput(state.search.query, smartActive, isEmbeddedOptions)
 
   const commandPanelClassName = [
     commandPanelBaseClass,
@@ -271,85 +274,153 @@ export function PopupChromeHost({
 
   return (
     <>
-      <header className={[heroBaseClass, smartActive ? 'justify-center' : 'justify-between'].join(' ')}>
-        <div className={heroBrandClass}>
-          <div className={heroMarkClass} aria-hidden="true">
-            <img className={heroLogoClass} src="../assets/icon128.png" alt="" />
+      {isEmbeddedOptions ? null : (
+        <header className={[heroBaseClass, smartActive ? 'justify-center' : 'justify-between'].join(' ')}>
+          <div className={heroBrandClass}>
+            <div className={heroMarkClass} aria-hidden="true">
+              <img className={heroLogoClass} src="../assets/icon128.png" alt="" />
+            </div>
+            <div className={heroCopyClass}>
+              <p className={heroEyebrowClass} hidden>Chrome Bookmark Manager</p>
+              <div className={heroTitleRowClass} />
+            </div>
           </div>
-          <div className={heroCopyClass}>
-            <p className={heroEyebrowClass} hidden>Chrome Bookmark Manager</p>
-            <div className={heroTitleRowClass} />
-          </div>
-        </div>
-        {smartActive ? null : (
-          <div className={heroActionsClass}>
-            <SearchHelpControl />
-            <PopupWorkspaceTools />
-            <Button
-              id="open-settings"
-              className={heroSettingsButtonClass}
-              size="sm"
-              variant="ghost"
-              type="button"
-              aria-label="打开设置页"
-              title="打开设置页"
-              onClick={() => dispatchPopupChromeAction('open-settings')}
-            >
-              <Icon name="Settings" size={15} aria-hidden="true" />
-              <span>设置</span>
-            </Button>
-          </div>
-        )}
-      </header>
+          {smartActive ? null : (
+            <div className={heroActionsClass}>
+              <SearchHelpControl />
+              <PopupWorkspaceTools />
+              <Button
+                id="open-settings"
+                className={heroSettingsButtonClass}
+                size="sm"
+                variant="ghost"
+                type="button"
+                aria-label="打开设置页"
+                title="打开设置页"
+                onClick={() => dispatchPopupChromeAction('open-settings')}
+              >
+                <Icon name="Settings" size={15} aria-hidden="true" />
+                <span>设置</span>
+              </Button>
+            </div>
+          )}
+        </header>
+      )}
 
       <section className={commandPanelClassName} aria-label="书签搜索与操作">
         {smartActive ? null : (
           <section className={searchBlockClass} aria-label="搜索书签">
-            <label className={searchShellClass} htmlFor="search-input">
-              <Icon name="Search" className={searchIconClass} size={16} aria-hidden="true" />
-              <Input
-                ref={searchInputRef}
-                id="search-input"
-                className={searchInputClass}
-                type="text"
-                {...searchAria}
-                spellCheck={false}
-                autoComplete="off"
-                placeholder={state.search.placeholder}
-                aria-label={state.search.ariaLabel}
-                value={state.search.query}
-                onValueChange={(nextValue) => dispatchPopupChromeAction('search-change', nextValue)}
-                unstyled
-              />
-              <Button
-                id="clear-search"
-                className={clearSearchButtonClass}
-                data-visible={state.search.clearVisible ? 'true' : 'false'}
-                type="button"
-                aria-label="清空搜索"
-                aria-hidden={!state.search.clearVisible}
-                tabIndex={state.search.clearVisible ? undefined : -1}
-                onClick={() => dispatchPopupChromeAction('clear-search')}
-                unstyled
-              >
-                <Icon name="X" size={14} aria-hidden="true" />
-              </Button>
-              <Button
-                id="natural-search-toggle"
-                className={naturalSearchClassName}
-              type="button"
-              aria-label="语义搜索"
-              aria-pressed={state.search.pressed}
-              title={state.search.title}
-              onClick={(event) => dispatchPopupChromeAction('toggle-natural-search', undefined, event.currentTarget)}
-              unstyled
-            >
-                {state.search.pending ? <span className={semanticSearchPendingDotClass} aria-hidden="true" /> : null}
-                {state.search.label}
-              </Button>
-            </label>
+            {isEmbeddedOptions ? (
+              <div className="options-bookmarks-toolbar">
+                <div className="options-bookmarks-heading">
+                  <h2 className="m-0 truncate text-[15px] font-semibold leading-none tracking-[-0.01em] text-ds-text-primary">
+                    书签管理
+                  </h2>
+                </div>
+                <div className="options-bookmarks-search-stage">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <label className={searchShellClass} htmlFor="search-input">
+                      <Icon name="Search" className={searchIconClass} size={16} aria-hidden="true" />
+                      <Input
+                        ref={searchInputRef}
+                        id="search-input"
+                        className={searchInputClass}
+                        type="text"
+                        {...searchAria}
+                        spellCheck={false}
+                        autoComplete="off"
+                        placeholder={state.search.placeholder}
+                        aria-label={state.search.ariaLabel}
+                        value={state.search.query}
+                        onValueChange={(nextValue) => dispatchPopupChromeAction('search-change', nextValue)}
+                        unstyled
+                      />
+                      <Button
+                        id="clear-search"
+                        className={clearSearchButtonClass}
+                        data-visible={state.search.clearVisible ? 'true' : 'false'}
+                        type="button"
+                        aria-label="清空搜索"
+                        aria-hidden={!state.search.clearVisible}
+                        tabIndex={state.search.clearVisible ? undefined : -1}
+                        onClick={() => dispatchPopupChromeAction('clear-search')}
+                        unstyled
+                      >
+                        <Icon name="X" size={14} aria-hidden="true" />
+                      </Button>
+                      <Button
+                        id="natural-search-toggle"
+                        className={naturalSearchClassName}
+                        type="button"
+                        aria-label="语义搜索"
+                        aria-pressed={state.search.pressed}
+                        title={state.search.title}
+                        onClick={(event) => dispatchPopupChromeAction('toggle-natural-search', undefined, event.currentTarget)}
+                        unstyled
+                      >
+                        {state.search.pending ? <span className={semanticSearchPendingDotClass} aria-hidden="true" /> : null}
+                        {state.search.label}
+                      </Button>
+                    </label>
+                    <div className="inline-flex shrink-0 items-center gap-1">
+                      <SearchHelpControl />
+                      <PopupKeyboardHelpButton />
+                    </div>
+                  </div>
+                  <PopupSearchChips />
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="min-w-0">
+                  <label className={searchShellClass} htmlFor="search-input">
+                    <Icon name="Search" className={searchIconClass} size={16} aria-hidden="true" />
+                    <Input
+                      ref={searchInputRef}
+                      id="search-input"
+                      className={searchInputClass}
+                      type="text"
+                      {...searchAria}
+                      spellCheck={false}
+                      autoComplete="off"
+                      placeholder={state.search.placeholder}
+                      aria-label={state.search.ariaLabel}
+                      value={state.search.query}
+                      onValueChange={(nextValue) => dispatchPopupChromeAction('search-change', nextValue)}
+                      unstyled
+                    />
+                    <Button
+                      id="clear-search"
+                      className={clearSearchButtonClass}
+                      data-visible={state.search.clearVisible ? 'true' : 'false'}
+                      type="button"
+                      aria-label="清空搜索"
+                      aria-hidden={!state.search.clearVisible}
+                      tabIndex={state.search.clearVisible ? undefined : -1}
+                      onClick={() => dispatchPopupChromeAction('clear-search')}
+                      unstyled
+                    >
+                      <Icon name="X" size={14} aria-hidden="true" />
+                    </Button>
+                    <Button
+                      id="natural-search-toggle"
+                      className={naturalSearchClassName}
+                      type="button"
+                      aria-label="语义搜索"
+                      aria-pressed={state.search.pressed}
+                      title={state.search.title}
+                      onClick={(event) => dispatchPopupChromeAction('toggle-natural-search', undefined, event.currentTarget)}
+                      unstyled
+                    >
+                      {state.search.pending ? <span className={semanticSearchPendingDotClass} aria-hidden="true" /> : null}
+                      {state.search.label}
+                    </Button>
+                  </label>
+                </div>
 
-            <PopupSearchChips />
+                <PopupSearchChips />
+              </>
+            )}
           </section>
         )}
         {children}
@@ -362,7 +433,7 @@ export function PopupChromeHost({
 function SearchHelpControl() {
   const [open, setOpen] = useState(false)
   const [Popover, setPopover] = useState<PopupSearchHelpPopoverComponent | null>(
-    popupSearchHelpPopoverComponent
+    () => popupSearchHelpPopoverComponent
   )
   const pendingOpenRef = useRef(false)
 

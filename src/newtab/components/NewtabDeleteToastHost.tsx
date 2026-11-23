@@ -25,20 +25,22 @@ export function NewtabDeleteToastHost() {
               <Button
                 type="button"
                 disabled={toast.busy}
-                aria-label={`撤销删除：${toast.bookmarkLabel}`}
+                aria-label={toast.undoAriaLabel || `撤销删除：${toast.bookmarkLabel}`}
                 onClick={dispatchNewtabDeleteToastUndo}
                 unstyled
               >
                 {toast.busy ? '恢复中' : '撤销'}
               </Button>
-              <Button
-                type="button"
-                aria-label={`打开回收站查看：${toast.bookmarkLabel}`}
-                onClick={dispatchNewtabDeleteToastOpenRecycle}
-                unstyled
-              >
-                回收站
-              </Button>
+              {toast.showRecycleAction !== false ? (
+                <Button
+                  type="button"
+                  aria-label={`打开回收站查看：${toast.bookmarkLabel}`}
+                  onClick={dispatchNewtabDeleteToastOpenRecycle}
+                  unstyled
+                >
+                  回收站
+                </Button>
+              ) : null}
             </div>
           ),
           description: toast.detail,

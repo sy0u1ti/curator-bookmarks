@@ -7,6 +7,7 @@ import type {
   PopupFolderPickerState,
   PopupSmartClassifierViewModel
 } from './components/PopupViewModels'
+import type { PopupFolderSortMode } from './popup-folder-management'
 
 export interface PopupAutoAnalyzeStatusView {
   id?: string
@@ -37,6 +38,7 @@ export interface PopupContentChangeDetail {
 
 export interface PopupContentActionDetail {
   action: string
+  baseSelectedIds?: string[]
   bookmarkId?: string
   emptyAction?: string
   exitOnEmpty?: boolean
@@ -45,6 +47,10 @@ export interface PopupContentActionDetail {
   menuAction?: string
   repeat?: boolean
   returnFocusElement?: HTMLElement | null
+  shiftKey?: boolean
+  sortMode?: PopupFolderSortMode
+  startBookmarkId?: string
+  targetSelected?: boolean
   value?: string
 }
 
@@ -98,7 +104,7 @@ export interface PopupSearchFocusRequestDetail {
 
 export interface PopupModalsView {
   error?: string
-  active: 'move' | 'smart-folder' | 'ai-provider' | 'edit' | null
+  active: 'move' | 'smart-folder' | 'ai-provider' | 'edit' | 'folder' | null
   aiProvider: {
     open: boolean
   }
@@ -119,7 +125,35 @@ export interface PopupModalsView {
     url: string
     urlDisabled: boolean
   }
+  folder: {
+    bookmarkCount: number
+    error: string
+    mode: 'create' | 'rename' | 'delete' | null
+    open: boolean
+    parentChanged: boolean
+    parentPath: string
+    parentPickerOpen: boolean
+    parentQuery: string
+    saving: boolean
+    saveDisabled: boolean
+    saveLabel: string
+    subfolderCount: number
+    targetPath: string
+    targetTitle: string
+    title: string
+  }
   move: {
+    busy: boolean
+    cardLabel: string
+    createError: string
+    createOpen: boolean
+    createParentId: string
+    createParentPath: string
+    createSaveDisabled: boolean
+    createSaving: boolean
+    createTitle: string
+    heading: string
+    mode: 'bookmark' | 'batch' | 'folder'
     open: boolean
     path: string
     query: string
@@ -210,7 +244,7 @@ export const EMPTY_POPUP_CONTENT_CHANGE_DETAIL: PopupContentChangeDetail = {
   state: {
     loading: true,
     rows: [],
-    title: '书签栏'
+    title: '全部书签'
   }
 }
 
@@ -234,7 +268,35 @@ export const EMPTY_POPUP_MODALS_VIEW: PopupModalsView = {
     url: '',
     urlDisabled: false
   },
+  folder: {
+    bookmarkCount: 0,
+    error: '',
+    mode: null,
+    open: false,
+    parentChanged: false,
+    parentPath: '',
+    parentPickerOpen: false,
+    parentQuery: '',
+    saving: false,
+    saveDisabled: true,
+    saveLabel: '创建',
+    subfolderCount: 0,
+    targetPath: '',
+    targetTitle: '',
+    title: ''
+  },
   move: {
+    busy: false,
+    cardLabel: '当前书签',
+    createError: '',
+    createOpen: false,
+    createParentId: '',
+    createParentPath: '',
+    createSaveDisabled: true,
+    createSaving: false,
+    createTitle: '',
+    heading: '移动书签',
+    mode: 'bookmark',
     open: false,
     path: '',
     query: '',
@@ -321,6 +383,7 @@ function createInitialPopupViewStoreSnapshot(): PopupViewStoreSnapshot {
     },
     folderPickers: {
       edit: getEmptyPopupFolderPickerState('edit'),
+      'folder-create': getEmptyPopupFolderPickerState('folder-create'),
       move: getEmptyPopupFolderPickerState('move'),
       smart: getEmptyPopupFolderPickerState('smart')
     },
@@ -328,6 +391,7 @@ function createInitialPopupViewStoreSnapshot(): PopupViewStoreSnapshot {
       ...EMPTY_POPUP_MODALS_VIEW,
       aiProvider: { ...EMPTY_POPUP_MODALS_VIEW.aiProvider },
       edit: { ...EMPTY_POPUP_MODALS_VIEW.edit },
+      folder: { ...EMPTY_POPUP_MODALS_VIEW.folder },
       move: { ...EMPTY_POPUP_MODALS_VIEW.move },
       smartFolder: { ...EMPTY_POPUP_MODALS_VIEW.smartFolder }
     },

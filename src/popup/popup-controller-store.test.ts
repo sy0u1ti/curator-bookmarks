@@ -33,7 +33,7 @@ function testResetClearsRetainedPopupSurface(): void {
   resetPopupViewStore()
 
   const smartClassifier = getPopupSmartClassifierSnapshot()
-  assert(latestTitle === '书签栏', `reset should restore the default content title, got ${latestTitle}`)
+  assert(latestTitle === '全部书签', `reset should restore the default content title, got ${latestTitle}`)
   assert(latestLoading, 'reset should restore the loading content shell')
   assert(smartClassifier.status === 'idle', `reset should clear retained smart state, got ${smartClassifier.status}`)
   assert(smartClassifier.suggestedTitle === '', 'reset should clear retained smart title')

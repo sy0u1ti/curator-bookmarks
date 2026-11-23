@@ -77,7 +77,7 @@ try {
   const guideCard = () => page.locator('#availability article').filter({ hasText: seeded.guide.title }).first()
   const baselineCard = await guideCard().boundingBox()
   const baselineCopy = await guideCard().innerText()
-  const sections = ['general','inbox','backup','availability','history','redirects','ignore','duplicates','recycle','ai-settings','ai','bookmark-history']
+  const sections = ['bookmarks','general','inbox','backup','availability','history','redirects','ignore','duplicates','recycle','ai-settings','ai','bookmark-history']
   const pages = []
   for (const width of [1440, 1100, 390]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
@@ -193,7 +193,8 @@ try {
     await more.focus(); await more.press('ArrowDown')
     const menu = page.getByRole('menu', { name: '更多操作：' + seeded.guide.title, exact: true })
     await menu.waitFor({ state: 'visible' })
-    assert.equal(await menu.getByRole('menuitem').count(), 4)
+    assert.equal(await menu.getByRole('menuitem').count(), 5)
+    await menu.getByRole('menuitem', { name: /^在全部书签中定位/ }).waitFor({ state: 'visible' })
     await page.keyboard.press('Escape'); await menu.waitFor({ state: 'hidden' })
     assert.equal(await more.evaluate(node => node === document.activeElement), true, 'Escape restores trigger focus')
     const restrictedSelection = page.locator('#availability article').filter({ hasText: seeded.restricted.title }).getByRole('checkbox')

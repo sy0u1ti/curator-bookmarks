@@ -93,8 +93,14 @@
         const node = find(state, id), from = find(state, node.parentId)
         const oldParentId = node.parentId, oldIndex = node.index
         const to = find(state, destination.parentId || node.parentId)
-        from.children.splice(from.children.indexOf(node), 1)
-        to.children.splice(Math.min(destination.index ?? to.children.length, to.children.length), 0, node)
+        const currentIndex = from.children.indexOf(node)
+        let insertIndex = destination.index ?? to.children.length
+        if (from === to && typeof destination.index === 'number') {
+          const clamped = Math.max(0, Math.min(destination.index, from.children.length))
+          insertIndex = clamped > currentIndex ? clamped - 1 : clamped
+        }
+        from.children.splice(currentIndex, 1)
+        to.children.splice(Math.max(0, Math.min(insertIndex, to.children.length)), 0, node)
         positions(from); positions(to)
         return { result: node, event: { name: 'onMoved', args: [node.id, { oldParentId, oldIndex, parentId: node.parentId, index: node.index }] } }
       })

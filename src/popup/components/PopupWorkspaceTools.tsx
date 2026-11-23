@@ -2,7 +2,16 @@ import { useState } from 'react'
 import { Button } from '../../ui/base/Button'
 import { DialogBackdrop, DialogOverlay, DialogPanel, DialogTitle } from '../../ui/base/Dialog'
 import { Icon } from '../../ui/icons/Icon'
-import { closeTransientPopup, isSidePanelSurface, openBookmarkSidePanel, openExtensionManagement, openPageArchiveWorkspace } from '../../shared/extension-surfaces'
+import {
+  closeTransientPopup,
+  isOptionsSurface,
+  isSidePanelSurface,
+  openBookmarkManagerWorkspace,
+  openBookmarkSidePanel,
+  openExtensionManagement,
+  openPageArchiveWorkspace
+} from '../../shared/extension-surfaces'
+import { getPopupCurrentBookmarkManagerTarget } from '../popup-controller'
 import { setPopupKeyboardHelpOpen, usePopupKeyboardHelpOpen } from '../popup-workspace-state'
 
 const shortcutGroups = [
@@ -32,60 +41,23 @@ const shortcutGroups = [
       ['Enter', '打开选中的书签'],
       ['Ctrl / ⌘ Enter', '后台打开'],
       ['Alt Enter', '在当前标签页打开'],
-      ['F2', '编辑选中的书签']
+      ['F2', '编辑选中书签 / 重命名选中文件夹'],
+      ['Space / Shift 点选', '多选模式下勾选或连选书签'],
+      ['Ctrl / ⌘ A', '多选模式下全选当前列表']
     ]
   },
   {
     title: '随时可用',
     rows: [
-      ['Esc', '逐层返回；输入框内先清空'],
+      ['Esc', '退出多选/排序或逐层返回；输入框内先清空'],
       ['? / Ctrl / ⌘ /', '显示键盘帮助（? 用于输入框外）']
     ]
   }
 ]
 
-export function PopupWorkspaceTools() {
-  const [opening, setOpening] = useState(false)
-  const [error, setError] = useState<{ message: string; manageExtension?: boolean } | null>(null)
+export function PopupKeyboardHelpDialog() {
   const open = usePopupKeyboardHelpOpen()
-  async function openPanel() {
-    if (opening) return
-    setError(null)
-    setOpening(true)
-    try {
-      await openBookmarkSidePanel()
-      closeTransientPopup()
-    } catch (reason) {
-      setError({ message: reason instanceof Error ? reason.message : '侧栏打开失败，请重新加载扩展后重试。', manageExtension: true })
-    } finally {
-      setOpening(false)
-    }
-  }
-  async function manageExtension() {
-    try { await openExtensionManagement() }
-    catch { setError({ message: '无法打开扩展管理。请在地址栏输入 chrome://extensions，找到 Curator 并点击“重新加载”。' }) }
-  }
-
-  return <>
-    <div className="relative flex items-center gap-1">
-      <Button id="popup-keyboard-help" size="icon-sm" variant="ghost" aria-label="查看键盘帮助" title="键盘帮助" onClick={() => setPopupKeyboardHelpOpen(true)}><Icon name="Keyboard" size={16} /></Button>
-      <Button id="open-page-archive" size="icon-sm" variant="ghost" aria-label="存档当前页面" title="存档当前页面" onClick={() => { setError(null); void openPageArchiveWorkspace().catch(reason => setError({ message: reason.message })) }}><Icon name="Save" size={16} /></Button>
-      {!isSidePanelSurface() && <Button id="open-side-panel" size="icon-sm" variant="ghost" aria-label="打开常驻书签侧栏" title="打开常驻书签侧栏" disabled={opening} onClick={() => void openPanel()}><Icon name="PanelRight" size={16} /></Button>}
-      {error && <div className="absolute right-0 top-full z-[120] mt-2 w-[300px] max-w-[calc(100vw-28px)] rounded-ds-lg border border-ds-danger/35 bg-ds-surface-2 ds-inset-panel text-xs text-ds-text-primary [filter:var(--ds-filter-popover)]" role="alert">
-        <div className="flex items-start gap-2.5">
-          <span className="mt-0.5 grid size-6 flex-none place-items-center rounded-full bg-ds-danger-soft text-ds-danger-text" aria-hidden="true">
-            <Icon name="AlertTriangle" size={13} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="m-0 leading-relaxed text-ds-text-primary [overflow-wrap:anywhere]">{error.message}</p>
-            <div className="mt-2.5 flex flex-wrap justify-end gap-1.5">
-              <Button size="sm" variant="ghost" onClick={() => setError(null)}>关闭</Button>
-              {error.manageExtension && <Button size="sm" variant="primary" onClick={() => void manageExtension()}>打开扩展管理</Button>}
-            </div>
-          </div>
-        </div>
-      </div>}
-    </div>
+  return (
     <DialogOverlay open={open} onOpenChange={setPopupKeyboardHelpOpen} keepMounted={false} className="fixed inset-0 z-[200] grid place-items-center p-3">
       <DialogBackdrop className="absolute inset-0 bg-black/70" />
       <DialogPanel id="popup-keyboard-help-dialog" className="relative max-h-[calc(100dvh-24px)] w-full max-w-lg overflow-y-auto rounded-ds-card border border-ds-border bg-ds-surface-2 ds-inset-card text-ds-text-primary" initialFocus={() => document.getElementById('popup-keyboard-help-title')}>
@@ -104,5 +76,77 @@ export function PopupWorkspaceTools() {
         <Button variant="secondary" onClick={() => setPopupKeyboardHelpOpen(false)}>关闭帮助</Button>
       </DialogPanel>
     </DialogOverlay>
+  )
+}
+
+export function PopupKeyboardHelpButton() {
+  return (
+    <>
+      <Button
+        id="popup-keyboard-help"
+        size="icon-sm"
+        variant="ghost"
+        aria-label="查看键盘帮助"
+        title="键盘帮助"
+        onClick={() => setPopupKeyboardHelpOpen(true)}
+      >
+        <Icon name="Keyboard" size={16} />
+      </Button>
+      <PopupKeyboardHelpDialog />
+    </>
+  )
+}
+
+export function PopupWorkspaceTools() {
+  const [opening, setOpening] = useState(false)
+  const [error, setError] = useState<{ message: string; manageExtension?: boolean } | null>(null)
+  async function openPanel() {
+    if (opening) return
+    setError(null)
+    setOpening(true)
+    try {
+      await openBookmarkSidePanel()
+      closeTransientPopup()
+    } catch (reason) {
+      setError({ message: reason instanceof Error ? reason.message : '侧栏打开失败，请重新加载扩展后重试。', manageExtension: true })
+    } finally {
+      setOpening(false)
+    }
+  }
+  async function manageExtension() {
+    try { await openExtensionManagement() }
+    catch { setError({ message: '无法打开扩展管理。请在地址栏输入 chrome://extensions，找到 Curator 并点击“重新加载”。' }) }
+  }
+  async function openFullManager() {
+    setError(null)
+    try {
+      await openBookmarkManagerWorkspace(getPopupCurrentBookmarkManagerTarget())
+    } catch (reason) {
+      setError({ message: reason instanceof Error ? reason.message : '无法打开全页书签管理，请稍后重试。' })
+    }
+  }
+
+  return <>
+    <div className="relative flex items-center gap-1">
+      <Button id="popup-keyboard-help" size="icon-sm" variant="ghost" aria-label="查看键盘帮助" title="键盘帮助" onClick={() => setPopupKeyboardHelpOpen(true)}><Icon name="Keyboard" size={16} /></Button>
+      <Button id="open-page-archive" size="icon-sm" variant="ghost" aria-label="存档当前页面" title="存档当前页面" onClick={() => { setError(null); void openPageArchiveWorkspace().catch(reason => setError({ message: reason.message })) }}><Icon name="Save" size={16} /></Button>
+      {!isSidePanelSurface() && <Button id="open-side-panel" size="icon-sm" variant="ghost" aria-label="打开常驻书签侧栏" title="打开常驻书签侧栏" disabled={opening} onClick={() => void openPanel()}><Icon name="PanelRight" size={16} /></Button>}
+      {!isOptionsSurface() && <Button id="open-bookmark-manager" size="icon-sm" variant="ghost" aria-label="在全页管理书签" title="全页书签管理" onClick={() => void openFullManager()}><Icon name="Maximize2" size={15} /></Button>}
+      {error && <div className="absolute right-0 top-full z-[120] mt-2 w-[300px] max-w-[calc(100vw-28px)] rounded-ds-lg border border-ds-danger/35 bg-ds-surface-2 ds-inset-panel text-xs text-ds-text-primary [filter:var(--ds-filter-popover)]" role="alert">
+        <div className="flex items-start gap-2.5">
+          <span className="mt-0.5 grid size-6 flex-none place-items-center rounded-full bg-ds-danger-soft text-ds-danger-text" aria-hidden="true">
+            <Icon name="AlertTriangle" size={13} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="m-0 leading-relaxed text-ds-text-primary [overflow-wrap:anywhere]">{error.message}</p>
+            <div className="mt-2.5 flex flex-wrap justify-end gap-1.5">
+              <Button size="sm" variant="ghost" onClick={() => setError(null)}>关闭</Button>
+              {error.manageExtension && <Button size="sm" variant="primary" onClick={() => void manageExtension()}>打开扩展管理</Button>}
+            </div>
+          </div>
+        </div>
+      </div>}
+    </div>
+    <PopupKeyboardHelpDialog />
   </>
 }

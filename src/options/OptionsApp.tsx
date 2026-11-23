@@ -103,6 +103,7 @@ function preloadablePanel<T extends ComponentType<any>>(load: () => Promise<T>) 
 }
 
 const aiSettingsPanel = preloadablePanel(() => import('./components/AiSettingsPanel').then((module) => module.AiSettingsPanel))
+const bookmarksPanel = preloadablePanel(() => import('./components/BookmarksManagerPanel').then((module) => module.BookmarksManagerPanel))
 const inboxPanel = preloadablePanel(() => import('./components/InboxPanel').then((module) => module.InboxPanel))
 const availabilityPanel = preloadablePanel(() => import('./components/AvailabilityPanel').then((module) => module.AvailabilityPanel))
 const aiAnalysisPanel = preloadablePanel(() => import('./components/AiAnalysisPanel').then((module) => module.AiAnalysisPanel))
@@ -111,6 +112,7 @@ const bookmarkHistoryPanel = preloadablePanel(() => import('./components/Bookmar
 // another task panel does not suspend again after that chunk has loaded.
 const taskPanel = preloadablePanel(() => import('./components/TaskPanels').then((module) => module.TaskPanel))
 const AiSettingsPanel = aiSettingsPanel.Panel
+const BookmarksManagerPanel = bookmarksPanel.Panel
 const InboxPanel = inboxPanel.Panel
 const AvailabilityPanel = availabilityPanel.Panel
 const AiAnalysisPanel = aiAnalysisPanel.Panel
@@ -118,7 +120,7 @@ const BookmarkHistoryPanel = bookmarkHistoryPanel.Panel
 const TaskPanel = taskPanel.Panel
 
 function preloadOptionsPanels() {
-  for (const panel of [aiSettingsPanel, inboxPanel, availabilityPanel, aiAnalysisPanel, bookmarkHistoryPanel, taskPanel]) {
+  for (const panel of [bookmarksPanel, aiSettingsPanel, inboxPanel, availabilityPanel, aiAnalysisPanel, bookmarkHistoryPanel, taskPanel]) {
     // A failed preload stays retryable: navigating loads it again and reports the error.
     void panel.preload().catch(() => undefined)
   }
@@ -174,6 +176,10 @@ const availabilityLinks: NavLink[] = [
   { section: 'ignore', href: '#ignore', icon: 'CircleHelp', label: '忽略规则', variant: 'subitem' }
 ]
 
+const bookmarkPrimaryLinks: NavLink[] = [
+  { section: 'bookmarks', href: '#bookmarks', icon: 'Bookmark', label: '全部书签' }
+]
+
 const bookmarkLinks: NavLink[] = [
   { section: 'inbox', href: '#inbox', icon: 'Inbox', label: '待整理' },
   { section: 'duplicates', href: '#duplicates', icon: 'Copy', label: '重复书签检测' },
@@ -197,6 +203,7 @@ const navGroups: NavGroup[] = [
   {
     labelId: 'options-bookmark-nav-label',
     label: '书签管理',
+    links: bookmarkPrimaryLinks,
     collapsible: {
       key: 'availability-tools',
       icon: 'CheckCircle2',
@@ -675,12 +682,20 @@ export function OptionsApp() {
         />
         <div className={optionsLayoutClass}>
           <OptionsSidebar activeSectionKey={sectionKey} onNavigate={handleSectionNavigationClick} />
-          <main id="options-main" className={optionsMainClass} ref={optionsMainRef} tabIndex={-1}>
+          <main
+            id="options-main"
+            className={optionsMainClass}
+            data-section-key={sectionKey}
+            ref={optionsMainRef}
+            tabIndex={-1}
+          >
             <Suspense fallback={<OptionsPanelLoading />}>
               <ActiveOptionsPanel
                 aiProviderAnchorRef={handleAiProviderAnchorRef}
                 aiProviderAttentionRequestId={aiProviderAttentionRequestId}
+                sectionAnchor={sectionAnchor}
                 sectionKey={sectionKey}
+                sectionRevision={sectionRevision}
               />
             </Suspense>
           </main>
@@ -697,7 +712,7 @@ export function OptionsApp() {
         mainRef={optionsMainRef}
         shellRef={optionsShellRef}
         sectionKey={sectionKey}
-        suppressed={mobileNavigationOpen}
+        suppressed={mobileNavigationOpen || sectionKey === 'bookmarks'}
       />
       <OptionsUndoToast />
     </ThemeProvider>
@@ -707,12 +722,19 @@ export function OptionsApp() {
 function ActiveOptionsPanel({
   aiProviderAnchorRef,
   aiProviderAttentionRequestId,
-  sectionKey
+  sectionAnchor,
+  sectionKey,
+  sectionRevision
 }: {
   aiProviderAnchorRef: (node: HTMLDivElement | null) => void
   aiProviderAttentionRequestId: number
+  sectionAnchor: string
   sectionKey: OptionsSectionKey
+  sectionRevision: number
 }) {
+  if (sectionKey === 'bookmarks') {
+    return <BookmarksManagerPanel sectionAnchor={sectionAnchor} sectionRevision={sectionRevision} />
+  }
   if (sectionKey === 'general') {
     return <GeneralPanel hidden={false} />
   }
@@ -739,7 +761,7 @@ function OptionsPanelLoading() {
 function DeferredOptionsModals() {
   const modals = useOptionsModalsState()
   const open = modals.confirm.open || modals.move.open || modals.scope.open
-  const [Modals, setModals] = useState<OptionsModalsComponent | null>(optionsModalsComponent)
+  const [Modals, setModals] = useState<OptionsModalsComponent | null>(() => optionsModalsComponent)
 
   useEffect(() => {
     if (Modals || !open) {

@@ -213,6 +213,141 @@ export function PopupActivityHost({ state, handlers, suspended, covered = false,
   )
 }
 
+export function PopupEmbeddedActivityOverlay() {
+  const snapshot = usePopupActivity()
+  const chromeView = usePopupChromeView()
+  const modals = usePopupModalsView()
+  const root = useRef<HTMLElement>(null)
+  const previous = useRef<PopupActivity | undefined>(undefined)
+  const actionFocusId = useRef<string | null>(null)
+  const active = snapshot.items.find(item => item.id === snapshot.activeId)
+  const performAction = (item: PopupActivity) => {
+    if (!item.action || item.type === 'pending') return
+    actionFocusId.current = item.id
+    dispatchPopupActivityAction(item.id, item.action)
+  }
+
+  useLayoutEffect(() => {
+    popupActivities.pause('modal', modals.open)
+    if (modals.open) {
+      popupActivities.pause('pointer', false)
+      popupActivities.pause('focus', false)
+    }
+  }, [modals.open])
+
+  useEffect(() => {
+    const visibility = () => popupActivities.pause('hidden', document.hidden)
+    const focus = () => popupActivities.pause('focus', Boolean(root.current?.contains(document.activeElement)))
+    visibility()
+    document.addEventListener('visibilitychange', visibility)
+    document.addEventListener('focusin', focus)
+    return () => {
+      document.removeEventListener('visibilitychange', visibility)
+      document.removeEventListener('focusin', focus)
+      for (const reason of ['modal', 'hidden', 'pointer', 'focus']) popupActivities.pause(reason, false)
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    if (chromeView.loadError) {
+      popupActivities.publish({
+        id: 'load-error', source: 'load', type: 'error', message: '读取失败',
+        detail: chromeView.loadError, action: 'retry-load', actionLabel: '重试'
+      })
+    } else if (popupActivities.get('load-error')?.type !== 'pending') {
+      popupActivities.remove('load-error')
+    }
+  }, [chromeView.loadError])
+
+  useLayoutEffect(() => {
+    const old = previous.current
+    previous.current = active
+    const finished = old && (!active || (old.id === active.id && old.type === 'pending' && active.type === 'success'))
+    const ownsFocus = root.current?.contains(document.activeElement) ||
+      (document.activeElement === document.body && actionFocusId.current === old?.id)
+    if (finished && !modals.open && ownsFocus) {
+      actionFocusId.current = null
+      focusSearch()
+    }
+  }, [active, modals.open])
+
+  const others = snapshot.items.filter(item => item.id !== active?.id)
+  const dots = others.length ? (
+    <PopupActivityDots
+      items={others}
+      onSelect={id => {
+        root.current?.focus({ preventScroll: true })
+        popupActivities.select(id)
+      }}
+    />
+  ) : null
+
+  return (
+    <section
+      id="popup-activity"
+      ref={root}
+      className="popup-embedded-activity-overlay"
+      data-active={active ? 'true' : 'false'}
+      aria-label="操作反馈"
+      tabIndex={-1}
+      onPointerEnter={event => {
+        if (event.pointerType !== 'touch') popupActivities.pause('pointer', true)
+      }}
+      onPointerLeave={() => popupActivities.pause('pointer', false)}
+      onFocusCapture={() => popupActivities.pause('focus', true)}
+      onBlurCapture={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) popupActivities.pause('focus', false)
+      }}
+    >
+      {active ? (
+        <article className="popup-activity-card popup-surface border border-ds-border shadow-[0_14px_34px_rgba(0,0,0,0.48)]" data-activity-id={active.id} data-tone={active.type}>
+          <span className="popup-activity-icon" aria-hidden="true">
+            <ActivityGlyph item={active} size={16} />
+          </span>
+          <div className="popup-activity-copy">
+            <p className="popup-activity-title" title={active.message}>{active.message}</p>
+            <div className="popup-activity-meta">
+              {active.detail ? <span className="truncate" title={active.detail}>{active.detail}</span> : null}
+              {active.detail ? <PopupActivityDetail item={active} /> : null}
+            </div>
+          </div>
+          <div className="popup-activity-actions">
+            {dots}
+            {active.action ? (
+              <Button
+                id="popup-activity-action"
+                className="popup-activity-action"
+                aria-disabled={active.type === 'pending'}
+                type="button"
+                onClick={() => {
+                  if (active.type === 'pending') return
+                  performAction(active)
+                }}
+                unstyled
+              >
+                {active.type === 'pending' ? '处理中' : active.actionLabel || '查看'}
+              </Button>
+            ) : null}
+            <Button
+              className="popup-activity-dismiss"
+              type="button"
+              aria-label="关闭操作反馈"
+              title="关闭"
+              onClick={() => { actionFocusId.current = null; popupActivities.park() }}
+              unstyled
+            >
+              <Icon name="X" size={14} aria-hidden="true" />
+            </Button>
+          </div>
+        </article>
+      ) : null}
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {modals.open ? '' : active ? `${active.message}${active.detail ? `。${active.detail}` : ''}` : ''}
+      </span>
+    </section>
+  )
+}
+
 function PopupActivityDots({ items, onSelect }: {
   items: PopupActivity[]
   onSelect: (id: string) => void

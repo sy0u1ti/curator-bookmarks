@@ -1,4 +1,5 @@
 export const SECTION_META = {
+  bookmarks: { title: '全部书签' },
   inbox: { title: '待整理' },
   'ai-settings': { title: 'AI 服务配置' },
   general: {

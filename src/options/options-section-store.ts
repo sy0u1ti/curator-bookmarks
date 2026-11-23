@@ -24,8 +24,9 @@ export function readOptionsSectionKey(): OptionsSectionKey {
 }
 
 export function readOptionsSectionAnchor(): string {
-  const [, anchor = ''] = window.location.hash.replace(/^#/, '').split(':')
-  return anchor
+  const raw = window.location.hash.replace(/^#/, '')
+  const separatorIndex = raw.indexOf(':')
+  return separatorIndex >= 0 ? raw.slice(separatorIndex + 1) : ''
 }
 
 export function getOptionsSectionNavigationFromLink(

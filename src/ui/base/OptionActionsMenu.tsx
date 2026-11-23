@@ -16,28 +16,54 @@ export interface OptionMenuAction {
   onSelect: () => void
 }
 
-export function OptionActionsMenu({ actions, label, triggerLabel = '更多操作', disabled = false, iconOnly = false, side = 'bottom' }: {
+export function OptionActionsMenu({
+  actions,
+  label,
+  triggerLabel = '更多操作',
+  disabled = false,
+  iconOnly = false,
+  icon = 'MoreHorizontal',
+  iconSize = 16,
+  popupWidthClass = 'w-[min(320px,calc(100vw_-_24px))]',
+  triggerClassName,
+  triggerId,
+  triggerTitle,
+  side = 'bottom'
+}: {
   actions: OptionMenuAction[]
   label: string
   triggerLabel?: string
   disabled?: boolean
   iconOnly?: boolean
+  icon?: IconName
+  iconSize?: number
+  popupWidthClass?: string
+  triggerClassName?: string
+  triggerId?: string
+  triggerTitle?: string
   /** A trigger at the bottom of a fixed-height surface opens upward. */
   side?: 'top' | 'bottom'
 }) {
   if (!actions.length) return null
   return (
     <Menu.Root modal={false}>
-      <Menu.Trigger aria-label={label} disabled={disabled || actions.every(action => action.disabled)}
-        render={<Button size={iconOnly ? 'icon-sm' : 'sm'} variant={iconOnly ? 'ghost' : 'secondary'} />}>
-        {iconOnly ? <Icon name="MoreHorizontal" size={16} aria-hidden="true" /> : triggerLabel}
+      <Menu.Trigger
+        id={triggerId}
+        title={triggerTitle}
+        aria-label={label}
+        disabled={disabled || actions.every(action => action.disabled)}
+        render={triggerClassName
+          ? <Button className={triggerClassName} unstyled />
+          : <Button size={iconOnly ? 'icon-sm' : 'sm'} variant={iconOnly ? 'ghost' : 'secondary'} />}
+      >
+        {iconOnly ? <Icon name={icon} size={iconSize} aria-hidden="true" /> : triggerLabel}
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner side={side} align="end" sideOffset={6} collisionPadding={12} className="z-[10000]">
           <Menu.Popup
             aria-label={label}
             render={<MotionPanel variant="menu" />}
-            className="max-h-[var(--available-height)] w-[min(320px,calc(100vw_-_24px))] overflow-y-auto rounded-ds-menu border border-ds-border bg-ds-surface-2 ds-inset-menu [filter:var(--ds-filter-popover)] outline-none"
+            className={`max-h-[var(--available-height)] ${popupWidthClass} overflow-y-auto rounded-ds-menu border border-ds-border bg-ds-surface-2 ds-inset-menu [filter:var(--ds-filter-popover)] outline-none`}
           >
             {actions.map(action => (
               <Fragment key={action.id}>

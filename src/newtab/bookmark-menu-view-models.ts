@@ -1,4 +1,15 @@
-export type BookmarkMenuActionIcon = 'trash' | 'refresh' | 'save' | 'plus' | 'copy' | 'pin' | 'move' | 'folder'
+export type BookmarkMenuActionIcon =
+  | 'trash'
+  | 'refresh'
+  | 'save'
+  | 'plus'
+  | 'copy'
+  | 'pin'
+  | 'move'
+  | 'folder'
+  | 'sort'
+  | 'folder-plus'
+  | 'folder-open'
 export type BookmarkIconMode = 'website' | 'custom'
 
 export interface BookmarkMenuTextFieldViewModel {
@@ -46,8 +57,29 @@ export interface BookmarkAddMenuViewModel {
   error: string
   expanded: boolean
   fields: [BookmarkMenuTextFieldViewModel, BookmarkMenuTextFieldViewModel]
+  folderAction?: BookmarkMenuActionViewModel
+  folderField?: BookmarkMenuTextFieldViewModel
+  mode?: 'collapsed' | 'bookmark' | 'folder'
   onCloseRequest: () => void
   onExpand: () => void | Promise<void>
+  onExpandFolder?: () => void | Promise<void>
+  onOpenManager?: () => void
+  x: number
+  y: number
+}
+
+export interface BookmarkFolderMenuViewModel {
+  actions: BookmarkMenuActionViewModel[]
+  canRename: boolean
+  error: string
+  nameField: BookmarkMenuTextFieldViewModel
+  onCloseRequest: () => void
+  status: string
+  statusTone?: 'warning' | ''
+  subfolderAction?: BookmarkMenuActionViewModel
+  subfolderExpanded: boolean
+  subfolderField?: BookmarkMenuTextFieldViewModel
+  title: string
   x: number
   y: number
 }

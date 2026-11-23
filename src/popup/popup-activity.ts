@@ -40,7 +40,7 @@ const defaultClock: Clock = {
 
 function duration(item: PopupActivity): number | null {
   if (item.type === 'pending' || item.type === 'error') return null
-  return item.duration ?? (item.action === 'undo-delete' ? UNDO_WINDOW_MS : 2500)
+  return item.duration ?? (item.action?.startsWith('undo-') ? UNDO_WINDOW_MS : 2500)
 }
 
 function retained(item: PopupActivity): boolean {

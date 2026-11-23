@@ -3,12 +3,14 @@ import { memo, startTransition, useEffect, useState } from 'react'
 import { runIdle } from '../../shared/idle.js'
 import { formatDateTime } from '../../shared/format.js'
 import { displayUrl } from '../../shared/text.js'
+import { buildBookmarkManagerHash } from '../../shared/extension-surfaces.js'
 import { Button } from '../../ui/base/Button'
 import { Checkbox } from '../../ui/base/Checkbox'
 import { TextSwap } from '../../ui/motion/TextSwap'
 import { SelectionDock } from './SelectionDock'
 import { StatusMessage } from '../../ui/base/StatusMessage'
 import { handleDuplicateAction } from '../options-controller'
+import { navigateToOptionsSectionHash } from '../options-section-store.js'
 import { useDuplicateGroupsState } from './duplicate-groups-store.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
 import type {
@@ -302,7 +304,18 @@ function DuplicateItemRow({
           <span className={`${ITEM_STATE_CLASS} ${selected || recommended ? 'text-ds-text-primary' : ''}`}>
             {selected ? '待删除' : recommended ? '推荐保留' : '保留'}
           </span>
-          <span className={ITEM_PATH_CLASS} title={item.path || '未归档路径'}>{item.path || '未归档路径'}</span>
+          <a
+            className={`${ITEM_PATH_CLASS} no-underline hover:text-ds-text-primary hover:underline focus-visible:rounded-ds-xs focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-focus`}
+            href={buildBookmarkManagerHash({ bookmarkId: itemId })}
+            title={`${item.path || '未归档路径'}（点击在全部书签中定位）`}
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
+              event.preventDefault()
+              navigateToOptionsSectionHash(buildBookmarkManagerHash({ bookmarkId: itemId }))
+            }}
+          >
+            {item.path || '未归档路径'}
+          </a>
           <span className={ITEM_DETAIL_CLASS} title={Number(item.dateAdded) > 0 ? formatDateTime(Number(item.dateAdded)) : undefined}>
             {formatDuplicateDate(item.dateAdded)}
           </span>

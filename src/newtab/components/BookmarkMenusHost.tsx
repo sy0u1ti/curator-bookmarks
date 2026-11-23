@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { Icon, type IconName } from '../../ui/icons/Icon'
 import { Button } from '../../ui/base/Button'
 import { StatusMessage } from '../../ui/base/StatusMessage'
@@ -13,12 +13,14 @@ import { NewtabGlassSurface } from './NewtabGlassSurface'
 import {
   useNewtabBookmarkMenusView,
   type NewtabBookmarkAddMenuView,
-  type NewtabBookmarkEditMenuView
+  type NewtabBookmarkEditMenuView,
+  type NewtabBookmarkFolderMenuView
 } from '../newtab-bookmark-menu-store'
 import type {
   BookmarkIconMode,
   BookmarkAddMenuViewModel,
   BookmarkEditMenuViewModel,
+  BookmarkFolderMenuViewModel,
   BookmarkMenuActionIcon,
   BookmarkMenuActionViewModel,
   BookmarkMenuTextFieldViewModel
@@ -27,11 +29,14 @@ import type {
 const MENU_ACTION_ICON_BY_ACTION: Record<BookmarkMenuActionIcon, IconName> = {
   copy: 'Copy',
   folder: 'Folder',
+  'folder-open': 'FolderOpen',
+  'folder-plus': 'FolderPlus',
   move: 'Move',
   pin: 'Pin',
   plus: 'Plus',
   refresh: 'RefreshCw',
   save: 'Save',
+  sort: 'ArrowUpDown',
   trash: 'Trash2'
 }
 
@@ -62,6 +67,7 @@ export function BookmarkMenusHost() {
     <>
       {menus.edit ? <BookmarkEditMenuHost key={`edit:${menus.edit.sessionId}`} view={menus.edit} /> : null}
       {menus.add ? <BookmarkAddMenuHost key={`add:${menus.add.sessionId}`} view={menus.add} /> : null}
+      {menus.folder ? <BookmarkFolderMenuHost key={`folder:${menus.folder.sessionId}`} view={menus.folder} /> : null}
     </>
   )
 }
@@ -109,6 +115,58 @@ function BookmarkEditMenuHost({ view }: { view: NewtabBookmarkEditMenuView }) {
       ref={ref}
     >
       <BookmarkEditMenu actionRefs={actionRefs} active={!view.closing} firstInputRef={firstInputRef} menu={view.menu} />
+    </NewtabGlassSurface>
+  )
+}
+
+function BookmarkFolderMenuHost({ view }: { view: NewtabBookmarkFolderMenuView }) {
+  const ref = useRef<HTMLElement | null>(null)
+  const firstInputRef = useRef<HTMLInputElement | null>(null)
+  const actionRefs = useBookmarkActionRefs(view.menu.actions)
+  const position = useBookmarkMenuPosition(ref, view.menu.x, view.menu.y)
+
+  useBookmarkMenuExit(ref, view.closing, view.onExitComplete)
+
+  useBookmarkMenuLayout(ref, {
+    actionRefs,
+    closing: view.closing,
+    firstInputRef,
+    focusAction: view.focusAction,
+    focusFirst: view.focusFirst
+  })
+
+  return (
+    <NewtabGlassSurface as="section" tone="panel"
+      className={cx(
+        'bookmark-folder-menu',
+        MENU_SURFACE_CLASS,
+        MENU_FULL_WIDTH_CLASS,
+        view.closing && cx('is-closing', MENU_CLOSING_CLASS)
+      )}
+      data-newtab-bookmark-menu-surface=""
+      inert={view.closing}
+      style={{
+        left: position.left,
+        top: position.top,
+        '--transform-origin': position.origin,
+        '--bookmark-menu-enter-x': `${position.enterX}px`,
+        '--bookmark-menu-enter-y': `${position.enterY}px`
+      } as CSSProperties}
+      onKeyDownCapture={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          event.stopPropagation()
+          view.menu.onCloseRequest()
+        }
+      }}
+      ref={ref}
+    >
+      <BookmarkFolderMenu
+        actionRefs={actionRefs}
+        active={!view.closing}
+        firstInputRef={firstInputRef}
+        menu={view.menu}
+      />
     </NewtabGlassSurface>
   )
 }
@@ -423,6 +481,60 @@ function BookmarkEditMenu({
   )
 }
 
+function BookmarkFolderMenu({
+  actionRefs,
+  active,
+  firstInputRef,
+  menu
+}: {
+  actionRefs: BookmarkActionRefMap
+  active: boolean
+  firstInputRef: RefObject<HTMLInputElement | null>
+  menu: BookmarkFolderMenuViewModel
+}) {
+  const subfolderInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (!active || !menu.subfolderExpanded) return
+    const input = subfolderInputRef.current
+    if (!input || input.disabled) return
+    input.focus({ preventScroll: true })
+    input.select()
+  }, [active, menu.subfolderExpanded])
+
+  return (
+    <InlineDialogPanel
+      className="bookmark-menu-popover-shell bookmark-folder-menu-shell"
+      aria-label={`管理文件夹：${menu.title}`}
+      initialFocus={false}
+      finalFocus={false}
+    >
+      <div className="bookmark-menu-fields">
+        {menu.canRename ? (
+          <BookmarkMenuTextField field={menu.nameField} inputRef={menu.subfolderExpanded ? undefined : firstInputRef} />
+        ) : (
+          <div className={MENU_ROW_CLASS}>
+            <span className={MENU_ROW_LABEL_CLASS}>目录</span>
+            <span className="truncate px-1 text-[13px] font-medium text-[var(--ui-text-primary)]">{menu.title}</span>
+          </div>
+        )}
+        {menu.subfolderExpanded && menu.subfolderField ? (
+          <div className="mt-1 grid gap-1.5 border-t border-[var(--ui-divider)] pt-2">
+            <BookmarkMenuTextField field={menu.subfolderField} inputRef={subfolderInputRef} />
+            {menu.subfolderAction ? (
+              <BookmarkMenuActions actionRefs={actionRefs} active={active} actions={[menu.subfolderAction]} label="新建子文件夹操作" />
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      <div className="bookmark-menu-actions-wrap">
+        <BookmarkMenuActions actionRefs={actionRefs} active={active} actions={menu.actions} label="文件夹操作" />
+        <BookmarkMenuFeedback error={menu.error} status={menu.status} statusTone={menu.statusTone} />
+      </div>
+    </InlineDialogPanel>
+  )
+}
+
 function BookmarkAddMenu({
   actionRefs,
   firstInputRef,
@@ -432,14 +544,23 @@ function BookmarkAddMenu({
   firstInputRef: RefObject<HTMLInputElement | null>
   menu: BookmarkAddMenuViewModel
 }) {
+  const mode = menu.mode || (menu.expanded ? 'bookmark' : 'collapsed')
+
+  useEffect(() => {
+    if (mode === 'collapsed') return
+    const input = firstInputRef.current
+    if (!input || input.disabled) return
+    input.focus({ preventScroll: true })
+  }, [firstInputRef, mode])
+
   return (
     <InlineDialogPanel
       className="bookmark-menu-popover-shell bookmark-add-menu-shell"
-      aria-label="添加新标签页书签"
+      aria-label={mode === 'folder' ? '新建文件夹' : '添加新标签页书签'}
       initialFocus={false}
       finalFocus={false}
     >
-      {menu.expanded ? (
+      {mode === 'bookmark' ? (
         <div className="bookmark-add-menu-content is-expanded">
           <div className="bookmark-menu-fields bookmark-add-menu-fields">
             <BookmarkMenuTextField field={menu.fields[0]} inputRef={firstInputRef} />
@@ -450,8 +571,22 @@ function BookmarkAddMenu({
             <BookmarkMenuFeedback error={menu.error} status="" />
           </div>
         </div>
+      ) : mode === 'folder' && menu.folderField ? (
+        <div className="bookmark-add-menu-content is-expanded">
+          <div className="bookmark-menu-fields bookmark-add-menu-fields">
+            <BookmarkMenuTextField field={menu.folderField} inputRef={firstInputRef} />
+          </div>
+          <div className="bookmark-menu-actions-wrap">
+            <BookmarkMenuActions
+              actionRefs={actionRefs}
+              actions={menu.folderAction ? [menu.folderAction] : menu.actions}
+              label="新建文件夹操作"
+            />
+            <BookmarkMenuFeedback error={menu.error} status="" />
+          </div>
+        </div>
       ) : (
-        <div className="bookmark-add-menu-content is-collapsed">
+        <div className="bookmark-add-menu-content is-collapsed grid gap-0.5">
           <Button
             className={cx(MENU_ACTION_CLASS, 'bookmark-add-menu-trigger hover:bg-[var(--ui-surface-hover)]')}
             type="button"
@@ -465,6 +600,36 @@ function BookmarkAddMenu({
             </span>
             <span className="bookmark-add-menu-trigger-label">添加书签</span>
           </Button>
+          {menu.onExpandFolder ? (
+            <Button
+              className={cx(MENU_ACTION_CLASS, 'bookmark-add-folder-trigger hover:bg-[var(--ui-surface-hover)]')}
+              type="button"
+              onClick={() => {
+                void menu.onExpandFolder?.()
+              }}
+              unstyled
+            >
+              <span className="bookmark-add-menu-trigger-icon">
+                <MenuActionIcon icon="folder-plus" />
+              </span>
+              <span className="bookmark-add-menu-trigger-label">新建文件夹</span>
+            </Button>
+          ) : null}
+          {menu.onOpenManager ? (
+            <Button
+              className={cx(MENU_ACTION_CLASS, 'bookmark-open-manager-trigger hover:bg-[var(--ui-surface-hover)]')}
+              type="button"
+              onClick={() => {
+                menu.onOpenManager?.()
+              }}
+              unstyled
+            >
+              <span className="bookmark-add-menu-trigger-icon">
+                <MenuActionIcon icon="folder-open" />
+              </span>
+              <span className="bookmark-add-menu-trigger-label">打开书签管理</span>
+            </Button>
+          ) : null}
         </div>
       )}
     </InlineDialogPanel>

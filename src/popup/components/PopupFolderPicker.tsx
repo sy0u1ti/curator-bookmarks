@@ -154,6 +154,9 @@ function getTreeFolderToggleAttributes(option: PopupFolderTreeOptionViewModel) {
   if (option.mode === 'smart') {
     return { 'data-toggle-smart-folder': option.id }
   }
+  if (option.mode === 'folder-create') {
+    return { 'data-folder-create-toggle': option.id }
+  }
   return { 'data-toggle-edit-folder': option.id }
 }
 
@@ -163,6 +166,9 @@ function getTreeFolderSelectAttributes(option: PopupFolderTreeOptionViewModel) {
   }
   if (option.mode === 'smart') {
     return { 'data-smart-select-folder': option.id }
+  }
+  if (option.mode === 'folder-create') {
+    return { 'data-folder-create-select': option.id }
   }
   return { 'data-select-edit-folder': option.id }
 }

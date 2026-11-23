@@ -45,6 +45,12 @@ const modalPrimaryButtonClass = [
   'hover:bg-ds-accent-hover hover:text-ds-accent-contrast',
   'focus-visible:bg-ds-accent-hover focus-visible:text-ds-accent-contrast'
 ].join(' ')
+const modalDangerButtonClass = [
+  modalButtonBaseClass,
+  'border-ds-danger/45 bg-ds-danger-soft text-ds-danger-text',
+  'hover:border-ds-danger hover:bg-ds-danger/25 hover:text-ds-danger-text',
+  'focus-visible:border-ds-danger focus-visible:bg-ds-danger/25 focus-visible:text-ds-danger-text'
+].join(' ')
 const modalCompactButtonClass =
   cx(modalSecondaryButtonClass, 'min-h-[30px] min-w-0 flex-none px-2.5 py-0 text-xs')
 const modalCloseButtonClass = [
@@ -115,13 +121,19 @@ const modalListClass = [
   '[scrollbar-gutter:stable]'
 ].join(' ')
 const modalCompactListClass = cx(modalListClass, 'max-h-[170px]')
-const editFolderPickerClass = 'edit-folder-picker flex min-h-0 flex-col gap-2'
+const editFolderPickerClass = 'edit-folder-picker flex min-h-0 flex-col gap-1.5'
+const modalEditCardClass = cx(modalStandardCardClass, 'popup-edit-modal gap-3')
+const modalEditFormClass = 'flex flex-col gap-2'
+const modalEditInlineFieldClass = 'grid grid-cols-[36px_minmax(0,1fr)] items-center gap-2'
+const modalEditCompactInputClass = cx(modalInputClass, 'h-[34px] min-h-[34px] px-2.5')
+const modalEditFolderBarClass =
+  'relative flex min-h-[40px] items-center gap-2 rounded-ds-sm border-0 bg-ds-surface-2 px-2.5 py-1.5 shadow-none'
 
 export function PopupModalsHost() {
   const liveState = usePopupModalsView()
   const lastOpenStateRef = useRef(liveState)
   const state = liveState.open ? liveState : lastOpenStateRef.current
-  const previousActiveRef = useRef<PopupModalsView['active']>(null)
+  const previousActiveRef = useRef<string | null>(null)
   const liveEditOpen = liveState.open && liveState.edit.open
   const [editSession, setEditSession] = useState(() => ({ open: liveEditOpen, key: 0 }))
   if (editSession.open !== liveEditOpen) {
@@ -136,6 +148,8 @@ export function PopupModalsHost() {
   const aiProviderSettingsRef = useRef<HTMLButtonElement | null>(null)
   const editTitleRef = useRef<HTMLInputElement | null>(null)
   const editFolderSearchRef = useRef<HTMLInputElement | null>(null)
+  const folderTitleRef = useRef<HTMLInputElement | null>(null)
+  const folderCancelRef = useRef<HTMLButtonElement | null>(null)
 
   useLayoutEffect(() => {
     if (liveState.open) {
@@ -149,17 +163,22 @@ export function PopupModalsHost() {
       return
     }
 
-    if (liveState.active !== previousActiveRef.current) {
-      previousActiveRef.current = liveState.active
-      focusInitialModalControl(liveState.active, {
+    const activeKey = liveState.active === 'folder'
+      ? `folder:${liveState.folder.mode || ''}`
+      : liveState.active
+    if (activeKey !== previousActiveRef.current) {
+      previousActiveRef.current = activeKey
+      focusInitialModalControl(liveState.active, liveState.folder.mode, {
         aiProviderSettingsRef,
         editTitleRef,
+        folderCancelRef,
+        folderTitleRef,
         moveSearchRef,
         smartFolderTitleRef
       })
     }
 
-  }, [liveState.open, liveState.active])
+  }, [liveState.open, liveState.active, liveState.folder.mode])
 
   return (
     <div
@@ -169,11 +188,16 @@ export function PopupModalsHost() {
         className={modalDismissLayerClass}
         type="button"
         aria-label="关闭弹窗"
-        disabled={state.smartFolder.open && state.smartFolder.saving}
+        disabled={
+          (state.smartFolder.open && state.smartFolder.saving) ||
+          (state.folder.open && state.folder.saving) ||
+          (state.move.open && state.move.busy)
+        }
         onClick={() => dispatchPopupModalAction('close')}
         unstyled
       />
       {state.move.open ? <MoveBookmarkModal searchRef={moveSearchRef} view={state.move} /> : null}
+      {state.folder.open ? <FolderDialogModal cancelRef={folderCancelRef} titleRef={folderTitleRef} view={state.folder} /> : null}
       {state.smartFolder.open ? <SmartFolderModal titleRef={smartFolderTitleRef} searchRef={smartFolderSearchRef} view={state.smartFolder} /> : null}
       {state.aiProvider.open ? <AiProviderPromptModal settingsButtonRef={aiProviderSettingsRef} /> : null}
       {state.edit.open ? <EditBookmarkModal key={editSession.key} folderSearchRef={editFolderSearchRef} titleRef={editTitleRef} view={state.edit} /> : null}
@@ -242,6 +266,7 @@ function PopupModalFeedback({
 
 function FolderSearch({
   inputRef,
+  className,
   htmlFor,
   inputId,
   placeholder,
@@ -253,6 +278,7 @@ function FolderSearch({
   disabled = false
 }: {
   action: string
+  className?: string
   controls: string
   disabled?: boolean
   htmlFor: string
@@ -264,7 +290,7 @@ function FolderSearch({
   value: string
 }) {
   return (
-    <label className={folderSearchShellClass} htmlFor={htmlFor}>
+    <label className={cx(folderSearchShellClass, className)} htmlFor={htmlFor}>
       <Icon name="Search" className={folderSearchIconClass} size={16} aria-hidden="true" />
       <Input
         ref={inputRef}
@@ -310,36 +336,320 @@ function MoveBookmarkModal({
   view: PopupModalsView['move']
 }) {
   const { error } = usePopupModalsView()
+  const createInputRef = useRef<HTMLInputElement | null>(null)
+  const previousCreateOpenRef = useRef(view.createOpen)
+
+  useEffect(() => {
+    const wasOpen = previousCreateOpenRef.current
+    previousCreateOpenRef.current = view.createOpen
+    if (!wasOpen && view.createOpen) {
+      const input = createInputRef.current
+      if (input) {
+        input.focus({ preventScroll: true })
+        if (input.value) {
+          input.select()
+        }
+      }
+    } else if (wasOpen && !view.createOpen && view.open) {
+      searchRef.current?.focus({ preventScroll: true })
+    }
+  }, [searchRef, view.createOpen, view.open])
+
   return (
     <section id="move-modal" className={modalWideCardClass} aria-labelledby="move-modal-title" tabIndex={-1}>
       <header className={modalHeaderClass}>
         <div className={modalHeaderCopyClass}>
-          <h2 id="move-modal-title" className={modalTitleClass}>移动书签</h2>
+          <h2 id="move-modal-title" className={modalTitleClass}>{view.heading || '移动书签'}</h2>
         </div>
-        <Button id="close-move-modal" className={modalCloseButtonClass} type="button" aria-label="关闭移动面板" onClick={() => dispatchPopupModalAction('close')} unstyled>
+        <Button id="close-move-modal" className={modalCloseButtonClass} type="button" aria-label="关闭移动面板" disabled={view.busy} onClick={() => dispatchPopupModalAction('close')} unstyled>
           <Icon name="X" size={16} aria-hidden="true" />
         </Button>
       </header>
       <div className={modalBookmarkCardClass}>
-        <p className={modalCardLabelClass}>当前书签</p>
+        <p className={modalCardLabelClass}>{view.cardLabel || '当前书签'}</p>
         <p id="move-bookmark-title" className={modalCardTitleClass}>{view.title}</p>
         <p id="move-bookmark-path" className={modalCardPathClass}>{view.path}</p>
       </div>
-      <FolderSearch
-        inputRef={searchRef}
-        htmlFor="move-search-input"
-        inputId="move-search-input"
-        placeholder="搜索目标文件夹"
-        label="搜索移动目标文件夹"
-        mode="move"
-        controls="move-folder-list"
-        value={view.query}
-        action="move-query-change"
-      />
+      {view.createOpen ? (
+        <>
+          <div id="move-inline-create" className="flex shrink-0 flex-col gap-2 rounded-ds-sm border border-ds-border bg-ds-surface-2 p-2.5">
+            <div className="flex items-center gap-2">
+              <Input
+                ref={createInputRef}
+                id="move-inline-create-input"
+                className={cx(modalInputClass, 'min-h-[34px] min-w-0 flex-1 bg-ds-surface-1')}
+                type="text"
+                maxLength={180}
+                spellCheck={false}
+                autoComplete="off"
+                placeholder="新文件夹名称"
+                aria-label="新文件夹名称"
+                value={view.createTitle}
+                disabled={view.createSaving}
+                onValueChange={(nextValue) => dispatchPopupModalAction('move-create-title-change', nextValue)}
+                onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    if (!view.createSaveDisabled) {
+                      dispatchPopupModalAction('move-create-submit')
+                    }
+                  }
+                }}
+                unstyled
+              />
+              <Button
+                id="move-inline-create-submit"
+                className={cx(modalPrimaryButtonClass, 'min-h-[34px] min-w-0 shrink-0 px-3')}
+                type="button"
+                disabled={view.createSaveDisabled}
+                onClick={() => dispatchPopupModalAction('move-create-submit')}
+                unstyled
+              >
+                <StableLabel
+                  text={view.createSaving ? '移入中…' : '创建并移入'}
+                  reserve={['创建并移入', '移入中…']}
+                />
+              </Button>
+              <Button
+                id="move-inline-create-cancel"
+                className={modalCloseButtonClass}
+                type="button"
+                aria-label="取消新建文件夹"
+                disabled={view.createSaving}
+                onClick={() => dispatchPopupModalAction('move-create-close')}
+                unstyled
+              >
+                <Icon name="X" size={15} aria-hidden="true" />
+              </Button>
+            </div>
+            <div className="flex min-w-0 items-center gap-1.5 text-xs text-ds-text-secondary">
+              <Icon name="FolderOpen" size={13} className="shrink-0 text-ds-text-muted" aria-hidden="true" />
+              <span id="move-inline-create-parent-path" className="min-w-0 truncate">{view.createParentPath}</span>
+            </div>
+            {view.createError ? (
+              <PopupModalFeedback id="move-inline-create-error" message={view.createError} />
+            ) : null}
+          </div>
+          <FolderSearch
+            inputRef={searchRef}
+            className="shrink-0"
+            htmlFor="move-search-input"
+            inputId="move-search-input"
+            placeholder="搜索上级文件夹"
+            label="搜索新建位置的上级文件夹"
+            mode="move"
+            controls="move-folder-list"
+            value={view.query}
+            action="move-query-change"
+            disabled={view.busy}
+          />
+        </>
+      ) : (
+        <div className="flex shrink-0 items-center gap-2">
+          <FolderSearch
+            inputRef={searchRef}
+            className="min-w-0 flex-1"
+            htmlFor="move-search-input"
+            inputId="move-search-input"
+            placeholder="搜索目标文件夹"
+            label="搜索移动目标文件夹"
+            mode="move"
+            controls="move-folder-list"
+            value={view.query}
+            action="move-query-change"
+            disabled={view.busy}
+          />
+          <Button
+            id="move-inline-create-toggle"
+            className={cx(modalSecondaryButtonClass, 'min-h-10 min-w-0 shrink-0 px-3')}
+            type="button"
+            title="新建文件夹并移入"
+            disabled={view.busy}
+            onClick={() => dispatchPopupModalAction('move-create-open')}
+            unstyled
+          >
+            <Icon name="FolderPlus" size={14} aria-hidden="true" />
+            <span>新建</span>
+          </Button>
+        </div>
+      )}
       <div className="relative flex min-h-0 flex-1 flex-col">
         <PopupFolderPickerHost id="move-folder-list" className={cx(modalListClass, error && 'pb-14')} mode="move" />
         <PopupModalFeedback overlay />
       </div>
+    </section>
+  )
+}
+
+function FolderDialogModal({
+  cancelRef,
+  titleRef,
+  view
+}: {
+  cancelRef: RefObject<HTMLButtonElement | null>
+  titleRef: RefObject<HTMLInputElement | null>
+  view: PopupModalsView['folder']
+}) {
+  const parentSearchRef = useRef<HTMLInputElement | null>(null)
+  const previousPickerOpenRef = useRef(view.parentPickerOpen)
+  const isDelete = view.mode === 'delete'
+  const isCreate = view.mode === 'create'
+  const heading = isDelete ? '删除文件夹' : isCreate ? '新建文件夹' : '重命名文件夹'
+  const deleteSummary = view.bookmarkCount > 0 && view.subfolderCount > 0
+    ? `${view.subfolderCount} 个子文件夹 · ${view.bookmarkCount} 个书签 · 书签进回收站，可撤销`
+    : view.bookmarkCount > 0
+      ? `${view.bookmarkCount} 个书签 · 书签进回收站，可撤销`
+      : view.subfolderCount > 0
+        ? `${view.subfolderCount} 个空子文件夹 · 可撤销`
+        : '空文件夹 · 可撤销'
+
+  useEffect(() => {
+    const wasOpen = previousPickerOpenRef.current
+    previousPickerOpenRef.current = view.parentPickerOpen
+    if (!isCreate || !view.open) return
+    if (!wasOpen && view.parentPickerOpen) {
+      parentSearchRef.current?.focus({ preventScroll: true })
+    } else if (wasOpen && !view.parentPickerOpen) {
+      titleRef.current?.focus({ preventScroll: true })
+    }
+  }, [isCreate, titleRef, view.open, view.parentPickerOpen])
+
+  return (
+    <section id="folder-modal" className={isCreate ? modalStandardCardClass : modalSmallCardClass} aria-labelledby="folder-modal-title" tabIndex={-1}>
+      <header className={modalHeaderClass}>
+        <div className={modalHeaderCopyClass}>
+          <h2 id="folder-modal-title" className={modalTitleClass}>{heading}</h2>
+        </div>
+        <Button
+          id="close-folder-modal"
+          className={modalCloseButtonClass}
+          type="button"
+          aria-label={`关闭${heading}面板`}
+          disabled={view.saving}
+          onClick={() => dispatchPopupModalAction('close')}
+          unstyled
+        >
+          <Icon name="X" size={16} aria-hidden="true" />
+        </Button>
+      </header>
+      {isDelete ? (
+        <>
+          <div className={modalBookmarkCardClass}>
+            <p className={modalCardLabelClass}>目标文件夹</p>
+            <p id="delete-folder-title" className={modalCardTitleClass}>{view.targetTitle}</p>
+            <p id="delete-folder-path" className={modalCardPathClass}>{view.targetPath}</p>
+          </div>
+          <p id="delete-folder-summary" className={modalNoteClass}>{deleteSummary}</p>
+        </>
+      ) : (
+        <div className={cx(modalFormClass, 'min-h-0 flex-1')}>
+          <div className={modalBookmarkCardClass}>
+            <p className={modalCardLabelClass}>{isCreate ? '创建位置' : '当前位置'}</p>
+            <div className={modalPathRowClass}>
+              <p
+                id="folder-modal-path"
+                className={cx(
+                  modalCardPathClass,
+                  'flex-auto',
+                  isCreate && view.parentChanged ? modalCardPathChangedClass : ''
+                )}
+              >
+                {isCreate ? (view.parentPath || view.targetPath) : view.targetPath}
+              </p>
+              {isCreate ? (
+                <Button
+                  id="folder-parent-picker-button"
+                  className={modalCompactButtonClass}
+                  type="button"
+                  aria-expanded={view.parentPickerOpen}
+                  aria-controls="folder-parent-picker"
+                  disabled={view.saving}
+                  onClick={() => dispatchPopupModalAction('folder-parent-picker-toggle')}
+                  unstyled
+                >
+                  {view.parentPickerOpen ? '收起' : '更改'}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+          {isCreate && view.parentPickerOpen ? (
+            <div id="folder-parent-picker" className="flex min-h-0 flex-1 flex-col gap-2">
+              <FolderSearch
+                inputRef={parentSearchRef}
+                htmlFor="folder-parent-search-input"
+                inputId="folder-parent-search-input"
+                placeholder="搜索上级文件夹"
+                label="搜索上级文件夹"
+                mode="folder-create"
+                controls="folder-parent-list"
+                value={view.parentQuery}
+                action="folder-parent-query-change"
+                disabled={view.saving}
+              />
+              <PopupFolderPickerHost
+                id="folder-parent-list"
+                className={modalCompactListClass}
+                mode="folder-create"
+                data-squircle-subtree="off"
+              />
+            </div>
+          ) : null}
+          <div className={modalFieldClass}>
+            <label className={modalLabelClass} htmlFor="folder-title-input">文件夹名称</label>
+            <Input
+              ref={titleRef}
+              id="folder-title-input"
+              className={modalInputClass}
+              type="text"
+              maxLength={180}
+              spellCheck={false}
+              autoComplete="off"
+              placeholder={isCreate ? '输入文件夹名称' : '输入新名称'}
+              value={view.title}
+              disabled={view.saving}
+              onValueChange={(nextValue) => dispatchPopupModalAction('folder-title-change', nextValue)}
+              onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  if (!view.saveDisabled) {
+                    dispatchPopupModalAction('save-folder-dialog')
+                  }
+                }
+              }}
+              unstyled
+            />
+          </div>
+        </div>
+      )}
+      <PopupModalFeedback id="folder-modal-error" message={view.error} />
+      <footer className={modalActionsClass}>
+        <Button
+          ref={cancelRef}
+          id="cancel-folder-modal"
+          className={modalSecondaryButtonClass}
+          type="button"
+          disabled={view.saving}
+          onClick={() => dispatchPopupModalAction('close')}
+          unstyled
+        >
+          取消
+        </Button>
+        <Button
+          id="confirm-folder-modal"
+          className={isDelete ? modalDangerButtonClass : modalPrimaryButtonClass}
+          type="button"
+          disabled={view.saveDisabled}
+          onClick={() => dispatchPopupModalAction('save-folder-dialog')}
+          unstyled
+        >
+          <StableLabel
+            text={view.saveLabel}
+            reserve={isDelete ? ['确认删除', '删除中…'] : isCreate ? ['创建', '创建中…'] : ['保存', '保存中…']}
+          />
+        </Button>
+      </footer>
     </section>
   )
 }
@@ -498,7 +808,7 @@ function EditBookmarkModal({
       if (modal.style.getPropertyValue('--popup-edit-rest-height') !== value) {
         modal.style.setProperty('--popup-edit-rest-height', value)
       }
-      const panelHeight = Math.floor(Math.max(0, Math.min(226, window.innerHeight - height - 64)) / 2) * 2
+      const panelHeight = Math.floor(Math.max(0, Math.min(320, window.innerHeight - height - 52)) / 2) * 2
       modal.style.setProperty('--popup-edit-panel-height', `${panelHeight}px`)
       modal.style.setProperty('--popup-edit-open-shift', `${panelHeight / 2}px`)
     }
@@ -513,7 +823,7 @@ function EditBookmarkModal({
   }, [])
 
   return (
-    <section ref={modalRef} id="edit-modal" className={cx(modalStandardCardClass, 'popup-edit-modal')} data-squircle="off" aria-labelledby="edit-modal-title" tabIndex={-1}>
+    <section ref={modalRef} id="edit-modal" className={modalEditCardClass} data-squircle="off" aria-labelledby="edit-modal-title" tabIndex={-1}>
       <div className="popup-edit-surface" aria-hidden="true" />
       <header className={cx(modalHeaderClass, 'popup-edit-upper')}>
         <div className={modalHeaderCopyClass}>
@@ -524,13 +834,13 @@ function EditBookmarkModal({
         </Button>
       </header>
       <EditFolderDisclosure folderSearchRef={folderSearchRef} view={view} />
-      <div className={cx(modalFormClass, 'popup-edit-lower')}>
-        <label className={modalFieldClass} htmlFor="edit-title-input">
+      <div className={cx(modalEditFormClass, 'popup-edit-lower')}>
+        <label className={modalEditInlineFieldClass} htmlFor="edit-title-input">
           <span className={modalLabelClass}>标题</span>
           <Input
             ref={titleRef}
             id="edit-title-input"
-            className={modalInputClass}
+            className={modalEditCompactInputClass}
             type="text"
             spellCheck={false}
             maxLength={512}
@@ -541,12 +851,12 @@ function EditBookmarkModal({
             unstyled
           />
         </label>
-        <label className={modalFieldClass} htmlFor="edit-url-input">
+        <label className={modalEditInlineFieldClass} htmlFor="edit-url-input">
           <span className={modalLabelClass}>网址</span>
           <Input
             id="edit-url-input"
             aria-describedby={error ? 'popup-modal-error' : undefined}
-            className={modalInputClass}
+            className={modalEditCompactInputClass}
             type="url"
             spellCheck={false}
             inputMode="url"
@@ -621,24 +931,26 @@ function EditFolderDisclosure({
         }
       }}
     >
-      <div className={cx(modalBookmarkCardClass, 'popup-edit-upper')}>
-        <p className={modalCardLabelClass}>文件夹</p>
-        <div className={modalPathRowClass}>
-          <p id="edit-bookmark-path" className={cx(modalCardPathClass, 'flex-auto', view.pathChanged ? modalCardPathChangedClass : '')}>
-            {view.path}
-          </p>
-          <CollapsibleTrigger
-            ref={triggerRef}
-            id="edit-folder-picker-button"
-            className={modalCompactButtonClass}
-            type="button"
-            aria-controls="edit-folder-picker"
-            disabled={view.closeDisabled}
-          >
-            <span className="popup-edit-toggle-closed">更改</span>
-            <span className="popup-edit-toggle-open">收起</span>
-          </CollapsibleTrigger>
-        </div>
+      <div className={cx(modalEditFolderBarClass, 'popup-edit-upper')}>
+        <Icon name="Folder" size={14} className="shrink-0 text-ds-text-muted" aria-hidden="true" />
+        <p
+          id="edit-bookmark-path"
+          className={cx(modalCardPathClass, 'min-w-0 flex-1 truncate', view.pathChanged ? modalCardPathChangedClass : '')}
+          title={view.path}
+        >
+          {view.path}
+        </p>
+        <CollapsibleTrigger
+          ref={triggerRef}
+          id="edit-folder-picker-button"
+          className={modalCompactButtonClass}
+          type="button"
+          aria-controls="edit-folder-picker"
+          disabled={view.closeDisabled}
+        >
+          <span className="popup-edit-toggle-closed">更改</span>
+          <span className="popup-edit-toggle-open">收起</span>
+        </CollapsibleTrigger>
       </div>
       <CollapsiblePanel
         ref={panelRef}
@@ -649,6 +961,7 @@ function EditFolderDisclosure({
       >
         <FolderSearch
           inputRef={folderSearchRef}
+          className="h-[34px] min-h-[34px] pl-2.5"
           htmlFor="edit-folder-search-input"
           inputId="edit-folder-search-input"
           placeholder="搜索目标文件夹"
@@ -661,7 +974,7 @@ function EditFolderDisclosure({
         />
         <PopupFolderPickerHost
           id="edit-folder-list"
-          className={modalCompactListClass}
+          className={modalListClass}
           mode="edit"
           data-squircle-subtree="off"
           onFolderSelectStart={() => {
@@ -686,13 +999,27 @@ function handleEditInputKeydown(event: React.KeyboardEvent<HTMLInputElement>) {
 interface ModalFocusRefs {
   aiProviderSettingsRef: RefObject<HTMLElement | null>
   editTitleRef: RefObject<HTMLInputElement | null>
+  folderCancelRef: RefObject<HTMLButtonElement | null>
+  folderTitleRef: RefObject<HTMLInputElement | null>
   moveSearchRef: RefObject<HTMLElement | null>
   smartFolderTitleRef: RefObject<HTMLInputElement | null>
 }
 
-function focusInitialModalControl(active: PopupModalsView['active'], refs: ModalFocusRefs) {
+function focusInitialModalControl(
+  active: PopupModalsView['active'],
+  folderMode: PopupModalsView['folder']['mode'],
+  refs: ModalFocusRefs
+) {
   if (active === 'move') {
     focusElement(refs.moveSearchRef)
+    return
+  }
+  if (active === 'folder') {
+    if (folderMode === 'delete') {
+      focusElement(refs.folderCancelRef)
+    } else {
+      focusElement(refs.folderTitleRef, folderMode === 'rename')
+    }
     return
   }
   if (active === 'smart-folder') {

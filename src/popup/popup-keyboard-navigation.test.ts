@@ -209,9 +209,11 @@ function testFolderPickerKeyboardIndexes(): void {
 function testFolderPickerSelectors(): void {
   assert(getFolderPickerSelectSelector('move') === '[data-select-folder]', 'move picker should use move select targets')
   assert(getFolderPickerSelectSelector('smart') === '[data-smart-select-folder]', 'smart picker should use smart select targets')
+  assert(getFolderPickerSelectSelector('folder-create') === '[data-folder-create-select]', 'folder-create picker should use folder-create select targets')
   assert(getFolderPickerSelectSelector('edit') === '[data-select-edit-folder]', 'edit picker should use edit select targets')
   assert(getFolderPickerToggleSelector('move') === '[data-toggle-move-folder]', 'move picker should use move toggle targets')
   assert(getFolderPickerToggleSelector('smart') === '[data-toggle-smart-folder]', 'smart picker should use smart toggle targets')
+  assert(getFolderPickerToggleSelector('folder-create') === '[data-folder-create-toggle]', 'folder-create picker should use folder-create toggle targets')
   assert(getFolderPickerToggleSelector('edit') === '[data-toggle-edit-folder]', 'edit picker should use edit toggle targets')
 }
 

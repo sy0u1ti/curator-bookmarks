@@ -65,6 +65,7 @@ export interface FolderSectionHeaderState {
   folderId: string
   onAddBookmark: (anchor: HTMLElement, folderId: string) => void
   onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void
+  onContextMenu?: (event: ReactMouseEvent<HTMLButtonElement>) => void
   onDragPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void
   onReorderKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => void
   path: string
@@ -106,6 +107,7 @@ export interface BookmarkFolderSectionViewModel {
   grid: BookmarkFolderGridViewModel | null
   onAddBookmark: (anchor: HTMLElement, folderId: string) => void
   onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void
+  onContextMenu?: (event: ReactMouseEvent<HTMLButtonElement>) => void
   onDragPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void
   onReorderKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => void
   onOpenFolderSettings: () => void
@@ -126,6 +128,7 @@ export interface BookmarkFolderGridViewModel {
 export interface BookmarkFolderCardViewModel {
   bookmarkCount: number
   folderId: string
+  onContextMenu?: (event: ReactMouseEvent<HTMLButtonElement>) => void
   onOpen: (event: ReactMouseEvent<HTMLButtonElement>) => void
   title: string
 }

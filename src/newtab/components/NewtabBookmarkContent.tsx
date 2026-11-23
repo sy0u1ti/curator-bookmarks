@@ -358,6 +358,7 @@ function BookmarkFolderSection({
           path: section.path,
           onAddBookmark: section.onAddBookmark,
           onClick: section.onClick,
+          onContextMenu: section.onContextMenu,
           onDragPointerDown: section.onDragPointerDown,
           onReorderKeyDown: section.onReorderKeyDown,
           title: section.title
@@ -964,6 +965,7 @@ function BookmarkFolderCard({
       data-folder-card-id={folder.folderId}
       aria-label={`进入文件夹「${folder.title}」，${folder.bookmarkCount} 个书签`}
       onClick={folder.onOpen}
+      onContextMenu={folder.onContextMenu}
     >
       <span className={BOOKMARK_FOLDER_CARD_ICON_CLASS} aria-hidden="true">
         <Icon name="Folder" size={20} />
@@ -1085,6 +1087,7 @@ function FolderSectionHeader({ pending, state }: { pending: boolean; state: Fold
         aria-label={`${state.title}，长按拖拽调整文件夹顺序`}
         aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
         onClick={state.onClick}
+        onContextMenu={state.onContextMenu}
         onKeyDown={state.onReorderKeyDown}
         onPointerDown={handlePointerDown}
         ref={setHeaderRef}

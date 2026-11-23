@@ -1,9 +1,68 @@
+export interface BookmarkManagerTarget {
+  bookmarkId?: string
+  folderId?: string
+  query?: string
+}
+
 export function isSidePanelSurface(): boolean {
   return typeof document !== 'undefined' && document.documentElement?.dataset.curatorSurface === 'sidepanel'
 }
 
+export function isOptionsSurface(): boolean {
+  return typeof document !== 'undefined' && document.documentElement?.dataset.curatorSurface === 'options'
+}
+
+export function isPersistentSurface(): boolean {
+  return isSidePanelSurface() || isOptionsSurface()
+}
+
 export function closeTransientPopup(): void {
-  if (!isSidePanelSurface() && typeof window !== 'undefined') window.close()
+  if (!isPersistentSurface() && typeof window !== 'undefined') window.close()
+}
+
+export function buildBookmarkManagerAnchor(target?: BookmarkManagerTarget): string {
+  if (!target) return ''
+  const params = new URLSearchParams()
+  const folderId = String(target.folderId || '').trim()
+  const bookmarkId = String(target.bookmarkId || '').trim()
+  const query = String(target.query || '').trim()
+  if (folderId) params.set('folder', folderId)
+  if (bookmarkId) params.set('bookmark', bookmarkId)
+  if (query) params.set('q', query)
+  return params.toString()
+}
+
+export function parseBookmarkManagerAnchor(anchor: string): BookmarkManagerTarget {
+  const raw = String(anchor || '').trim()
+  if (!raw || raw === 'section') return {}
+  const params = new URLSearchParams(raw)
+  const folderId = String(params.get('folder') || '').trim()
+  const bookmarkId = String(params.get('bookmark') || '').trim()
+  const query = String(params.get('q') || '').trim()
+  return {
+    ...(folderId ? { folderId } : null),
+    ...(bookmarkId ? { bookmarkId } : null),
+    ...(query ? { query } : null)
+  }
+}
+
+export function buildBookmarkManagerHash(target?: BookmarkManagerTarget): string {
+  const anchor = buildBookmarkManagerAnchor(target)
+  return anchor ? `#bookmarks:${anchor}` : '#bookmarks'
+}
+
+export function buildBookmarkManagerUrl(target?: BookmarkManagerTarget): string {
+  return chrome.runtime.getURL(`src/options/options.html${buildBookmarkManagerHash(target)}`)
+}
+
+export async function openBookmarkManagerWorkspace(target?: BookmarkManagerTarget): Promise<void> {
+  const hash = buildBookmarkManagerHash(target)
+  if (isOptionsSurface() && typeof window !== 'undefined') {
+    window.location.hash = hash
+    return
+  }
+  await chrome.tabs.create({ url: chrome.runtime.getURL(`src/options/options.html${hash}`) })
+  closeTransientPopup()
 }
 
 export async function openBookmarkSidePanel(): Promise<void> {
